@@ -31,7 +31,9 @@ Row / Column Stable ID 仅在所属 Model 内有效；移动保持身份，删�
 
 缺失 Renderer、无效 Model / Source、非法 Scene 配置或失效 ID 必须明确反馈。Resize 遇到 Column / Header 失效、Cancel 或 Disabled 时结束当前 Gesture，不能对另一个身份继续写宽度。滚动中的可见 Cell 复用不改变业务 ID。
 
-区域样式所需输出缺失时继续以 Error 交给宿主，保留失效区域重试；持续同因只记录一次中文 ERROR，实际修复后记录 INFO，销毁 View 不伪造恢复。
+运行结构、Renderer 注册/查找与配色 API 使用 `TableFailure` / `TableRuntimeFault`，区分失效部件、归属变化、缺失 Renderer/Registry、值类型不匹配与 generation 耗尽。Runtime 补充 View / Source、稳定 RowId / ColumnId、冻结或普通区域、输出部件及 Renderer 类型/版本。持续结构与样式故障按业务槽位复用原始诊断，实际重新验证成功后记录关联 INFO；布局等待、虚拟化销毁和 View 销毁不视为恢复。
+
+同帧多个 View、Header、Cell 和样式部件的实际失败分别交给宿主，健康区域继续更新。每次实际 Scene 展开失败独立保留原始原因、Severity 与 payload；下层已受管错误保留首次 ID 与 Backtrace。失败仅清理该次新建的内容子树，已有业务实体脱离失败子树并保留已提交状态，不回滚 Model 或已写入的业务 Component。失败仍结束当前输入/编辑会话并静默清理选择，保持既有中断契约。
 
 ## 强类型原位编辑
 

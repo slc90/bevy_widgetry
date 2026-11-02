@@ -1,5 +1,5 @@
+use crate::{TableError, TableFailure};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryTableStateColorOverrides {
     pub background: Option<Color>,
@@ -7,38 +7,44 @@ pub struct WidgetryTableStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryTableStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), TableFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TableError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "table")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TableError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "table")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TableError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "table")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -64,31 +70,55 @@ pub struct WidgetryTableRegionColorOverrides {
     pub disabled_focused_border: Option<Color>,
 }
 impl WidgetryTableRegionColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.selected.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self) -> Result<(), TableFailure> {
+        self.normal.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.state")
+                    .field("state", "normal"),
+            )
+        })?;
+        self.hovered.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.state")
+                    .field("state", "hovered"),
+            )
+        })?;
+        self.selected.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.state")
+                    .field("state", "selected"),
+            )
+        })?;
+        self.disabled.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.state")
+                    .field("state", "disabled"),
+            )
+        })?;
         if let Some(color) = self.focused_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TableError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "table")
                             .field("field", "focused_border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.disabled_focused_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TableError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "table")
                             .field("field", "disabled_focused_border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -118,12 +148,37 @@ pub struct WidgetryTableColorOverrides {
     pub cell: WidgetryTableRegionColorOverrides,
 }
 impl WidgetryTableColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.table.validate()?;
-        self.column_header.validate()?;
-        self.row_header.validate()?;
-        self.corner.validate()?;
-        self.cell.validate()?;
+    fn validate(&self) -> Result<(), TableFailure> {
+        self.table.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.region")
+                    .field("region", "table"),
+            )
+        })?;
+        self.column_header.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.region")
+                    .field("region", "column_header"),
+            )
+        })?;
+        self.row_header.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.region")
+                    .field("region", "row_header"),
+            )
+        })?;
+        self.corner.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.region")
+                    .field("region", "corner"),
+            )
+        })?;
+        self.cell.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.region")
+                    .field("region", "cell"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -161,7 +216,7 @@ impl ColorState {
     }
 }
 impl WidgetryTableColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, TableFailure> {
         world
             .get::<ColorState>(entity)
             .filter(|state| (state.1)(world, entity))
@@ -172,7 +227,7 @@ impl WidgetryTableColorOverrides {
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, TableFailure> {
         Self::get(world, entity)?;
         if world
             .get::<ColorState>(entity)
@@ -180,8 +235,11 @@ impl WidgetryTableColorOverrides {
         {
             return Err(invalid_target(entity));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.colors.set")
+                    .field("view", entity),
+            )
         })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
@@ -193,27 +251,26 @@ impl WidgetryTableColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(TableFailure::into_bevy_error)
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, TableFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial<T: Send + Sync + 'static>(self) -> Result<ColorState, BevyError> {
+    pub(crate) fn initial<T: Send + Sync + 'static>(self) -> Result<ColorState, TableFailure> {
         self.validate()?;
         let mut state = ColorState::new::<T>();
         state.0 = self;
         Ok(state)
     }
 }
-#[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryTableColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryTableColorOverrides 目标不存在、类型不匹配或属于托管部件")
+#[track_caller]
+fn invalid_target(entity: Entity) -> TableFailure {
+    crate::error::failure(TableError::InvalidColors { view: entity }, "table.colors")
 }

@@ -3,7 +3,6 @@ use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui::{GridPlacement, ScrollPosition};
 use bevy::ui_widgets::ScrollArea;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use std::marker::PhantomData;
 
 #[derive(SceneComponent, FromTemplate)]
@@ -25,7 +24,7 @@ pub struct WidgetryTableProps {
 }
 
 #[derive(Component, Default)]
-pub(crate) struct TableDiagnostics(pub(crate) UnmigratedFailureState);
+pub(crate) struct TableDiagnostics(pub(crate) crate::runtime_error::RuntimeDiagnostics);
 
 #[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]
@@ -145,7 +144,7 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             template(move |_| Ok(column_reordering))
             template(move |_| Ok(editing.clone()))
             bevy_widgetry_core::foreground::ResolvedForeground
-            template(move |_| props.colors.clone().initial::<T>())
+            template(move |_| props.colors.clone().initial::<T>().map_err(crate::TableFailure::into_bevy_error))
             template(move |ctx| {
                 if source == Entity::PLACEHOLDER {
                     return Err(bevy_widgetry_core::scene_source_error!("WidgetryTable requires source"; "Table 构造必须提供 source"));

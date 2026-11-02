@@ -1,5 +1,6 @@
 use crate::layout::TableGeometry;
-use crate::projection::required;
+use crate::runtime_error::{RuntimeResult, required};
+
 use crate::{
     WidgetryTable, WidgetryTableCell, WidgetryTableColumnHeader, WidgetryTableColumnId,
     WidgetryTableModel, WidgetryTableRowHeader, WidgetryTableRowId, WidgetryTableSelection,
@@ -14,7 +15,6 @@ use bevy::picking::{
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::window::RequestRedraw;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
 #[component(immutable)]
@@ -174,26 +174,28 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
     let double_click = event.count == 2;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        if world
-            .get::<crate::WidgetryTableEditState>(root)
-            .is_some_and(|s| crate::editing::inside(world, target, s.editor()))
-        {
-            return Ok(());
-        }
-        click::<T>(world, root, target).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table click 失败");
-            }
-        })?;
-        if double_click
-            && let Some(WidgetryTableSelection::Cell { row, column }) = clicked(world, root, target)
-        {
-            WidgetryTable::<T>::begin_edit(world, root, WidgetryTableCell { row, column })?;
-        }
-        Ok(())
+        crate::runtime_error::run_request_at::<T, _>(
+            world,
+            root,
+            target,
+            "table.interaction.input",
+            |world| {
+                if world
+                    .get::<crate::WidgetryTableEditState>(root)
+                    .is_some_and(|s| crate::editing::inside(world, target, s.editor()))
+                {
+                    return Ok(());
+                }
+                click::<T>(world, root, target)?;
+                if double_click
+                    && let Some(WidgetryTableSelection::Cell { row, column }) =
+                        clicked(world, root, target)
+                {
+                    WidgetryTable::<T>::begin_edit(world, root, WidgetryTableCell { row, column })?;
+                }
+                Ok(())
+            },
+        )
     });
 }
 
@@ -201,7 +203,7 @@ fn click<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     target: Entity,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     if world.get::<InteractionDisabled>(root).is_some()
         || world
             .get::<crate::column_reorder::SuppressClick>(root)
@@ -217,13 +219,30 @@ fn click<T: Send + Sync + 'static>(
         return Ok(());
     };
     crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
-    let source = required(world.get::<WidgetryTable<T>>(root))?.source();
-    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-    let projection = required(world.get::<WidgetryTableViewState>(root))?;
+    let source = required(
+        world.get::<WidgetryTable<T>>(root),
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
+    let model = required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?;
+    let projection = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
     if !valid(model, projection, selection) {
         return Ok(());
     }
-    let mut state = *required(world.get::<WidgetryTableState>(root))?;
+    let mut state = *required(
+        world.get::<WidgetryTableState>(root),
+        root,
+        "WidgetryTableState",
+    )?;
     repair(model, projection, &mut state);
     let selection = if world
         .get_resource::<ButtonInput<KeyCode>>()
@@ -234,7 +253,13 @@ fn click<T: Send + Sync + 'static>(
         selection
     }
     .normalize(projection.is_empty() || model.column_count() == 0);
-    let changed = required(world.get::<WidgetryTableState>(root))?.selection != selection;
+    let changed = required(
+        world.get::<WidgetryTableState>(root),
+        root,
+        "WidgetryTableState",
+    )?
+    .selection
+        != selection;
     let old = state.focused_cell;
     let row = old
         .and_then(|cell| projection.display_index(cell.row).map(|_| cell.row))
@@ -319,16 +344,32 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
     body: Entity,
     geometry: &TableGeometry,
     size: Vec2,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
-    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-    let projection = required(world.get::<WidgetryTableViewState>(root))?;
-    let mut state = *required(world.get::<WidgetryTableState>(root))?;
+    let model = required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?;
+    let projection = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
+    let mut state = *required(
+        world.get::<WidgetryTableState>(root),
+        root,
+        "WidgetryTableState",
+    )?;
     repair(model, projection, &mut state);
     let row_index = state
         .focused_cell
         .and_then(|cell| projection.display_index(cell.row));
-    let current = required(world.get::<WidgetryTableState>(root))?;
+    let current = required(
+        world.get::<WidgetryTableState>(root),
+        root,
+        "WidgetryTableState",
+    )?;
     if current.selection != state.selection || current.focused_cell != state.focused_cell {
         world.entity_mut(root).insert(state);
     }
@@ -343,13 +384,20 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
                 .columns
                 .iter()
                 .find(|column| column.id == cell.column),
+            root,
+            "geometry .columns .iter() .find(|column| column.id == cell.column),",
         )?;
         let start = Vec2::new(
             column.left - geometry.frozen_width,
             row as f32 * geometry.row_height,
         );
         let end = start + Vec2::new(column.width, geometry.row_height);
-        let mut position = required(world.get_mut::<ScrollPosition>(body))?;
+        let mut position = required(
+            world.get_mut::<ScrollPosition>(body),
+            body,
+            "ScrollPosition",
+        )
+        .map_err(|error| error.at(crate::TableRegion::Body))?;
         for axis in 0..2 {
             if axis == 0 && (column.frozen || size.x <= 0.0) {
                 continue;
@@ -409,13 +457,8 @@ pub(crate) fn on_focus<T: Send + Sync + 'static>(
     }
     let cause = event.cause;
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        initialize::<T>(world, root, cause).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table focus 初始化失败");
-            }
+        crate::runtime_error::run_request::<T, _>(world, root, "table.interaction.input", |world| {
+            initialize::<T>(world, root, cause)
         })
     });
 }
@@ -424,7 +467,7 @@ fn initialize<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     cause: FocusCause,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     if world.get::<WidgetryTable<T>>(root).is_none()
         || world.get::<InteractionDisabled>(root).is_some()
         || world
@@ -434,10 +477,27 @@ fn initialize<T: Send + Sync + 'static>(
         return Ok(());
     }
     crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
-    let source = required(world.get::<WidgetryTable<T>>(root))?.source();
-    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-    let projection = required(world.get::<WidgetryTableViewState>(root))?;
-    let mut state = *required(world.get::<WidgetryTableState>(root))?;
+    let source = required(
+        world.get::<WidgetryTable<T>>(root),
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
+    let model = required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?;
+    let projection = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
+    let mut state = *required(
+        world.get::<WidgetryTableState>(root),
+        root,
+        "WidgetryTableState",
+    )?;
     repair(model, projection, &mut state);
     // Pressed occurs before PointerClick.
     // Revealing early would destroy the hit cell while it is still waiting for release.
@@ -484,13 +544,8 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
     }
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        navigate::<T>(world, root, key).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table navigation 失败");
-            }
+        crate::runtime_error::run_request::<T, _>(world, root, "table.interaction.input", |world| {
+            navigate::<T>(world, root, key)
         })
     });
 }
@@ -499,7 +554,7 @@ fn navigate<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     key: KeyCode,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     if world.get::<WidgetryTable<T>>(root).is_none()
         || world.get::<InteractionDisabled>(root).is_some()
         || world
@@ -514,10 +569,27 @@ fn navigate<T: Send + Sync + 'static>(
         return Ok(());
     }
     crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
-    let source = required(world.get::<WidgetryTable<T>>(root))?.source();
-    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-    let projection = required(world.get::<WidgetryTableViewState>(root))?;
-    let mut state = *required(world.get::<WidgetryTableState>(root))?;
+    let source = required(
+        world.get::<WidgetryTable<T>>(root),
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
+    let model = required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?;
+    let projection = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
+    let mut state = *required(
+        world.get::<WidgetryTableState>(root),
+        root,
+        "WidgetryTableState",
+    )?;
     repair(model, projection, &mut state);
     if projection.is_empty() || model.column_count() == 0 {
         world.entity_mut(root).insert(state);
@@ -526,8 +598,16 @@ fn navigate<T: Send + Sync + 'static>(
     let mut row = 0;
     let mut column = 0;
     if let Some(cell) = state.focused_cell {
-        row = required(projection.display_index(cell.row))?;
-        column = required(projection.column_display_index(cell.column))?;
+        row = required(
+            projection.display_index(cell.row),
+            root,
+            "projection.display_index(cell.row)",
+        )?;
+        column = required(
+            projection.column_display_index(cell.column),
+            root,
+            "projection.column_display_index(cell.column)",
+        )?;
         match key {
             KeyCode::ArrowUp => row = row.saturating_sub(1),
             KeyCode::ArrowDown => row = (row + 1).min(projection.len() - 1),
@@ -537,8 +617,12 @@ fn navigate<T: Send + Sync + 'static>(
         }
     }
     state.focused_cell = Some(WidgetryTableCell {
-        row: required(projection.row_id(row))?,
-        column: required(projection.column_id(column))?,
+        row: required(projection.row_id(row), root, "projection.row_id(row)")?,
+        column: required(
+            projection.column_id(column),
+            root,
+            "projection.column_id(column)",
+        )?,
     });
     world
         .entity_mut(root)

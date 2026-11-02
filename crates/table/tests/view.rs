@@ -215,6 +215,16 @@ fn renderer_retries_preserve_native_reporting_and_existing_diagnostics() {
             })
         });
         let mut records = errors.take_records();
+        let scene_ids = records
+            .iter()
+            .flat_map(|record| {
+                record
+                    .managed()
+                    .unwrap()
+                    .diagnostics()
+                    .map(|diagnostic| diagnostic.origin().id().to_string())
+            })
+            .collect::<Vec<_>>();
         assert_eq!(records.len(), 2);
         for record in &mut records {
             assert_eq!(
@@ -236,7 +246,7 @@ fn renderer_retries_preserve_native_reporting_and_existing_diagnostics() {
                     47
                 );
             }
-            assert_eq!(record.managed().is_some(), managed);
+            assert!(record.managed().is_some());
             if let Some(carrier) = record.managed() {
                 let diagnostic = carrier.diagnostics().next().unwrap();
                 assert_eq!(
@@ -254,9 +264,9 @@ fn renderer_retries_preserve_native_reporting_and_existing_diagnostics() {
                 .iter()
                 .filter(|record| record.level == Level::ERROR)
                 .count(),
-            if managed { 2 } else { 1 }
+            2
         );
-        assert!(cells(&mut app, root).is_empty());
+        assert_eq!(cells(&mut app, root).len(), 1);
         failing.store(false, Ordering::Relaxed);
         errors.run(|| logs.run(|| app.update()));
         assert!(errors.take_records().is_empty());
@@ -264,12 +274,12 @@ fn renderer_retries_preserve_native_reporting_and_existing_diagnostics() {
         assert_eq!(
             logs.records()
                 .iter()
-                .filter(|record| record
-                    .fields
-                    .get("message")
-                    .is_some_and(|message| message.contains("Table View 恢复正常")))
+                .filter(|record| record.matches_field("phase", "recovered")
+                    && scene_ids
+                        .iter()
+                        .any(|id| record.matches_field("error_id", id)))
                 .count(),
-            1
+            0
         );
     }
 }

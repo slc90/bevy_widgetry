@@ -59,7 +59,7 @@
 ## Coverage Map
 
 - `renderers.rs`：Cell / Header Typed Registry、异构内容与缺失 Renderer 错误。
-- `view.rs`：四区布局、Scene、Source / Revision 与 Theme / Disabled；无效构造 Layout 保留原生错误，源头和普通 Display 不保存 Bevy 边界栈；Cell Renderer 从既有 shell 失败到新 shell 重试、清理与恢复时，native 失败由 Owner 去重并保持 Panic Severity/payload，已有受管源头保持身份且不重复报告。
+- `view.rs`：四区布局、Scene、Source / Revision 与 Theme / Disabled；无效构造 Layout 保留原生错误，源头和普通 Display 不保存 Bevy 边界栈；Cell Renderer 的既有 Shell 失败与重试逐次保留实际 source、Panic Severity/payload 和源头身份，不按观察帧合并新的 Scene 失败；Scene 成功不伪造持续状态恢复。
 - `view.rs` 还覆盖共享 Model 的两侧独立配色、禁用侧数据更新、内容 / Renderer 替换、两轴滚动后的新建 / 复用 Cell 在同帧完成 Text 前景、Font、glyph、Visibility、Stack 和 Layout 准备；字体前置使用现有 test_utils 真实 UI 设施。
 - 源码样式单元测试保护稳定帧零重复根解析 / 区域配色，单 Cell Hover / Disabled 及移除的局部工作量，旧 / 新 Row、Column、Cell Selection 与 Focus 区域，纯 Style 几何变化不重算颜色，Override / Theme、Selected 输出修复，以及持续 Error 的宿主传播、诊断去重和真实恢复。
 - `virtualization.rs`：二维可见范围、Row / Column Header 复用与静止投影。
@@ -102,3 +102,19 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 
 
 `diagnostics.rs` 验证重复行及失效排序 / 筛选列请求保存具体身份，Selection 和非法宽度保存实际值（包括 NaN 位值）且失败不提交；真实 queued Handler 保留原始领域诊断、Severity 与单次源头日志。Runtime 非法布局重复观察复用 origin / ID，实际修复后记录关联恢复，再次故障创建新 ID。Model 单元回归核对插入越界、行列 ID / revision 耗尽的实际轴、稳定 ID、index / len 与 counter，继续保护失败后数据、索引、次序和 revision 不变。
+
+## Runtime 诊断
+
+- `diagnostics.rs` 覆盖多个 View 同帧失去 Source 时全部抵达真实宿主 Handler，持续状态共享原始 origin、每个源头只记录一次 ERROR。
+- `runtime_diagnostics.rs` 覆盖共享 Source 的普通/冻结 View 同帧多个 Header/Cell Scene 失败，所有原因链、独立 ID、Error/Panic Severity 和普通/Panic payload 保留，行列和区域可定位，健康 Cell 继续显示；缺失 Registry 按 Cell 槽位复用诊断并在重新验证后恢复。
+- 受管 Viewport、冻结区、表头及 Canvas 的标记/Node/实体销毁在清理后保持原故障身份；销毁 View 不记录恢复。Renderer 部分构造后失败只清理本次实体，挂接的已有业务子树脱离并保留已提交状态。
+- 多 Cell 样式输出失效全部抵达 Handler，重复观察不重建诊断，零高度导致 Shell 离开可见区域不伪造恢复。
+- `renderers.rs` 验证公开注册/展开返回可识别领域拒绝，Cell/Header Registry 保持隔离；generation 耗尽的纯分类与不覆盖旧注册由源码 Unit Test 保护。
+
+- 结构销毁后的完整 BSN 补建能够重新发现新 Body/Canvas，并以原诊断 ID 记录一次真实恢复；Resize 期间切换为未注册 Header 值类型时，预检查与后续普通/冻结表头投影共享 ColumnId、区域和原始 origin。Scene 成功后的无伪恢复断言按统一 phase 与对应 error_id 检查。
+
+- Body/Canvas 脱离父级的归属错误与重新发现时的缺失错误共享槽位身份，重新挂接不留下重复 Shell。全部根部件销毁后也保持首次故障身份并支持BSN补建。Resize 期间移除共享 Layout 的故障保持根级Site，不归入Header列。
+
+- Body、ColumnHeaders、RowHeaders、FrozenBody 依次缺少ScrollPosition时，各部件保留自己的区域、实际Entity、新origin与源头ERROR，不因同名Component被前一处故障覆盖。
+
+- 导航Focus产生待执行Reveal时移除Body的ScrollPosition，交互同步和清理后普通投影保持同一Body区域及诊断origin。列拖拽读取Body的ComputedNode/ScrollPosition也沿用该区域现场。

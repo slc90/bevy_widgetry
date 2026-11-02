@@ -1,4 +1,5 @@
-use crate::projection::required;
+use crate::runtime_error::{RuntimeResult, required};
+
 use crate::{
     WidgetryTable, WidgetryTableColumnHeader, WidgetryTableColumnId, WidgetryTableLayout,
     WidgetryTableModel, WidgetryTableViewState,
@@ -13,7 +14,6 @@ use bevy::prelude::*;
 use bevy::ui::{CalculatedClip, InteractionDisabled, ScrollPosition, UiGlobalTransform};
 use bevy_widgetry_core::{pointer::WidgetryPointerQuery, scene::spawn_scene};
 use bevy_widgetry_cursor::CursorLease;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::sync::Arc;
 
 #[derive(Component, Default, Clone, Copy, Debug, Reflect)]
@@ -164,8 +164,12 @@ fn endpoint(
     world: &World,
     root: Entity,
     session: &ColumnDrag,
-) -> Result<Option<(usize, f32)>, BevyError> {
-    let camera = required(world.get::<Camera>(session.camera))?;
+) -> RuntimeResult<Option<(usize, f32)>> {
+    let camera = required(
+        world.get::<Camera>(session.camera),
+        session.camera,
+        "Camera",
+    )?;
     let Some(scale) = camera.target_scaling_factor() else {
         return Ok(None);
     };
@@ -173,7 +177,7 @@ fn endpoint(
     if let Some(viewport) = camera.physical_viewport_rect() {
         physical -= viewport.min.as_vec2();
     }
-    let computed = required(world.get::<ComputedNode>(root))?;
+    let computed = required(world.get::<ComputedNode>(root), root, "ComputedNode")?;
     if !physical.is_finite()
         || world
             .get::<CalculatedClip>(root)
@@ -181,14 +185,27 @@ fn endpoint(
     {
         return Ok(None);
     }
-    let Some(inverse) = required(world.get::<UiGlobalTransform>(root))?.try_inverse() else {
+    let Some(inverse) = required(
+        world.get::<UiGlobalTransform>(root),
+        root,
+        "UiGlobalTransform",
+    )?
+    .try_inverse() else {
         return Ok(None);
     };
     let local = (inverse.transform_point2(physical) - computed.content_box().min)
         * computed.inverse_scale_factor();
-    let layout = required(world.get::<WidgetryTableLayout>(root))?;
+    let layout = required(
+        world.get::<WidgetryTableLayout>(root),
+        root,
+        "WidgetryTableLayout",
+    )?;
     let point = local - Vec2::new(layout.row_header_width, 0.0);
-    let view = required(world.get::<WidgetryTableViewState>(root))?;
+    let view = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
     let width = crate::projection::viewport_width(world, root, layout)?;
     if !point.is_finite()
         || point.x < 0.0
@@ -210,11 +227,28 @@ fn endpoint(
             )
             .into_bevy_error()
         })?;
-    let runtime = required(world.get::<crate::projection::TableRuntime>(root))?;
-    let body = required(world.get::<ComputedNode>(runtime.body))?;
+    let runtime = required(
+        world.get::<crate::projection::TableRuntime>(root),
+        root,
+        "crate::projection::TableRuntime",
+    )?;
+    let body = required(
+        world.get::<ComputedNode>(runtime.body),
+        runtime.body,
+        "ComputedNode",
+    )
+    .map_err(|error| error.at(crate::TableRegion::Body))?;
     let inverse = body.inverse_scale_factor();
-    let offset =
-        (required(world.get::<ScrollPosition>(runtime.body))?.0.x / inverse).floor() * inverse;
+    let offset = (required(
+        world.get::<ScrollPosition>(runtime.body),
+        runtime.body,
+        "ScrollPosition",
+    )
+    .map_err(|error| error.at(crate::TableRegion::Body))?
+    .0
+    .x / inverse)
+        .floor()
+        * inverse;
     let x = point.x
         + if point.x >= geometry.frozen_width {
             offset
@@ -249,54 +283,63 @@ fn on_start<T: Send + Sync + 'static>(
     let pointer = event.pointer.id;
     let location = event.pointer.location();
     let camera = event.hit.camera;
-    commands.queue(move |world: &mut World| {
-        (|| -> Result {
-            if active(world, root)
-                || crate::resize::active_column(world, root).is_some()
-                || world
-                    .get::<WidgetryTableColumnReordering>(root)
-                    .is_none_or(|config| !config.enabled)
-                || world
-                    .get_resource::<PointerCaptureMap>()
-                    .is_some_and(|map| map.is_captured(&pointer))
-            {
-                return Ok(());
-            }
-            let Some((header, column)) = header(world, root, target) else {
-                return Ok(());
-            };
-            if !location.position.is_finite() || world.get::<Camera>(camera).is_none() {
-                return Ok(());
-            }
-            crate::view_state::refresh::<T>(world, root)
-                .map_err(crate::TableFailure::into_bevy_error)?;
-            let source = required(world.get::<WidgetryTable<T>>(root))?.source();
-            let instance = required(world.get::<WidgetryTableModel<T>>(source))?
-                .instance()
-                .clone();
-            world.entity_mut(root).insert(ColumnDrag {
-                header,
-                column,
-                source,
-                instance,
-                pointer,
-                camera,
-                start: location.position,
-                location,
-                active: false,
-                fresh: true,
-                indicator: None,
-            });
-            Ok(())
-        })()
-        .inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table 列拖拽开始失败");
-            }
-        })
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        crate::runtime_error::run_request_at::<T, _>(
+            world,
+            root,
+            target,
+            "table.column_reorder.input",
+            |world| {
+                (|| -> RuntimeResult {
+                    if active(world, root)
+                        || crate::resize::active_column(world, root).is_some()
+                        || world
+                            .get::<WidgetryTableColumnReordering>(root)
+                            .is_none_or(|config| !config.enabled)
+                        || world
+                            .get_resource::<PointerCaptureMap>()
+                            .is_some_and(|map| map.is_captured(&pointer))
+                    {
+                        return Ok(());
+                    }
+                    let Some((header, column)) = header(world, root, target) else {
+                        return Ok(());
+                    };
+                    if !location.position.is_finite() || world.get::<Camera>(camera).is_none() {
+                        return Ok(());
+                    }
+                    crate::view_state::refresh::<T>(world, root)
+                        .map_err(crate::TableFailure::into_bevy_error)?;
+                    let source = required(
+                        world.get::<WidgetryTable<T>>(root),
+                        root,
+                        "WidgetryTable<T>",
+                    )?
+                    .source();
+                    let instance = required(
+                        world.get::<WidgetryTableModel<T>>(source),
+                        source,
+                        "WidgetryTableModel<T>",
+                    )?
+                    .instance()
+                    .clone();
+                    world.entity_mut(root).insert(ColumnDrag {
+                        header,
+                        column,
+                        source,
+                        instance,
+                        pointer,
+                        camera,
+                        start: location.position,
+                        location,
+                        active: false,
+                        fresh: true,
+                        indicator: None,
+                    });
+                    Ok(())
+                })()
+            },
+        )
     });
 }
 
@@ -306,7 +349,7 @@ fn apply<T: Send + Sync + 'static>(
     pointer: PointerId,
     location: Location,
     distance: Option<Vec2>,
-) -> Result {
+) -> RuntimeResult {
     let Some(mut session) = world.get::<ColumnDrag>(root).cloned() else {
         return Ok(());
     };
@@ -330,8 +373,12 @@ fn apply<T: Send + Sync + 'static>(
         world.entity_mut(root).insert(SuppressClick);
         let destination = endpoint(world, root, &session)?;
         if let Some((_, marker)) = destination {
-            let layout = required(world.get::<WidgetryTableLayout>(root))?;
-            let computed = required(world.get::<ComputedNode>(root))?;
+            let layout = required(
+                world.get::<WidgetryTableLayout>(root),
+                root,
+                "WidgetryTableLayout",
+            )?;
+            let computed = required(world.get::<ComputedNode>(root), root, "ComputedNode")?;
             let origin = computed.content_box().min + computed.size() * 0.5;
             let position = origin * computed.inverse_scale_factor()
                 + Vec2::new(layout.row_header_width + marker, 0.0);
@@ -351,9 +398,13 @@ fn apply<T: Send + Sync + 'static>(
                 .selected
                 .border;
             if let Some(indicator) = session.indicator {
-                required(world.get_mut::<Node>(indicator))?.set_if_neq(node);
-                required(world.get_mut::<BackgroundColor>(indicator))?
-                    .set_if_neq(BackgroundColor(color));
+                required(world.get_mut::<Node>(indicator), indicator, "Node")?.set_if_neq(node);
+                required(
+                    world.get_mut::<BackgroundColor>(indicator),
+                    indicator,
+                    "BackgroundColor",
+                )?
+                .set_if_neq(BackgroundColor(color));
             } else {
                 let indicator=spawn_scene(world,bsn!{template(move |_|Ok(node.clone())) BackgroundColor({color}) ZIndex(2) Pickable::IGNORE}).map_err(bevy_widgetry_core::scene::SceneFailure::into_bevy_error)?;
                 world.entity_mut(root).add_child(indicator);
@@ -380,7 +431,7 @@ fn apply<T: Send + Sync + 'static>(
     Ok(())
 }
 
-fn complete<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result {
+fn complete<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> RuntimeResult {
     let destination = world
         .get::<ColumnDrag>(root)
         .filter(|session| session.active && allowed::<T>(world, root, session))
@@ -411,15 +462,13 @@ fn on_drag<T: Send + Sync + 'static>(
     let pointer = event.pointer.id;
     let location = event.pointer.location();
     let distance = event.distance;
-    commands.queue(move |world: &mut World| {
-        apply::<T>(world, root, pointer, location, Some(distance)).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table 列拖拽更新失败");
-            }
-        })
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        crate::runtime_error::run_request::<T, _>(
+            world,
+            root,
+            "table.column_reorder.input",
+            |world| apply::<T>(world, root, pointer, location, Some(distance)),
+        )
     });
 }
 
@@ -432,27 +481,27 @@ fn on_end<T: Send + Sync + 'static>(
         return;
     }
     let root = event.entity;
+    let target = event.original_event_target();
     let pointer = event.pointer.id;
     let location = event.pointer.location();
-    commands.queue(move |world: &mut World| {
-        (|| -> Result {
-            if world
-                .get::<ColumnDrag>(root)
-                .is_some_and(|s| s.pointer == pointer && s.location.target == location.target)
-            {
-                apply::<T>(world, root, pointer, location, None)?;
-                complete::<T>(world, root)?;
-            }
-            Ok(())
-        })()
-        .inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table 列拖拽结束失败");
-            }
-        })
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        crate::runtime_error::run_request_at::<T, _>(
+            world,
+            root,
+            target,
+            "table.column_reorder.input",
+            |world| {
+                (|| -> RuntimeResult {
+                    if world.get::<ColumnDrag>(root).is_some_and(|s| {
+                        s.pointer == pointer && s.location.target == location.target
+                    }) {
+                        apply::<T>(world, root, pointer, location, None)?;
+                        complete::<T>(world, root)?;
+                    }
+                    Ok(())
+                })()
+            },
+        )
     });
 }
 
@@ -476,7 +525,7 @@ fn on_cancel<T: Send + Sync + 'static>(
     });
 }
 
-pub(crate) fn refresh<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result {
+pub(crate) fn refresh<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> RuntimeResult {
     if let Some(session) = world.get::<ColumnDrag>(root).cloned() {
         apply::<T>(world, root, session.pointer, session.location, None)?;
     }
@@ -515,26 +564,25 @@ fn track<T: Send + Sync + 'static>(
         }
         session.fresh = false;
         let pointer = session.pointer;
-        commands.queue(move |world: &mut World| {
-            (|| -> Result {
-                if terminal == Some(true) {
-                    cancel(world, root);
-                    return Ok(());
-                }
-                apply::<T>(world, root, pointer, location, None)?;
-                if terminal == Some(false) {
-                    complete::<T>(world, root)?;
-                }
-                Ok(())
-            })()
-            .inspect_err(|error| {
-                if error
-                    .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                    .is_none()
-                {
-                    widgetry_error!(?root,%error,"Table 列拖拽输入处理失败");
-                }
-            })
+        commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+            crate::runtime_error::run_request::<T, _>(
+                world,
+                root,
+                "table.column_reorder.input",
+                |world| {
+                    (|| -> RuntimeResult {
+                        if terminal == Some(true) {
+                            cancel(world, root);
+                            return Ok(());
+                        }
+                        apply::<T>(world, root, pointer, location, None)?;
+                        if terminal == Some(false) {
+                            complete::<T>(world, root)?;
+                        }
+                        Ok(())
+                    })()
+                },
+            )
         });
     }
 }

@@ -1,4 +1,5 @@
-use crate::projection::required;
+use crate::runtime_error::{RuntimeResult, required};
+
 use crate::{
     WidgetryTable, WidgetryTableColumnHeader, WidgetryTableColumnId, WidgetryTableEvent,
     WidgetryTableEventKind, WidgetryTableModel, WidgetryTableSortDirection, WidgetryTableViewState,
@@ -10,7 +11,6 @@ use bevy::ui_widgets::{Activate, Button};
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::scene::spawn_scene;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::collections::HashSet;
 
 #[derive(Component, Clone, Debug, Default, Reflect)]
@@ -45,7 +45,7 @@ pub(crate) fn ensure(
     root: Entity,
     header: Entity,
     column: WidgetryTableColumnId,
-) -> Result {
+) -> RuntimeResult {
     let config = world.get::<WidgetryTableHeaderActions>(root);
     let next = Controls {
         sort: config.is_some_and(|config| config.sortable.contains(&column)),
@@ -96,7 +96,11 @@ pub(crate) fn ensure(
         world.entity_mut(header).add_child(entity);
         entity
     };
-    let state = required(world.get::<WidgetryTableViewState>(root))?;
+    let state = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
     let sort = state
         .sort()
         .filter(|sort| sort.column == column)
@@ -107,7 +111,11 @@ pub(crate) fn ensure(
         .map(|children| children.iter().collect::<Vec<_>>())
         .unwrap_or_default();
     for button in buttons {
-        let action = required(world.get::<WidgetryTableHeaderAction>(button))?;
+        let action = required(
+            world.get::<WidgetryTableHeaderAction>(button),
+            button,
+            "WidgetryTableHeaderAction",
+        )?;
         let icon = match action.kind {
             WidgetryTableHeaderActionKind::Sort => match sort {
                 None => BuiltinIcon::TableSort,
@@ -122,9 +130,22 @@ pub(crate) fn ensure(
                 }
             }
         };
-        let icon_entity = required(required(world.get::<Children>(button))?.first().copied())?;
+        let icon_entity = required(
+            required(world.get::<Children>(button), button, "Children")?
+                .first()
+                .copied(),
+            button,
+            "HeaderIcon",
+        )?;
         let path = icon.path();
-        if required(world.get::<WidgetryIcon>(icon_entity))?.path() != Some(&path) {
+        if required(
+            world.get::<WidgetryIcon>(icon_entity),
+            icon_entity,
+            "WidgetryIcon",
+        )?
+        .path()
+            != Some(&path)
+        {
             WidgetryIcon::set_svg_in_world(world, icon_entity, path)
                 .map_err(|error| error.into_bevy_error())?;
         }
@@ -141,19 +162,14 @@ pub(crate) fn on_activate<T: Send + Sync + 'static>(
         return;
     }
     let target = event.entity;
-    commands.queue(move |world: &mut World| -> Result {
-        activate::<T>(world, target).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?target, %error, "Table 表头请求失败");
-            }
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        crate::runtime_error::run_request::<T, _>(world, target, "table.header.input", |world| {
+            activate::<T>(world, target)
         })
     });
 }
 
-fn activate<T: Send + Sync + 'static>(world: &mut World, target: Entity) -> Result {
+fn activate<T: Send + Sync + 'static>(world: &mut World, target: Entity) -> RuntimeResult {
     let Some(action) = world.get::<WidgetryTableHeaderAction>(target).copied() else {
         return Ok(());
     };
@@ -187,12 +203,25 @@ fn activate<T: Send + Sync + 'static>(world: &mut World, target: Entity) -> Resu
     if !enabled {
         return Ok(());
     }
-    let source = required(world.get::<WidgetryTable<T>>(root))?.source();
-    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
+    let source = required(
+        world.get::<WidgetryTable<T>>(root),
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
+    let model = required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?;
     if model.column_index(action.column).is_none() {
         return Ok(());
     }
-    let state = required(world.get::<WidgetryTableViewState>(root))?;
+    let state = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
     let kind = match action.kind {
         WidgetryTableHeaderActionKind::Sort => {
             let direction = match state

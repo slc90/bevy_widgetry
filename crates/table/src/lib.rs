@@ -4,10 +4,11 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 mod error;
 pub use error::{
     TableAxis, TableError, TableFailure, TableIdentity, TableLayoutFault, TableLayoutField,
-    TableViewRejection,
+    TableRegion, TableRendererFault, TableRendererRole, TableRuntimeFault, TableViewRejection,
 };
 mod clipboard;
 mod column_reorder;
+mod runtime_error;
 pub use clipboard::{
     WidgetryTableCopyAppExt, WidgetryTableCopyFormatter, WidgetryTableCopyFormatterRegistry,
 };

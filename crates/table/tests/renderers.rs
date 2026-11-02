@@ -1,6 +1,5 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
-use bevy::ecs::error::Severity;
 use bevy::log::tracing::Level;
 use bevy::prelude::*;
 use bevy_widgetry_table::*;
@@ -162,8 +161,15 @@ fn missing_renderers_return_logged_error_and_do_not_cross_registries() {
         [header_error, cell_error]
     });
     for error in errors {
-        assert_eq!(error.severity(), Severity::Error);
-        assert!(error.to_string().contains("no registered renderer"));
+        assert!(matches!(
+            error.kind(),
+            TableError::Runtime {
+                fault: TableRuntimeFault::Renderer {
+                    reason: TableRendererFault::MissingRenderer,
+                    ..
+                }
+            }
+        ));
     }
     assert_eq!(capture.records().len(), 2);
     assert!(
@@ -197,8 +203,15 @@ fn removed_registry_returns_logged_error_from_registration() {
         [cell, header]
     });
     for error in errors {
-        assert_eq!(error.severity(), Severity::Error);
-        assert!(error.to_string().contains("registry missing"));
+        assert!(matches!(
+            error.kind(),
+            TableError::Runtime {
+                fault: TableRuntimeFault::Renderer {
+                    reason: TableRendererFault::MissingRegistry,
+                    ..
+                }
+            }
+        ));
     }
     assert_eq!(capture.records().len(), 2);
     assert!(

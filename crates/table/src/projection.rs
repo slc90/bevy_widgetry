@@ -1,4 +1,6 @@
 use crate::layout::TableGeometry;
+use crate::runtime_error::Site;
+use crate::runtime_error::{RuntimeResult, required};
 use crate::style::{Region, bind_part};
 use crate::view::{TableCanvas, TableDiagnostics};
 use crate::viewport::VisibleCells;
@@ -9,8 +11,10 @@ use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::window::RequestRedraw;
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_core::scene::attempt::{apply_scene, into_bevy_error, spawn_scene};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_core::scene::{
+    SceneFailure,
+    attempt::{apply_scene, spawn_scene},
+};
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -23,6 +27,7 @@ pub(crate) struct TableRuntime {
     pub(crate) frozen_body: Entity,
     frozen_body_canvas: Entity,
     frozen_column_canvas: Entity,
+    frozen_columns: Entity,
     columns: Entity,
     rows: Entity,
     pub(super) corner: Entity,
@@ -43,16 +48,12 @@ struct ContentVersion {
     value_type: TypeId,
 }
 
-pub(crate) fn required<V>(value: Option<V>) -> Result<V, BevyError> {
-    value.ok_or_else(|| BevyError::error("Table required runtime state missing"))
-}
-
 pub(crate) fn viewport_width(
     world: &World,
     root: Entity,
     layout: &WidgetryTableLayout,
-) -> Result<f32, BevyError> {
-    let computed = required(world.get::<ComputedNode>(root))?;
+) -> RuntimeResult<f32> {
+    let computed = required(world.get::<ComputedNode>(root), root, "ComputedNode")?;
     Ok(
         (computed.content_box().width() * computed.inverse_scale_factor()
             - layout.row_header_width)
@@ -65,15 +66,21 @@ fn reparent_shell(
     entity: Option<Entity>,
     canvas: Entity,
     alternate: Entity,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     let Some(entity) = entity else {
         return Ok(());
     };
-    let parent = required(world.get::<ChildOf>(entity))?.parent();
+    let parent = required(world.get::<ChildOf>(entity), entity, "ChildOf")?.parent();
     if parent == alternate {
-        required(world.get_entity_mut(canvas).ok())?.add_child(entity);
+        required(world.get_entity_mut(canvas).ok(), canvas, "Entity")?.add_child(entity);
     } else if parent != canvas {
-        return Err(BevyError::error("Table shell ownership changed"));
+        return Err(TableRuntimeFault::Ownership {
+            component: "ChildOf",
+            entity,
+            expected: canvas,
+            actual: Some(parent),
+        }
+        .into());
     }
     Ok(())
 }
@@ -106,41 +113,74 @@ pub(crate) fn on_frozen_scroll(
     });
 }
 
-fn runtime(world: &World, root: Entity) -> Result<TableRuntime, BevyError> {
-    let children = required(world.get::<Children>(root))?;
-    let part = |matches: fn(&World, Entity) -> bool| {
-        required(children.iter().find(|&entity| matches(world, entity)))
+fn runtime(world: &World, root: Entity) -> RuntimeResult<TableRuntime> {
+    let children = world.get::<Children>(root);
+    let part = |region, component, matches: fn(&World, Entity) -> bool| {
+        required(
+            children.and_then(|children| children.iter().find(|&entity| matches(world, entity))),
+            root,
+            component,
+        )
+        .map_err(|error| error.at(region))
     };
-    let body = part(|world, entity| world.get::<WidgetryTableBody>(entity).is_some())?;
-    let columns = part(|world, entity| world.get::<WidgetryTableColumnHeaders>(entity).is_some())?;
-    let rows = part(|world, entity| world.get::<WidgetryTableRowHeaders>(entity).is_some())?;
-    let corner = part(|world, entity| world.get::<WidgetryTableCorner>(entity).is_some())?;
-    let frozen_body = part(|world, entity| world.get::<WidgetryTableFrozenBody>(entity).is_some())?;
-    let frozen_columns = part(|world, entity| {
-        world
-            .get::<WidgetryTableFrozenColumnHeaders>(entity)
-            .is_some()
+    let body = part(TableRegion::Body, "WidgetryTableBody", |world, entity| {
+        world.get::<WidgetryTableBody>(entity).is_some()
     })?;
-    let canvas = |entity| {
-        required(world.get::<Children>(entity).and_then(|children| {
-            children
-                .iter()
-                .find(|&entity| world.get::<TableCanvas>(entity).is_some())
-        }))
+    let columns = part(
+        TableRegion::ColumnHeaders,
+        "WidgetryTableColumnHeaders",
+        |world, entity| world.get::<WidgetryTableColumnHeaders>(entity).is_some(),
+    )?;
+    let rows = part(
+        TableRegion::RowHeaders,
+        "WidgetryTableRowHeaders",
+        |world, entity| world.get::<WidgetryTableRowHeaders>(entity).is_some(),
+    )?;
+    let corner = part(
+        TableRegion::Corner,
+        "WidgetryTableCorner",
+        |world, entity| world.get::<WidgetryTableCorner>(entity).is_some(),
+    )?;
+    let frozen_body = part(
+        TableRegion::FrozenBody,
+        "WidgetryTableFrozenBody",
+        |world, entity| world.get::<WidgetryTableFrozenBody>(entity).is_some(),
+    )?;
+    let frozen_columns = part(
+        TableRegion::FrozenColumnHeaders,
+        "WidgetryTableFrozenColumnHeaders",
+        |world, entity| {
+            world
+                .get::<WidgetryTableFrozenColumnHeaders>(entity)
+                .is_some()
+        },
+    )?;
+    let canvas = |entity, region| {
+        required(
+            world.get::<Children>(entity).and_then(|children| {
+                children
+                    .iter()
+                    .find(|&entity| world.get::<TableCanvas>(entity).is_some())
+            }),
+            entity,
+            "TableCanvas",
+        )
+        .map_err(|error| error.at(region))
     };
     Ok(TableRuntime {
         source: Entity::PLACEHOLDER,
         instance: None,
         frozen_body,
-        frozen_body_canvas: canvas(frozen_body)?,
-        frozen_column_canvas: canvas(frozen_columns)?,
+        frozen_columns,
+        frozen_body_canvas: canvas(frozen_body, TableRegion::FrozenBody)?,
+        frozen_column_canvas: canvas(frozen_columns, TableRegion::FrozenColumnHeaders)?,
         body,
         columns,
         rows,
         corner,
-        body_canvas: canvas(body)?,
-        column_canvas: canvas(columns)?,
-        row_canvas: canvas(rows)?,
+        body_canvas: canvas(body, TableRegion::Body)?,
+        column_canvas: canvas(columns, TableRegion::ColumnHeaders)?,
+        row_canvas: canvas(rows, TableRegion::RowHeaders)?,
         cells: default(),
         column_headers: default(),
         row_headers: default(),
@@ -148,54 +188,141 @@ fn runtime(world: &World, root: Entity) -> Result<TableRuntime, BevyError> {
     })
 }
 
+fn validate_runtime(world: &World, root: Entity, runtime: &TableRuntime) -> RuntimeResult {
+    let parts = [
+        (
+            runtime.body,
+            world.get::<WidgetryTableBody>(runtime.body).is_some(),
+            "WidgetryTableBody",
+            TableRegion::Body,
+        ),
+        (
+            runtime.frozen_body,
+            world
+                .get::<WidgetryTableFrozenBody>(runtime.frozen_body)
+                .is_some(),
+            "WidgetryTableFrozenBody",
+            TableRegion::FrozenBody,
+        ),
+        (
+            runtime.columns,
+            world
+                .get::<WidgetryTableColumnHeaders>(runtime.columns)
+                .is_some(),
+            "WidgetryTableColumnHeaders",
+            TableRegion::ColumnHeaders,
+        ),
+        (
+            runtime.frozen_columns,
+            world
+                .get::<WidgetryTableFrozenColumnHeaders>(runtime.frozen_columns)
+                .is_some(),
+            "WidgetryTableFrozenColumnHeaders",
+            TableRegion::FrozenColumnHeaders,
+        ),
+        (
+            runtime.rows,
+            world.get::<WidgetryTableRowHeaders>(runtime.rows).is_some(),
+            "WidgetryTableRowHeaders",
+            TableRegion::RowHeaders,
+        ),
+        (
+            runtime.corner,
+            world.get::<WidgetryTableCorner>(runtime.corner).is_some(),
+            "WidgetryTableCorner",
+            TableRegion::Corner,
+        ),
+    ];
+    for (entity, present, component, region) in parts {
+        (|| -> RuntimeResult {
+            required(present.then_some(()), entity, component)?;
+            required(world.get::<Node>(entity), entity, "Node")?;
+            let parent = world.get::<ChildOf>(entity).map(ChildOf::parent);
+            if parent != Some(root) {
+                return Err(TableRuntimeFault::Ownership {
+                    component,
+                    entity,
+                    expected: root,
+                    actual: parent,
+                }
+                .into());
+            }
+            Ok(())
+        })()
+        .map_err(|error| error.at(region))?;
+    }
+    for (canvas, parent, region) in [
+        (runtime.body_canvas, runtime.body, TableRegion::Body),
+        (
+            runtime.frozen_body_canvas,
+            runtime.frozen_body,
+            TableRegion::FrozenBody,
+        ),
+        (
+            runtime.column_canvas,
+            runtime.columns,
+            TableRegion::ColumnHeaders,
+        ),
+        (
+            runtime.frozen_column_canvas,
+            runtime.frozen_columns,
+            TableRegion::FrozenColumnHeaders,
+        ),
+        (runtime.row_canvas, runtime.rows, TableRegion::RowHeaders),
+    ] {
+        (|| -> RuntimeResult {
+            required(world.get::<TableCanvas>(canvas), canvas, "TableCanvas")?;
+            required(world.get::<Node>(canvas), canvas, "Canvas Node")?;
+            let actual = world.get::<ChildOf>(canvas).map(ChildOf::parent);
+            if actual != Some(parent) {
+                return Err(TableRuntimeFault::Ownership {
+                    component: "TableCanvas",
+                    entity: canvas,
+                    expected: parent,
+                    actual,
+                }
+                .into());
+            }
+            Ok(())
+        })()
+        .map_err(|error| error.at(region))?;
+    }
+    Ok(())
+}
+
 pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
     let roots: Vec<_> = world
         .query_filtered::<Entity, With<WidgetryTable<T>>>()
         .iter(world)
         .collect();
-    let mut failure = None;
+    let mut failures = Vec::new();
     for root in roots {
-        if world.get::<WidgetryTable<T>>(root).is_none() {
-            continue;
-        }
-        let result = reconcile_root::<T>(world, root);
-        // A semantic event callback may legitimately despawn the root, leaving no diagnostic state to inspect.
+        let site = Site::view::<T>(world, root);
+        let result = reconcile_root::<T>(world, root, &mut failures);
+        // A semantic event callback may legitimately despawn the root.
         if !world.entities().contains(root) {
             continue;
         }
-        let result = if let Some(mut diagnostics) = world.get_mut::<TableDiagnostics>(root) {
-            diagnostics.0.observe(
-                result,
-                |error| {
-                    if error
-                        .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                        .is_none()
-                    {
-                        widgetry_error!(entity = ?root, %error, "Table View reconciliation 失败");
-                    }
-                },
-                || widgetry_info!(entity = ?root, "Table View 恢复正常"),
-            )
-        } else {
-            widgetry_error!(entity = ?root, "Table 诊断 state 缺失");
-            Err(BevyError::error("Table diagnostics missing"))
-        };
+        let result = observe(world, site, result);
         if let Err(error) = result {
             discard_projection(world, root);
-            if failure.is_none() {
-                failure = Some(error);
-            }
+            failures.push(error);
         }
     }
-    failure.map_or(Ok(()), Err)
+    crate::runtime_error::dispatch(world, failures)
 }
-
+fn observe<V>(world: &mut World, site: Site, result: RuntimeResult<V>) -> Result<V, BevyError> {
+    match world.get_mut::<TableDiagnostics>(site.view) {
+        Some(mut diagnostics) => diagnostics.0.observe(site, result, "table.project"),
+        None => crate::runtime_error::request(result, site, "table.project"),
+    }
+}
 fn discard_projection(world: &mut World, root: Entity) {
     crate::column_reorder::cancel(world, root);
     crate::editing::close(world, root);
     crate::selection_drag::finish(world, root);
     crate::interaction::clear(world, root);
-    let canvases: Vec<_> = world
+    let mut canvases: HashSet<_> = world
         .get::<Children>(root)
         .into_iter()
         .flat_map(|children| children.iter())
@@ -207,6 +334,15 @@ fn discard_projection(world: &mut World, root: Entity) {
         })
         .filter(|&entity| world.get::<TableCanvas>(entity).is_some())
         .collect();
+    if let Some(runtime) = world.get::<TableRuntime>(root) {
+        canvases.extend([
+            runtime.body_canvas,
+            runtime.frozen_body_canvas,
+            runtime.column_canvas,
+            runtime.frozen_column_canvas,
+            runtime.row_canvas,
+        ]);
+    }
     for canvas in canvases {
         let children = world
             .get::<Children>(canvas)
@@ -229,17 +365,26 @@ fn discard_projection(world: &mut World, root: Entity) {
 fn reconcile_root<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
-) -> Result<(), BevyError> {
+    failures: &mut Vec<BevyError>,
+) -> RuntimeResult {
+    let site = Site::view::<T>(world, root);
+    let failure_count = failures.len();
     let mut runtime = world
         .get::<TableRuntime>(root)
         .cloned()
         .map(Ok)
         .unwrap_or_else(|| runtime(world, root))?;
-    let source = required(world.get::<WidgetryTable<T>>(root))?.source();
+    let source = required(
+        world.get::<WidgetryTable<T>>(root),
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
     let instance = world
         .get::<WidgetryTableModel<T>>(source)
-        .ok_or_else(|| {
-            BevyError::error("Table requires a live matching WidgetryTableModel source")
+        .ok_or(TableRuntimeFault::Missing {
+            entity: source,
+            component: "WidgetryTableModel<T>",
         })?
         .instance()
         .clone();
@@ -251,6 +396,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         discard_projection(world, root);
         runtime = self::runtime(world, root)?;
     }
+    validate_runtime(world, root, &runtime)?;
     runtime.source = source;
     runtime.instance = Some(instance);
     crate::resize::sync::<T>(world, root, source);
@@ -258,19 +404,50 @@ fn reconcile_root<T: Send + Sync + 'static>(
     if world.get::<WidgetryTable<T>>(root).is_none() {
         return Ok(());
     }
+    required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
+    required(
+        world.get::<WidgetryTableState>(root),
+        root,
+        "WidgetryTableState",
+    )?;
     crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     crate::editing::repair_session::<T>(world, root);
     // Resize termination observers may change axes or despawn the root through Commands.
     // Finish callbacks before reading the Model to avoid using IDs or counts they invalidated.
-    world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
-        BevyError::error("Table requires a live matching WidgetryTableModel source")
-    })?;
-    let ids = required(world.get::<WidgetryTableViewState>(root))?
-        .ordered_columns()
-        .to_vec();
-    let rows = required(world.get::<WidgetryTableViewState>(root))?.len();
-    let layout = required(world.get::<WidgetryTableLayout>(root))?.clone();
-    let computed = required(world.get::<ComputedNode>(runtime.body))?;
+    required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?;
+    let ids = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?
+    .ordered_columns()
+    .to_vec();
+    let rows = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?
+    .len();
+    let layout = required(
+        world.get::<WidgetryTableLayout>(root),
+        root,
+        "WidgetryTableLayout",
+    )?
+    .clone();
+    let computed = required(
+        world.get::<ComputedNode>(runtime.body),
+        runtime.body,
+        "ComputedNode",
+    )
+    .map_err(|error| error.at(TableRegion::Body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
     let inverse = computed.inverse_scale_factor();
     let width = viewport_width(world, root, &layout)?;
@@ -278,7 +455,13 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let geometry = crate::error::observe_layout(world, root, source, result)?;
     let scrolling_size = Vec2::new((width - geometry.frozen_width).max(0.0), measured.y);
     crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, scrolling_size)?;
-    let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
+    let previous = required(
+        world.get::<ScrollPosition>(runtime.body),
+        runtime.body,
+        "ScrollPosition",
+    )
+    .map_err(|error| error.at(TableRegion::Body))?
+    .0;
     let offset = Vec2::new(
         clamp_offset(
             previous.x,
@@ -292,16 +475,24 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let physical_offset = (offset / inverse).floor() * inverse;
     let full_size = Vec2::new(width, measured.y);
     let visible = VisibleCells::new(&geometry, rows, physical_offset, full_size);
-    required(world.get::<WidgetryTableStyle>(root))?;
+    required(
+        world.get::<WidgetryTableStyle>(root),
+        root,
+        "WidgetryTableStyle",
+    )?;
     bind_part(world, root, root, Region::Table)?;
     bind_part(world, root, runtime.corner, Region::Corner)?;
     let header_rows =
         VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(1.0, measured.y)).rows;
     let row_ids: Vec<_> = header_rows
         .map(|index| {
-            required(world.get::<WidgetryTableViewState>(root))
-                .and_then(|projection| required(projection.row_id(index)))
-                .map(|id| (index, id))
+            required(
+                world.get::<WidgetryTableViewState>(root),
+                root,
+                "WidgetryTableViewState",
+            )
+            .and_then(|projection| required(projection.row_id(index), root, "RowId"))
+            .map(|id| (index, id))
         })
         .collect::<Result<_, _>>()?;
     let current_rows: HashSet<_> = row_ids.iter().map(|(_, row)| *row).collect();
@@ -329,7 +520,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
             runtime.frozen_body_canvas
         };
         reparent_shell(world, Some(entity), canvas, alternate)?;
-        let mut node = required(world.get_mut::<Node>(entity))?;
+        let mut node = required(world.get_mut::<Node>(entity), entity, "Node")?;
         node.top = px(row as f32 * geometry.row_height);
         node.left = px(column.left
             - if column.frozen {
@@ -359,29 +550,47 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .column_indices()
         .map(|index| &geometry.columns[index])
     {
-        let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-        let model_column = required(model.column_index(column.id))?;
-        let header = required(model.column(model_column))?.header();
-        let revision = required(model.column_revision(model_column))?;
-        let registry = required(world.get_resource::<WidgetryTableHeaderRendererRegistry>())?;
-        let version = ContentVersion {
-            row: 0,
-            column: revision,
-            generation: registry.0.generation(header.type_id())?,
-            value_type: header.type_id(),
-        };
-        let old = runtime.column_headers.get(&column.id).copied();
-        let canvas = if column.frozen {
-            runtime.frozen_column_canvas
-        } else {
-            runtime.column_canvas
-        };
-        let alternate = if column.frozen {
-            runtime.column_canvas
-        } else {
-            runtime.frozen_column_canvas
-        };
-        let scene = needs_content(world, old, version)
+        let location = site.at(
+            if column.frozen {
+                TableRegion::FrozenColumnHeader
+            } else {
+                TableRegion::ColumnHeader
+            },
+            None,
+            Some(column.id),
+        );
+        let result = (|| -> RuntimeResult {
+            let model = required(
+                world.get::<WidgetryTableModel<T>>(source),
+                source,
+                "WidgetryTableModel<T>",
+            )?;
+            let model_column = required(model.column_index(column.id), root, "ColumnIndex")?;
+            let header = required(model.column(model_column), root, "Column")?.header();
+            let revision = required(model.column_revision(model_column), root, "ColumnRevision")?;
+            let registry = required(
+                world.get_resource::<WidgetryTableHeaderRendererRegistry>(),
+                Entity::PLACEHOLDER,
+                "WidgetryTableHeaderRendererRegistry",
+            )?;
+            let version = ContentVersion {
+                row: 0,
+                column: revision,
+                generation: registry.0.generation(header.type_id())?,
+                value_type: header.type_id(),
+            };
+            let old = runtime.column_headers.get(&column.id).copied();
+            let canvas = if column.frozen {
+                runtime.frozen_column_canvas
+            } else {
+                runtime.column_canvas
+            };
+            let alternate = if column.frozen {
+                runtime.column_canvas
+            } else {
+                runtime.frozen_column_canvas
+            };
+            let scene = needs_content(world, old, version)
             .then(|| registry.0.scene(header.as_any()).map(|(_, scene)| -> Box<dyn SceneList> {
                 Box::new(bsn_list! {
                     Node { flex_grow: 1.0, min_width: px(0), height: percent(100), overflow: Overflow::clip(), align_items: AlignItems::Center }
@@ -389,113 +598,6 @@ fn reconcile_root<T: Send + Sync + 'static>(
                 })
             }))
             .transpose()?;
-        reparent_shell(world, old, canvas, alternate)?;
-        let entity = shell(
-            world,
-            canvas,
-            old,
-            version,
-            scene,
-            column.left
-                - if column.frozen {
-                    0.0
-                } else {
-                    geometry.frozen_width
-                },
-            0.0,
-            column.width,
-            layout.column_header_height,
-        )?;
-        let identity = WidgetryTableColumnHeader { column: column.id };
-        if world.get::<WidgetryTableColumnHeader>(entity) != Some(&identity) {
-            world.entity_mut(entity).insert(identity);
-        }
-        bind_part(world, root, entity, Region::ColumnHeader)?;
-        runtime.column_headers.insert(column.id, entity);
-        crate::resize::ensure_handle(world, entity, column.id)?;
-        crate::header::ensure(world, root, entity, column.id)?;
-    }
-    for (index, row) in row_ids.iter().copied() {
-        let old = runtime.row_headers.get(&row).copied();
-        let version = ContentVersion {
-            row: index as u64,
-            column: 0,
-            generation: 0,
-            value_type: TypeId::of::<String>(),
-        };
-        let scene = needs_content(world, old, version).then(|| {
-            Box::new(bsn_list!{Text({ (index + 1).to_string() }) bevy_widgetry_core::text::WidgetryText}) as Box<dyn SceneList>
-        });
-        let entity = shell(
-            world,
-            runtime.row_canvas,
-            old,
-            version,
-            scene,
-            0.0,
-            index as f32 * geometry.row_height,
-            layout.row_header_width,
-            geometry.row_height,
-        )?;
-        let identity = WidgetryTableRowHeader { row, index };
-        if world.get::<WidgetryTableRowHeader>(entity) != Some(&identity) {
-            world.entity_mut(entity).insert(identity);
-        }
-        bind_part(world, root, entity, Region::RowHeader)?;
-        runtime.row_headers.insert(row, entity);
-        if !visible.rows.contains(&index) {
-            continue;
-        }
-        for column in visible
-            .column_indices()
-            .map(|index| &geometry.columns[index])
-        {
-            let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-            let registry = required(world.get_resource::<WidgetryTableCellRendererRegistry>())?;
-            let old = runtime.cells.get(&(row, column.id)).copied();
-            let canvas = if column.frozen {
-                runtime.frozen_body_canvas
-            } else {
-                runtime.body_canvas
-            };
-            let alternate = if column.frozen {
-                runtime.body_canvas
-            } else {
-                runtime.frozen_body_canvas
-            };
-            let model_index = required(model.row_index(row))?;
-            let row_revision = required(model.row_revision(model_index))?;
-            let model_column = required(model.column_index(column.id))?;
-            let column_revision = required(model.column_revision(model_column))?;
-            let cached = old
-                .and_then(|entity| world.get::<ContentVersion>(entity))
-                .copied();
-            let unchanged = if let Some(cached) = cached {
-                old.is_some_and(|entity| {
-                    world
-                        .get::<crate::editing::EditingContent>(entity)
-                        .is_some()
-                }) || cached.row == row_revision
-                    && cached.column == column_revision
-                    && cached.generation == registry.0.generation(cached.value_type)?
-            } else {
-                false
-            };
-            let (version, scene) = if unchanged {
-                (required(cached)?, None)
-            } else {
-                let value = required(model.cell_at(model_index, model_column))?;
-                let (generation, scene) = registry.0.scene(value.as_any())?;
-                (
-                    ContentVersion {
-                        row: row_revision,
-                        column: column_revision,
-                        generation,
-                        value_type: value.type_id(),
-                    },
-                    Some(scene),
-                )
-            };
             reparent_shell(world, old, canvas, alternate)?;
             let entity = shell(
                 world,
@@ -509,23 +611,167 @@ fn reconcile_root<T: Send + Sync + 'static>(
                     } else {
                         geometry.frozen_width
                     },
-                index as f32 * geometry.row_height,
+                0.0,
                 column.width,
-                geometry.row_height,
+                layout.column_header_height,
             )?;
-            let identity = WidgetryTableCell {
-                row,
-                column: column.id,
-            };
-            if world.get::<WidgetryTableCell>(entity) != Some(&identity) {
+            let identity = WidgetryTableColumnHeader { column: column.id };
+            if world.get::<WidgetryTableColumnHeader>(entity) != Some(&identity) {
                 world.entity_mut(entity).insert(identity);
             }
-            bind_part(world, root, entity, Region::Cell)?;
-            runtime.cells.insert((row, column.id), entity);
+            bind_part(world, root, entity, Region::ColumnHeader)?;
+            runtime.column_headers.insert(column.id, entity);
+            crate::resize::ensure_handle(world, entity, column.id)?;
+            crate::header::ensure(world, root, entity, column.id)?;
+            Ok(())
+        })();
+        if let Err(error) = observe(world, location, result) {
+            failures.push(error);
+        }
+    }
+    for (index, row) in row_ids.iter().copied() {
+        let location = site.at(TableRegion::RowHeader, Some(row), None);
+        let result = (|| -> RuntimeResult {
+            let old = runtime.row_headers.get(&row).copied();
+            let version = ContentVersion {
+                row: index as u64,
+                column: 0,
+                generation: 0,
+                value_type: TypeId::of::<String>(),
+            };
+            let scene = needs_content(world, old, version).then(|| {
+            Box::new(bsn_list!{Text({ (index + 1).to_string() }) bevy_widgetry_core::text::WidgetryText}) as Box<dyn SceneList>
+        });
+            let entity = shell(
+                world,
+                runtime.row_canvas,
+                old,
+                version,
+                scene,
+                0.0,
+                index as f32 * geometry.row_height,
+                layout.row_header_width,
+                geometry.row_height,
+            )?;
+            let identity = WidgetryTableRowHeader { row, index };
+            if world.get::<WidgetryTableRowHeader>(entity) != Some(&identity) {
+                world.entity_mut(entity).insert(identity);
+            }
+            bind_part(world, root, entity, Region::RowHeader)?;
+            runtime.row_headers.insert(row, entity);
+            Ok(())
+        })();
+        if let Err(error) = observe(world, location, result) {
+            failures.push(error);
+        }
+        if !visible.rows.contains(&index) {
+            continue;
+        }
+        for column in visible
+            .column_indices()
+            .map(|index| &geometry.columns[index])
+        {
+            let location = site.at(
+                if column.frozen {
+                    TableRegion::FrozenCell
+                } else {
+                    TableRegion::Cell
+                },
+                Some(row),
+                Some(column.id),
+            );
+            let result = (|| -> RuntimeResult {
+                let model = required(
+                    world.get::<WidgetryTableModel<T>>(source),
+                    source,
+                    "WidgetryTableModel<T>",
+                )?;
+                let registry = required(
+                    world.get_resource::<WidgetryTableCellRendererRegistry>(),
+                    Entity::PLACEHOLDER,
+                    "WidgetryTableCellRendererRegistry",
+                )?;
+                let old = runtime.cells.get(&(row, column.id)).copied();
+                let canvas = if column.frozen {
+                    runtime.frozen_body_canvas
+                } else {
+                    runtime.body_canvas
+                };
+                let alternate = if column.frozen {
+                    runtime.body_canvas
+                } else {
+                    runtime.frozen_body_canvas
+                };
+                let model_index = required(model.row_index(row), root, "RowIndex")?;
+                let row_revision = required(model.row_revision(model_index), root, "RowRevision")?;
+                let model_column = required(model.column_index(column.id), root, "ColumnIndex")?;
+                let column_revision =
+                    required(model.column_revision(model_column), root, "ColumnRevision")?;
+                let cached = old
+                    .and_then(|entity| world.get::<ContentVersion>(entity))
+                    .copied();
+                let unchanged = if let Some(cached) = cached {
+                    old.is_some_and(|entity| {
+                        world
+                            .get::<crate::editing::EditingContent>(entity)
+                            .is_some()
+                    }) || cached.row == row_revision
+                        && cached.column == column_revision
+                        && cached.generation == registry.0.generation(cached.value_type)?
+                } else {
+                    false
+                };
+                let (version, scene) = if unchanged {
+                    (required(cached, root, "ContentVersion")?, None)
+                } else {
+                    let value =
+                        required(model.cell_at(model_index, model_column), root, "CellValue")?;
+                    let (generation, scene) = registry.0.scene(value.as_any())?;
+                    (
+                        ContentVersion {
+                            row: row_revision,
+                            column: column_revision,
+                            generation,
+                            value_type: value.type_id(),
+                        },
+                        Some(scene),
+                    )
+                };
+                reparent_shell(world, old, canvas, alternate)?;
+                let entity = shell(
+                    world,
+                    canvas,
+                    old,
+                    version,
+                    scene,
+                    column.left
+                        - if column.frozen {
+                            0.0
+                        } else {
+                            geometry.frozen_width
+                        },
+                    index as f32 * geometry.row_height,
+                    column.width,
+                    geometry.row_height,
+                )?;
+                let identity = WidgetryTableCell {
+                    row,
+                    column: column.id,
+                };
+                if world.get::<WidgetryTableCell>(entity) != Some(&identity) {
+                    world.entity_mut(entity).insert(identity);
+                }
+                bind_part(world, root, entity, Region::Cell)?;
+                runtime.cells.insert((row, column.id), entity);
+                Ok(())
+            })();
+            if let Err(error) = observe(world, location, result) {
+                failures.push(error);
+            }
         }
     }
     {
-        let mut node = required(world.get_mut::<Node>(root))?;
+        let mut node = required(world.get_mut::<Node>(root), root, "Node")?;
         let columns = vec![
             RepeatedGridTrack::px(1, layout.row_header_width),
             RepeatedGridTrack::px(1, geometry.frozen_width),
@@ -547,45 +793,80 @@ fn reconcile_root<T: Send + Sync + 'static>(
         runtime.body_canvas,
         geometry.width - geometry.frozen_width,
         geometry.height,
-    )?;
+    )
+    .map_err(|error| error.at(TableRegion::Body))?;
     size_canvas(
         world,
         runtime.frozen_body_canvas,
         geometry.frozen_width,
         geometry.height,
-    )?;
+    )
+    .map_err(|error| error.at(TableRegion::FrozenBody))?;
     size_canvas(
         world,
         runtime.frozen_column_canvas,
         geometry.frozen_width,
         layout.column_header_height,
-    )?;
+    )
+    .map_err(|error| error.at(TableRegion::FrozenColumnHeaders))?;
     size_canvas(
         world,
         runtime.column_canvas,
         geometry.width - geometry.frozen_width,
         layout.column_header_height,
-    )?;
+    )
+    .map_err(|error| error.at(TableRegion::ColumnHeaders))?;
     size_canvas(
         world,
         runtime.row_canvas,
         layout.row_header_width,
         geometry.height,
-    )?;
-    required(world.get_mut::<ScrollPosition>(runtime.body))?
-        .map_unchanged(|value| &mut value.0)
-        .set_if_neq(offset);
-    required(world.get_mut::<ScrollPosition>(runtime.columns))?
-        .map_unchanged(|value| &mut value.0)
-        .set_if_neq(Vec2::new(offset.x, 0.0));
-    required(world.get_mut::<ScrollPosition>(runtime.rows))?
-        .map_unchanged(|value| &mut value.0)
-        .set_if_neq(Vec2::new(0.0, offset.y));
-    required(world.get_mut::<ScrollPosition>(runtime.frozen_body))?
-        .map_unchanged(|value| &mut value.0)
-        .set_if_neq(Vec2::new(0.0, offset.y));
+    )
+    .map_err(|error| error.at(TableRegion::RowHeaders))?;
+    required(
+        world.get_mut::<ScrollPosition>(runtime.body),
+        runtime.body,
+        "ScrollPosition",
+    )
+    .map_err(|error| error.at(TableRegion::Body))?
+    .map_unchanged(|value| &mut value.0)
+    .set_if_neq(offset);
+    required(
+        world.get_mut::<ScrollPosition>(runtime.columns),
+        runtime.columns,
+        "ScrollPosition",
+    )
+    .map_err(|error| error.at(TableRegion::ColumnHeaders))?
+    .map_unchanged(|value| &mut value.0)
+    .set_if_neq(Vec2::new(offset.x, 0.0));
+    required(
+        world.get_mut::<ScrollPosition>(runtime.rows),
+        runtime.rows,
+        "ScrollPosition",
+    )
+    .map_err(|error| error.at(TableRegion::RowHeaders))?
+    .map_unchanged(|value| &mut value.0)
+    .set_if_neq(Vec2::new(0.0, offset.y));
+    required(
+        world.get_mut::<ScrollPosition>(runtime.frozen_body),
+        runtime.frozen_body,
+        "ScrollPosition",
+    )
+    .map_err(|error| error.at(TableRegion::FrozenBody))?
+    .map_unchanged(|value| &mut value.0)
+    .set_if_neq(Vec2::new(0.0, offset.y));
     runtime.measured = measured;
     world.entity_mut(root).insert((runtime, geometry));
+    if failures.len() != failure_count {
+        crate::column_reorder::cancel(world, root);
+        crate::editing::close(world, root);
+        crate::selection_drag::finish(world, root);
+        crate::interaction::clear(world, root);
+        crate::resize::cancel(world, root);
+        if !world.entities().contains(root) {
+            return Ok(());
+        }
+    }
     crate::editing::sync::<T>(world, root)?;
     crate::resize::sync::<T>(world, root, source);
     crate::selection_drag::refresh::<T>(world, root)?;
@@ -600,39 +881,89 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     root: Entity,
     source: Entity,
     runtime: &TableRuntime,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     let Some(column) = crate::resize::active_column(world, root) else {
         return Ok(());
     };
-    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-    let index = required(model.column_index(column))?;
-    let header = required(model.header(column))?;
-    let registry = required(world.get_resource::<WidgetryTableHeaderRendererRegistry>())?;
-    let version = ContentVersion {
-        row: 0,
-        column: required(model.column_revision(index))?,
-        generation: registry.0.generation(header.type_id())?,
-        value_type: header.type_id(),
-    };
+    let model = required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?;
+    let frozen = world.get::<TableGeometry>(root).is_some_and(|geometry| {
+        geometry
+            .columns
+            .iter()
+            .any(|entry| entry.id == column && entry.frozen)
+    });
+    let location = Site::view::<T>(world, root).at(
+        if frozen {
+            TableRegion::FrozenColumnHeader
+        } else {
+            TableRegion::ColumnHeader
+        },
+        None,
+        Some(column),
+    );
+    let version = (|| -> RuntimeResult<ContentVersion> {
+        let index = required(model.column_index(column), root, "ColumnIndex")?;
+        let header = required(model.header(column), root, "HeaderValue")?;
+        let registry = required(
+            world.get_resource::<WidgetryTableHeaderRendererRegistry>(),
+            Entity::PLACEHOLDER,
+            "WidgetryTableHeaderRendererRegistry",
+        )?;
+        Ok(ContentVersion {
+            row: 0,
+            column: required(model.column_revision(index), root, "ColumnRevision")?,
+            generation: registry.0.generation(header.type_id())?,
+            value_type: header.type_id(),
+        })
+    })()
+    .map_err(|error| crate::runtime_error::RuntimeFailure::AtSite(location, Box::new(error)))?;
     if needs_content(world, runtime.column_headers.get(&column).copied(), version) {
         crate::resize::cancel(world, root);
         return Ok(());
     }
-    let ids = required(world.get::<WidgetryTableViewState>(root))?
-        .ordered_columns()
-        .to_vec();
-    let rows = required(world.get::<WidgetryTableViewState>(root))?.len();
-    let computed = required(world.get::<ComputedNode>(runtime.body))?;
+    let ids = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?
+    .ordered_columns()
+    .to_vec();
+    let rows = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?
+    .len();
+    let computed = required(
+        world.get::<ComputedNode>(runtime.body),
+        runtime.body,
+        "ComputedNode",
+    )
+    .map_err(|error| error.at(TableRegion::Body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
     let inverse = computed.inverse_scale_factor();
-    let layout = required(world.get::<WidgetryTableLayout>(root))?;
+    let layout = required(
+        world.get::<WidgetryTableLayout>(root),
+        root,
+        "WidgetryTableLayout",
+    )?;
     let width = viewport_width(world, root, layout)?;
     let result = layout.resolve(ids, rows, width);
     let geometry = crate::error::observe_layout(world, root, source, result)?;
     let scrolling_size = Vec2::new((width - geometry.frozen_width).max(0.0), measured.y);
     // Consume pending keyboard reveal too so later projection cannot scroll the active handle out of the viewport.
     crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, scrolling_size)?;
-    let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
+    let previous = required(
+        world.get::<ScrollPosition>(runtime.body),
+        runtime.body,
+        "ScrollPosition",
+    )
+    .map_err(|error| error.at(TableRegion::Body))?
+    .0;
     let offset = Vec2::new(
         clamp_offset(
             previous.x,
@@ -643,7 +974,11 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     );
     let physical_offset = (offset / inverse).floor() * inverse;
     let visible = VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(width, 1.0));
-    if !visible.contains_column(required(geometry.indices.get(&column).copied())?) {
+    if !visible.contains_column(required(
+        geometry.indices.get(&column).copied(),
+        root,
+        "ColumnGeometry",
+    )?) {
         crate::resize::cancel(world, root);
     }
     Ok(())
@@ -725,7 +1060,7 @@ fn shell(
     top: f32,
     width: f32,
     height: f32,
-) -> Result<Entity, BevyError> {
+) -> RuntimeResult<Entity> {
     let node = Node {
         position_type: PositionType::Absolute,
         left: px(left),
@@ -744,9 +1079,15 @@ fn shell(
         ..default()
     };
     let entity = if let Some(entity) = old {
-        required(world.get::<Node>(entity))?;
-        if required(world.get::<ChildOf>(entity))?.parent() != canvas {
-            return Err(BevyError::error("Table shell ownership changed"));
+        required(world.get::<Node>(entity), entity, "Node")?;
+        if required(world.get::<ChildOf>(entity), entity, "ChildOf")?.parent() != canvas {
+            return Err(TableRuntimeFault::Ownership {
+                component: "ChildOf",
+                entity,
+                expected: canvas,
+                actual: world.get::<ChildOf>(entity).map(ChildOf::parent),
+            }
+            .into());
         }
         if let Some(scene) = scene {
             crate::style::content_changed(world, entity);
@@ -757,11 +1098,11 @@ fn shell(
             for child in children {
                 world.despawn(child);
             }
-            apply_scene(&mut world.entity_mut(entity), bsn! { Children [{scene}] })
-                .map_err(|error| into_bevy_error(error, entity, "Table shell update"))?;
+            world.entity_mut(entity).remove::<ContentVersion>();
+            expand_content(world, entity, scene, version)?;
             world.entity_mut(entity).insert(version);
         }
-        let mut current = required(world.get_mut::<Node>(entity))?;
+        let mut current = required(world.get_mut::<Node>(entity), entity, "Node")?;
         // Shell geometry and styling share the same Node.
         // Preserve the previous padding and border so each frame does not clear and then restore them.
         let mut node = node;
@@ -770,7 +1111,8 @@ fn shell(
         current.set_if_neq(node);
         entity
     } else {
-        let scene = required(scene)?;
+        let scene = required(scene, canvas, "RendererScene")?;
+        required(world.get_entity(canvas).ok(), canvas, "Entity")?;
         let entity = spawn_scene(
             world,
             bsn! {
@@ -779,23 +1121,74 @@ fn shell(
                 template(move |_| Ok(version))
                 template(move |_| Ok(node.clone()))
                 template(|_| Ok(ResolvedForeground::default()))
-                Children [{scene}]
             },
         )
-        .map_err(|error| into_bevy_error(error, canvas, "Table shell spawn"))?;
-        required(world.get_entity_mut(canvas).ok())?.add_child(entity);
+        .map_err(|error| {
+            SceneFailure::from_native(error, canvas, "table.shell.spawn").into_bevy_error()
+        })?;
+        if let Err(error) = expand_content(world, entity, scene, version) {
+            world.despawn(entity);
+            return Err(error);
+        }
+        required(world.get_entity_mut(canvas).ok(), canvas, "Entity")?.add_child(entity);
         entity
     };
     Ok(entity)
 }
 
-fn size_canvas(
+fn expand_content(
     world: &mut World,
-    canvas: Entity,
-    width: f32,
-    height: f32,
-) -> Result<(), BevyError> {
-    let mut node = required(world.get_mut::<Node>(canvas))?;
+    entity: Entity,
+    scene: Box<dyn SceneList>,
+    version: ContentVersion,
+) -> RuntimeResult {
+    let before = world.increment_change_tick();
+    if let Err(error) = apply_scene(&mut world.entity_mut(entity), bsn! { Children [{scene}] }) {
+        cleanup_attempt(world, entity, before);
+        return Err(
+            SceneFailure::from_native(error, entity, "table.renderer.expand")
+                .with_context(
+                    bevy_widgetry_diagnostics::ErrorFrame::new("table.renderer")
+                        .field("value_type", format_args!("{:?}", version.value_type))
+                        .field("generation", version.generation),
+                )
+                .into_bevy_error()
+                .into(),
+        );
+    }
+    Ok(())
+}
+fn cleanup_attempt(world: &mut World, content: Entity, before: bevy::ecs::change_detection::Tick) {
+    let current = world.change_tick();
+    let mut pending = world
+        .get::<Children>(content)
+        .map(|children| children.to_vec())
+        .unwrap_or_default();
+    let mut created = Vec::new();
+    while let Some(entity) = pending.pop() {
+        let new = world
+            .entities()
+            .entity_get_spawn_or_despawn_tick(entity)
+            .is_some_and(|spawned| spawned.is_newer_than(before, current));
+        if new {
+            if let Some(children) = world.get::<Children>(entity) {
+                pending.extend(children.iter());
+            }
+            created.push(entity);
+        } else if let Ok(mut entity) = world.get_entity_mut(entity) {
+            // A successful Template can attach an existing business subtree before a sibling fails.
+            entity.remove::<ChildOf>();
+        }
+    }
+    for entity in created {
+        if world.entities().contains(entity) {
+            world.despawn(entity);
+        }
+    }
+}
+
+fn size_canvas(world: &mut World, canvas: Entity, width: f32, height: f32) -> RuntimeResult {
+    let mut node = required(world.get_mut::<Node>(canvas), canvas, "Node")?;
     if node.width != px(width) {
         node.width = px(width);
     }

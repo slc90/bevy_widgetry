@@ -1,5 +1,6 @@
 use crate::layout::TableGeometry;
-use crate::projection::required;
+use crate::runtime_error::{RuntimeResult, required};
+
 use crate::{
     WidgetryTable, WidgetryTableColumnId, WidgetryTableColumnWidth, WidgetryTableEvent,
     WidgetryTableEventKind, WidgetryTableLayout, WidgetryTableModel, WidgetryTableState,
@@ -14,7 +15,6 @@ use bevy::ui::InteractionDisabled;
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_cursor::CursorLease;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component)]
 pub(crate) struct ResizeHandle {
@@ -79,7 +79,7 @@ pub(crate) fn ensure_handle(
     world: &mut World,
     header: Entity,
     column: WidgetryTableColumnId,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     if world.get::<Children>(header).is_some_and(|children| {
         children.iter().any(|entity| {
             world
@@ -95,7 +95,7 @@ pub(crate) fn ensure_handle(
         Node {position_type:PositionType::Absolute,right:px(0),top:px(0),width:px(6),height:percent(100)}
         ZIndex(1)
     }).map_err(bevy_widgetry_core::scene::SceneFailure::into_bevy_error)?;
-    required(world.get_entity_mut(header).ok())?.add_child(entity);
+    required(world.get_entity_mut(header).ok(), header, "Entity")?.add_child(entity);
     Ok(())
 }
 
@@ -210,14 +210,13 @@ pub(crate) fn on_start<T: Send + Sync + 'static>(
     let context = event.pointer.location();
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        start::<T>(world, root, target, pointer, context).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table resize start 失败");
-            }
-        })
+        crate::runtime_error::run_request_at::<T, _>(
+            world,
+            root,
+            target,
+            "table.resize.input",
+            |world| start::<T>(world, root, target, pointer, context),
+        )
     });
 }
 
@@ -227,7 +226,7 @@ fn start<T: Send + Sync + 'static>(
     target: Entity,
     pointer: PointerId,
     context: Location,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     if world.get::<WidgetryTable<T>>(root).is_none()
         || world.get::<InteractionDisabled>(root).is_some()
         || world.get::<ResizeSession>(root).is_some()
@@ -238,16 +237,30 @@ fn start<T: Send + Sync + 'static>(
     let Some(target) = handle(world, root, target) else {
         return Ok(());
     };
-    let column = required(world.get::<ResizeHandle>(target))?.column;
-    let source = required(world.get::<WidgetryTable<T>>(root))?.source();
-    if required(world.get::<WidgetryTableModel<T>>(source))?
-        .column_index(column)
-        .is_none()
+    let column = required(world.get::<ResizeHandle>(target), target, "ResizeHandle")?.column;
+    let source = required(
+        world.get::<WidgetryTable<T>>(root),
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
+    if required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?
+    .column_index(column)
+    .is_none()
     {
         return Ok(());
     }
-    let geometry = required(world.get::<TableGeometry>(root))?;
-    let width = required(geometry.columns.iter().find(|item| item.id == column))?.width;
+    let geometry = required(world.get::<TableGeometry>(root), root, "TableGeometry")?;
+    let width = required(
+        geometry.columns.iter().find(|item| item.id == column),
+        root,
+        "geometry.columns.iter().find(|item| item.id == column)",
+    )?
+    .width;
     // Winit already converts Pointer distance to window logical pixels.
     // Divide only by the additional UiScale because applying native DPI again would shorten the drag distance.
     let inverse_ui_scale = world
@@ -285,7 +298,7 @@ fn apply<T: Send + Sync + 'static>(
     pointer: PointerId,
     distance: Vec2,
     context: &NormalizedRenderTarget,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     let Some(mut session) = world.get::<ResizeSession>(root).cloned() else {
         return Ok(());
     };
@@ -296,12 +309,22 @@ fn apply<T: Send + Sync + 'static>(
     {
         return Ok(());
     }
-    let source = required(world.get::<WidgetryTable<T>>(root))?.source();
+    let source = required(
+        world.get::<WidgetryTable<T>>(root),
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
     sync::<T>(world, root, source);
     if world.get::<ResizeSession>(root).is_none() {
         return Ok(());
     }
-    let minimum = required(world.get::<WidgetryTableLayout>(root))?.min_column_width;
+    let minimum = required(
+        world.get::<WidgetryTableLayout>(root),
+        root,
+        "WidgetryTableLayout",
+    )?
+    .min_column_width;
     let width = (session.start_width as f64 + distance.x as f64 * session.inverse_ui_scale as f64)
         .max(minimum as f64);
     if !width.is_finite() || width > f32::MAX as f64 {
@@ -311,9 +334,13 @@ fn apply<T: Send + Sync + 'static>(
     if session.width == width {
         return Ok(());
     }
-    required(world.get_mut::<WidgetryTableLayout>(root))?
-        .columns
-        .insert(session.column, WidgetryTableColumnWidth::Fixed(width));
+    required(
+        world.get_mut::<WidgetryTableLayout>(root),
+        root,
+        "WidgetryTableLayout",
+    )?
+    .columns
+    .insert(session.column, WidgetryTableColumnWidth::Fixed(width));
     session.width = width;
     let column = session.column;
     world.entity_mut(root).insert(session);
@@ -339,14 +366,13 @@ pub(crate) fn on_drag<T: Send + Sync + 'static>(
     let distance = event.distance;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        apply::<T>(world, root, target, pointer, distance, &context).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table resize drag 失败");
-            }
-        })
+        crate::runtime_error::run_request_at::<T, _>(
+            world,
+            root,
+            target,
+            "table.resize.input",
+            |world| apply::<T>(world, root, target, pointer, distance, &context),
+        )
     });
 }
 
@@ -365,29 +391,30 @@ pub(crate) fn on_end<T: Send + Sync + 'static>(
     let distance = event.distance;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        let accepted = world.get::<ResizeSession>(root).is_some_and(|session| {
-            session.pointer == pointer
-                && session.target == context
-                && handle(world, root, target) == Some(session.handle)
-        });
-        if !accepted {
-            return Ok(());
-        }
-        apply::<T>(world, root, target, pointer, distance, &context).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root,%error,"Table resize end 失败");
-            }
-        })?;
-        // Final width observers may queue changes that interrupt the gesture, so apply them before deciding termination.
-        world.flush();
-        if let Some(view) = world.get::<WidgetryTable<T>>(root) {
-            sync::<T>(world, root, view.source());
-        }
-        finish(world, root, false);
-        Ok(())
+        crate::runtime_error::run_request_at::<T, _>(
+            world,
+            root,
+            target,
+            "table.resize.input",
+            |world| {
+                let accepted = world.get::<ResizeSession>(root).is_some_and(|session| {
+                    session.pointer == pointer
+                        && session.target == context
+                        && handle(world, root, target) == Some(session.handle)
+                });
+                if !accepted {
+                    return Ok(());
+                }
+                apply::<T>(world, root, target, pointer, distance, &context)?;
+                // Final width observers may queue changes that interrupt the gesture, so apply them before deciding termination.
+                world.flush();
+                if let Some(view) = world.get::<WidgetryTable<T>>(root) {
+                    sync::<T>(world, root, view.source());
+                }
+                finish(world, root, false);
+                Ok(())
+            },
+        )
     });
 }
 

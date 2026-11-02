@@ -1,4 +1,6 @@
-use crate::projection::{TableRuntime, required};
+use crate::projection::TableRuntime;
+use crate::runtime_error::{RuntimeDiagnostics, Site, entity_site};
+use crate::runtime_error::{RuntimeResult, required};
 use crate::{
     WidgetryTable, WidgetryTableCell, WidgetryTableColumnHeader, WidgetryTableRowHeader,
     WidgetryTableSelection, WidgetryTableState,
@@ -8,10 +10,8 @@ use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Selected};
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::{WidgetryTableColors, WidgetryThemeMode};
 
 #[cfg(test)]
@@ -69,7 +69,7 @@ pub(crate) struct TableStyle {
     colors: Option<WidgetryTableColors>,
     appearance: Appearance,
     pending: Pending,
-    diagnostics: UnmigratedFailureState,
+    diagnostics: RuntimeDiagnostics,
 }
 
 impl Default for TableStyle {
@@ -99,7 +99,12 @@ pub(crate) fn install(app: &mut App) {
         );
 }
 
-pub(super) fn bind_part(world: &mut World, root: Entity, entity: Entity, region: Region) -> Result {
+pub(super) fn bind_part(
+    world: &mut World,
+    root: Entity,
+    entity: Entity,
+    region: Region,
+) -> RuntimeResult {
     let part = StyledPart {
         root,
         region,
@@ -110,7 +115,7 @@ pub(super) fn bind_part(world: &mut World, root: Entity, entity: Entity, region:
         .is_none_or(|part| part.root != root || part.region != region)
     {
         world.entity_mut(entity).insert(part);
-        let mut style = required(world.get_mut::<TableStyle>(root))?;
+        let mut style = required(world.get_mut::<TableStyle>(root), root, "TableStyle")?;
         style.pending.parts.insert(entity);
         style.pending.geometry_parts.insert(entity);
     }
@@ -301,12 +306,12 @@ fn style_shell(
     entity: Entity,
     colors: &bevy_widgetry_theme::WidgetryTableRegionColors,
     disabled: bool,
-) -> Result<(), BevyError> {
+) -> RuntimeResult {
     #[cfg(test)]
     STYLE_WORK.with_borrow_mut(|work| work.1.push(entity));
     let (selected, focused) = region_appearance(world, root, entity, appearance(world, root)?);
     // Record the expected output before Remove so our own deselection does not enqueue a second refresh.
-    required(world.get_mut::<StyledPart>(entity))?.selected = selected;
+    required(world.get_mut::<StyledPart>(entity), entity, "StyledPart")?.selected = selected;
     if selected {
         if world.get::<Selected>(entity).is_none() {
             world.entity_mut(entity).insert(Selected);
@@ -343,12 +348,21 @@ fn style_shell(
         state.border
     };
     let foreground = state.foreground;
-    required(world.get_mut::<BackgroundColor>(entity))?.set_if_neq(BackgroundColor(background));
-    required(world.get_mut::<BorderColor>(entity))?.set_if_neq(BorderColor::all(border));
-    if let Some(mut color) = world.get_mut::<ResolvedForeground>(entity)
-        && *color != ResolvedForeground(foreground)
-    {
-        color.set_if_neq(ResolvedForeground(foreground));
+    required(
+        world.get_mut::<BackgroundColor>(entity),
+        entity,
+        "BackgroundColor",
+    )?
+    .set_if_neq(BackgroundColor(background));
+    required(world.get_mut::<BorderColor>(entity), entity, "BorderColor")?
+        .set_if_neq(BorderColor::all(border));
+    if world.get::<crate::WidgetryTableCorner>(entity).is_none() {
+        required(
+            world.get_mut::<ResolvedForeground>(entity),
+            entity,
+            "ResolvedForeground",
+        )?
+        .set_if_neq(ResolvedForeground(foreground));
     }
     Ok(())
 }
@@ -357,8 +371,8 @@ fn apply_geometry(
     world: &mut World,
     entity: Entity,
     style: &WidgetryTableRegionStyle,
-) -> Result<(), BevyError> {
-    let mut node = required(world.get_mut::<Node>(entity))?;
+) -> RuntimeResult {
+    let mut node = required(world.get_mut::<Node>(entity), entity, "Node")?;
     if node.padding != style.padding {
         node.padding = style.padding;
     }
@@ -375,36 +389,61 @@ pub(crate) fn update_colors<T: Send + Sync + 'static>(world: &mut World) -> Resu
         .filter(|(_, style)| !style.pending.is_empty())
         .map(|(entity, _)| entity)
         .collect::<Vec<_>>();
-    let mut failure = None;
+    let mut failures = Vec::new();
     for root in roots {
-        if world.get::<TableRuntime>(root).is_none() {
+        if world.get::<TableRuntime>(root).is_none()
+            || world.get::<crate::layout::TableGeometry>(root).is_none()
+        {
             continue;
         }
-        let mut pending = std::mem::take(&mut required(world.get_mut::<TableStyle>(root))?.pending);
-        let result = update_root(world, root, &mut pending);
-        let mut style = required(world.get_mut::<TableStyle>(root))?;
-        let result = style.diagnostics.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "Table 区域样式更新失败"),
-            || widgetry_info!(?root, "Table 区域样式恢复正常"),
-        );
-        if let Err(error) = result {
+        let site = Site::view::<T>(world, root);
+        let Some(mut style) = world.get_mut::<TableStyle>(root) else {
+            continue;
+        };
+        let mut pending = std::mem::take(&mut style.pending);
+        let result = update_root(world, root, &mut pending, site, &mut failures);
+        if let Err(error) = observe_style(world, site, result, "table.style.config") {
+            failures.push(error);
+        }
+        if let Some(mut style) = world.get_mut::<TableStyle>(root) {
             style.pending.palette |= pending.palette;
             style.pending.full |= pending.full;
             style.pending.geometry |= pending.geometry;
             style.pending.state |= pending.state;
             style.pending.parts.extend(pending.parts);
             style.pending.geometry_parts.extend(pending.geometry_parts);
-            failure.get_or_insert(error);
         }
     }
-    failure.map_or(Ok(()), Err)
+    crate::runtime_error::dispatch(world, failures)
+}
+fn observe_style<V>(
+    world: &mut World,
+    site: Site,
+    result: RuntimeResult<V>,
+    operation: &'static str,
+) -> Result<V, BevyError> {
+    match world.get_mut::<TableStyle>(site.view) {
+        Some(mut style) => style.diagnostics.observe(site, result, operation),
+        None => crate::runtime_error::request(result, site, operation),
+    }
 }
 
-fn appearance(world: &World, root: Entity) -> Result<Appearance, BevyError> {
-    let state = required(world.get::<WidgetryTableState>(root))?;
-    let view = required(world.get::<crate::WidgetryTableViewState>(root))?;
-    let geometry = required(world.get::<crate::layout::TableGeometry>(root))?;
+fn appearance(world: &World, root: Entity) -> RuntimeResult<Appearance> {
+    let state = required(
+        world.get::<WidgetryTableState>(root),
+        root,
+        "WidgetryTableState",
+    )?;
+    let view = required(
+        world.get::<crate::WidgetryTableViewState>(root),
+        root,
+        "crate::WidgetryTableViewState",
+    )?;
+    let geometry = required(
+        world.get::<crate::layout::TableGeometry>(root),
+        root,
+        "crate::layout::TableGeometry",
+    )?;
     Ok(Appearance {
         range: state
             .selection()
@@ -474,8 +513,8 @@ fn region_appearance(
     }
 }
 
-fn visible_parts(world: &World, root: Entity) -> Result<Vec<Entity>, BevyError> {
-    let runtime = required(world.get::<TableRuntime>(root))?;
+fn visible_parts(world: &World, root: Entity) -> RuntimeResult<Vec<Entity>> {
+    let runtime = required(world.get::<TableRuntime>(root), root, "TableRuntime")?;
     Ok([root, runtime.corner]
         .into_iter()
         .chain(runtime.cells.values().copied())
@@ -484,20 +523,40 @@ fn visible_parts(world: &World, root: Entity) -> Result<Vec<Entity>, BevyError> 
         .collect())
 }
 
-fn update_root(world: &mut World, root: Entity, pending: &mut Pending) -> Result {
-    if pending.palette || required(world.get::<TableStyle>(root))?.colors.is_none() {
+fn update_root(
+    world: &mut World,
+    root: Entity,
+    pending: &mut Pending,
+    site: Site,
+    failures: &mut Vec<BevyError>,
+) -> RuntimeResult {
+    if pending.palette
+        || required(world.get::<TableStyle>(root), root, "TableStyle")?
+            .colors
+            .is_none()
+    {
         #[cfg(test)]
         STYLE_WORK.with_borrow_mut(|work| work.0.push(root));
-        let theme = world.resource::<WidgetryThemeMode>().colors().table;
-        let colors = required(world.get::<crate::colors::ColorState>(root))?
-            .0
-            .resolve(&theme);
-        required(world.get_mut::<TableStyle>(root))?.colors = Some(colors);
+        let theme = required(
+            world.get_resource::<WidgetryThemeMode>(),
+            root,
+            "WidgetryThemeMode",
+        )?
+        .colors()
+        .table;
+        let colors = required(
+            world.get::<crate::colors::ColorState>(root),
+            root,
+            "crate::colors::ColorState",
+        )?
+        .0
+        .resolve(&theme);
+        required(world.get_mut::<TableStyle>(root), root, "TableStyle")?.colors = Some(colors);
         pending.palette = false;
         pending.full = true;
     }
     let current = appearance(world, root)?;
-    let previous = required(world.get::<TableStyle>(root))?.appearance;
+    let previous = required(world.get::<TableStyle>(root), root, "TableStyle")?.appearance;
     if pending.full || pending.geometry || (pending.state && previous != current) {
         for entity in visible_parts(world, root)? {
             if pending.full
@@ -515,8 +574,12 @@ fn update_root(world: &mut World, root: Entity, pending: &mut Pending) -> Result
     pending.full = false;
     pending.geometry = false;
     pending.state = false;
-    required(world.get_mut::<TableStyle>(root))?.appearance = current;
-    let colors = required(required(world.get::<TableStyle>(root))?.colors)?;
+    required(world.get_mut::<TableStyle>(root), root, "TableStyle")?.appearance = current;
+    let colors = required(
+        required(world.get::<TableStyle>(root), root, "TableStyle")?.colors,
+        root,
+        "ResolvedPalette",
+    )?;
     let disabled = world.get::<InteractionDisabled>(root).is_some();
     let parts = pending.parts.iter().copied().collect::<Vec<_>>();
     for entity in parts {
@@ -524,7 +587,7 @@ fn update_root(world: &mut World, root: Entity, pending: &mut Pending) -> Result
             pending.parts.remove(&entity);
             continue;
         }
-        let part = *required(world.get::<StyledPart>(entity))?;
+        let part = *required(world.get::<StyledPart>(entity), entity, "StyledPart")?;
         if part.root != root {
             pending.parts.remove(&entity);
             continue;
@@ -536,18 +599,29 @@ fn update_root(world: &mut World, root: Entity, pending: &mut Pending) -> Result
             Region::ColumnHeader => colors.column_header,
             Region::RowHeader => colors.row_header,
         };
-        style_shell(world, root, entity, &colors, disabled)?;
-        pending.parts.remove(&entity);
+        let location = entity_site(world, site, entity);
+        let result = style_shell(world, root, entity, &colors, disabled);
+        match observe_style(world, location, result, "table.style.part") {
+            Ok(()) => {
+                pending.parts.remove(&entity);
+            }
+            Err(error) => failures.push(error),
+        }
     }
     if !pending.geometry_parts.is_empty() {
-        let config = required(world.get::<WidgetryTableStyle>(root))?.clone();
+        let config = required(
+            world.get::<WidgetryTableStyle>(root),
+            root,
+            "WidgetryTableStyle",
+        )?
+        .clone();
         let parts = pending.geometry_parts.iter().copied().collect::<Vec<_>>();
         for entity in parts {
             if !world.entities().contains(entity) {
                 pending.geometry_parts.remove(&entity);
                 continue;
             }
-            let part = *required(world.get::<StyledPart>(entity))?;
+            let part = *required(world.get::<StyledPart>(entity), entity, "StyledPart")?;
             if part.root != root {
                 pending.geometry_parts.remove(&entity);
                 continue;
@@ -559,8 +633,14 @@ fn update_root(world: &mut World, root: Entity, pending: &mut Pending) -> Result
                 Region::ColumnHeader => &config.column_header,
                 Region::RowHeader => &config.row_header,
             };
-            apply_geometry(world, entity, config)?;
-            pending.geometry_parts.remove(&entity);
+            let location = entity_site(world, site, entity);
+            let result = apply_geometry(world, entity, config);
+            match observe_style(world, location, result, "table.style.geometry") {
+                Ok(()) => {
+                    pending.geometry_parts.remove(&entity);
+                }
+                Err(error) => failures.push(error),
+            }
         }
     }
     Ok(())
@@ -876,10 +956,7 @@ mod tests {
             logs.records()
                 .iter()
                 .filter(|record| record.level == Level::INFO
-                    && record
-                        .fields
-                        .get("message")
-                        .is_some_and(|message| message.contains("区域样式恢复")))
+                    && record.matches_field("phase", "recovered"))
                 .count(),
             1
         );

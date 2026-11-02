@@ -507,10 +507,11 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
         .add_systems(Update, apply_hover);
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(move |value: &String| {
         bsn_list!{Node { flex_direction: FlexDirection::Column } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("details: 123.45 / active") bevy_widgetry_core::text::WidgetryText })}]}
-    }))?;
+    })).map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
         |value: &String| bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText},
-    ))?;
+    ))
+    .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
     let mut model = WidgetryTableModel::default();
     for row in 0..rows {
         model

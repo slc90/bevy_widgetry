@@ -1,6 +1,7 @@
 use crate::interaction::{clicked, valid};
 use crate::layout::TableGeometry;
-use crate::projection::{TableRuntime, required};
+use crate::projection::TableRuntime;
+use crate::runtime_error::{RuntimeResult, required};
 use crate::{
     WidgetryTable, WidgetryTableCell, WidgetryTableModel, WidgetryTableSelection,
     WidgetryTableViewState,
@@ -15,7 +16,6 @@ use bevy::picking::{
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition, UiGlobalTransform};
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component, Clone)]
 struct SelectionDrag {
@@ -135,15 +135,14 @@ fn on_start<T: Send + Sync + 'static>(
     let pointer = event.pointer.id;
     let location = event.pointer.location();
     let camera = event.hit.camera;
-    commands.queue(move |world: &mut World| -> Result {
-        begin::<T>(world, root, target, pointer, location, camera).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root, %error, "Table 拖选开始失败");
-            }
-        })
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        crate::runtime_error::run_request_at::<T, _>(
+            world,
+            root,
+            target,
+            "table.selection_drag.input",
+            |world| begin::<T>(world, root, target, pointer, location, camera),
+        )
     });
 }
 
@@ -154,7 +153,7 @@ fn begin<T: Send + Sync + 'static>(
     pointer: PointerId,
     location: Location,
     camera: Entity,
-) -> Result {
+) -> RuntimeResult {
     let mut current = target;
     while current != root {
         if world.get::<bevy::ui_widgets::Button>(current).is_some()
@@ -183,13 +182,26 @@ fn begin<T: Send + Sync + 'static>(
         return Ok(());
     }
     crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
-    let source = required(world.get::<WidgetryTable<T>>(root))?.source();
-    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-    let view = required(world.get::<WidgetryTableViewState>(root))?;
+    let source = required(
+        world.get::<WidgetryTable<T>>(root),
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
+    let model = required(
+        world.get::<WidgetryTableModel<T>>(source),
+        source,
+        "WidgetryTableModel<T>",
+    )?;
+    let view = required(
+        world.get::<WidgetryTableViewState>(root),
+        root,
+        "WidgetryTableViewState",
+    )?;
     if !valid(model, view, WidgetryTableSelection::Cell { row, column }) {
         return Ok(());
     }
-    let body = required(world.get::<TableRuntime>(root))?.body;
+    let body = required(world.get::<TableRuntime>(root), root, "TableRuntime")?.body;
     let anchor = WidgetryTableCell { row, column };
     world.entity_mut(root).insert(SelectionDrag {
         anchor,
@@ -261,7 +273,7 @@ fn apply<T: Send + Sync + 'static>(
     pointer: PointerId,
     location: &Location,
     distance: Option<Vec2>,
-) -> Result {
+) -> RuntimeResult {
     let Some(mut session) = world.get::<SelectionDrag>(root).cloned() else {
         return Ok(());
     };
@@ -340,15 +352,13 @@ fn on_drag<T: Send + Sync + 'static>(
     let pointer = event.pointer.id;
     let location = event.pointer.location();
     let distance = event.distance;
-    commands.queue(move |world: &mut World| -> Result {
-        apply::<T>(world, root, pointer, &location, Some(distance)).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root, %error, "Table 拖选更新失败");
-            }
-        })
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        crate::runtime_error::run_request::<T, _>(
+            world,
+            root,
+            "table.selection_drag.input",
+            |world| apply::<T>(world, root, pointer, &location, Some(distance)),
+        )
     });
 }
 
@@ -361,17 +371,25 @@ fn on_end<T: Send + Sync + 'static>(
         return;
     }
     let root = event.entity;
+    let target = event.original_event_target();
     let pointer = event.pointer.id;
     let location = event.pointer.location();
-    commands.queue(move |world: &mut World| -> Result {
-        if world
-            .get::<SelectionDrag>(root)
-            .is_some_and(|session| session.pointer == pointer && session.target == location.target)
-        {
-            apply::<T>(world, root, pointer, &location, None)?;
-            finish(world, root);
-        }
-        Ok(())
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        crate::runtime_error::run_request_at::<T, _>(
+            world,
+            root,
+            target,
+            "table.selection_drag.input",
+            |world| {
+                if world.get::<SelectionDrag>(root).is_some_and(|session| {
+                    session.pointer == pointer && session.target == location.target
+                }) {
+                    apply::<T>(world, root, pointer, &location, None)?;
+                    finish(world, root);
+                }
+                Ok(())
+            },
+        )
     });
 }
 
@@ -416,19 +434,26 @@ fn track<T: Send + Sync + 'static>(
                     PointerAction::Release(PointerButton::Primary) | PointerAction::Cancel
                 )
         });
-        commands.queue(move |world: &mut World| -> Result {
-            if !invalid && let Some(location) = location {
-                apply::<T>(world, root, pointer, &location, None)?;
-            }
-            if terminal || invalid {
-                finish(world, root);
-            }
-            Ok(())
+        commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+            crate::runtime_error::run_request::<T, _>(
+                world,
+                root,
+                "table.selection_drag.input",
+                |world| {
+                    if !invalid && let Some(location) = location {
+                        apply::<T>(world, root, pointer, &location, None)?;
+                    }
+                    if terminal || invalid {
+                        finish(world, root);
+                    }
+                    Ok(())
+                },
+            )
         });
     }
 }
 
-pub(crate) fn refresh<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result {
+pub(crate) fn refresh<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> RuntimeResult {
     let Some(session) = world.get::<SelectionDrag>(root).cloned() else {
         return Ok(());
     };

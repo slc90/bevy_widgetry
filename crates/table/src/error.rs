@@ -7,6 +7,52 @@ use bevy_widgetry_diagnostics::WidgetryFailure;
 use std::{error::Error, fmt};
 
 pub type TableFailure = WidgetryFailure<TableError>;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TableRegion {
+    Table,
+    Body,
+    FrozenBody,
+    ColumnHeaders,
+    FrozenColumnHeaders,
+    RowHeaders,
+    Corner,
+    Cell,
+    FrozenCell,
+    ColumnHeader,
+    FrozenColumnHeader,
+    RowHeader,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TableRendererRole {
+    Cell,
+    Header,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TableRendererFault {
+    MissingRegistry,
+    MissingRenderer,
+    TypeMismatch { expected: std::any::TypeId },
+    GenerationExhausted { generation: u64 },
+    MissingRegistration,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TableRuntimeFault {
+    Missing {
+        entity: Entity,
+        component: &'static str,
+    },
+    Ownership {
+        component: &'static str,
+        entity: Entity,
+        expected: Entity,
+        actual: Option<Entity>,
+    },
+    Renderer {
+        role: TableRendererRole,
+        value_type: std::any::TypeId,
+        reason: TableRendererFault,
+    },
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TableAxis {
     Row,
@@ -90,6 +136,15 @@ pub enum TableViewRejection {
 }
 #[derive(Debug)]
 pub enum TableError {
+    Runtime {
+        fault: TableRuntimeFault,
+    },
+    InvalidColors {
+        view: Entity,
+    },
+    Core {
+        source: Box<bevy_widgetry_core::diagnostics::CoreError>,
+    },
     InsertionIndex {
         axis: TableAxis,
         index: usize,
@@ -137,6 +192,9 @@ pub enum TableError {
 impl fmt::Display for TableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Runtime { .. } => "Table 运行结构或 renderer 失效",
+            Self::InvalidColors { .. } => "Table 配色目标失效或属于托管部件",
+            Self::Core { .. } => "Table 配色校验失败",
             Self::InsertionIndex { .. } => "Table Model 插入 index 越界",
             Self::IdExhausted { .. } => "Table Model ID 已耗尽",
             Self::RevisionExhausted { .. } => "Table Model revision 已耗尽",
@@ -150,6 +208,7 @@ impl fmt::Display for TableError {
 impl Error for TableError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Core { source } => Some(source.as_ref()),
             Self::Layout { fault } => Some(fault.as_ref()),
             _ => None,
         }

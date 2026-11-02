@@ -1,4 +1,4 @@
-use crate::projection::{TableRuntime, required};
+use crate::projection::TableRuntime;
 use crate::*;
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::{FocusCause, FocusedInput, InputFocus};
@@ -452,7 +452,9 @@ fn begin<T: Send + Sync + 'static>(
             return Err(error.into_bevy_error());
         }
     };
-    crate::style::bind_part(world, root, error_label, crate::style::Region::Table)?;
+    crate::runtime_error::run_request::<T, _>(world, root, "table.edit.feedback", |world| {
+        crate::style::bind_part(world, root, error_label, crate::style::Region::Table)
+    })?;
     let children = world
         .get::<Children>(shell)
         .map(|c| c.iter().collect::<Vec<_>>())
@@ -913,4 +915,8 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity) ->
         }
     }
     Ok(())
+}
+
+fn required<V>(value: Option<V>) -> Result<V, BevyError> {
+    value.ok_or_else(|| BevyError::error("Table required runtime state missing"))
 }

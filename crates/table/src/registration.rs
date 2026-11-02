@@ -1,10 +1,11 @@
+use crate::{TableError, TableFailure, TableRendererFault, TableRendererRole, TableRuntimeFault};
 use crate::{WidgetryTableCellValue, WidgetryTableHeaderValue};
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::reflect::{GetTypeRegistration, TypeRegistry};
 use bevy::ui_widgets::ScrollAreaPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_theme::WidgetryThemePlugin;
 use std::any::Any;
 use std::marker::PhantomData;
@@ -26,21 +27,41 @@ pub struct WidgetryTableHeaderRenderer<V>(Arc<dyn Fn(&V) -> Box<dyn SceneList> +
 #[derive(Resource, Default)]
 pub struct WidgetryTableCellRendererRegistry(pub(crate) RendererRegistry);
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct WidgetryTableHeaderRendererRegistry(pub(crate) RendererRegistry);
+impl Default for WidgetryTableHeaderRendererRegistry {
+    fn default() -> Self {
+        Self(RendererRegistry {
+            role: TableRendererRole::Header,
+            ..default()
+        })
+    }
+}
 
 #[derive(Clone)]
 struct RendererData {
     generation: u64,
     render: Arc<
-        dyn Fn(&(dyn Any + Send + Sync)) -> Result<Box<dyn SceneList>, BevyError> + Send + Sync,
+        dyn Fn(&(dyn Any + Send + Sync)) -> Result<Box<dyn SceneList>, TableRuntimeFault>
+            + Send
+            + Sync,
     >,
 }
 
-#[derive(Default)]
 pub(crate) struct RendererRegistry {
+    role: TableRendererRole,
     types: TypeRegistry,
     generation: u64,
+}
+
+impl Default for RendererRegistry {
+    fn default() -> Self {
+        Self {
+            role: TableRendererRole::Cell,
+            types: TypeRegistry::default(),
+            generation: 0,
+        }
+    }
 }
 
 pub trait WidgetryTableAppExt {
@@ -49,12 +70,12 @@ pub trait WidgetryTableAppExt {
     fn register_table_cell_renderer<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         renderer: WidgetryTableCellRenderer<V>,
-    ) -> Result<&mut Self, BevyError>;
+    ) -> Result<&mut Self, TableFailure>;
 
     fn register_table_header_renderer<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         renderer: WidgetryTableHeaderRenderer<V>,
-    ) -> Result<&mut Self, BevyError>;
+    ) -> Result<&mut Self, TableFailure>;
 }
 
 impl Plugin for WidgetryTablePlugin {
@@ -160,27 +181,30 @@ impl<V> WidgetryTableHeaderRenderer<V> {
 }
 
 impl WidgetryTableCellRendererRegistry {
-    pub fn render(&self, value: &WidgetryTableCellValue) -> Result<Box<dyn SceneList>, BevyError> {
+    pub fn render(
+        &self,
+        value: &WidgetryTableCellValue,
+    ) -> Result<Box<dyn SceneList>, TableFailure> {
         self.0
             .scene(value.as_any())
             .map(|(_, scene)| scene)
-            .map_err(|error| {
-                widgetry_error!(value_type = ?value.type_id(), %error, "Table Cell renderer 失败");
-                error
-            })
+            .map_err(renderer_failure)
     }
 }
-
 impl WidgetryTableHeaderRendererRegistry {
     pub fn render(
         &self,
         value: &WidgetryTableHeaderValue,
-    ) -> Result<Box<dyn SceneList>, BevyError> {
-        self.0.scene(value.as_any()).map(|(_, scene)| scene).map_err(|error| {
-            widgetry_error!(value_type = ?value.type_id(), %error, "Table Header renderer 失败");
-            error
-        })
+    ) -> Result<Box<dyn SceneList>, TableFailure> {
+        self.0
+            .scene(value.as_any())
+            .map(|(_, scene)| scene)
+            .map_err(renderer_failure)
     }
+}
+#[track_caller]
+fn renderer_failure(fault: TableRuntimeFault) -> TableFailure {
+    crate::error::failure(TableError::Runtime { fault }, "table.renderer")
 }
 
 impl WidgetryTableAppExt for App {
@@ -197,7 +221,7 @@ impl WidgetryTableAppExt for App {
     fn register_table_cell_renderer<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         renderer: WidgetryTableCellRenderer<V>,
-    ) -> Result<&mut Self, BevyError> {
+    ) -> Result<&mut Self, TableFailure> {
         if !self.is_plugin_added::<WidgetryTablePlugin>() {
             self.add_plugins(WidgetryTablePlugin);
         }
@@ -205,17 +229,20 @@ impl WidgetryTableAppExt for App {
             .world_mut()
             .get_resource_mut::<WidgetryTableCellRendererRegistry>()
         else {
-            widgetry_error!("Table Cell renderer registry 缺失");
-            return Err(BevyError::error("Table Cell renderer registry missing"));
+            return Err(renderer_failure(TableRuntimeFault::Renderer {
+                role: TableRendererRole::Cell,
+                value_type: std::any::TypeId::of::<V>(),
+                reason: TableRendererFault::MissingRegistry,
+            }));
         };
-        registry.0.register(renderer.0)?;
+        registry.0.register(renderer.0).map_err(renderer_failure)?;
         Ok(self)
     }
 
     fn register_table_header_renderer<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         renderer: WidgetryTableHeaderRenderer<V>,
-    ) -> Result<&mut Self, BevyError> {
+    ) -> Result<&mut Self, TableFailure> {
         if !self.is_plugin_added::<WidgetryTablePlugin>() {
             self.add_plugins(WidgetryTablePlugin);
         }
@@ -223,30 +250,48 @@ impl WidgetryTableAppExt for App {
             .world_mut()
             .get_resource_mut::<WidgetryTableHeaderRendererRegistry>()
         else {
-            widgetry_error!("Table Header renderer registry 缺失");
-            return Err(BevyError::error("Table Header renderer registry missing"));
+            return Err(renderer_failure(TableRuntimeFault::Renderer {
+                role: TableRendererRole::Header,
+                value_type: std::any::TypeId::of::<V>(),
+                reason: TableRendererFault::MissingRegistry,
+            }));
         };
-        registry.0.register(renderer.0)?;
+        registry.0.register(renderer.0).map_err(renderer_failure)?;
         Ok(self)
     }
 }
 
 impl RendererRegistry {
-    pub(crate) fn generation(&self, value_type: std::any::TypeId) -> Result<u64, BevyError> {
+    fn fault(&self, value_type: std::any::TypeId, reason: TableRendererFault) -> TableRuntimeFault {
+        TableRuntimeFault::Renderer {
+            role: self.role,
+            value_type,
+            reason,
+        }
+    }
+    pub(crate) fn generation(
+        &self,
+        value_type: std::any::TypeId,
+    ) -> Result<u64, TableRuntimeFault> {
         self.types
             .get_type_data::<RendererData>(value_type)
             .map(|entry| entry.generation)
-            .ok_or_else(|| BevyError::error("Table value has no registered renderer"))
+            .ok_or_else(|| self.fault(value_type, TableRendererFault::MissingRenderer))
     }
 
     fn register<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         factory: Arc<dyn Fn(&V) -> Box<dyn SceneList> + Send + Sync>,
-    ) -> Result<(), BevyError> {
+    ) -> Result<(), TableRuntimeFault> {
         let Some(generation) = self.generation.checked_add(1) else {
-            widgetry_error!("Table renderer generation 已耗尽");
-            return Err(BevyError::error("Table renderer generation exhausted"));
+            return Err(self.fault(
+                std::any::TypeId::of::<V>(),
+                TableRendererFault::GenerationExhausted {
+                    generation: self.generation,
+                },
+            ));
         };
+        let role = self.role;
         let mut registration = V::get_type_registration();
         registration.insert(RendererData {
             generation,
@@ -254,13 +299,21 @@ impl RendererRegistry {
                 value
                     .downcast_ref::<V>()
                     .map(|value| factory(value))
-                    .ok_or_else(|| BevyError::error("Table renderer value type mismatch"))
+                    .ok_or_else(|| TableRuntimeFault::Renderer {
+                        role,
+                        value_type: value.type_id(),
+                        reason: TableRendererFault::TypeMismatch {
+                            expected: std::any::TypeId::of::<V>(),
+                        },
+                    })
             }),
         });
         self.types.register::<V>();
         let Some(current) = self.types.get_mut(registration.type_id()) else {
-            widgetry_error!("Table renderer TypeRegistration 缺失");
-            return Err(BevyError::error("Table renderer TypeRegistration missing"));
+            return Err(self.fault(
+                std::any::TypeId::of::<V>(),
+                TableRendererFault::MissingRegistration,
+            ));
         };
         *current = registration;
         self.generation = generation;
@@ -270,11 +323,11 @@ impl RendererRegistry {
     pub(crate) fn scene(
         &self,
         value: &(dyn Any + Send + Sync),
-    ) -> Result<(u64, Box<dyn SceneList>), BevyError> {
+    ) -> Result<(u64, Box<dyn SceneList>), TableRuntimeFault> {
         let entry = self
             .types
             .get_type_data::<RendererData>(value.type_id())
-            .ok_or_else(|| BevyError::error("Table value has no registered renderer"))?;
+            .ok_or_else(|| self.fault(value.type_id(), TableRendererFault::MissingRenderer))?;
         Ok((entry.generation, (entry.render)(value)?))
     }
 }
@@ -307,9 +360,16 @@ mod tests {
                 }))
             })
             .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-        assert!(error.to_string().contains("generation exhausted"));
-        assert_eq!(capture.records().len(), 1);
+        assert!(matches!(
+            error,
+            TableRuntimeFault::Renderer {
+                reason: TableRendererFault::GenerationExhausted {
+                    generation: u64::MAX
+                },
+                ..
+            }
+        ));
+        assert!(capture.records().is_empty());
         assert_eq!(registry.generation, u64::MAX);
         assert_eq!(
             registry

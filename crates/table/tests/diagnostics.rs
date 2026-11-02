@@ -199,3 +199,46 @@ fn stale_schema_and_invalid_width_requests_keep_exact_values_without_committing(
         );
     }
 }
+
+#[test]
+fn simultaneous_missing_sources_reach_handler_with_distinct_view_contexts() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let (mut app, source, view, _) = common::fixture(2, 2);
+    let other = app.world_mut().spawn_scene(bsn! { @WidgetryTable::<u32> { @source: source } Node { width: px(286), height: px(144) } }).unwrap().id();
+    app.update();
+    app.update();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PostUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    app.world_mut().despawn(source);
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    let mut origins = std::collections::HashMap::new();
+    for _ in 0..3 {
+        logs.run(|| errors.run(|| app.update()));
+        let records = errors.take_records();
+        assert_eq!(records.len(), 2);
+        for record in records {
+            let diagnostic = record.managed().unwrap().diagnostics().next().unwrap();
+            let actual = diagnostic
+                .contexts()
+                .iter()
+                .flat_map(|frame| frame.fields())
+                .find(|(key, _)| key == "view")
+                .unwrap()
+                .1
+                .clone();
+            assert!([view.to_string(), other.to_string()].contains(&actual));
+            if let Some(old) = origins.insert(actual, diagnostic.origin().clone()) {
+                assert!(std::sync::Arc::ptr_eq(&old, diagnostic.origin()));
+            }
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+        }
+    }
+    assert_eq!(origins.len(), 2);
+}

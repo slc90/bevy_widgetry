@@ -47,11 +47,13 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         |world, entity, apply| {
             use bevy_widgetry::table::WidgetryTableColorOverrides;
             if !apply {
-                return WidgetryTableColorOverrides::clear_in_world(world, entity);
+                return WidgetryTableColorOverrides::clear_in_world(world, entity)
+                    .map_err(bevy_widgetry::table::TableFailure::into_bevy_error);
             }
             let mut colors = WidgetryTableColorOverrides::default();
             colors.cell.selected.background = Some(crate::color_showcase::TEAL);
             WidgetryTableColorOverrides::set_in_world(world, entity, colors)
+                .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)
         },
     )
 }
@@ -1356,21 +1358,25 @@ impl Plugin for TableDemoPlugin {
                 |value: &TableLabel| {
                     bsn_list! { @{value.scene()} bevy_widgetry::text::WidgetryText }
                 },
-            ))?;
+            ))
+            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
                 |value: &TableLabel| {
                     bsn_list! { @{value.scene()} bevy_widgetry::text::WidgetryText }
                 },
-            ))?;
+            ))
+            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
                 bsn_list! {Text({ value.clone() }) bevy_widgetry::text::WidgetryText}
-            }))?;
+            }))
+            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &u32| {
                 bsn_list! {Text({ format!("{value}") }) bevy_widgetry::text::WidgetryText}
-            }))?;
+            }))
+            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &bool| {
                 bsn_list!{Text({ if *value { "true" } else { "false" } }) bevy_widgetry::text::WidgetryText}
-            }))?;
+            })).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &ProgressValue| {
                 let progress_percent = (value.0 * 100.0).clamp(0.0, 100.0);
                 bsn_list!{Node {width: percent(100), align_items: AlignItems::Center, column_gap: px(8)} Children [
@@ -1379,20 +1385,20 @@ impl Plugin for TableDemoPlugin {
                     ]--
                     Text({format!("{progress_percent:.0}%")}) bevy_widgetry::text::WidgetryText
                 ]}
-            }))?;
+            })).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|_: &StarValue| bsn_list!{
                 @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(18, 18))} }
                 Node {width: px(18), height: px(18)}
-            }))?;
+            })).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
                 |value: &String| bsn_list!{Text({ value.clone() }) bevy_widgetry::text::WidgetryText},
-            ))?;
+            )).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &CustomHeader| bsn_list!{
                 Node {align_items: AlignItems::Center, column_gap: px(8)} Children [
                     @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(16, 16))} } Node {width: px(16), height: px(16)}--
                     @{value.0.scene()} bevy_widgetry::text::WidgetryText
                 ]
-            }))?;
+            })).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.add_systems(
                 PostUpdate,
                 refresh_shared_projection

@@ -51,7 +51,7 @@ fn fixture(count: usize, kind: &'static str) -> Result<Fixture> {
             }
         }
     }))
-    .map_err(|error| BevyError::error(error.to_string()))?;
+    .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|_: &u32| {
         bsn_list! {
             Node {
@@ -60,7 +60,7 @@ fn fixture(count: usize, kind: &'static str) -> Result<Fixture> {
             }
         }
     }))
-    .map_err(|error| BevyError::error(error.to_string()))?;
+    .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
     let window = app
         .world_mut()
         .spawn((

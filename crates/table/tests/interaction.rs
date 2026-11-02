@@ -3209,7 +3209,11 @@ fn drag_capture_cleans_up_on_disabled_deleted_anchor_cancel_and_view_destruction
         let errors = errors.take();
         assert_eq!(
             errors.len(),
-            usize::from(matches!(cause, "source" | "source_update" | "renderer")),
+            if cause == "renderer" {
+                4
+            } else {
+                usize::from(matches!(cause, "source" | "source_update"))
+            },
             "{cause}"
         );
         assert!(
