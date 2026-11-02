@@ -1,12 +1,12 @@
 use super::{TreeExpander, WidgetryTreeView};
 use crate::WidgetryTreeVisibleItem;
+use crate::{TreeError, TreeViewFailure, TreeViewFault, error::view_failure};
 use bevy::ecs::entity::EntityHashSet;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{color::WidgetryStyleOwner, foreground::ResolvedForeground};
-use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_list_view::WidgetryListView;
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryTreeColors};
 
@@ -101,40 +101,75 @@ pub(crate) fn collect_changes(
     changes.buttons.extend(buttons.iter());
 }
 
-fn palette(world: &World, root: Entity) -> Result<WidgetryTreeColors, BevyError> {
+fn palette(world: &World, root: Entity) -> Result<WidgetryTreeColors, TreeViewFailure> {
     world
         .get::<TreeStyle>(root)
         .and_then(|style| style.0)
         .ok_or_else(|| {
-            widgetry_error!(?root, "TreeView 缺失已解析配色");
-            BevyError::error("TreeView 缺失已解析配色")
+            view_failure(
+                TreeViewFault::Part {
+                    view: Some(root),
+                    node: None,
+                    entity: root,
+                    part: crate::TreeViewPart::ResolvedPalette,
+                },
+                "tree.colors.palette",
+            )
         })
 }
 
 pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
     let mut changes = std::mem::take(&mut *world.resource_mut::<ColorChanges>());
-    let mut failure = None;
+    let mut failures = Vec::new();
     let mut resolved = EntityHashSet::default();
     for root in changes.palettes.drain().collect::<Vec<_>>() {
         if world.get::<WidgetryTreeView>(root).is_none() {
             continue;
         }
-        let result = (|| {
+        let result: Result<(), TreeViewFailure> = (|| {
             #[cfg(test)]
             COLOR_WORK.with_borrow_mut(|work| work.0.push(root));
             let theme = world.resource::<WidgetryThemeMode>().colors().tree;
-            let colors = crate::WidgetryTreeColorOverrides::get(world, root)?.resolve(&theme);
-            let Some(mut style) = world.get_mut::<TreeStyle>(root) else {
-                widgetry_error!(?root, "TreeView 缺失配色缓存");
-                return Err(BevyError::error("TreeView 缺失配色缓存"));
+            let fault = if world.get::<crate::colors::ColorState>(root).is_none() {
+                Some(crate::TreeViewPart::ColorState)
+            } else if world.get::<TreeStyle>(root).is_none() {
+                Some(crate::TreeViewPart::ColorCache)
+            } else {
+                None
             };
+            super::observe_colors(
+                world,
+                root,
+                fault.map_or(Ok(()), |part| {
+                    Err(TreeViewFault::Part {
+                        view: Some(root),
+                        node: None,
+                        entity: root,
+                        part,
+                    })
+                }),
+            )?;
+            let colors = crate::WidgetryTreeColorOverrides::get(world, root)
+                .map_err(TreeViewFailure::new)?
+                .resolve(&theme);
+            let mut style = world.get_mut::<TreeStyle>(root).ok_or_else(|| {
+                view_failure(
+                    TreeViewFault::Part {
+                        view: Some(root),
+                        node: None,
+                        entity: root,
+                        part: crate::TreeViewPart::ColorCache,
+                    },
+                    "tree.colors.cache",
+                )
+            })?;
             style.0 = Some(colors);
             resolved.insert(root);
             Ok(())
         })();
         if let Err(error) = result {
             changes.palettes.insert(root);
-            failure.get_or_insert(error);
+            failures.push(error.into_bevy_error());
         }
     }
     if !resolved.is_empty() {
@@ -187,11 +222,19 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
                     item: colors.item,
                 },
             )
-            .map_err(|error| error.into_bevy_error())
+            .map_err(|error| {
+                error.with_context(crate::error::view_context(
+                    world,
+                    root,
+                    None,
+                    list,
+                    "tree.colors.list",
+                ))
+            })
         });
         if let Err(error) = result {
             changes.lists.insert(list);
-            failure.get_or_insert(error);
+            failures.push(error.into_bevy_error());
         }
     }
     for button in changes.buttons.drain().collect::<Vec<_>>() {
@@ -240,18 +283,32 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
                     foreground: state.foreground,
                 },
             )
-            .map_err(|error| error.into_bevy_error())
+            .map_err(|error| {
+                TreeViewFailure::new(
+                    error
+                        .map_kind(|source| TreeError::Button {
+                            source: Box::new(source),
+                        })
+                        .with_context(crate::error::view_context(
+                            world,
+                            root,
+                            Some(expander.node),
+                            button,
+                            "tree.colors.expander",
+                        )),
+                )
+            })
         });
         if let Err(error) = result {
             changes.buttons.insert(button);
-            failure.get_or_insert(error);
+            failures.push(error.into_bevy_error());
         }
     }
     let mut pending = world.resource_mut::<ColorChanges>();
     pending.palettes.extend(changes.palettes);
     pending.lists.extend(changes.lists);
     pending.buttons.extend(changes.buttons);
-    failure.map_or(Ok(()), Err)
+    crate::error::dispatch(world, failures)
 }
 
 fn refresh_colors(

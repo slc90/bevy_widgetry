@@ -30,11 +30,13 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         |world, entity, apply| {
             use bevy_widgetry::tree::WidgetryTreeColorOverrides;
             if !apply {
-                return WidgetryTreeColorOverrides::clear_in_world(world, entity);
+                return WidgetryTreeColorOverrides::clear_in_world(world, entity)
+                    .map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error);
             }
             let mut colors = WidgetryTreeColorOverrides::default();
             colors.item.selected.background = Some(crate::color_showcase::TEAL);
             WidgetryTreeColorOverrides::set_in_world(world, entity, colors)
+                .map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error)
         },
     )
 }
@@ -199,20 +201,24 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
                     .and_then(|state| state.visible_items().last())
                     .map(|item| item.entity);
                 if let Some(node) = node
-                    && WidgetryTreeView::select(world, view, Some(node))?
+                    && WidgetryTreeView::select(world, view, Some(node))
+                        .map_err(bevy_widgetry::tree::TreeViewFailure::into_bevy_error)?
                 {
                     info!(source = ?action.source, ?node, "程序化设置 Tree selection");
                 }
             }
             Action::SelectVisible => {
-                let changed = WidgetryTreeView::select_visible(world, view)?;
+                let changed = WidgetryTreeView::select_visible(world, view)
+                    .map_err(bevy_widgetry::tree::TreeViewFailure::into_bevy_error)?;
                 info!(?view, changed, "程序化选择 Tree 可见节点");
             }
             Action::ExpandAll | Action::CollapseAll => {
                 let changed = if matches!(action.kind, Action::ExpandAll) {
-                    WidgetryTreeView::expand_all(world, view)?
+                    WidgetryTreeView::expand_all(world, view)
+                        .map_err(bevy_widgetry::tree::TreeViewFailure::into_bevy_error)?
                 } else {
-                    WidgetryTreeView::collapse_all(world, view)?
+                    WidgetryTreeView::collapse_all(world, view)
+                        .map_err(bevy_widgetry::tree::TreeViewFailure::into_bevy_error)?
                 };
                 info!(?view, changed, action = ?action.kind, "程序化批量更新 Tree 展开状态");
             }
@@ -243,7 +249,9 @@ fn edit_shared(world: &mut World, action: TreeAction) -> Result {
     };
     let root = model.root();
     let view = demo_view(world, action.view_kind)?;
-    let selected = WidgetryTreeView::selection(world, view)?.selected_id();
+    let selected = WidgetryTreeView::selection(world, view)
+        .map_err(bevy_widgetry::tree::TreeViewFailure::into_bevy_error)?
+        .selected_id();
     if matches!(action.kind, Action::Insert) {
         let folder = world.resource::<DemoSources>().shared_folder;
         let folder = if world.get::<Folder>(folder).is_some() {
@@ -268,7 +276,8 @@ fn edit_shared(world: &mut World, action: TreeAction) -> Result {
             Name::new(format!("Shared file {index:02}")),
             ChildOf(folder),
         ));
-        WidgetryTreeView::expand(world, view, folder)?;
+        WidgetryTreeView::expand(world, view, folder)
+            .map_err(bevy_widgetry::tree::TreeViewFailure::into_bevy_error)?;
         info!(source = ?action.source, index, "插入共享 Tree 文件");
         return Ok(());
     }
@@ -414,7 +423,8 @@ fn load_children(
                 ));
             }
             world.entity_mut(node).remove::<LoadDeadline>();
-            WidgetryTreeChildrenState::set_loaded(world, node)?;
+            WidgetryTreeChildrenState::set_loaded(world, node)
+                .map_err(bevy_widgetry::tree::TreeViewFailure::into_bevy_error)?;
             info!(?node, children = 12, "Tree children 加载完成");
             Ok(())
         });
@@ -463,33 +473,42 @@ fn update_status(world: &mut World) {
                 continue;
             }
         };
-        let selected = WidgetryTreeView::selection(world, *view)
-            .map(|state| {
-                let mut nodes = state.selected_ids().iter().copied().collect::<Vec<_>>();
-                nodes.sort();
-                if nodes.len() > 16 {
-                    nodes = nodes
-                        .iter()
-                        .take(4)
-                        .chain(nodes.iter().rev().take(4))
-                        .copied()
-                        .collect();
-                }
-                nodes
-                    .into_iter()
-                    .map(|node| {
-                        let name = world.get::<Name>(node).map(Name::as_str).unwrap_or("node");
-                        let parent = world.get::<ChildOf>(node).map(ChildOf::parent);
-                        let parent = parent
-                            .and_then(|e| world.get::<Name>(e))
-                            .map(Name::as_str)
-                            .unwrap_or("root");
-                        format!("{name} ({node:?}) → {parent}")
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            })
-            .unwrap_or_default();
+        let selection = match WidgetryTreeView::selection(world, *view) {
+            Ok(state) => state,
+            Err(error) => {
+                world
+                    .commands()
+                    .queue(move |_: &mut World| -> Result { Err(error.into_bevy_error()) });
+                continue;
+            }
+        };
+        let selected_count = selection.selected_ids().len();
+        let selected = {
+            let state = selection;
+            let mut nodes = state.selected_ids().iter().copied().collect::<Vec<_>>();
+            nodes.sort();
+            if nodes.len() > 16 {
+                nodes = nodes
+                    .iter()
+                    .take(4)
+                    .chain(nodes.iter().rev().take(4))
+                    .copied()
+                    .collect();
+            }
+            nodes
+                .into_iter()
+                .map(|node| {
+                    let name = world.get::<Name>(node).map(Name::as_str).unwrap_or("node");
+                    let parent = world.get::<ChildOf>(node).map(ChildOf::parent);
+                    let parent = parent
+                        .and_then(|e| world.get::<Name>(e))
+                        .map(Name::as_str)
+                        .unwrap_or("root");
+                    format!("{name} ({node:?}) → {parent}")
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
         let selected = if selected.is_empty() {
             tr(language, TextKey::Common(CommonKey::None)).to_owned()
         } else {
@@ -542,13 +561,7 @@ fn update_status(world: &mut World) {
                         })
                         .unwrap_or_default(),
                 ),
-                (
-                    "selected_count",
-                    WidgetryTreeView::selection(world, *view)
-                        .map(|state| state.selected_ids().len())
-                        .unwrap_or_default()
-                        .to_string(),
-                ),
+                ("selected_count", selected_count.to_string()),
                 (
                     "state",
                     tr(
@@ -727,16 +740,16 @@ impl Plugin for TreeDemoPlugin {
         let result = (|| -> Result<(), BevyError> {
             app.register_renderer::<BasicNode>(WidgetryTreeRenderer::new(
                 |_, node: &BasicNode| bsn_list!{@localized(node.0) bevy_widgetry::text::WidgetryText},
-            ))?;
+            )).map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error)?;
             app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
                 bsn_list!{@localized_binding(LocalizedText::new(TextKey::Tree(TreeKey::TreeFolder)).with_key_arg("label", node.0)) bevy_widgetry::text::WidgetryText}
-            }))?;
+            })).map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error)?;
             app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
                 bsn_list!{@localized_args(TextKey::Tree(TreeKey::TreeFile), vec![("label", node.label.clone()), ("bytes", node.bytes.to_string())]) bevy_widgetry::text::WidgetryText}
-            }))?;
+            })).map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error)?;
             app.register_renderer::<SharedFile>(WidgetryTreeRenderer::new(|_, node: &SharedFile| {
                 bsn_list!{@localized_args(TextKey::Tree(TreeKey::TreeSharedFile), vec![("index", node.index.to_string()), ("edits", node.edits.to_string())]) bevy_widgetry::text::WidgetryText}
-            }))?;
+            })).map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error)?;
             app.register_type::<DemoSources>()
                 .add_systems(OnEnter(GalleryPage::Tree), enter)
                 .add_systems(OnExit(GalleryPage::Tree), exit)

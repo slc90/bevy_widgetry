@@ -1,5 +1,5 @@
+use crate::{TreeError, TreeFailure, error::failure};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryTreeExpanderStateColorOverrides {
     pub background: Option<Color>,
@@ -7,38 +7,44 @@ pub struct WidgetryTreeExpanderStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryTreeExpanderStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, view: Entity) -> Result<(), TreeFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -62,11 +68,27 @@ pub struct WidgetryTreeExpanderInteractionColorOverrides {
     pub disabled: WidgetryTreeExpanderStateColorOverrides,
 }
 impl WidgetryTreeExpanderInteractionColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, view: Entity) -> Result<(), TreeFailure> {
+        self.normal.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "normal"),
+            )
+        })?;
+        self.hovered.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "hovered"),
+            )
+        })?;
+        self.pressed.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "pressed"),
+            )
+        })?;
+        self.disabled.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "disabled"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -87,9 +109,18 @@ pub struct WidgetryTreeExpanderColorOverrides {
     pub expanded: WidgetryTreeExpanderInteractionColorOverrides,
 }
 impl WidgetryTreeExpanderColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.collapsed.validate()?;
-        self.expanded.validate()?;
+    fn validate(&self, view: Entity) -> Result<(), TreeFailure> {
+        self.collapsed.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors")
+                    .field("part", "collapsed"),
+            )
+        })?;
+        self.expanded.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "expanded"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -109,38 +140,44 @@ pub struct WidgetryListViewItemStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryListViewItemStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, view: Entity) -> Result<(), TreeFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -167,32 +204,56 @@ pub struct WidgetryListViewItemColorOverrides {
     pub disabled_active_border: Option<Color>,
 }
 impl WidgetryListViewItemColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.selected.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, view: Entity) -> Result<(), TreeFailure> {
+        self.normal.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "normal"),
+            )
+        })?;
+        self.hovered.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "hovered"),
+            )
+        })?;
+        self.pressed.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "pressed"),
+            )
+        })?;
+        self.selected.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "selected"),
+            )
+        })?;
+        self.disabled.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "disabled"),
+            )
+        })?;
         if let Some(color) = self.active_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "active_border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.disabled_active_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "disabled_active_border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -221,38 +282,44 @@ pub struct WidgetryListViewContainerStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryListViewContainerStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, view: Entity) -> Result<(), TreeFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| TreeError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tree")
+                            .field("view", view)
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -275,10 +342,22 @@ pub struct WidgetryListViewContainerColorOverrides {
     pub disabled: WidgetryListViewContainerStateColorOverrides,
 }
 impl WidgetryListViewContainerColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.focused.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, view: Entity) -> Result<(), TreeFailure> {
+        self.normal.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "normal"),
+            )
+        })?;
+        self.focused.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "focused"),
+            )
+        })?;
+        self.disabled.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "disabled"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -299,10 +378,23 @@ pub struct WidgetryTreeColorOverrides {
     pub expander: WidgetryTreeExpanderColorOverrides,
 }
 impl WidgetryTreeColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.container.validate()?;
-        self.item.validate()?;
-        self.expander.validate()?;
+    fn validate(&self, view: Entity) -> Result<(), TreeFailure> {
+        self.container.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors")
+                    .field("part", "container"),
+            )
+        })?;
+        self.item.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "item"),
+            )
+        })?;
+        self.expander.validate(view).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("tree.colors").field("part", "expander"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -319,7 +411,7 @@ impl WidgetryTreeColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetryTreeColorOverrides);
 impl WidgetryTreeColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, TreeFailure> {
         if world.get::<crate::WidgetryTreeView>(entity).is_none() {
             return Err(invalid_target(entity));
         }
@@ -332,17 +424,20 @@ impl WidgetryTreeColorOverrides {
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, TreeFailure> {
         Self::get(world, entity)?;
-        if world
+        if let Some(owner) = world
             .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryTreeView>>(entity)
-            .is_some()
         {
-            return Err(invalid_target(entity));
+            return Err(failure(
+                TreeError::ManagedColors {
+                    view: entity,
+                    owner: owner.entity,
+                },
+                "tree.colors.set",
+            ));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
-        })?;
+        colors.validate(entity)?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;
@@ -353,25 +448,83 @@ impl WidgetryTreeColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(TreeFailure::into_bevy_error)
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, TreeFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, view: Entity) -> Result<ColorState, TreeFailure> {
+        self.validate(view)?;
         Ok(ColorState(self))
     }
 }
 #[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryTreeColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryTreeColorOverrides 目标不存在、类型不匹配或属于托管部件")
+fn invalid_target(entity: Entity) -> TreeFailure {
+    failure(
+        TreeError::InvalidColors { view: entity },
+        "tree.colors.target",
+    )
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+    #[test]
+    fn invalid_override_keeps_core_source_and_managed_owner_identity() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(crate::WidgetryTreePlugin);
+        let root = app.world_mut().spawn_empty().id();
+        let source = app
+            .world_mut()
+            .spawn(crate::WidgetryTreeModel::new(root))
+            .id();
+        let view = bevy_widgetry_core::scene::spawn_scene(
+            app.world_mut(),
+            bsn! {@crate::WidgetryTreeView{@source:source}},
+        )
+        .unwrap();
+        let original = WidgetryTreeColorOverrides::get(app.world(), view)
+            .unwrap()
+            .clone();
+        let mut invalid = original.clone();
+        invalid.expander.expanded.pressed.foreground =
+            Some(Color::linear_rgba(f32::NAN, 0., 0., 1.));
+        let error =
+            WidgetryTreeColorOverrides::set_in_world(app.world_mut(), view, invalid).unwrap_err();
+        assert!(matches!(error.kind(), TreeError::Core { .. }));
+        assert!(std::error::Error::source(error.kind()).is_some());
+        for field in ["expander", "expanded", "pressed", "foreground"] {
+            assert!(
+                error
+                    .contexts()
+                    .iter()
+                    .any(|frame| frame.fields().iter().any(|(_, value)| value == field))
+            );
+        }
+        assert_eq!(
+            WidgetryTreeColorOverrides::get(app.world(), view).unwrap(),
+            &original
+        );
+        let owner = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(view)
+            .insert(bevy_widgetry_core::color::WidgetryStyleOwner::<
+                crate::WidgetryTreeView,
+            >::new(owner));
+        let error = WidgetryTreeColorOverrides::clear_in_world(app.world_mut(), view).unwrap_err();
+        assert!(
+            matches!(error.kind(),TreeError::ManagedColors{view:actual,owner:actual_owner} if (*actual,*actual_owner)==(view,owner))
+        );
+    }
 }

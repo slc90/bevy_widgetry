@@ -59,3 +59,8 @@ Invalid Root / Node、缺失 Renderer、非法行高或缩进需要报告。Lazy
 失效节点、异树、自身、拟议父节点属于源后代、无效父子链、源/目标或业务祖先 Disabled 均拒绝并返回 Error，失败不写入局部层级、不发移动或加载事件。Inside 在提交时再次读取目标的 ChildrenState，Unknown/Loading 均拒绝，Loaded 或普通本地节点允许；Before/After 不因目标自身未加载而拒绝。拖动中 Loaded 变为 Loading 同样取消提交，不启动加载或缓存待执行移动。程序化移动不依赖拖拽开关，允许操作 Disabled View，但仍验证业务节点的 Disabled 及层级限制。
 
 节点移动与拖放开关 API 使用 `TreeFailure`。`TreeError::Move` 保存纯数据的 `TreeMoveRejection`：View、可确定的 Model Source / Root、完整移动请求及已知旧 / 新父级；`TreeMoveReason` 区分无效 View / Source / 内部 List、自身移动、跨树或失效成员、实际禁用祖先、缺失父级 / index、未加载 children 和循环父链。失败不修改层级；同父同索引仍返回 `Ok(false)`。拖放预览只计算拒绝，不创建诊断或 ERROR；实际非法公开请求才捕获诊断。拖放查询 / 设置共享 Root / List 校验，下层 ListView 配置失败保留原原因与 origin，排队入口显式转为 `Severity::Error`。
+
+
+TreeView 状态、选择、展开及 loader 完成请求返回 `TreeViewFailure`（共享的 `WidgetryEcsError`），可通过诊断原因链识别 `TreeError::View` / `TreeViewFault` 或具体 List 错误；注册 renderer 和配色 API 返回 `TreeFailure`。`TreeViewFault` 区分 Source、内部部件、目标、深度及 Renderer 缺失 / 歧义，保留 View、业务 Node 和部件身份。颜色值拒绝保留原 Core 原因及字段路径，托管配色拒绝保留实际 Owner。
+
+持续结构故障按类型化业务键保留同一诊断 ID / origin，缺少内部 List 的层级与投影检查共用身份。独立程序请求和每次实际 Renderer Scene 尝试分别诊断；来自 ListView / Button / Core / Scene 的原始原因、Backtrace 和 ID 在传播中保留。批量 View、节点和样式更新继续处理其他目标，并将全部未处理失败交给宿主。原生 Scene 的 Severity 与 payload 逐次保留；失败清理仅销毁该内容容器下本次新建的构造实体和空预留实体；清理前脱离临时挂入的已有业务子树，保留它们及已提交的状态，不回滚独立业务实体。合法折叠、Loading 等待、同值请求及生命周期删除沿用正常结果，不作为恢复证据。

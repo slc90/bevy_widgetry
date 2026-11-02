@@ -1,4 +1,8 @@
 use crate::renderer::TreeContent;
+use crate::{
+    TreeError, TreeViewFailure, TreeViewFault,
+    error::{failure, persistent, view_failure},
+};
 use crate::{WidgetryTreeModel, WidgetryTreeVisibleItem};
 use bevy::asset::AssetPath;
 use bevy::prelude::*;
@@ -6,9 +10,9 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{ErrorFrame, bevy::FailureState};
+
 use bevy_widgetry_list_view::{
     WidgetryListSelectionChanged, WidgetryListSelectionMode, WidgetryListView,
     WidgetryListViewRenderer,
@@ -30,9 +34,10 @@ pub struct WidgetryTreeView {
 
 #[derive(Component, Default)]
 struct ViewDiagnostics {
-    source: UnmigratedFailureState,
-    projection: UnmigratedFailureState,
-    hierarchy: UnmigratedFailureState,
+    source: FailureState<TreeViewFault>,
+    projection: FailureState<TreeViewFault>,
+    hierarchy: FailureState<TreeViewFault>,
+    colors: FailureState<TreeViewFault>,
 }
 
 pub struct WidgetryTreeViewProps {
@@ -65,47 +70,93 @@ thread_local! {
 }
 
 #[derive(Component, Default)]
-struct ExpanderDiagnostics(UnmigratedFailureState);
+struct ExpanderDiagnostics(FailureState<TreeViewFault>);
 
 #[cfg(test)]
 thread_local! {
     static DIAGNOSTIC_WORK: std::cell::RefCell<Vec<Entity>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-pub(crate) fn validate_source(world: &mut World, root: Entity) -> Result<(), BevyError> {
-    let source = world
-        .get::<WidgetryTreeView>(root)
-        .map(|view| view.source)
-        .unwrap_or(Entity::PLACEHOLDER);
-    let result = if world.get::<WidgetryTreeModel>(source).is_some() {
+pub(crate) fn validate_source(world: &mut World, root: Entity) -> Result<(), TreeViewFailure> {
+    let source = world.get::<WidgetryTreeView>(root).map(|view| view.source);
+    let result = if source.is_some_and(|source| world.get::<WidgetryTreeModel>(source).is_some()) {
         Ok(())
     } else {
-        Err(BevyError::error(
-            "WidgetryTreeView requires a live TreeModel source",
-        ))
+        Err(TreeViewFault::Source { view: root, source })
     };
-    let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) else {
-        return result;
-    };
-    diagnostics.source.observe(result,
-        |error| widgetry_error!(entity = ?root, ?source, %error, "TreeView source 缺失或没有 TreeModel"),
-        || widgetry_info!(entity = ?root, ?source, "TreeView source 恢复正常"))
+    observe(world, root, DiagnosticPart::Source, result)
 }
-
+enum DiagnosticPart {
+    Source,
+    Projection,
+    Hierarchy,
+    Colors,
+}
+fn observe(
+    world: &mut World,
+    root: Entity,
+    part: DiagnosticPart,
+    result: Result<(), TreeViewFault>,
+) -> Result<(), TreeViewFailure> {
+    let operation = match part {
+        DiagnosticPart::Source => "tree.source",
+        DiagnosticPart::Projection => "tree.projection",
+        DiagnosticPart::Hierarchy => "tree.hierarchy",
+        DiagnosticPart::Colors => "tree.colors",
+    };
+    let frame = result.as_ref().err().map(|fault| {
+        let node = if let TreeViewFault::Depth { node, .. } = fault {
+            Some(*node)
+        } else {
+            None
+        };
+        crate::error::view_context(world, root, node, root, operation).field("request", "Sync")
+    });
+    let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) else {
+        return result.map_err(|fault| view_failure(fault, "tree.view"));
+    };
+    let state = match part {
+        DiagnosticPart::Source => &mut diagnostics.source,
+        DiagnosticPart::Projection => &mut diagnostics.projection,
+        DiagnosticPart::Hierarchy => &mut diagnostics.hierarchy,
+        DiagnosticPart::Colors => &mut diagnostics.colors,
+    };
+    match result {
+        Ok(()) => {
+            state.recover(|| ErrorFrame::new(operation).field("view", root));
+            Ok(())
+        }
+        Err(fault) => Err(crate::error::persistent_frame(
+            state,
+            fault,
+            frame.unwrap_or_else(|| ErrorFrame::new(operation)),
+        )),
+    }
+}
+pub(crate) fn observe_colors(
+    world: &mut World,
+    root: Entity,
+    result: Result<(), TreeViewFault>,
+) -> Result<(), TreeViewFailure> {
+    observe(world, root, DiagnosticPart::Colors, result)
+}
 pub(crate) fn observe_projection(
     world: &mut World,
     root: Entity,
-    result: Result<(), BevyError>,
-) -> Result<(), BevyError> {
-    if let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) {
-        diagnostics.projection.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "TreeView projection 失败"),
-            || widgetry_info!(?root, "TreeView projection 恢复正常"),
-        )
+    result: Result<(), TreeViewFault>,
+) -> Result<(), TreeViewFailure> {
+    let part = if matches!(
+        result,
+        Err(TreeViewFault::Part {
+            part: crate::TreeViewPart::List,
+            ..
+        })
+    ) {
+        DiagnosticPart::Hierarchy
     } else {
-        result
-    }
+        DiagnosticPart::Projection
+    };
+    observe(world, root, part, result)
 }
 
 pub(crate) fn on_selection(
@@ -137,35 +188,47 @@ fn on_expand(event: On<Activate>, expanders: Query<&TreeExpander>, mut commands:
     let button = event.entity;
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         let root = tree_root(world, button).ok_or_else(|| {
-            widgetry_error!(?button, "Tree expander 缺少所属 TreeView");
-            BevyError::error("Tree expander has no owning TreeView")
+            view_failure(
+                TreeViewFault::ExpanderOwner {
+                    button,
+                    node: expander.node,
+                },
+                "tree.activate_expander",
+            )
+            .into_bevy_error()
         })?;
         if world.get::<InteractionDisabled>(root).is_some() {
             return Ok(());
         }
-        WidgetryTreeView::toggle_expand(world, root, expander.node)?;
+        WidgetryTreeView::toggle_expand(world, root, expander.node)
+            .map_err(TreeViewFailure::into_bevy_error)?;
         Ok(())
     });
 }
 
-pub(crate) fn internal_list(world: &World, root: Entity) -> Result<Entity, BevyError> {
-    invariant(
-        world.get::<Children>(root).and_then(|children| {
-            children.iter().find(|&child| {
-                world
-                    .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(child)
-                    .is_some()
-            })
-        }),
-        root,
-    )
+pub(crate) fn internal_list_entity(world: &World, root: Entity) -> Option<Entity> {
+    world.get::<Children>(root).and_then(|children| {
+        children.iter().find(|&child| {
+            world
+                .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(child)
+                .is_some()
+        })
+    })
 }
-
-fn invariant<T>(value: Option<T>, _root: Entity) -> Result<T, BevyError> {
-    value.ok_or_else(|| BevyError::error("WidgetryTreeView invariant failed"))
+pub(crate) fn internal_list(world: &World, root: Entity) -> Result<Entity, TreeViewFailure> {
+    internal_list_entity(world, root).ok_or_else(|| {
+        view_failure(
+            TreeViewFault::Part {
+                view: Some(root),
+                node: None,
+                entity: root,
+                part: crate::TreeViewPart::List,
+            },
+            "tree.internal_list",
+        )
+    })
 }
-
-fn tree_root(world: &World, mut entity: Entity) -> Option<Entity> {
+pub(crate) fn tree_root(world: &World, mut entity: Entity) -> Option<Entity> {
     loop {
         if world.get::<WidgetryTreeView>(entity).is_some() {
             return Some(entity);
@@ -173,42 +236,45 @@ fn tree_root(world: &World, mut entity: Entity) -> Option<Entity> {
         entity = world.get::<ChildOf>(entity)?.parent();
     }
 }
-
-fn validate_view_hierarchy(world: &mut World, root: Entity) -> Result<(), BevyError> {
-    let result = internal_list(world, root).map(|_| ());
-    if let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) {
-        diagnostics.hierarchy.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "TreeView hierarchy 失效"),
-            || widgetry_info!(?root, "TreeView hierarchy 恢复正常"),
-        )
-    } else {
-        result
-    }
+fn validate_view_hierarchy(world: &mut World, root: Entity) -> Result<(), TreeViewFailure> {
+    let result = internal_list_entity(world, root)
+        .map(|_| ())
+        .ok_or(TreeViewFault::Part {
+            view: Some(root),
+            node: None,
+            entity: root,
+            part: crate::TreeViewPart::List,
+        });
+    observe(world, root, DiagnosticPart::Hierarchy, result)
 }
-
-fn validate_expander_hierarchy(world: &mut World, button: Entity) -> Result<(), BevyError> {
-    let result = if tree_root(world, button).is_some() {
-        Ok(())
-    } else {
-        Err(BevyError::error("Tree expander has no owning TreeView"))
-    };
+fn validate_expander_hierarchy(world: &mut World, button: Entity) -> Result<(), TreeViewFailure> {
+    let result = tree_root(world, button)
+        .map(|_| ())
+        .ok_or_else(|| TreeViewFault::ExpanderOwner {
+            button,
+            node: world
+                .get::<TreeExpander>(button)
+                .map(|part| part.node)
+                .unwrap_or(Entity::PLACEHOLDER),
+        });
     observe_expander_hierarchy(world, button, result)
 }
-
 fn observe_expander_hierarchy(
     world: &mut World,
     button: Entity,
-    result: Result<(), BevyError>,
-) -> Result<(), BevyError> {
-    if let Some(mut diagnostics) = world.get_mut::<ExpanderDiagnostics>(button) {
-        diagnostics.0.observe(
-            result,
-            |error| widgetry_error!(?button, %error, "Tree expander ownership 失效"),
-            || widgetry_info!(?button, "Tree expander ownership 恢复正常"),
-        )
-    } else {
-        result
+    result: Result<(), TreeViewFault>,
+) -> Result<(), TreeViewFailure> {
+    let Some(mut diagnostics) = world.get_mut::<ExpanderDiagnostics>(button) else {
+        return result.map_err(|fault| view_failure(fault, "tree.expander"));
+    };
+    match result {
+        Ok(()) => {
+            diagnostics
+                .0
+                .recover(|| ErrorFrame::new("tree.expander").field("button", button));
+            Ok(())
+        }
+        Err(fault) => Err(persistent(&mut diagnostics.0, fault, "tree.expander")),
     }
 }
 
@@ -248,7 +314,7 @@ pub(crate) fn validate_changed(world: &mut World) -> Result<(), BevyError> {
             buttons.insert(entity);
         }
     }
-    let mut failure = None;
+    let mut failures = Vec::new();
     for root in roots {
         #[cfg(test)]
         DIAGNOSTIC_WORK.with_borrow_mut(|work| work.push(root));
@@ -256,23 +322,19 @@ pub(crate) fn validate_changed(world: &mut World) -> Result<(), BevyError> {
             validate_source(world, root),
             validate_view_hierarchy(world, root),
         ] {
-            if let Err(error) = result
-                && failure.is_none()
-            {
-                failure = Some(error);
+            if let Err(error) = result {
+                failures.push(error.into_bevy_error());
             }
         }
     }
     for button in buttons {
         #[cfg(test)]
         DIAGNOSTIC_WORK.with_borrow_mut(|work| work.push(button));
-        if let Err(error) = validate_expander_hierarchy(world, button)
-            && failure.is_none()
-        {
-            failure = Some(error);
+        if let Err(error) = validate_expander_hierarchy(world, button) {
+            failures.push(error.into_bevy_error());
         }
     }
-    failure.map_or(Ok(()), Err)
+    crate::error::dispatch(world, failures)
 }
 
 impl Default for WidgetryTreeIcons {
@@ -316,11 +378,11 @@ impl WidgetryTreeView {
         let icons = props.icons;
         bsn! {
             @root_reference(#TreeRoot)
-            template(move |_| props.colors.clone().initial())
+            template(move |ctx| props.colors.clone().initial(ctx.entity.id()).map_err(crate::TreeFailure::into_bevy_error))
             WidgetryTreeView { source }
-            template(move |_| {
+            template(move |ctx| {
                 if source == Entity::PLACEHOLDER || !indent.is_finite() || indent < 0.0 {
-                    return Err(bevy_widgetry_core::scene_source_error!("Invalid WidgetryTreeView configuration"; source = ?source, indent_width = indent, "TreeView 必须提供 source 与有限非负 indent_width"));
+                    return Err(failure(TreeError::Configuration{view:ctx.entity.id(),source,indent_width:indent},"tree.scene").into_bevy_error());
                 }
                 Ok(ValidatedConfig)
             })
@@ -333,13 +395,14 @@ impl WidgetryTreeView {
                     @item_height: {props.item_height},
                     @renderer: {WidgetryListViewRenderer::new(move |item: &WidgetryTreeVisibleItem| {
                         let node = item.entity;
+                        let depth=item.depth;
                         let padding = f32::from(item.depth) * indent;
                         let icon = if item.expanded { icons.collapse.clone() } else { icons.expand.clone() };
                         let visibility = if item.has_children { Visibility::Inherited } else { Visibility::Hidden };
                         bsn_list!{
                             template(move |_| {
                                 if !padding.is_finite() {
-                                    return Err(BevyError::error("TreeView indentation overflow"));
+                                    return Err(failure(TreeError::Indent{node,depth,indent_width:indent,padding},"tree.indent").into_bevy_error());
                                 }
                                 Ok(Node { width: percent(100), align_items: AlignItems::Center, padding: UiRect::left(px(padding)), column_gap: px(6), ..default() })
                             })
@@ -615,7 +678,7 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
         .collect::<Vec<_>>();
     let mut visited = bevy::ecs::entity::EntityHashSet::default();
     let mut visited_subtrees = bevy::ecs::entity::EntityHashSet::default();
-    let mut failure = None;
+    let mut failures = Vec::new();
     while let Some((entity, subtree)) = pending.pop() {
         if !world.entities().contains(entity) {
             continue;
@@ -648,11 +711,15 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
             let root = tree_root(world, entity);
             let result = root
                 .map(|_| ())
-                .ok_or_else(|| BevyError::error("Tree expander has no owning TreeView"));
-            if let Err(error) = observe_expander_hierarchy(world, entity, result)
-                && failure.is_none()
-            {
-                failure = Some(error);
+                .ok_or_else(|| TreeViewFault::ExpanderOwner {
+                    button: entity,
+                    node: world
+                        .get::<TreeExpander>(entity)
+                        .map(|part| part.node)
+                        .unwrap_or(Entity::PLACEHOLDER),
+                });
+            if let Err(error) = observe_expander_hierarchy(world, entity, result) {
+                failures.push(error.into_bevy_error());
             }
             root.map(|root| (root, PartKind::Expander))
         } else {
@@ -695,7 +762,7 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
             world.entity_mut(entity).insert(OwnedPart { root, kind });
         }
     }
-    failure.map_or(Ok(()), Err)
+    crate::error::dispatch(world, failures)
 }
 pub(crate) fn own_list(
     event: On<Add<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>,
@@ -807,6 +874,9 @@ mod tests {
 
     #[test]
     fn stable_tree_views_skip_palette_and_expander_color_work() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (mut app, _, _) = fixture();
         style::COLOR_WORK.with_borrow_mut(|work| {
             work.0.clear();
@@ -826,6 +896,9 @@ mod tests {
 
     #[test]
     fn expander_interaction_and_removal_only_recolor_the_affected_button() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy::picking::hover::Hovered;
         use bevy::ui::Pressed;
         let (mut app, _, roots) = fixture();
@@ -878,6 +951,9 @@ mod tests {
 
     #[test]
     fn palette_changes_stay_in_their_view_and_missing_outputs_retry_until_repaired() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy_widgetry_core::foreground::ResolvedForeground;
         use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
         LogCapture::default().run(|| {
@@ -945,6 +1021,9 @@ mod tests {
 
     #[test]
     fn idle_tree_views_do_not_rediscover_list_and_expander_owners() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (mut app, _, _) = fixture();
         assert!(
             app.world_mut()
@@ -962,6 +1041,9 @@ mod tests {
 
     #[test]
     fn stable_views_skip_extra_source_and_hierarchy_diagnostics() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (mut app, _, _) = fixture();
         app.edit_schedule(PreUpdate, |schedule| {
             schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
@@ -1002,6 +1084,9 @@ mod tests {
 
     #[test]
     fn owner_repairs_remain_local_and_do_not_take_business_buttons() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy_widgetry_core::color::WidgetryStyleOwner;
         let (mut app, _, roots) = fixture();
         assert_owners(app.world_mut());
@@ -1054,6 +1139,9 @@ mod tests {
 
     #[test]
     fn delayed_subtrees_and_reparenting_follow_the_nearest_tree_view() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy_widgetry_core::color::WidgetryStyleOwner;
         use bevy_widgetry_test_utils::LogCapture;
         let logs = LogCapture::default();
@@ -1122,15 +1210,19 @@ mod tests {
             establish_style_owners(app.world_mut()).unwrap();
             assert_owners(app.world_mut());
         });
-        assert!(
-            logs.records()
-                .iter()
-                .any(|record| record.level == bevy::log::Level::ERROR
-                    && record.fields.contains_key("button"))
-        );
+        assert!(logs.records().iter().any(|record| {
+            record.level == bevy::log::Level::ERROR
+                && record
+                    .fields
+                    .get("context")
+                    .is_some_and(|context| context.contains("ExpanderOwner"))
+        }));
     }
     #[test]
     fn marker_repairs_and_late_plugin_installation_restore_existing_parts() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy_widgetry_core::color::WidgetryStyleOwner;
         use bevy_widgetry_list_view::{WidgetryListViewAppExt, WidgetryListViewPlugin};
         use bevy_widgetry_test_utils::LogCapture;
@@ -1228,6 +1320,9 @@ mod tests {
 
     #[test]
     fn shared_source_failure_recovers_each_view_without_recovering_destroyed_views() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
         let logs = LogCapture::default();
         logs.run(|| {
@@ -1244,7 +1339,7 @@ mod tests {
                         record.level == level
                             && record
                                 .fields
-                                .get("message")
+                                .get("context")
                                 .is_some_and(|text| text.contains(message))
                     })
                     .count()
@@ -1259,30 +1354,33 @@ mod tests {
                 update_with_errors(&mut app, &errors, true);
             }
             assert_eq!(DIAGNOSTIC_WORK.with_borrow(Vec::len), 2);
-            assert_eq!(count(bevy::log::Level::ERROR, "source 缺失"), 2);
-            assert_eq!(count(bevy::log::Level::INFO, "TreeView source 恢复"), 0);
+            assert_eq!(count(bevy::log::Level::ERROR, "tree.source"), 2);
+            assert_eq!(count(bevy::log::Level::INFO, "tree.source"), 0);
             app.world_mut().entity_mut(source).insert(saved);
             update_with_errors(&mut app, &errors, false);
-            assert_eq!(count(bevy::log::Level::INFO, "TreeView source 恢复"), 2);
+            assert_eq!(count(bevy::log::Level::INFO, "tree.source"), 2);
             let saved = app
                 .world_mut()
                 .entity_mut(source)
                 .take::<WidgetryTreeModel>()
                 .unwrap();
             update_with_errors(&mut app, &errors, true);
-            assert_eq!(count(bevy::log::Level::ERROR, "source 缺失"), 4);
+            assert_eq!(count(bevy::log::Level::ERROR, "tree.source"), 4);
             app.world_mut().despawn(roots[0]);
             update_with_errors(&mut app, &errors, true);
-            assert_eq!(count(bevy::log::Level::INFO, "TreeView source 恢复"), 2);
+            assert_eq!(count(bevy::log::Level::INFO, "tree.source"), 2);
             app.world_mut().entity_mut(source).insert(saved);
             update_with_errors(&mut app, &errors, false);
-            assert_eq!(count(bevy::log::Level::INFO, "TreeView source 恢复"), 3);
+            assert_eq!(count(bevy::log::Level::INFO, "tree.source"), 3);
             assert_owners(app.world_mut());
         });
     }
 
     #[test]
     fn hierarchy_failures_and_repairs_keep_view_diagnostics_independent() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
         let logs = LogCapture::default();
         logs.run(|| {
@@ -1308,24 +1406,18 @@ mod tests {
                         record.level == level
                             && record
                                 .fields
-                                .get("message")
+                                .get("context")
                                 .is_some_and(|text| text.contains(message))
                     })
                     .count()
             };
-            assert_eq!(count(bevy::log::Level::ERROR, "hierarchy 失效"), 1);
-            assert_eq!(
-                count(bevy::log::Level::ERROR, "TreeView projection 失败"),
-                1
-            );
+            assert_eq!(count(bevy::log::Level::ERROR, "tree.hierarchy"), 1);
+            assert_eq!(count(bevy::log::Level::ERROR, "tree.projection"), 0);
             assert_eq!(count(bevy::log::Level::INFO, "恢复正常"), 0);
             app.world_mut().entity_mut(list).insert(saved);
             update_with_errors(&mut app, &errors, false);
-            assert_eq!(count(bevy::log::Level::INFO, "hierarchy 恢复正常"), 1);
-            assert_eq!(
-                count(bevy::log::Level::INFO, "TreeView projection 恢复正常"),
-                1
-            );
+            assert_eq!(count(bevy::log::Level::INFO, "tree.hierarchy"), 1);
+            assert_eq!(count(bevy::log::Level::INFO, "tree.projection"), 0);
             assert_owners(app.world_mut());
             let expander = app
                 .world_mut()
@@ -1336,13 +1428,10 @@ mod tests {
             let parent = app.world().get::<ChildOf>(expander).unwrap().parent();
             app.world_mut().entity_mut(expander).remove::<ChildOf>();
             update_with_errors(&mut app, &errors, true);
-            assert_eq!(count(bevy::log::Level::ERROR, "expander ownership 失效"), 1);
+            assert_eq!(count(bevy::log::Level::ERROR, "tree.expander"), 1);
             app.world_mut().entity_mut(expander).insert(ChildOf(parent));
             update_with_errors(&mut app, &errors, false);
-            assert_eq!(
-                count(bevy::log::Level::INFO, "expander ownership 恢复正常"),
-                1
-            );
+            assert_eq!(count(bevy::log::Level::INFO, "tree.expander"), 1);
             for record in logs.records().iter().filter(|record| {
                 record.level == bevy::log::Level::INFO
                     && record
@@ -1350,8 +1439,101 @@ mod tests {
                         .get("message")
                         .is_some_and(|text| text.contains("恢复正常"))
             }) {
-                assert_ne!(record.fields.get("root"), Some(&format!("{:?}", roots[1])));
+                assert!(
+                    !record.fields["context"].contains(&format!("(\"view\", \"{:?}\")", roots[1]))
+                );
             }
         });
+    }
+    #[test]
+    fn shared_source_diagnostics_reach_handler_for_each_view_and_requests_are_independent() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+        let (mut app, source, roots) = fixture();
+        app.set_error_handler(ErrorCapture::handler());
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        let saved = app
+            .world_mut()
+            .entity_mut(source)
+            .take::<WidgetryTreeModel>()
+            .unwrap();
+        let mut originals = Vec::new();
+        logs.run(||{
+            errors.run(||{app.world_mut().commands().queue(validate_changed);app.world_mut().flush();});
+            let records=errors.take_records();assert_eq!(records.len(),2);
+            for record in records {
+                assert_eq!(record.error.severity(),bevy::ecs::error::Severity::Error);
+                let diagnostic=record.managed().unwrap().diagnostics().next().unwrap();
+                let fault=diagnostic.source().unwrap().downcast_ref::<TreeError>().unwrap();
+                assert!(matches!(fault,TreeError::View{fault:TreeViewFault::Source{view,source:Some(actual)}} if roots.contains(view)&&*actual==source));
+                assert_eq!(logs.diagnostic_records(diagnostic.origin().id(),DiagnosticPhase::Source).len(),1);
+                originals.push(diagnostic.origin().clone());
+            }
+            errors.run(||{app.world_mut().commands().queue(crate::behavior::sync_views);app.world_mut().flush();});
+            let records=errors.take_records();assert_eq!(records.len(),2);
+            for record in records {let diagnostic=record.managed().unwrap().diagnostics().next().unwrap();assert!(originals.iter().any(|origin|std::sync::Arc::ptr_eq(origin,diagnostic.origin())));}
+            let first=WidgetryTreeView::select(app.world_mut(),roots[0],None).unwrap_err();
+            let second=WidgetryTreeView::select(app.world_mut(),roots[0],None).unwrap_err();
+            let first=first.diagnostics().next().unwrap().origin();let second=second.diagnostics().next().unwrap().origin();
+            assert_ne!(first.id(),second.id());assert!(originals.iter().all(|origin|origin.id()!=first.id()));
+        });
+        app.world_mut().entity_mut(source).insert(saved);
+        errors.run(|| {
+            app.world_mut().commands().queue(validate_changed);
+            app.world_mut().flush();
+        });
+        assert!(errors.take().is_empty());
+    }
+
+    #[test]
+    fn color_cache_failures_keep_all_view_identities_and_recover_after_actual_repair() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+        let (mut app, _, roots) = fixture();
+        app.set_error_handler(ErrorCapture::handler());
+        for root in roots.iter().copied() {
+            app.world_mut()
+                .entity_mut(root)
+                .remove::<style::TreeStyle>();
+        }
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        let mut origins = Vec::new();
+        logs.run(||for attempt in 0..2 {
+            errors.run(||{app.world_mut().commands().queue(style::update_colors);app.world_mut().flush();});
+            let records=errors.take_records();assert_eq!(records.len(),2);
+            for record in records {let diagnostic=record.managed().unwrap().diagnostics().next().unwrap();
+                assert!(matches!(diagnostic.source().unwrap().downcast_ref::<TreeError>(),Some(TreeError::View{fault:TreeViewFault::Part{view:Some(view),part:crate::TreeViewPart::ColorCache,..}}) if roots.contains(view)));
+                if attempt==0 {origins.push(diagnostic.origin().clone());}else {assert!(origins.iter().any(|origin|std::sync::Arc::ptr_eq(origin,diagnostic.origin())));}
+            }
+        });
+        for root in roots {
+            app.world_mut()
+                .entity_mut(root)
+                .insert(style::TreeStyle::default());
+        }
+        logs.run(|| {
+            errors.run(|| {
+                app.world_mut().commands().queue(style::update_colors);
+                app.world_mut().flush();
+            })
+        });
+        assert!(errors.take().is_empty());
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.level == bevy::log::Level::INFO
+                    && record
+                        .fields
+                        .get("phase")
+                        .is_some_and(|phase| phase.contains("recovered")))
+                .count(),
+            2
+        );
     }
 }

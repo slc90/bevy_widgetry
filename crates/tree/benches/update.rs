@@ -125,7 +125,8 @@ fn main() -> Result {
                                 app.world_mut(),
                                 fixture.root,
                                 fixture.branch,
-                            )?;
+                            )
+                            .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
                             settle(app);
                         }
                         "scroll" => {
@@ -228,7 +229,8 @@ fn main() -> Result {
                         fixture.app.world_mut(),
                         fixture.root,
                         fixture.branch,
-                    )?;
+                    )
+                    .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
                 }
                 fixture.app.update();
                 Ok(())
@@ -237,7 +239,8 @@ fn main() -> Result {
                 validate_text(&mut fixture.app)?;
                 validate_owners(&mut fixture.app, fixture.root)?;
                 validate_owners(&mut fixture.app, *second)?;
-                if WidgetryTreeView::state(fixture.app.world(), *second)?
+                if WidgetryTreeView::state(fixture.app.world(), *second)
+                    .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?
                     .visible_items()
                     .len()
                     != 1
@@ -256,20 +259,26 @@ fn main() -> Result {
             || {
                 let mut fixture = fixture(10_000, "collapsed", false)?;
                 spawn_view(&mut fixture, 384)?;
-                WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)?;
+                WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)
+                    .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
                 if action == "select_visible" {
-                    WidgetryTreeView::select_visible(fixture.app.world_mut(), fixture.root)?;
+                    WidgetryTreeView::select_visible(fixture.app.world_mut(), fixture.root)
+                        .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
                 }
                 settle(&mut fixture.app);
                 Ok(fixture)
             },
             |fixture, _| {
                 if action == "select_visible" {
-                    WidgetryTreeView::select(fixture.app.world_mut(), fixture.root, None)?;
-                    WidgetryTreeView::select_visible(fixture.app.world_mut(), fixture.root)?;
+                    WidgetryTreeView::select(fixture.app.world_mut(), fixture.root, None)
+                        .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
+                    WidgetryTreeView::select_visible(fixture.app.world_mut(), fixture.root)
+                        .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
                 } else {
-                    WidgetryTreeView::collapse_all(fixture.app.world_mut(), fixture.root)?;
-                    WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)?;
+                    WidgetryTreeView::collapse_all(fixture.app.world_mut(), fixture.root)
+                        .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
+                    WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)
+                        .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
                 }
                 fixture.app.update();
                 Ok(())
@@ -277,12 +286,14 @@ fn main() -> Result {
             |fixture| {
                 validate_owners(&mut fixture.app, fixture.root)?;
                 validate_text(&mut fixture.app)?;
-                if WidgetryTreeView::state(fixture.app.world(), fixture.root)?
+                if WidgetryTreeView::state(fixture.app.world(), fixture.root)
+                    .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?
                     .visible_items()
                     .len()
                     != 10_000
                     || (action == "select_visible"
-                        && WidgetryTreeView::selection(fixture.app.world(), fixture.root)?
+                        && WidgetryTreeView::selection(fixture.app.world(), fixture.root)
+                            .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?
                             .selected_ids()
                             .len()
                             != 10_000)
@@ -301,12 +312,14 @@ fn main() -> Result {
             || {
                 let mut fixture = fixture(10_000, "wide", false)?;
                 spawn_view(&mut fixture, 384)?;
-                WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)?;
+                WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)
+                    .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
                 WidgetryTreeView::replace_selection(
                     fixture.app.world_mut(),
                     fixture.root,
                     [fixture.branch, fixture.leaf],
-                )?;
+                )
+                .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?;
                 settle(&mut fixture.app);
                 Ok(fixture)
             },
@@ -352,11 +365,13 @@ fn main() -> Result {
             |fixture| {
                 validate_owners(&mut fixture.app, fixture.root)?;
                 validate_text(&mut fixture.app)?;
-                if WidgetryTreeView::state(fixture.app.world(), fixture.root)?
+                if WidgetryTreeView::state(fixture.app.world(), fixture.root)
+                    .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?
                     .visible_items()
                     .len()
                     != 10_000
-                    || WidgetryTreeView::selection(fixture.app.world(), fixture.root)?
+                    || WidgetryTreeView::selection(fixture.app.world(), fixture.root)
+                        .map_err(bevy_widgetry_tree::TreeViewFailure::into_bevy_error)?
                         .selected_ids()
                         .len()
                         != 2
@@ -409,7 +424,7 @@ fn fixture(nodes: usize, shape: &str, rich: bool) -> Result<Fixture> {
     app.add_plugins(WidgetryTreePlugin);
     app.init_resource::<HoverRequest>()
         .add_systems(Update, apply_hover);
-    app.register_renderer::<Label>(WidgetryTreeRenderer::new(move |_, label: &Label| bsn_list!{Node { column_gap: px(8) } Children [Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("node metadata") bevy_widgetry_core::text::WidgetryText })}]}))?;
+    app.register_renderer::<Label>(WidgetryTreeRenderer::new(move |_, label: &Label| bsn_list!{Node { column_gap: px(8) } Children [Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("node metadata") bevy_widgetry_core::text::WidgetryText })}]})).map_err(bevy_widgetry_tree::TreeFailure::into_bevy_error)?;
     let hierarchy = app.world_mut().spawn_empty().id();
     let branch = app
         .world_mut()

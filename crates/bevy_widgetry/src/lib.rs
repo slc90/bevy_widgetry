@@ -139,15 +139,16 @@ pub mod list_view {
 #[cfg(feature = "tree")]
 pub mod tree {
     pub use bevy_widgetry_tree::{
-        TreeError, TreeFailure, TreeMoveReason, TreeMoveRejection,
-        WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
-        WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
-        WidgetryTreeAppExt, WidgetryTreeChildrenState, WidgetryTreeColorOverrides,
-        WidgetryTreeDropPlacement, WidgetryTreeEvent, WidgetryTreeEventKind,
-        WidgetryTreeExpanderColorOverrides, WidgetryTreeExpanderInteractionColorOverrides,
-        WidgetryTreeExpanderStateColorOverrides, WidgetryTreeIcons, WidgetryTreeModel,
-        WidgetryTreeMove, WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeRenderer,
-        WidgetryTreeState, WidgetryTreeView, WidgetryTreeViewProps, WidgetryTreeVisibleItem,
+        TreeError, TreeFailure, TreeMoveReason, TreeMoveRejection, TreeRendererIdentity,
+        TreeViewFailure, TreeViewFault, TreeViewPart, WidgetryListViewContainerColorOverrides,
+        WidgetryListViewContainerStateColorOverrides, WidgetryListViewItemColorOverrides,
+        WidgetryListViewItemStateColorOverrides, WidgetryTreeAppExt, WidgetryTreeChildrenState,
+        WidgetryTreeColorOverrides, WidgetryTreeDropPlacement, WidgetryTreeEvent,
+        WidgetryTreeEventKind, WidgetryTreeExpanderColorOverrides,
+        WidgetryTreeExpanderInteractionColorOverrides, WidgetryTreeExpanderStateColorOverrides,
+        WidgetryTreeIcons, WidgetryTreeModel, WidgetryTreeMove, WidgetryTreeNode,
+        WidgetryTreePlugin, WidgetryTreeRenderer, WidgetryTreeState, WidgetryTreeView,
+        WidgetryTreeViewProps, WidgetryTreeVisibleItem,
     };
 }
 

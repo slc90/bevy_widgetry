@@ -38,7 +38,14 @@ impl Plugin for WidgetryTreePlugin {
             app.world_mut()
                 .commands()
                 .queue(move |_: &mut World| -> Result<(), BevyError> {
-                    Err(error.into_bevy_error())
+                    Err(error
+                        .map_kind(|source| crate::TreeError::List {
+                            source: Box::new(source),
+                        })
+                        .with_context(bevy_widgetry_diagnostics::ErrorFrame::new(
+                            "tree.register_source",
+                        ))
+                        .into_bevy_error())
                 });
             return;
         }

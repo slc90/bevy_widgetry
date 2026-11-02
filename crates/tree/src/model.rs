@@ -47,7 +47,7 @@ impl WidgetryTreeState {
         &self,
         world: &World,
         root: Entity,
-    ) -> Result<(Vec<WidgetryTreeVisibleItem>, HashSet<Entity>), BevyError> {
+    ) -> Result<(Vec<WidgetryTreeVisibleItem>, HashSet<Entity>), crate::TreeViewFault> {
         let mut items = Vec::new();
         let mut reachable = HashSet::new();
         let mut stack = tree_children(world, root)
@@ -65,7 +65,11 @@ impl WidgetryTreeState {
             let expanded = self.is_expanded(entity);
             if visible {
                 let Ok(depth) = u16::try_from(depth) else {
-                    return Err(BevyError::error("WidgetryTree depth overflow"));
+                    return Err(crate::TreeViewFault::Depth {
+                        root,
+                        node: entity,
+                        depth,
+                    });
                 };
                 items.push(WidgetryTreeVisibleItem {
                     entity,
@@ -129,6 +133,9 @@ mod tests {
     use super::*;
     #[test]
     fn projection_obeys_hierarchy_order_and_hidden_membership() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut world = World::new();
         let root = world.spawn_empty().id();
         let a = world.spawn((WidgetryTreeNode, ChildOf(root))).id();
@@ -154,6 +161,9 @@ mod tests {
     }
     #[test]
     fn deep_hierarchy_uses_iterative_projection() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut world = World::new();
         let root = world.spawn_empty().id();
         let mut parent = root;

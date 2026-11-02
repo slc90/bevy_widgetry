@@ -291,6 +291,9 @@ mod tests {
     };
     #[test]
     fn preview_rejections_and_legal_noop_do_not_create_diagnostics() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut app = bevy_widgetry_test_utils::scene_app();
         app.add_plugins(crate::WidgetryTreePlugin);
         let root = app.world_mut().spawn_empty().id();
@@ -342,6 +345,9 @@ mod tests {
     }
     #[test]
     fn missing_child_index_preserves_parent_and_node() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut world = World::new();
         let parent = world.spawn_empty().id();
         let node = world.spawn(crate::WidgetryTreeNode).id();

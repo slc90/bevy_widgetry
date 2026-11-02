@@ -4,6 +4,8 @@ use bevy::{prelude::*, ui::InteractionDisabled};
 use bevy_widgetry_tree::*;
 use std::collections::HashSet;
 
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn fixture() -> (App, Entity, [Entity; 2], [Entity; 5]) {
     let mut app = bevy_widgetry_test_utils::scene_app();
     app.add_plugins(WidgetryTreePlugin);
@@ -58,6 +60,7 @@ fn children(world: &World, parent: Entity) -> Vec<Entity> {
 
 #[test]
 fn before_inside_after_write_real_hierarchy_and_preserve_view_local_state() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     use WidgetryTreeDropPlacement::*;
     let (mut app, root, [view, other], [a, b, c, leaf, deep]) = fixture();
     WidgetryTreeView::expand_all(app.world_mut(), view).unwrap();
@@ -124,6 +127,7 @@ fn before_inside_after_write_real_hierarchy_and_preserve_view_local_state() {
 
 #[test]
 fn invalid_moves_are_atomic_and_report_error_severity() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     use WidgetryTreeDropPlacement::*;
     for reason in [
         "self",
@@ -229,6 +233,7 @@ fn invalid_moves_are_atomic_and_report_error_severity() {
 
 #[test]
 fn drag_configuration_and_queued_move_failures_keep_domain_identity() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
     let (mut app, root, [view, _], [a, b, c, _, _]) = fixture();
     let missing = app.world_mut().spawn_empty().id();
@@ -298,6 +303,7 @@ fn drag_configuration_and_queued_move_failures_keep_domain_identity() {
 
 #[test]
 fn lazy_boundaries_apply_only_to_inside_and_queue_reads_latest_state() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     use WidgetryTreeDropPlacement::*;
     for state in [
         WidgetryTreeChildrenState::Unknown,
@@ -340,6 +346,7 @@ fn lazy_boundaries_apply_only_to_inside_and_queue_reads_latest_state() {
 
 #[test]
 fn moves_notify_only_after_hierarchy_commit_and_same_position_is_a_noop() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     use WidgetryTreeDropPlacement::*;
     #[derive(Resource, Default)]
     struct Moves(usize);
@@ -373,6 +380,7 @@ fn moves_notify_only_after_hierarchy_commit_and_same_position_is_a_noop() {
 
 #[test]
 fn every_sibling_before_after_pair_matches_original_entity_order() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     for from in 0..3 {
         for target in 0..3 {
             for placement in [

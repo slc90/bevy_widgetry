@@ -69,6 +69,9 @@ mod tests {
 
     #[test]
     fn adapter_reads_view_metadata_and_rejects_live_invalid_membership() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut app = bevy_widgetry_test_utils::scene_app();
         app.add_plugins(WidgetryTreePlugin);
         let root = app.world_mut().spawn_empty().id();

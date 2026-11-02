@@ -3,7 +3,10 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod behavior;
 mod error;
-pub use error::{TreeError, TreeFailure, TreeMoveReason, TreeMoveRejection};
+pub use error::{
+    TreeError, TreeFailure, TreeMoveReason, TreeMoveRejection, TreeRendererIdentity,
+    TreeViewFailure, TreeViewFault, TreeViewPart,
+};
 mod model;
 mod movement;
 mod registration;
@@ -20,3 +23,6 @@ pub use view::{WidgetryTreeIcons, WidgetryTreeView, WidgetryTreeViewProps};
 
 mod colors;
 pub use colors::*;
+
+#[cfg(test)]
+pub(crate) static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

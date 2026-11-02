@@ -10,6 +10,8 @@ use bevy_widgetry_tree::{
 #[derive(Resource, Default)]
 struct Events(Vec<WidgetryTreeEventKind>);
 
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn fixture() -> (App, Entity, Entity, Entity, Entity) {
     let mut app = scene_app();
     app.add_plugins(WidgetryTreePlugin)
@@ -39,6 +41,7 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity) {
 
 #[test]
 fn selection_notifications_observe_committed_authority_and_clear() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, a, _, c) = fixture();
     app.add_observer(
         |event: On<WidgetryTreeEvent>,
@@ -81,6 +84,7 @@ fn selection_notifications_observe_committed_authority_and_clear() {
 
 #[test]
 fn invalid_requests_log_errors_without_state_changes() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, a, b, _) = fixture();
     WidgetryTreeView::select(app.world_mut(), source, Some(b)).unwrap();
     app.world_mut().resource_mut::<Events>().0.clear();
@@ -96,8 +100,10 @@ fn invalid_requests_log_errors_without_state_changes() {
                 WidgetryTreeView::toggle_expand(app.world_mut(), target, Entity::PLACEHOLDER)
                     .unwrap_err(),
             ] {
-                assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-                assert!(error.to_string().contains("Tree"));
+                assert_eq!(
+                    error.into_bevy_error().severity(),
+                    bevy::ecs::error::Severity::Error
+                );
             }
         }
     });
@@ -120,6 +126,7 @@ fn invalid_requests_log_errors_without_state_changes() {
 
 #[test]
 fn lazy_notifications_and_loader_api_preserve_committed_state() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, _, node, _) = fixture();
     app.world_mut()
         .entity_mut(node)
@@ -143,7 +150,10 @@ fn lazy_notifications_and_loader_api_preserve_committed_state() {
     let error = logs
         .run(|| WidgetryTreeChildrenState::set_loaded(app.world_mut(), node))
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
     assert!(
         logs.records()
             .iter()
@@ -183,6 +193,7 @@ fn lazy_notifications_and_loader_api_preserve_committed_state() {
 
 #[test]
 fn expand_collapse_preserve_unaffected_entries_and_hidden_selection() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, a, b, c) = fixture();
     let list = app.world().get::<WidgetryTreeState>(source).unwrap();
     let b_id = list.visible_items().get(1).map(|item| item.entity).unwrap();
@@ -222,6 +233,7 @@ fn expand_collapse_preserve_unaffected_entries_and_hidden_selection() {
 
 #[test]
 fn lazy_children_request_is_once_and_external_completion_is_projected() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, _, b, _) = fixture();
     app.world_mut()
         .entity_mut(b)
@@ -257,6 +269,7 @@ fn lazy_children_request_is_once_and_external_completion_is_projected() {
 
 #[test]
 fn external_hierarchy_changes_repair_state_and_keep_identity() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, a, b, c) = fixture();
     assert!(WidgetryTreeView::expand(app.world_mut(), source, a).unwrap());
     assert!(WidgetryTreeView::select(app.world_mut(), source, Some(c)).unwrap());
@@ -285,6 +298,7 @@ fn external_hierarchy_changes_repair_state_and_keep_identity() {
 
 #[test]
 fn invalid_targets_are_rejected_using_live_hierarchy() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, a, b, c) = fixture();
     let root = root(&app, source);
     let other_root = app.world_mut().spawn_empty().id();
@@ -318,6 +332,7 @@ fn invalid_targets_are_rejected_using_live_hierarchy() {
 
 #[test]
 fn hidden_descendant_intent_survives_collapse_and_root_destruction_repairs_state() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, a, _, c) = fixture();
     let d = app.world_mut().spawn((WidgetryTreeNode, ChildOf(c))).id();
     assert!(WidgetryTreeView::expand(app.world_mut(), source, c).unwrap());
@@ -375,6 +390,7 @@ fn hidden_descendant_intent_survives_collapse_and_root_destruction_repairs_state
 
 #[test]
 fn lazy_completion_while_collapsed_and_empty_completion_preserve_request_contract() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     for empty in [false, true] {
         let (mut app, source, _, b, _) = fixture();
         app.world_mut()
@@ -418,6 +434,7 @@ fn lazy_completion_while_collapsed_and_empty_completion_preserve_request_contrac
 
 #[test]
 fn sibling_reorder_and_noop_updates_preserve_incremental_projection() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let (mut app, source, a, b, _) = fixture();
     let before = app.world().get::<WidgetryTreeState>(source).unwrap();
     let a_id = before

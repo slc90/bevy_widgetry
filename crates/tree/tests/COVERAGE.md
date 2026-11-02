@@ -65,3 +65,8 @@
 
 共享 Model 的多 View 输入、数据和生命周期耦合由上述用例保护；Gallery 的中英文实时切换、不同视口展示和离页资源清理由任务级 BRP 验证，不作为库自动化测试结论。
 
+
+
+源码 Renderer 回归验证缺失 / 歧义的结构化身份、无关注册不重建同因诊断、修复后再故障的新 ID；真实 System / Command Handler 同时接收多个受管及原生 Scene 错误，核对原始 origin 指针、单次源头日志、每次尝试的 cause / payload / Severity、局部子树清理和独立业务实体保留。View 局部回归核对共享 Source 的全部失败到达 Handler、跨检查重复观察复用身份、独立 API 请求产生新身份，以及多 View 配色缓存故障与实际修复。颜色回归保留 Core 原因、完整字段路径和托管 Owner；交互、懒加载、同帧准备和稳定局部工作量仍由原有用例保护。日志用例所在二进制内串行化相关测试，避免进程级 Tracing callsite interest 刷新干扰线程局部 Subscriber。
+
+Review 回归进一步保护 Renderer 中途挂入的已有业务子树在后续失败及重试后仍存活，且已提交状态不回滚；真实超出 u16 深度的共享 Model 用例核对单节点展开、批量展开、同步请求及持续观察的 View / Source / 请求现场和失败原子性。健康 View 的恢复排除断言匹配 ErrorFrame 的实际键值元组格式。
