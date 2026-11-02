@@ -98,6 +98,7 @@ fn editor() -> WidgetryTableCellEditor<String> {
 fn readonly_cell_resolves_to_lock_cursor_and_restores_default_when_editing_is_off() {
     use bevy::picking::pointer::{Location, PointerAction, PointerId};
     use bevy::window::{CursorIcon, SystemCursorIcon};
+    use bevy_widgetry_asset::{BuiltinCursorAnimation, BuiltinCursorImage};
     use bevy_widgetry_cursor::WidgetryCursorTheme;
     use bevy_widgetry_test_utils::queue_pointer;
 
@@ -161,19 +162,38 @@ fn readonly_cell_resolves_to_lock_cursor_and_restores_default_when_editing_is_of
         bevy::image::CompressedImageFormats::NONE,
     ));
     app.insert_resource(WidgetryCursorTheme::Kamuri);
+    let animation = BuiltinCursorAnimation::ReadOnly;
+    let static_index = BuiltinCursorAnimation::ALL
+        .iter()
+        .position(|item| *item == animation)
+        .unwrap();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         app.update();
         if let Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) =
             app.world().get::<CursorIcon>(window)
         {
-            assert_eq!(image.texture_atlas.as_ref().unwrap().index, 44);
-            assert_eq!(image.hotspot, (14, 37));
-            break;
+            let atlas = image.texture_atlas.as_ref().unwrap();
+            assert_eq!(image.hotspot, animation.hotspot());
+            if image.handle.path() == Some(&animation.path()) {
+                assert!(atlas.index < animation.frame_count());
+                let layout = app
+                    .world()
+                    .resource::<Assets<TextureAtlasLayout>>()
+                    .get(&atlas.layout)
+                    .unwrap();
+                assert_eq!(layout.textures.len(), animation.frame_count());
+                break;
+            }
+            assert_eq!(
+                image.handle.path(),
+                Some(&BuiltinCursorImage::KamuriStaticAtlas.path())
+            );
+            assert_eq!(atlas.index, static_index);
         }
         assert!(
             std::time::Instant::now() < deadline,
-            "ReadOnly Kamuri atlas did not load"
+            "ReadOnly Kamuri animation did not load"
         );
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
