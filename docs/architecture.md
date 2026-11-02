@@ -163,4 +163,6 @@ Collapsible 直接组合 Button 与 Core Icon，依赖 Asset、Theme、Core 与�
 
 Collapsible 直接依赖 diagnostics 的 Bevy 桥接。查询、展开、Header 禁用与颜色 API 返回领域失败，保留组合部件身份、Icon / Core 原始原因及 origin；初始化聚合多个 Root，样式按结构业务键惰性保存持续诊断。
 
+ProgressBar 直接依赖 diagnostics 的 Bevy 桥接。状态、尺寸与颜色失败保留请求值、Root 和 Core 原因，样式结构异常按业务键保存诊断并在 System 边界聚合，正常动画算法保持不变。
+
 Cursor 直接依赖 diagnostics 的 Bevy 桥接，共用按业务键保存原诊断的 `FailureState`；该通用状态实现位于 diagnostics，Core 保留重导出入口。Cursor 的资源缓存拥有图集失败身份，各 Window 的实际静态/System 回退消费不新建错误身份。

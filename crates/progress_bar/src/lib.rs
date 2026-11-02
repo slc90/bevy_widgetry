@@ -3,10 +3,12 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod animation;
 mod colors;
+mod error;
 mod progress;
 mod style;
 
 pub use colors::WidgetryProgressBarColorOverrides;
+pub use error::{ProgressBarError, ProgressBarFailure};
 pub use progress::{WidgetryProgressBar, WidgetryProgressBarProps, WidgetryProgressState};
 
 use bevy::prelude::*;

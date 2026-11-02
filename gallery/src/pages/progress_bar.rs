@@ -104,18 +104,21 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                         fill: Some(Color::srgb(0.15, 0.65, 0.4)),
                         ..default()
                     },
-                )?;
+                )
+                .map_err(|error| error.into_bevy_error())?;
                 info!("应用进度条局部填充色");
                 return Ok(());
             }
             Action::Clear => {
-                WidgetryProgressBarColorOverrides::clear_in_world(world, parts.bar)?;
+                WidgetryProgressBarColorOverrides::clear_in_world(world, parts.bar)
+                    .map_err(|error| error.into_bevy_error())?;
                 info!("清除进度条局部配色");
                 return Ok(());
             }
             _ => {}
         }
-        let current = WidgetryProgressBar::state(world, parts.bar)?;
+        let current = WidgetryProgressBar::state(world, parts.bar)
+            .map_err(|error| error.into_bevy_error())?;
         let next_ticks = match action {
             Action::Increase => ticks.saturating_add(1).min(10),
             Action::Decrease => ticks.saturating_sub(1),
@@ -132,7 +135,8 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             _ if current == WidgetryProgressState::Indeterminate => current,
             _ => determinate,
         };
-        let changed = WidgetryProgressBar::set_state_in_world(world, parts.bar, next)?;
+        let changed = WidgetryProgressBar::set_state_in_world(world, parts.bar, next)
+            .map_err(|error| error.into_bevy_error())?;
         world
             .get_mut::<Simulation>(root)
             .ok_or_else(|| invalid("simulation is missing"))?
@@ -149,7 +153,8 @@ fn refresh_readout(world: &mut World) -> Result {
         .map(|(root, parts, simulation)| (root, *parts, simulation.displayed))
         .collect();
     for (root, parts, previous) in demos {
-        let current = WidgetryProgressBar::state(world, parts.bar)?;
+        let current = WidgetryProgressBar::state(world, parts.bar)
+            .map_err(|error| error.into_bevy_error())?;
         if previous == Some(current) {
             continue;
         }

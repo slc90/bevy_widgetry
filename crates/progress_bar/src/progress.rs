@@ -1,4 +1,9 @@
+use crate::{
+    ProgressBarError, ProgressBarFailure,
+    error::{failure, missing},
+};
 use bevy::prelude::*;
+use bevy_widgetry_diagnostics::ErrorFrame;
 
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 pub enum WidgetryProgressState {
@@ -13,31 +18,29 @@ impl Default for WidgetryProgressState {
 }
 
 impl WidgetryProgressState {
-    pub(crate) fn validate(self) -> Result<(), BevyError> {
+    pub(crate) fn validate(self) -> Result<(), ProgressBarFailure> {
         if let Self::Determinate { value } = self
             && (!value.is_finite() || !(0.0..=1.0).contains(&value))
         {
-            return Err(invalid(
-                "ProgressBar value must be finite and within [0, 1]",
+            return Err(failure(
+                ProgressBarError::InvalidValue { value },
+                ErrorFrame::new("progress_bar.validate_value"),
             ));
         }
         Ok(())
     }
 }
 
-fn invalid(reason: &str) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(reason; reason, "ProgressBar 状态请求无效")
-}
-
-fn state(world: &World, entity: Entity) -> Result<&ProgressState, BevyError> {
+fn state(world: &World, entity: Entity) -> Result<&ProgressState, ProgressBarFailure> {
     if world.get::<WidgetryProgressBar>(entity).is_none() {
-        return Err(invalid(
-            "ProgressBar target does not exist or is not a WidgetryProgressBar",
+        return Err(failure(
+            ProgressBarError::InvalidRoot { root: entity },
+            ErrorFrame::new("progress_bar.state"),
         ));
     }
     world
         .get::<ProgressState>(entity)
-        .ok_or_else(|| invalid("ProgressBar runtime state is missing"))
+        .ok_or_else(|| missing(entity, "ProgressState"))
 }
 
 #[derive(Component, Clone, Copy, Reflect)]
@@ -70,7 +73,10 @@ impl WidgetryProgressBar {
         crate::style::scene(props)
     }
 
-    pub fn state(world: &World, entity: Entity) -> Result<WidgetryProgressState, BevyError> {
+    pub fn state(
+        world: &World,
+        entity: Entity,
+    ) -> Result<WidgetryProgressState, ProgressBarFailure> {
         Ok(state(world, entity)?.0)
     }
 
@@ -78,22 +84,30 @@ impl WidgetryProgressBar {
         world: &mut World,
         entity: Entity,
         next: WidgetryProgressState,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ProgressBarFailure> {
         let current = state(world, entity)?;
-        next.validate()?;
+        next.validate().map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("progress_bar.set_state")
+                    .field("root", entity)
+                    .field("state", format_args!("{next:?}")),
+            )
+        })?;
         if current.0 == next {
             return Ok(false);
         }
         world
             .get_mut::<ProgressState>(entity)
-            .ok_or_else(|| invalid("ProgressBar runtime state is missing"))?
+            .ok_or_else(|| missing(entity, "ProgressState"))?
             .0 = next;
         Ok(true)
     }
 
     pub fn set_state(commands: &mut Commands, entity: Entity, state: WidgetryProgressState) {
         commands.queue(move |world: &mut World| {
-            Self::set_state_in_world(world, entity, state).map(|_| ())
+            Self::set_state_in_world(world, entity, state)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
         });
     }
 }
@@ -124,6 +138,7 @@ mod tests {
                 WidgetryProgressState::Determinate { value }
                     .validate()
                     .unwrap_err()
+                    .into_bevy_error()
                     .severity(),
                 bevy::ecs::error::Severity::Error
             );

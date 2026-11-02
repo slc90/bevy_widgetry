@@ -89,8 +89,8 @@ fn invalid_inputs_and_targets_reject_without_mutation() {
                 determinate(value),
             )
             .unwrap_err();
-            assert_eq!(error.severity(), Severity::Error);
             assert!(error.to_string().contains("[0, 1]"));
+            assert_eq!(error.into_bevy_error().severity(), Severity::Error);
             assert_eq!(
                 WidgetryProgressBar::state(app.world(), entity).unwrap(),
                 determinate(0.65)
@@ -106,12 +106,14 @@ fn invalid_inputs_and_targets_reject_without_mutation() {
         assert_eq!(
             WidgetryProgressBar::state(app.world(), target)
                 .unwrap_err()
+                .into_bevy_error()
                 .severity(),
             Severity::Error
         );
         assert_eq!(
             WidgetryProgressBar::set_state_in_world(app.world_mut(), target, determinate(0.0))
                 .unwrap_err()
+                .into_bevy_error()
                 .severity(),
             Severity::Error
         );

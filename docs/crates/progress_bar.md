@@ -6,7 +6,9 @@ ProgressBar 是只读展示控件，保存应用已经掌握的任务进度，�
 
 安装 `WidgetryProgressBarPlugin` 注册反射类型。Facade 默认启用 `progress_bar` Feature，通过同名模块导出 Widget、Props、状态枚举和 Plugin；可关闭默认集合后单独启用。
 
-`WidgetryProgressBar::state(world, entity)` 读回当前真实状态。`set_state_in_world` 同步校验并提交，返回 `Result<bool, BevyError>`：状态改变为 `Ok(true)`，合法同值为 `Ok(false)`，无效输入或目标为错误。`set_state` 通过 Commands 排队，执行时才校验和提交，错误交给宿主 Handler。
+`WidgetryProgressBar::state(world, entity)` 读回当前真实状态。查询、状态设置与颜色 API 返回 `ProgressBarFailure`（`WidgetryFailure<ProgressBarError>`）。`set_state_in_world` 同步校验并提交，返回 `Result<bool, ProgressBarFailure>`：状态改变为 `Ok(true)`，合法同值为 `Ok(false)`，无效输入或目标为错误。`set_state` 通过 Commands 排队，执行时才校验和提交，错误交给宿主 Handler。
+
+`ProgressBarError` 区分非法进度值、非法高度、无效 Root、必需状态缺失、视觉子树失效与 Core 原因。数值错误保存实际请求值，目标错误保存实体和缺失状态，颜色错误保留 Core 原因与字段上下文。统一诊断在源头记录一次 ERROR 并保存原始回溯，纯传播保留 ID；Template、Command 和 System 边界显式转为 `Severity::Error`。样式结构异常按 Root 与查询失败条件保存原诊断，多 Root 失败聚合到宿主；恢复记录 INFO，再次发生创建新诊断。正常模式切换、动画等待与同值操作不产生错误日志。
 
 确定值必须有限且属于 `[0.0, 1.0]`，允许增加、减小、重置以及双向切换模式。NaN、无穷、越界、无效 Entity、非目标 Widget 或缺少运行时状态均拒绝并报告 Error，不 Clamp；失败保留原状态。外部不直接替换或删除内部状态 Component。
 

@@ -1,11 +1,16 @@
+use crate::{ProgressBarError, error::failure};
 use crate::{
     WidgetryProgressBar, WidgetryProgressBarProps, animation::Animation, colors::ColorState,
     progress::ProgressState,
 };
 use bevy::prelude::*;
-use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, ui::WidgetryUiSystems};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_core::ui::WidgetryUiSystems;
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState},
+};
 use bevy_widgetry_theme::WidgetryThemeMode;
+use std::sync::Arc;
 
 #[derive(Component, FromTemplate)]
 struct Parts {
@@ -15,7 +20,7 @@ struct Parts {
 }
 
 #[derive(Component, Default)]
-struct Diagnostics(UnmigratedFailureState);
+struct Diagnostics(FailureState<([Entity; 3], Entity, u8)>);
 
 // Bevy overflow clips rectangles, so crop a full-track rounded canvas instead of shrinking its caps.
 // Bound the reciprocal for subpixel fractions so valid subnormal progress never creates infinite layout values.
@@ -29,14 +34,14 @@ pub(crate) fn scene(props: WidgetryProgressBarProps) -> impl Scene {
     let colors = props.colors;
     let (left, fraction) = Animation::new(value).window();
     bsn! {
-        template(move |_| {
-            value.validate()?;
+        template(move |ctx| {
+            value.validate().map_err(|error| error.with_context(ErrorFrame::new("progress_bar.initialize").field("root", ctx.entity.id())).into_bevy_error())?;
             if !height.is_finite() || height <= 0.0 {
-                return Err(bevy_widgetry_core::scene_source_error!("ProgressBar height must be finite and positive"; height, "ProgressBar 高度必须为有限正数"));
+                return Err(failure(ProgressBarError::InvalidHeight { height }, ErrorFrame::new("progress_bar.initialize").field("root", ctx.entity.id())).into_bevy_error());
             }
             Ok(ProgressState(value))
         })
-        template(move |_| colors.clone().initial())
+        template(move |ctx| colors.clone().initial(ctx.entity.id()).map_err(|error| error.into_bevy_error()))
         template(|_| Ok(Diagnostics::default()))
         template(move |_| Ok(Animation::new(value)))
         Parts { track: #ProgressTrack, fill: #ProgressFill, clip: #ProgressClip }
@@ -88,7 +93,7 @@ fn update(
     >,
     mut visuals: Query<(&mut Node, &mut BackgroundColor)>,
 ) -> Result {
-    let mut failure = None;
+    let mut failures = DiagnosticBatch::default();
     for (root, state, parts, local, mut border, mut diagnostics, mut animation) in &mut roots {
         let was_moving = animation.active();
         let retargeted = state.is_changed() && animation.retarget(state.0);
@@ -103,15 +108,15 @@ fn update(
         if !mode.is_changed() && !state.is_changed() && !local.is_changed() && !moving {
             continue;
         }
-        let result = (|| -> Result {
+        let frame = || ErrorFrame::new("progress_bar.style").field("root", root);
+        let entities = [parts.track, parts.fill, parts.clip];
+        let result = (|| -> Result<(), bevy::ecs::query::QueryEntityError> {
             let colors = local.0.resolve(&mode.colors().progress_bar);
             let [
                 (_, mut track),
                 (mut fill_node, mut fill),
                 (mut clip_node, _),
-            ] = visuals
-                .get_many_mut([parts.track, parts.fill, parts.clip])
-                .map_err(|_| BevyError::error("ProgressBar visual subtree is missing"))?;
+            ] = visuals.get_many_mut(entities)?;
             border.set_if_neq(BorderColor::all(colors.border));
             track.set_if_neq(BackgroundColor(colors.track));
             fill.set_if_neq(BackgroundColor(colors.fill));
@@ -133,18 +138,37 @@ fn update(
             }
             Ok(())
         })();
-        let result = diagnostics.0.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "ProgressBar 样式内部结构失效"),
-            || widgetry_info!(?root, "ProgressBar 样式内部结构恢复正常"),
-        );
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+        match result {
+            Ok(()) => {
+                diagnostics.0.recover(frame);
+            }
+            Err(source) => {
+                let (entity, category) = match &source {
+                    bevy::ecs::query::QueryEntityError::QueryDoesNotMatch(entity, _) => {
+                        (*entity, 0)
+                    }
+                    bevy::ecs::query::QueryEntityError::NotSpawned(error) => (error.entity(), 1),
+                    bevy::ecs::query::QueryEntityError::AliasedMutability(entity) => (*entity, 2),
+                };
+                let error = diagnostics.0.failure((entities, entity, category), || {
+                    Arc::new(failure(
+                        ProgressBarError::VisualStructure {
+                            root,
+                            track: parts.track,
+                            fill: parts.fill,
+                            clip: parts.clip,
+                            source,
+                        },
+                        frame(),
+                    ))
+                });
+                for diagnostic in error.shared_diagnostics() {
+                    failures.push_shared(diagnostic);
+                }
+            }
         }
     }
-    failure.map_or(Ok(()), Err)
+    failures.into_bevy_error().map_or(Ok(()), Err)
 }
 
 #[cfg(test)]

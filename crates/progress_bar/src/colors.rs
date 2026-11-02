@@ -1,5 +1,9 @@
+use crate::{
+    ProgressBarError, ProgressBarFailure,
+    error::{core, failure, missing},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 use bevy_widgetry_theme::WidgetryProgressBarColors;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -13,7 +17,7 @@ pub struct WidgetryProgressBarColorOverrides {
 pub(crate) struct ColorState(pub(crate) WidgetryProgressBarColorOverrides);
 
 impl WidgetryProgressBarColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), ProgressBarFailure> {
         for (field, color) in [
             ("track", self.track),
             ("fill", self.fill),
@@ -23,20 +27,20 @@ impl WidgetryProgressBarColorOverrides {
                 continue;
             };
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "progress_bar")
-                            .field("field", field),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("progress_bar.validate_colors").field("field", field),
+                )
             })?;
         }
         Ok(())
     }
 
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, root: Entity) -> Result<ColorState, ProgressBarFailure> {
+        self.validate().map_err(|error| {
+            error
+                .with_context(ErrorFrame::new("progress_bar.initialize_colors").field("root", root))
+        })?;
         Ok(ColorState(self))
     }
 
@@ -48,28 +52,31 @@ impl WidgetryProgressBarColorOverrides {
         }
     }
 
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, ProgressBarFailure> {
         if world.get::<crate::WidgetryProgressBar>(entity).is_none() {
-            return Err(invalid_target(entity));
+            return Err(failure(
+                ProgressBarError::InvalidRoot { root: entity },
+                ErrorFrame::new("progress_bar.color_target"),
+            ));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| missing(entity, "ColorState"))
     }
 
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ProgressBarFailure> {
         Self::get(world, entity)?;
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("progress_bar.set_colors").field("root", entity))
         })?;
         let mut current = world
             .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| missing(entity, "ColorState"))?;
         if current.0 == colors {
             return Ok(false);
         }
@@ -78,23 +85,18 @@ impl WidgetryProgressBarColorOverrides {
     }
 
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
 
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, ProgressBarFailure> {
         Self::set_in_world(world, entity, default())
     }
 
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, default());
     }
-}
-
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "ProgressBar 颜色目标不存在、类型不匹配或内部状态缺失"
-    );
-    BevyError::error("ProgressBar color target is missing or invalid")
 }

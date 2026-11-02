@@ -674,7 +674,7 @@ fn poll(world: &mut World) -> Result {
                 ("progress_a",run.a.progress.to_string()), ("progress_b",run.b.progress.to_string()), ("flow_a",run.a.flow(language)), ("flow_b",run.b.flow(language)),
             ]))?;
             for (entity, progress) in [(run.row.a, run.a.progress), (run.row.b, run.b.progress)] {
-                WidgetryProgressBar::set_state_in_world(world, entity, WidgetryProgressState::Determinate { value: progress as f32 / run.total as f32 })?;
+                WidgetryProgressBar::set_state_in_world(world, entity, WidgetryProgressState::Determinate { value: progress as f32 / run.total as f32 }).map_err(|error| error.into_bevy_error())?;
             }
             if selected == Some(run.id) {
                 bind(world, selection, LocalizedText::with_args(TextKey::Job(JobKey::Selection), vec![
