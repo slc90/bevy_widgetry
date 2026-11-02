@@ -27,6 +27,8 @@ Headless 输入与 App Update 由测试主动调度；Queue 不代表已经执�
 
 `run()` 只设置当前线程 Subscriber，不安装全局 Subscriber。`dispatcher()` 可显式移到工作线程，或交给 future 的 `WithSubscriber::with_subscriber()`，确保每次 poll 都处于对应作用域；没有 dispatcher 的线程未捕获日志不代表生产未发事件。真实全局 Subscriber 组合在独立子进程验证。
 
+捕获器同时保留一个不安装的 Dispatch，避免当前 Tracing 的单 Dispatch 快速路径根据其他未订阅线程首次注册调用点时的状态缓存 `never`。该注册随捕获器及其 Dispatch 克隆释放，不改变线程的 Subscriber 或扩大捕获范围；其他线程先使用同一日志调用点后，作用域内的源头与处理日志仍须完整捕获。
+
 `ErrorCapture::run()` 嵌套后恢复外层捕获，捕获状态按线程隔离。`take_records()` 取走 `CapturedError { error, context }`，`managed()` 通过统一非泛型载体读取单个或集合诊断，外来错误完整保留。`take()` 仍取走错误列表，适用于不检查 ECS context 的既有测试；两个入口消费同一记录队列。捕获 Handler 只保存数据，不替正式 Gallery 安装终结策略。无捕获作用域时仍交给 Bevy 原生 Severity 策略。
 
 ## 边界情况与错误处理

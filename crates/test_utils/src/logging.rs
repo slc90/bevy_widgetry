@@ -11,6 +11,9 @@ use std::sync::{Arc, Mutex};
 pub struct LogCapture {
     records: Arc<Mutex<Vec<LogRecord>>>,
     targets: Arc<BTreeSet<String>>,
+    // tracing-core's single-dispatch fast path caches the registering thread's interest.
+    // Keep a second, uninstalled dispatch alive so uncaptured workers cannot cache `never` for a scoped capture.
+    _interest_guard: tracing::Dispatch,
 }
 
 impl Default for LogCapture {
@@ -40,6 +43,7 @@ impl LogCapture {
         Self {
             records: Arc::default(),
             targets: Arc::new(targets.into_iter().map(Into::into).collect()),
+            _interest_guard: tracing::Dispatch::new(bevy::log::tracing_subscriber::registry()),
         }
     }
 
@@ -119,5 +123,60 @@ impl Visit for LogRecord {
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
         self.fields
             .insert(field.name().into(), format!("{value:?}"));
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+    use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
+
+    #[test]
+    fn scoped_capture_observes_callsite_first_registered_on_an_unsubscribed_thread() {
+        const CHILD: &str = "WIDGETRY_SCOPED_CAPTURE_REGISTRATION_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "logging::tests::scoped_capture_observes_callsite_first_registered_on_an_unsubscribed_thread",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{} {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let outside = std::thread::spawn(|| {
+                let failure = WidgetryFailure::new(
+                    std::io::Error::other("outside capture"),
+                    ErrorFrame::new("capture.fixture.outside"),
+                );
+                failure.record_handled("结束外部请求", "没有安装捕获器");
+                failure.origin().id().clone()
+            })
+            .join()
+            .unwrap();
+            let failure = WidgetryFailure::new(
+                std::io::Error::other("inside capture"),
+                ErrorFrame::new("capture.fixture.inside"),
+            );
+            failure.record_handled("结束作用域内请求", "保留诊断");
+            assert!(logs.records_for_error(&outside).is_empty());
+            for phase in [DiagnosticPhase::Source, DiagnosticPhase::Handled] {
+                assert_eq!(
+                    logs.diagnostic_records(failure.origin().id(), phase).len(),
+                    1
+                );
+            }
+        });
     }
 }
