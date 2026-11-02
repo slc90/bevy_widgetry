@@ -53,6 +53,8 @@ pub(crate) struct Runtime {
     preference_save: Option<PreparedJob<PreferencesReply>>,
     save_revisions: Option<BTreeMap<String, u64>>,
     failed_revisions: Option<BTreeMap<String, u64>>,
+    preference_failure:
+        bevy_widgetry_diagnostics::bevy::FailureState<bevy_widgetry_diagnostics::ErrorId>,
     disk_revision: u64,
     retired: Vec<(JobManager, JobId)>,
     directory_cursor: usize,
@@ -76,8 +78,8 @@ enum Output {
         Arc<WidgetryFileDialogSnapshot>,
         WidgetryFileDialogDirectoryState,
     ),
-    Loaded(Result<BTreeMap<String, WidgetryFileDialogStorageSnapshot>, String>),
-    Saved(BTreeMap<String, u64>, Result<(), String>),
+    Loaded(Result<BTreeMap<String, WidgetryFileDialogStorageSnapshot>, FileDialogRequestError>),
+    Saved(BTreeMap<String, u64>, Result<(), FileDialogRequestError>),
 }
 
 struct DirectoryJob {
@@ -1315,10 +1317,13 @@ impl Runtime {
                             .resource_mut::<WidgetryFileDialogRuntimeStatus>()
                             .persistence = storage_state;
                         if let Some(failure) = merge_failure {
-                            failure.record_handled(
+                            self.handle_preference_failure(
+                                &failure.into(),
                                 "放弃本次加载后的偏好合并",
                                 "已保留现有偏好、抑制当前 revision 自动保存并提交加载失败状态",
                             );
+                        } else {
+                            self.recover_preferences();
                         }
                     }
                     Err(error) => {
@@ -1332,7 +1337,15 @@ impl Runtime {
                         );
                         world
                             .resource_mut::<WidgetryFileDialogRuntimeStatus>()
-                            .persistence = WidgetryFileDialogStorageState::Failed(error)
+                            .persistence =
+                            WidgetryFileDialogStorageState::Failed(error.to_string());
+                        if let Some(failure) = error.failure() {
+                            self.handle_preference_failure(
+                                failure,
+                                "保留当前内存偏好并抑制当前 Revision 自动保存",
+                                "已提交偏好加载失败状态",
+                            );
+                        }
                     }
                 }
             }
@@ -1350,17 +1363,50 @@ impl Runtime {
                             .resource_mut::<WidgetryFileDialogRuntimeStatus>()
                             .persistence =
                             WidgetryFileDialogStorageState::Saved(self.disk_revision);
+                        self.recover_preferences();
                     }
                     Err(error) => {
                         self.failed_revisions = Some(revisions);
                         world
                             .resource_mut::<WidgetryFileDialogRuntimeStatus>()
-                            .persistence = WidgetryFileDialogStorageState::Failed(error);
+                            .persistence =
+                            WidgetryFileDialogStorageState::Failed(error.to_string());
+                        if let Some(failure) = error.failure() {
+                            self.handle_preference_failure(
+                                failure,
+                                "保留当前内存偏好与未确认的保存 Revision",
+                                "已提交保存失败状态并保留重试规则",
+                            );
+                        }
                     }
                 }
             }
         }
         Ok(())
+    }
+
+    fn handle_preference_failure(
+        &mut self,
+        failure: &bevy_widgetry_job::JobFailure,
+        action: &str,
+        outcome: &str,
+    ) {
+        if let Some(first) = failure.diagnostics().next() {
+            let _ = self
+                .preference_failure
+                .failure_batch(first.origin().id().clone(), || {
+                    failure.clone().into_report()
+                });
+        }
+        failure.record_handled(action, outcome);
+    }
+
+    fn recover_preferences(&mut self) {
+        self.preference_failure.recover(|| {
+            bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.preferences.recovered")
+                .field("path", format_args!("{:?}", self.persistence_path))
+                .field("disk_revision", self.disk_revision)
+        });
     }
 
     fn poll_preferences(&mut self, world: &mut World) -> Result<bool> {
@@ -1385,11 +1431,13 @@ impl Runtime {
                     }
                     let error = match outcome {
                         JobOutcome::Completed if pending.is_some() => None,
-                        JobOutcome::Completed => {
-                            Some("preferences result was canceled before delivery".into())
-                        }
-                        JobOutcome::Failed(error) => Some(error.to_string()),
-                        JobOutcome::Canceled => Some("preferences operation canceled".into()),
+                        JobOutcome::Completed => Some(FileDialogRequestError::Canceled(
+                            "preferences result was canceled before delivery",
+                        )),
+                        JobOutcome::Failed(error) => Some(FileDialogRequestError::Failed(error)),
+                        JobOutcome::Canceled => Some(FileDialogRequestError::Canceled(
+                            "preferences operation canceled",
+                        )),
                     };
                     let output = match (loading, error, pending) {
                         (true, Some(error), _) => Output::Loaded(Err(error)),
@@ -1400,11 +1448,11 @@ impl Runtime {
                             Err(error),
                         ),
                         (true, None, Some(PreferencesReply::Loaded(result))) => {
-                            Output::Loaded(result.map_err(|error| error.to_string()))
+                            Output::Loaded(result.map_err(FileDialogRequestError::Failed))
                         }
                         (false, None, Some(PreferencesReply::Saved(revisions, result))) => {
                             self.save_revisions = None;
-                            Output::Saved(revisions, result.map_err(|error| error.to_string()))
+                            Output::Saved(revisions, result.map_err(FileDialogRequestError::Failed))
                         }
                         _ => {
                             return Err(contract_error(
@@ -1455,8 +1503,20 @@ impl Runtime {
                         .persistence = WidgetryFileDialogStorageState::Loading;
                 }
                 Err(error) => {
-                    self.receive(world, Output::Loaded(Err(error.to_string())))?;
-                    error.record_handled("更新偏好加载失败状态", "停止本次偏好加载");
+                    let error = crate::error::preference_io(
+                        FileDialogPreferenceContext {
+                            path: path.clone(),
+                            resource: None,
+                            operation: FileDialogPreferenceOperation::Load,
+                            scope: None,
+                            revisions: Default::default(),
+                        },
+                        std::io::Error::other(bevy_widgetry_job::JobFailure::from(error)),
+                    );
+                    self.receive(
+                        world,
+                        Output::Loaded(Err(FileDialogRequestError::Failed(error))),
+                    )?;
                 }
             }
         }
@@ -1491,7 +1551,7 @@ impl Runtime {
             match crate::preferences_job::save(
                 &manager,
                 world.resource::<WidgetryFileDialogBackend>().clone(),
-                path,
+                path.clone(),
                 scopes,
                 revisions.clone(),
             ) {
@@ -1509,8 +1569,20 @@ impl Runtime {
                         .persistence = WidgetryFileDialogStorageState::Saving(self.disk_revision);
                 }
                 Err(error) => {
-                    self.receive(world, Output::Saved(revisions, Err(error.to_string())))?;
-                    error.record_handled("更新偏好保存失败状态", "保留尚未保存的偏好");
+                    let error = crate::error::preference_io(
+                        FileDialogPreferenceContext {
+                            path,
+                            resource: None,
+                            operation: FileDialogPreferenceOperation::Save,
+                            scope: None,
+                            revisions: Arc::new(revisions.clone()),
+                        },
+                        std::io::Error::other(bevy_widgetry_job::JobFailure::from(error)),
+                    );
+                    self.receive(
+                        world,
+                        Output::Saved(revisions, Err(FileDialogRequestError::Failed(error))),
+                    )?;
                 }
             }
         }
@@ -2335,6 +2407,94 @@ mod tests {
     }
 
     #[test]
+    fn rejected_preference_jobs_keep_request_context_and_submission_origin() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+        for saving in [false, true] {
+            let mut world = World::new();
+            world.init_resource::<WidgetryFileDialogStorage>();
+            world.init_resource::<WidgetryFileDialogRuntimeStatus>();
+            world.init_resource::<WidgetryFileDialogBackend>();
+            world.insert_resource(WidgetryFileDialogPersistence {
+                path: "C:/fixture/preferences.json".into(),
+            });
+            world.insert_resource(JobManager::default());
+            for scope in ["open", "save"] {
+                world
+                    .resource_mut::<WidgetryFileDialogStorage>()
+                    .import(scope.into(), Default::default())
+                    .unwrap();
+            }
+            let mut runtime = Runtime::default();
+            if saving {
+                runtime
+                    .receive(&mut world, Output::Loaded(Ok(BTreeMap::new())))
+                    .unwrap();
+                runtime.load_admitted = true;
+            }
+            let expected: BTreeMap<_, _> = world
+                .resource::<WidgetryFileDialogStorage>()
+                .scopes
+                .iter()
+                .map(|(scope, record)| (scope.clone(), record.revision))
+                .collect();
+            world
+                .resource::<JobManager>()
+                .begin_shutdown(std::time::Duration::ZERO)
+                .unwrap();
+            let logs = LogCapture::default();
+            logs.run(|| runtime.persistence(&mut world)).unwrap();
+            let diagnostic = runtime.preference_failure.active().unwrap();
+            let mut cause = diagnostic.source();
+            let mut typed = false;
+            let mut original = false;
+            while let Some(error) = cause {
+                if let Some(FileDialogError::PreferenceManaged { context, .. }) =
+                    error.downcast_ref::<FileDialogError>()
+                {
+                    assert_eq!(context.path, PathBuf::from("C:/fixture/preferences.json"));
+                    assert_eq!(
+                        context.operation,
+                        if saving {
+                            FileDialogPreferenceOperation::Save
+                        } else {
+                            FileDialogPreferenceOperation::Load
+                        }
+                    );
+                    if saving {
+                        assert_eq!(*context.revisions, expected);
+                    } else {
+                        assert!(context.revisions.is_empty());
+                    }
+                    typed = true;
+                }
+                if let Some(error) = error.downcast_ref::<bevy_widgetry_job::SubmitFailure>() {
+                    assert!(matches!(
+                        error.kind(),
+                        bevy_widgetry_job::SubmitError::ShuttingDown { .. }
+                    ));
+                    assert!(Arc::ptr_eq(error.origin(), diagnostic.origin()));
+                    original = true;
+                }
+                cause = error.source();
+            }
+            assert!(typed, "typed preference request context missing");
+            assert!(original);
+            assert_eq!(runtime.failed_revisions.as_ref(), Some(&expected));
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                    .len(),
+                1
+            );
+        }
+    }
+
+    #[test]
     fn persistence_submission_honors_manager_shutdown() -> Result {
         let mut app = bevy_widgetry_test_utils::scene_app();
         app.add_plugins(WidgetryFileDialogHeadlessPlugin);
@@ -3104,6 +3264,99 @@ mod tests {
     }
 
     #[test]
+    fn preference_handling_and_recovery_are_distinct_and_cancel_does_not_recover() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let mut world = World::new();
+        world.init_resource::<WidgetryFileDialogStorage>();
+        world.init_resource::<WidgetryFileDialogRuntimeStatus>();
+        world
+            .resource_mut::<WidgetryFileDialogStorage>()
+            .import("open".into(), Default::default())
+            .unwrap();
+        let revision = world
+            .resource::<WidgetryFileDialogStorage>()
+            .revision("open")
+            .unwrap();
+        let revisions = BTreeMap::from([("open".into(), revision)]);
+        let mut runtime = Runtime::default();
+        let logs = LogCapture::default();
+        let failure = logs.run(|| {
+            bevy_widgetry_job::JobFailure::from(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "load denied",
+            ))
+        });
+        let origin = failure.diagnostics().next().unwrap().origin().clone();
+        assert!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+        logs.run(|| {
+            runtime.receive(
+                &mut world,
+                Output::Loaded(Err(FileDialogRequestError::Failed(failure))),
+            )
+        })
+        .unwrap();
+        assert_eq!(runtime.failed_revisions.as_ref(), Some(&revisions));
+        assert_eq!(
+            world.resource::<WidgetryFileDialogStorage>().scopes["open"].saved_revision,
+            0
+        );
+        assert!(matches!(
+            world
+                .resource::<WidgetryFileDialogRuntimeStatus>()
+                .persistence,
+            WidgetryFileDialogStorageState::Failed(_)
+        ));
+        let handled = logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled);
+        assert_eq!(handled.len(), 1);
+        assert_eq!(handled[0].level, bevy::log::tracing::Level::DEBUG);
+        logs.run(|| {
+            runtime.receive(
+                &mut world,
+                Output::Saved(
+                    revisions.clone(),
+                    Err(FileDialogRequestError::Canceled("save canceled")),
+                ),
+            )
+        })
+        .unwrap();
+        assert!(
+            logs.records_for_error(origin.id())
+                .iter()
+                .all(|record| !record.matches_field("phase", "recovered"))
+        );
+        logs.run(|| runtime.receive(&mut world, Output::Saved(revisions.clone(), Ok(()))))
+            .unwrap();
+        assert_eq!(
+            world.resource::<WidgetryFileDialogStorage>().scopes["open"].saved_revision,
+            revision
+        );
+        let recovered: Vec<_> = logs
+            .records_for_error(origin.id())
+            .into_iter()
+            .filter(|record| record.matches_field("phase", "recovered"))
+            .collect();
+        assert_eq!(recovered.len(), 1);
+        assert_eq!(recovered[0].level, bevy::log::tracing::Level::INFO);
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .len(),
+            1
+        );
+        let count = logs.records().len();
+        logs.run(|| runtime.receive(&mut world, Output::Saved(revisions, Ok(()))))
+            .unwrap();
+        assert_eq!(logs.records().len(), count);
+    }
+
+    #[test]
     fn failed_load_suppresses_automatic_save_of_current_revision() -> Result {
         let mut world = World::new();
         world.init_resource::<WidgetryFileDialogStorage>();
@@ -3116,7 +3369,12 @@ mod tests {
             },
         )?;
         let mut runtime = Runtime::default();
-        runtime.receive(&mut world, Output::Loaded(Err("unsupported schema".into())))?;
+        runtime.receive(
+            &mut world,
+            Output::Loaded(Err(FileDialogRequestError::Failed(
+                std::io::Error::other("unsupported schema").into(),
+            ))),
+        )?;
         assert_eq!(
             runtime
                 .failed_revisions

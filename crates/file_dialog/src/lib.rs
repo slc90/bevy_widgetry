@@ -30,7 +30,8 @@ mod window;
 pub use error::{
     FileDialogApiFault, FileDialogDirectoryContext, FileDialogDirectoryFault,
     FileDialogDirectoryOperation, FileDialogError, FileDialogFailure, FileDialogFilterViolation,
-    FileDialogOperationFailure, FileDialogRequestContext, FileDialogRequestError,
+    FileDialogOperationFailure, FileDialogPreferenceContext, FileDialogPreferenceFault,
+    FileDialogPreferenceOperation, FileDialogRequestContext, FileDialogRequestError,
     FileDialogRequestFault, FileDialogRequestOperation, FileDialogStateFault,
 };
 

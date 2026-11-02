@@ -10,6 +10,14 @@ pub type FileDialogFailure = WidgetryFailure<FileDialogError>;
 
 #[derive(Debug)]
 pub enum FileDialogError {
+    PreferenceIo {
+        context: Box<FileDialogPreferenceContext>,
+        source: std::io::Error,
+    },
+    PreferenceManaged {
+        context: Arc<FileDialogPreferenceContext>,
+        source: Arc<dyn Diagnostic>,
+    },
     RequestManaged {
         context: Arc<FileDialogRequestContext>,
         source: Arc<dyn Diagnostic>,
@@ -82,6 +90,172 @@ pub enum FileDialogError {
     Wake {
         source: Box<dyn Error + Send + Sync>,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileDialogPreferenceOperation {
+    Load,
+    Save,
+    Open,
+    Read,
+    DecodeJson,
+    DecodeValues,
+    EncodeValues,
+    EncodeJson,
+    CreateTemporary,
+    WriteTemporary,
+    SyncTemporary,
+    Replace,
+}
+
+#[derive(Clone)]
+pub struct FileDialogPreferenceContext {
+    pub path: PathBuf,
+    pub resource: Option<PathBuf>,
+    pub operation: FileDialogPreferenceOperation,
+    pub scope: Option<String>,
+    pub revisions: Arc<std::collections::BTreeMap<String, u64>>,
+}
+impl fmt::Debug for FileDialogPreferenceContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FileDialogPreferenceContext")
+            .field("path", &self.path)
+            .field("resource", &self.resource)
+            .field("operation", &self.operation)
+            .field("scope", &self.scope)
+            .field("revision_count", &self.revisions.len())
+            .field(
+                "revision",
+                &self
+                    .scope
+                    .as_ref()
+                    .and_then(|scope| self.revisions.get(scope)),
+            )
+            .finish()
+    }
+}
+impl FileDialogPreferenceContext {
+    pub(crate) fn frame(&self) -> ErrorFrame {
+        ErrorFrame::new("file_dialog.preferences")
+            .field("path", format_args!("{:?}", self.path))
+            .field("resource", format_args!("{:?}", self.resource))
+            .field("operation", format_args!("{:?}", self.operation))
+            .field("scope", format_args!("{:?}", self.scope))
+            .field("revision_count", self.revisions.len())
+            .field(
+                "revision",
+                format_args!(
+                    "{:?}",
+                    self.scope
+                        .as_ref()
+                        .and_then(|scope| self.revisions.get(scope))
+                ),
+            )
+    }
+}
+
+#[derive(Debug)]
+pub enum FileDialogPreferenceFault {
+    FileCapacity {
+        actual: usize,
+        limit: usize,
+    },
+    Schema {
+        version: u32,
+        scopes: usize,
+    },
+    ScopeCapacity {
+        actual: usize,
+        limit: usize,
+    },
+    ScopeValues {
+        scope: String,
+        bytes: usize,
+        pinned: usize,
+        filter_bytes: usize,
+    },
+    Sort {
+        value: u8,
+    },
+    Path {
+        path: PathBuf,
+        issue: &'static str,
+    },
+    DuplicatePinned {
+        path: PathBuf,
+    },
+}
+impl fmt::Display for FileDialogPreferenceFault {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid FileDialog preferences: {self:?}")
+    }
+}
+impl Error for FileDialogPreferenceFault {}
+
+#[derive(Debug)]
+struct NativePreferenceIo {
+    operation: FileDialogPreferenceOperation,
+    scope: Option<String>,
+    resource: Option<PathBuf>,
+    source: std::io::Error,
+}
+impl fmt::Display for NativePreferenceIo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.source, f)
+    }
+}
+impl Error for NativePreferenceIo {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.source)
+    }
+}
+pub(crate) fn native_preference_io(
+    operation: FileDialogPreferenceOperation,
+    scope: Option<&str>,
+    resource: Option<PathBuf>,
+    source: std::io::Error,
+) -> std::io::Error {
+    std::io::Error::new(
+        source.kind(),
+        NativePreferenceIo {
+            operation,
+            scope: scope.map(str::to_owned),
+            resource,
+            source,
+        },
+    )
+}
+
+#[track_caller]
+pub(crate) fn preference_io(
+    mut context: FileDialogPreferenceContext,
+    source: std::io::Error,
+) -> bevy_widgetry_job::JobFailure {
+    if is_managed_io(&source) {
+        let context = Arc::new(context);
+        return contextual_io(source, context.frame(), |source| {
+            FileDialogError::PreferenceManaged {
+                context: context.clone(),
+                source,
+            }
+        });
+    }
+    if let Some(native) = source
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<NativePreferenceIo>())
+    {
+        context.operation = native.operation;
+        context.scope = native.scope.clone();
+        context.resource = native.resource.clone();
+    }
+    failure(
+        FileDialogError::PreferenceIo {
+            context: Box::new(context),
+            source,
+        },
+        "file_dialog.preferences.io",
+    )
+    .into()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -211,27 +385,13 @@ pub(crate) fn request_io(
     source: std::io::Error,
 ) -> bevy_widgetry_job::JobFailure {
     if is_managed_io(&source) {
-        let report = bevy_widgetry_job::JobFailure::from(source).into_report();
         let context = Arc::new(context);
-        let failures = report
-            .shared_diagnostics()
-            .map(|source| {
-                let mut contexts = source.contexts().to_vec();
-                contexts.push(context.frame());
-                let diagnostic = ManagedRequestDiagnostic {
-                    origin: source.origin().clone(),
-                    contexts,
-                    kind: FileDialogError::RequestManaged {
-                        context: context.clone(),
-                        source,
-                    },
-                };
-                bevy_widgetry_job::JobFailure::from(WidgetryEcsError::from_shared(Arc::new(
-                    diagnostic,
-                )))
-            })
-            .reduce(bevy_widgetry_job::JobFailure::combine);
-        return failures.unwrap_or_else(|| report.into());
+        return contextual_io(source, context.frame(), |source| {
+            FileDialogError::RequestManaged {
+                context: context.clone(),
+                source,
+            }
+        });
     }
     if let Some(native) = source
         .get_ref()
@@ -251,29 +411,51 @@ pub(crate) fn request_io(
     .into()
 }
 
-// A string frame cannot retain shared candidate paths on an existing failure.
+fn contextual_io(
+    source: std::io::Error,
+    frame: ErrorFrame,
+    wrap: impl Fn(Arc<dyn Diagnostic>) -> FileDialogError,
+) -> bevy_widgetry_job::JobFailure {
+    let report = bevy_widgetry_job::JobFailure::from(source).into_report();
+    let failures = report
+        .shared_diagnostics()
+        .map(|source| {
+            let mut contexts = source.contexts().to_vec();
+            contexts.push(frame.clone());
+            let diagnostic = ContextualFileDialogDiagnostic {
+                origin: source.origin().clone(),
+                contexts,
+                kind: wrap(source),
+            };
+            bevy_widgetry_job::JobFailure::from(WidgetryEcsError::from_shared(Arc::new(diagnostic)))
+        })
+        .reduce(bevy_widgetry_job::JobFailure::combine);
+    failures.unwrap_or_else(|| report.into())
+}
+
+// A string frame cannot retain typed request data on an existing failure.
 // This propagation wrapper keeps the typed payload with the original lifecycle.
-struct ManagedRequestDiagnostic {
+struct ContextualFileDialogDiagnostic {
     kind: FileDialogError,
     origin: Arc<ErrorOrigin>,
     contexts: Vec<ErrorFrame>,
 }
-impl fmt::Display for ManagedRequestDiagnostic {
+impl fmt::Display for ContextualFileDialogDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.kind, f)
     }
 }
-impl fmt::Debug for ManagedRequestDiagnostic {
+impl fmt::Debug for ContextualFileDialogDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
 }
-impl Error for ManagedRequestDiagnostic {
+impl Error for ContextualFileDialogDiagnostic {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.kind)
     }
 }
-impl Diagnostic for ManagedRequestDiagnostic {
+impl Diagnostic for ContextualFileDialogDiagnostic {
     fn origin(&self) -> &Arc<ErrorOrigin> {
         &self.origin
     }
@@ -580,6 +762,10 @@ pub enum FileDialogStateFault {
 impl fmt::Display for FileDialogError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PreferenceIo { .. } => f.write_str("FileDialog 偏好 I/O 失败"),
+            Self::PreferenceManaged { context, source } => {
+                write!(f, "{source} [{:?}]", context.frame())
+            }
             Self::RequestManaged { context, source } => {
                 write!(f, "{source} [{:?}]", context.frame())
             }
@@ -596,6 +782,8 @@ impl fmt::Display for FileDialogError {
 impl Error for FileDialogError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::PreferenceIo { source, .. } => Some(source),
+            Self::PreferenceManaged { source, .. } => Some(source.as_ref()),
             Self::RequestManaged { source, .. } => Some(source.as_ref()),
             Self::RequestIo { source, .. } => Some(source),
             Self::DirectoryIo { source, .. } => Some(source),

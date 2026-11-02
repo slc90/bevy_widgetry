@@ -113,3 +113,9 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 同一多选矩阵还覆盖自定义 Backend 返回现有 JobFailure 与真实关闭通道产生的 SendFailure：原 origin / source、类型化候选上下文和共享 Paths 在回执 / JobOutcome 中同时保留。
 
 原生 SaveFile 父目录不存在的回归同时断言候选 `path` 含完整文件名、实际失败 `resource` 为父目录、操作阶段 / Token / 模式 / ErrorKind 与回执-终态同源；原生多选的失败资源不覆盖候选集合。
+
+偏好源码回归保护损坏 JSON 的原始 serde 类型 / 位置、首次缺文件静默空加载、非法存储路径的 Scope / 提交 Revision、Windows 真实锁定替换失败的原生 IO source 与原文件保留。独立日志子进程在真实生产线程验证回执 / JobOutcome 共享 origin、源头一次 ERROR、传播尚无处理 DEBUG；自定义 Backend 的 JobFailure / SendFailure 保留类型化偏好 Context 和原 source。
+
+偏好递送回归固定已关闭的真实 Job 通道，验证 I/O 与递送失败两份诊断同时保留；既有慢 IO / 晚取消矩阵继续保护已完成磁盘事实。Runtime 源码回归区分失败状态提交后的 DEBUG 与实际成功确认后的恢复 INFO，正常取消不恢复，同一恢复只记录一次；原保存 Revision 与失败抑制回归继续运行。
+
+Manager shutdown 拒收偏好加载 / 保存时，Runtime 回归检查原 SubmitFailure origin 与 ShuttingDown 分类、类型化目标文件 / 操作及完整保存 Revision；源头一次 ERROR，在失败状态与抑制规则提交后一次处理 DEBUG。

@@ -93,6 +93,12 @@ Backend 递送已有 JobFailure / SendFailure 时，`RequestManaged` 传播包�
 
 请求上下文的 `path` 保留单个候选或请求路径，`resource` 单独保存原生失败涉及的实际资源。例如 SaveFile 的父目录检查失败，同时保留完整候选文件名与失败父目录；多选保留共享 `paths`，并由 `resource` / `index` 指出已知失败项。
 
+偏好 Loaded / Saved 回执及 Runtime 最后消费层保留同一 JobFailure，显示字符串只在提交状态时生成。`FileDialogPreferenceContext` 保存目标文件、已知失败资源、读写 / 编解码 / 原子替换阶段、Scope 和完整的已提交 Revision 集合；原生 JSON 错误保留原始 `serde_json::Error`，格式、容量及存储路径故障保留 `FileDialogPreferenceFault`。自定义 Backend 的已有 JobFailure / SendFailure 只附加类型化偏好上下文，保留原 origin / source。
+
+首次偏好文件缺失仍按空加载处理。加载失败后保留当前内存偏好并抑制当前 Revision 的自动保存；保存失败保留内存值与未确认 Revision，不回滚已经完成的磁盘写入。实际提交这些结局后才记录处理 DEBUG；I/O 与回执递送都失败时分别保留两份诊断。
+
+偏好异常状态复用统一 FailureState 保存最近一次真实失败组；成功采用加载结果或完成保存确认后单独记录恢复 INFO。Loading / Saving、正常取消与资源销毁不算恢复，正常自动保存不增加诊断日志；独立的新 I/O 失败仍各自产生源头诊断。
+
 公开递送在失败状态实际提交后记录处理 DEBUG；旧请求或目标销毁时明确记录放弃，保持当前状态。递送或状态提交本身失败时保留原请求诊断与新的失败并继续传播，不记录已处理。位置回执匹配 Session / Generation；同代 Query 改变仍可接受位置结果，导航后的旧位置失败不能覆盖新目录。
 
 普通 API 不赋予 Bevy Severity。Template、排队请求及 System / Observer 边界显式使用 Error Severity，保留原 ID / origin / source；组合结果的 Bevy `From` 转换也使用该受管边界，不落入原生 Panic 默认转换。构造 Template 失败沿 Core Scene 清理本次新建 Root，不回滚既有 Entity 的全部 Patch。

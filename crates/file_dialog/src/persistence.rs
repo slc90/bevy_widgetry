@@ -1,3 +1,5 @@
+use crate::error::native_preference_io;
+use crate::{FileDialogPreferenceFault as Fault, FileDialogPreferenceOperation as Phase};
 use crate::{
     WidgetryFileDialogFilterId, WidgetryFileDialogSort, WidgetryFileDialogStorageSnapshot,
 };
@@ -34,17 +36,50 @@ enum EncodedPath {
     Windows(Vec<u16>),
 }
 
-fn invalid(message: impl std::fmt::Display) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, message.to_string())
+#[derive(Debug)]
+enum PreferenceCause {
+    Format(Fault),
+    Json(serde_json::Error),
+}
+impl std::fmt::Display for PreferenceCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Format(error) => std::fmt::Display::fmt(error, f),
+            Self::Json(error) => std::fmt::Display::fmt(error, f),
+        }
+    }
+}
+impl std::error::Error for PreferenceCause {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::Format(error) => error,
+            Self::Json(error) => error,
+        })
+    }
+}
+fn invalid(fault: Fault) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, PreferenceCause::Format(fault))
+}
+fn json_error(error: serde_json::Error) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, PreferenceCause::Json(error))
+}
+fn at(phase: Phase, scope: Option<&str>, error: io::Error) -> io::Error {
+    native_preference_io(phase, scope, None, error)
 }
 
 fn encode(path: &Path) -> io::Result<EncodedPath> {
     if !path.is_absolute() || path.as_os_str().len() > 32768 {
-        return Err(invalid("invalid or oversized stored path"));
+        return Err(invalid(Fault::Path {
+            path: path.to_owned(),
+            issue: "relative or oversized",
+        }));
     }
     let units: Vec<_> = path.as_os_str().encode_wide().collect();
     if units.contains(&0) {
-        return Err(invalid("stored path contains NUL"));
+        return Err(invalid(Fault::Path {
+            path: path.to_owned(),
+            issue: "NUL",
+        }));
     }
     Ok(EncodedPath::Windows(units))
 }
@@ -52,11 +87,17 @@ fn encode(path: &Path) -> io::Result<EncodedPath> {
 fn decode(encoded: EncodedPath) -> io::Result<PathBuf> {
     let EncodedPath::Windows(units) = encoded;
     if units.len() > 32768 || units.contains(&0) {
-        return Err(invalid("invalid encoded Windows path"));
+        return Err(invalid(Fault::Path {
+            path: PathBuf::from(OsString::from_wide(&units)),
+            issue: "oversized or NUL encoded path",
+        }));
     }
     let path = PathBuf::from(OsString::from_wide(&units));
     if !path.is_absolute() {
-        return Err(invalid("stored path must be absolute"));
+        return Err(invalid(Fault::Path {
+            path,
+            issue: "relative",
+        }));
     }
     Ok(path)
 }
@@ -65,16 +106,33 @@ pub(crate) fn load(path: &Path) -> io::Result<BTreeMap<String, WidgetryFileDialo
     let file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
-        Err(error) => return Err(error),
+        Err(error) => return Err(at(Phase::Open, None, error)),
     };
     let mut bytes = Vec::new();
-    file.take((MAX_BYTES + 1) as u64).read_to_end(&mut bytes)?;
+    file.take((MAX_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| at(Phase::Read, None, error))?;
     if bytes.len() > MAX_BYTES {
-        return Err(invalid("preference file capacity exceeded"));
+        return Err(at(
+            Phase::Read,
+            None,
+            invalid(Fault::FileCapacity {
+                actual: bytes.len(),
+                limit: MAX_BYTES,
+            }),
+        ));
     }
-    let document: Document = serde_json::from_slice(&bytes).map_err(invalid)?;
+    let document: Document = serde_json::from_slice(&bytes)
+        .map_err(|error| at(Phase::DecodeJson, None, json_error(error)))?;
     if document.version != 1 || document.scopes.len() > 256 {
-        return Err(invalid("unsupported schema or scope capacity"));
+        return Err(at(
+            Phase::DecodeValues,
+            None,
+            invalid(Fault::Schema {
+                version: document.version,
+                scopes: document.scopes.len(),
+            }),
+        ));
     }
     let mut result = BTreeMap::new();
     for (scope, prefs) in document.scopes {
@@ -83,25 +141,53 @@ pub(crate) fn load(path: &Path) -> io::Result<BTreeMap<String, WidgetryFileDialo
             || prefs.pinned.len() > 1024
             || prefs.filter.len() > 1024
         {
-            return Err(invalid("preference capacity exceeded"));
+            return Err(at(
+                Phase::DecodeValues,
+                Some(&scope),
+                invalid(Fault::ScopeValues {
+                    scope: scope.clone(),
+                    bytes: scope.len(),
+                    pinned: prefs.pinned.len(),
+                    filter_bytes: prefs.filter.len(),
+                }),
+            ));
         }
         let sort = match prefs.sort {
             0 => WidgetryFileDialogSort::NameAscending,
             1 => WidgetryFileDialogSort::NameDescending,
             2 => WidgetryFileDialogSort::SizeAscending,
             3 => WidgetryFileDialogSort::ModifiedDescending,
-            _ => return Err(invalid("unknown sorting preference")),
+            _ => {
+                return Err(at(
+                    Phase::DecodeValues,
+                    Some(&scope),
+                    invalid(Fault::Sort { value: prefs.sort }),
+                ));
+            }
         };
         let pinned = prefs
             .pinned
             .into_iter()
             .map(decode)
-            .collect::<io::Result<Vec<_>>>()?;
-        let visited = prefs.visited.map(decode).transpose()?;
-        let picked = prefs.picked.map(decode).transpose()?;
+            .collect::<io::Result<Vec<_>>>()
+            .map_err(|error| at(Phase::DecodeValues, Some(&scope), error))?;
+        let visited = prefs
+            .visited
+            .map(decode)
+            .transpose()
+            .map_err(|error| at(Phase::DecodeValues, Some(&scope), error))?;
+        let picked = prefs
+            .picked
+            .map(decode)
+            .transpose()
+            .map_err(|error| at(Phase::DecodeValues, Some(&scope), error))?;
         let mut unique = std::collections::BTreeSet::new();
-        if pinned.iter().any(|path| !unique.insert(path)) {
-            return Err(invalid("duplicate pinned path"));
+        if let Some(path) = pinned.iter().find(|path| !unique.insert(*path)) {
+            return Err(at(
+                Phase::DecodeValues,
+                Some(&scope),
+                invalid(Fault::DuplicatePinned { path: path.clone() }),
+            ));
         }
         result.insert(
             scope,
@@ -124,7 +210,14 @@ pub(crate) fn save(
     scopes: &BTreeMap<String, WidgetryFileDialogStorageSnapshot>,
 ) -> io::Result<()> {
     if scopes.len() > 256 {
-        return Err(invalid("scope capacity exceeded"));
+        return Err(at(
+            Phase::EncodeValues,
+            None,
+            invalid(Fault::ScopeCapacity {
+                actual: scopes.len(),
+                limit: 256,
+            }),
+        ));
     }
     let mut encoded = BTreeMap::new();
     for (scope, prefs) in scopes {
@@ -133,13 +226,32 @@ pub(crate) fn save(
             || prefs.pinned.len() > 1024
             || prefs.filter.0.len() > 1024
         {
-            return Err(invalid("preference capacity exceeded"));
+            return Err(at(
+                Phase::EncodeValues,
+                Some(scope),
+                invalid(Fault::ScopeValues {
+                    scope: scope.clone(),
+                    bytes: scope.len(),
+                    pinned: prefs.pinned.len(),
+                    filter_bytes: prefs.filter.0.len(),
+                }),
+            ));
         }
         encoded.insert(
             scope.clone(),
             Preferences {
-                visited: prefs.last_visited_dir.as_deref().map(encode).transpose()?,
-                picked: prefs.last_picked_dir.as_deref().map(encode).transpose()?,
+                visited: prefs
+                    .last_visited_dir
+                    .as_deref()
+                    .map(encode)
+                    .transpose()
+                    .map_err(|error| at(Phase::EncodeValues, Some(scope), error))?,
+                picked: prefs
+                    .last_picked_dir
+                    .as_deref()
+                    .map(encode)
+                    .transpose()
+                    .map_err(|error| at(Phase::EncodeValues, Some(scope), error))?,
                 hidden: prefs.show_hidden,
                 system: prefs.show_system,
                 filter: prefs.filter.0.clone(),
@@ -153,7 +265,8 @@ pub(crate) fn save(
                     .pinned
                     .iter()
                     .map(|path| encode(path))
-                    .collect::<io::Result<Vec<_>>>()?,
+                    .collect::<io::Result<Vec<_>>>()
+                    .map_err(|error| at(Phase::EncodeValues, Some(scope), error))?,
             },
         );
     }
@@ -161,18 +274,43 @@ pub(crate) fn save(
         version: 1,
         scopes: encoded,
     })
-    .map_err(invalid)?;
+    .map_err(|error| at(Phase::EncodeJson, None, json_error(error)))?;
     if bytes.len() > MAX_BYTES {
-        return Err(invalid("preference file capacity exceeded"));
+        return Err(at(
+            Phase::EncodeJson,
+            None,
+            invalid(Fault::FileCapacity {
+                actual: bytes.len(),
+                limit: MAX_BYTES,
+            }),
+        ));
     }
     let parent = path
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-    temporary.write_all(&bytes)?;
-    temporary.as_file().sync_all()?;
-    temporary.persist(path).map_err(|error| error.error)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|error| {
+        native_preference_io(Phase::CreateTemporary, None, Some(parent.to_owned()), error)
+    })?;
+    temporary.write_all(&bytes).map_err(|error| {
+        native_preference_io(
+            Phase::WriteTemporary,
+            None,
+            Some(temporary.path().to_owned()),
+            error,
+        )
+    })?;
+    temporary.as_file().sync_all().map_err(|error| {
+        native_preference_io(
+            Phase::SyncTemporary,
+            None,
+            Some(temporary.path().to_owned()),
+            error,
+        )
+    })?;
+    temporary.persist(path).map_err(|error| {
+        native_preference_io(Phase::Replace, None, Some(path.to_owned()), error.error)
+    })?;
     Ok(())
 }
 
@@ -183,6 +321,26 @@ mod tests {
     use std::fs;
     use std::os::windows::ffi::OsStringExt;
     use std::os::windows::fs::OpenOptionsExt;
+
+    #[test]
+    fn malformed_json_preserves_the_original_parser_cause() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("preferences.json");
+        fs::write(&path, b"{broken").unwrap();
+        let error = load(&path).unwrap_err();
+        let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(&error);
+        let mut parser = None;
+        while let Some(error) = cause {
+            if let Some(error) = error.downcast_ref::<serde_json::Error>() {
+                parser = Some(error);
+                break;
+            }
+            cause = error.source();
+        }
+        let parser = parser.expect("original serde_json::Error missing");
+        assert_eq!(parser.classify(), serde_json::error::Category::Syntax);
+        assert_eq!(parser.line(), 1);
+    }
 
     #[test]
     fn preferences_round_trip_and_replace_existing_file() -> io::Result<()> {
