@@ -476,18 +476,15 @@ impl Runtime {
                         });
                     }
                     Err(error) => {
+                        let error = bevy_widgetry_job::JobFailure::from(error);
                         WidgetryFileDialog::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Locations {
                                 token: control.token,
-                                outcome: Err(error.to_string()),
+                                outcome: Err(FileDialogRequestError::Failed(error.clone())),
                             },
                         )?;
-                        error.record_handled(
-                            "提交失败回复并停止本次任务",
-                            "FileDialog 已保存失败状态",
-                        );
                         continue;
                     }
                 }
@@ -628,19 +625,16 @@ impl Runtime {
                         session.validation_submitted = Some(job.token());
                     }
                     Err(error) => {
+                        let error = bevy_widgetry_job::JobFailure::from(error);
                         session.validation_submitted = Some(job.token());
                         WidgetryFileDialog::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::ValidationFailed {
                                 token: job.token(),
-                                error: error.to_string(),
+                                error: FileDialogRequestError::Failed(error.clone()),
                             },
                         )?;
-                        error.record_handled(
-                            "提交失败回复并停止本次任务",
-                            "FileDialog 已保存失败状态",
-                        );
                         continue;
                     }
                 }
@@ -673,18 +667,15 @@ impl Runtime {
                         });
                     }
                     Err(error) => {
+                        let error = bevy_widgetry_job::JobFailure::from(error);
                         WidgetryFileDialog::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::FolderCreated {
                                 request: request.clone(),
-                                outcome: Err(error.to_string()),
+                                outcome: Err(FileDialogRequestError::Failed(error.clone())),
                             },
                         )?;
-                        error.record_handled(
-                            "提交失败回复并停止本次任务",
-                            "FileDialog 已保存失败状态",
-                        );
                     }
                 }
             }
@@ -837,25 +828,26 @@ impl Runtime {
                 PreparedPoll::Finished(outcome, pending) => {
                     let failure = outcome_failure(&outcome);
                     session.locations = None;
-                    let reply =
-                        match outcome {
-                            JobOutcome::Completed => {
-                                pending.unwrap_or_else(|| WidgetryFileDialogReply::Locations {
-                                    token,
-                                    outcome: Err(
-                                        "locations result was canceled before delivery".into()
-                                    ),
-                                })
-                            }
-                            JobOutcome::Failed(error) => WidgetryFileDialogReply::Locations {
+                    let reply = match outcome {
+                        JobOutcome::Completed => {
+                            pending.unwrap_or_else(|| WidgetryFileDialogReply::Locations {
                                 token,
-                                outcome: Err(error.to_string()),
-                            },
-                            JobOutcome::Canceled => WidgetryFileDialogReply::Locations {
-                                token,
-                                outcome: Err("locations query canceled".into()),
-                            },
-                        };
+                                outcome: Err(FileDialogRequestError::Canceled(
+                                    "locations result was canceled before delivery",
+                                )),
+                            })
+                        }
+                        JobOutcome::Failed(error) => WidgetryFileDialogReply::Locations {
+                            token,
+                            outcome: Err(FileDialogRequestError::Failed(error.clone())),
+                        },
+                        JobOutcome::Canceled => WidgetryFileDialogReply::Locations {
+                            token,
+                            outcome: Err(FileDialogRequestError::Canceled(
+                                "locations query canceled",
+                            )),
+                        },
+                    };
                     finish_job_delivery(
                         WidgetryFileDialog::deliver(world, root, reply)
                             .map(|_| ())
@@ -911,16 +903,20 @@ impl Runtime {
                         JobOutcome::Completed => {
                             pending.unwrap_or_else(|| WidgetryFileDialogReply::FolderCreated {
                                 request,
-                                outcome: Err("folder result was canceled before delivery".into()),
+                                outcome: Err(FileDialogRequestError::Canceled(
+                                    "folder result was canceled before delivery",
+                                )),
                             })
                         }
                         JobOutcome::Failed(error) => WidgetryFileDialogReply::FolderCreated {
                             request,
-                            outcome: Err(error.to_string()),
+                            outcome: Err(FileDialogRequestError::Failed(error.clone())),
                         },
                         JobOutcome::Canceled => WidgetryFileDialogReply::FolderCreated {
                             request,
-                            outcome: Err("folder creation canceled".into()),
+                            outcome: Err(FileDialogRequestError::Canceled(
+                                "folder creation canceled",
+                            )),
                         },
                     };
                     finish_job_delivery(
@@ -983,8 +979,9 @@ impl Runtime {
                         JobOutcome::Completed => {
                             pending.unwrap_or_else(|| WidgetryFileDialogReply::ValidationFailed {
                                 token,
-                                error: "candidate validation result was canceled before delivery"
-                                    .into(),
+                                error: FileDialogRequestError::Canceled(
+                                    "candidate validation result was canceled before delivery",
+                                ),
                             })
                         }
                         JobOutcome::Failed(error) => pending
@@ -993,11 +990,13 @@ impl Runtime {
                             })
                             .unwrap_or_else(|| WidgetryFileDialogReply::ValidationFailed {
                                 token,
-                                error: error.to_string(),
+                                error: FileDialogRequestError::Failed(error.clone()),
                             }),
                         JobOutcome::Canceled => WidgetryFileDialogReply::ValidationFailed {
                             token,
-                            error: "candidate validation canceled".into(),
+                            error: FileDialogRequestError::Canceled(
+                                "candidate validation canceled",
+                            ),
                         },
                     };
                     finish_job_delivery(
@@ -2162,7 +2161,9 @@ mod tests {
                             .send(WidgetryFileDialogReply::Locations {
                                 token,
                                 outcome: if change == 4 {
-                                    Err("controlled location error".into())
+                                    Err(FileDialogRequestError::Failed(
+                                        std::io::Error::other("controlled location error").into(),
+                                    ))
                                 } else {
                                     Ok(vec![WidgetryFileDialogLocation {
                                         name: "New".into(),
@@ -2445,12 +2446,7 @@ mod tests {
             WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
             let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
             let token = state.token();
-            let candidate = state
-                .validation_job
-                .clone()
-                .unwrap()
-                .prepare()
-                .map_err(BevyError::error)?;
+            let candidate = state.validation_job.clone().unwrap().prepare().unwrap();
             let manager = app.world().resource::<JobManager>().clone();
             let (id, receiver) = manager
                 .spawn_io::<WidgetryFileDialogReply, _, _>(

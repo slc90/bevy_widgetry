@@ -269,17 +269,40 @@ pub enum WidgetryFileDialogReply {
     },
     ValidationFailed {
         token: WidgetryFileDialogToken,
-        error: String,
+        error: crate::FileDialogRequestError,
     },
     Selection(crate::selection::WidgetryFileDialogPreparedSelection),
     FolderCreated {
         request: WidgetryFileDialogFolderRequest,
-        outcome: Result<(), String>,
+        outcome: Result<(), crate::FileDialogRequestError>,
     },
     Locations {
         token: WidgetryFileDialogToken,
-        outcome: Result<Vec<crate::WidgetryFileDialogLocation>, String>,
+        outcome: Result<Vec<crate::WidgetryFileDialogLocation>, crate::FileDialogRequestError>,
     },
+}
+
+impl WidgetryFileDialogReply {
+    pub(crate) fn request_failure(&self) -> Option<bevy_widgetry_job::JobFailure> {
+        let (error, token) = match self {
+            Self::ValidationFailed { error, token } => (error, *token),
+            Self::FolderCreated {
+                outcome: Err(error),
+                request,
+            } => (error, request.token()),
+            Self::Locations {
+                outcome: Err(error),
+                token,
+            } => (error, *token),
+            _ => return None,
+        };
+        error.failure().map(|failure| {
+            failure.clone().with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.reply")
+                    .field("token", format_args!("{token:?}")),
+            )
+        })
+    }
 }
 
 pub(crate) fn contract_error(message: &str) -> BevyError {

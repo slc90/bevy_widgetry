@@ -279,8 +279,9 @@ pub mod file_dialog {
     pub use bevy_widgetry_file_dialog::{
         FileDialogApiFault, FileDialogDirectoryContext, FileDialogDirectoryFault,
         FileDialogDirectoryOperation, FileDialogError, FileDialogFailure,
-        FileDialogFilterViolation, FileDialogOperationFailure, FileDialogStateFault,
-        WidgetryButtonColorOverrides, WidgetryButtonStateColorOverrides,
+        FileDialogFilterViolation, FileDialogOperationFailure, FileDialogRequestContext,
+        FileDialogRequestError, FileDialogRequestFault, FileDialogRequestOperation,
+        FileDialogStateFault, WidgetryButtonColorOverrides, WidgetryButtonStateColorOverrides,
         WidgetryCheckBoxColorOverrides, WidgetryCheckBoxInteractionColorOverrides,
         WidgetryCheckBoxStateColorOverrides, WidgetryComboBoxColorOverrides,
         WidgetryComboBoxFieldColorOverrides, WidgetryComboBoxFieldStateColorOverrides,

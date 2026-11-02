@@ -52,6 +52,7 @@
 
 - `diagnostics.rs`：公开 scope / Filter / 容量分类、Storage Revision 与路径字段、真实 Scene 失败 Root 清理及源头 origin、排队非法请求的宿主接收、Job 失败保持原类别 / 身份，以及过期正常回复和合法 No-op 的静默性。Session 耗尽由私有局部计数器回归保护，避免污染全局 Session 序列。
 - `diagnostics.rs` 同时检查 Snapshot 的目录 / Token / 原始条目路径分类、源头一次 ERROR，以及转换到 Bevy 后的 Error Severity 与同一 origin。
+- `diagnostics.rs` 检查单次请求失败只在状态提交 / 明确废弃后记录 DEBUG，过期 Validation / Locations 不修改新请求；递送自身失败聚合原诊断与新契约错误且不记录已处理。非法文件名与正常取消保持静默。
 - `style.rs` 的组合错误回归检查两份 TextField Query 原因与四份 ScrollArea 缺失部件诊断全部到达宿主，并验证真实 System context 和所属实例；不再将已迁移的 TextField 诊断当作原生字符串错误。
 
 - `contract.rs`：Headless API、Session / Scope、Navigation / Selection、确认与通知。
@@ -104,3 +105,11 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 目录源码回归同时保护 12 条失败各自产生一次 ERROR / 跳过 DEBUG，摘要只保留前 8 条且未知路径不被编造；原生解析失败保留 Canonicalize、目录 / Token、ErrorKind 与 raw OS cause。受控慢 I/O 的迟到取消保留真实 Failed，但已取消的原始 Interrupted 确认 Canceled。Retention 回归固定 CPU 已产生 Snapshot 失败后取消的时序，验证批次回执与最终 JobOutcome 共享 origin；真实 CPU 应答断连保留 oneshot source，明确服务停止时正常结束。
 
 自定义 Backend 将真实 `SendFailure` 包装为 Other 或 Interrupted 时，目录 Owner 复用 Job 的受管 I/O 转换；独立日志捕获子进程验证原 origin、一次源头 ERROR、传播上下文与迟到取消后的 Failed，不将已存在的发送失败再次分类为正常取消。
+
+单次操作的生产回执与最终 JobOutcome 共享原诊断：候选、创建目录、位置查询均在原有迟到取消矩阵中断言。原生多选用一项真实文件和一项缺失文件验证失败路径、候选索引、Token / 模式、ErrorKind 与共享 origin；原生 SavePath 不存在单独验证返回 false 且无诊断。
+
+普通自定义 Backend 的校验错误同时保护实际单路径与共享多选 Paths。多选回归比较 Backend 接收的候选 Arc 与错误上下文 Arc 的指针身份，保留完整候选但不复制集合；多选未知具体失败项时 resource / index 为空。
+
+同一多选矩阵还覆盖自定义 Backend 返回现有 JobFailure 与真实关闭通道产生的 SendFailure：原 origin / source、类型化候选上下文和共享 Paths 在回执 / JobOutcome 中同时保留。
+
+原生 SaveFile 父目录不存在的回归同时断言候选 `path` 含完整文件名、实际失败 `resource` 为父目录、操作阶段 / Token / 模式 / ErrorKind 与回执-终态同源；原生多选的失败资源不覆盖候选集合。

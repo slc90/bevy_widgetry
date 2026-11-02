@@ -1,12 +1,27 @@
 use crate::*;
 use bevy::prelude::*;
-use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
-use std::{error::Error, fmt, path::PathBuf};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame, ErrorOrigin, WidgetryFailure,
+    bevy::{Diagnostic, WidgetryEcsError},
+};
+use std::{error::Error, fmt, path::PathBuf, sync::Arc};
 
 pub type FileDialogFailure = WidgetryFailure<FileDialogError>;
 
 #[derive(Debug)]
 pub enum FileDialogError {
+    RequestManaged {
+        context: Arc<FileDialogRequestContext>,
+        source: Arc<dyn Diagnostic>,
+    },
+    RequestIo {
+        context: Box<FileDialogRequestContext>,
+        source: std::io::Error,
+    },
+    Request {
+        context: Box<FileDialogRequestContext>,
+        fault: Box<FileDialogRequestFault>,
+    },
     DirectoryIo {
         context: Box<FileDialogDirectoryContext>,
         source: std::io::Error,
@@ -67,6 +82,238 @@ pub enum FileDialogError {
     Wake {
         source: Box<dyn Error + Send + Sync>,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileDialogRequestOperation {
+    PrepareCandidate,
+    ValidateCandidate,
+    SaveParentMetadata,
+    SaveTargetMetadata,
+    SaveTargetLinkMetadata,
+    CandidateMetadata,
+    CreateDirectory,
+    Locations,
+    UserDirectories,
+    LocationMetadata,
+    PrepareSelection,
+}
+
+#[derive(Clone)]
+pub struct FileDialogRequestContext {
+    pub root: Option<Entity>,
+    pub token: WidgetryFileDialogToken,
+    pub mode: Option<WidgetryFileDialogMode>,
+    pub operation: FileDialogRequestOperation,
+    pub path: Option<PathBuf>,
+    pub resource: Option<PathBuf>,
+    pub paths: Option<std::sync::Arc<[PathBuf]>>,
+    pub index: Option<usize>,
+}
+impl fmt::Debug for FileDialogRequestContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FileDialogRequestContext")
+            .field("root", &self.root)
+            .field("token", &self.token)
+            .field("mode", &self.mode)
+            .field("operation", &self.operation)
+            .field("path", &self.path)
+            .field("resource", &self.resource)
+            .field(
+                "candidate_count",
+                &self.paths.as_ref().map(|paths| paths.len()),
+            )
+            .field("index", &self.index)
+            .finish()
+    }
+}
+impl FileDialogRequestContext {
+    pub(crate) fn frame(&self) -> ErrorFrame {
+        ErrorFrame::new("file_dialog.request").field("request", format_args!("{self:?}"))
+    }
+}
+
+#[derive(Debug)]
+pub enum FileDialogRequestFault {
+    LocationCapacity {
+        actual: usize,
+        limit: usize,
+    },
+    SelectionSnapshotMissing,
+    SelectedEntryMissing {
+        id: WidgetryFileDialogEntryId,
+    },
+    SelectionOutsideSnapshot {
+        selected: usize,
+        visible: usize,
+    },
+    SelectionKind {
+        id: WidgetryFileDialogEntryId,
+        kind: WidgetryFileDialogEntryKind,
+    },
+    SelectionCount {
+        actual: usize,
+    },
+}
+
+impl fmt::Display for FileDialogRequestFault {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LocationCapacity { actual, limit } => {
+                write!(f, "location capacity exceeded: {actual} > {limit}")
+            }
+            other => write!(f, "invalid candidate preparation: {other:?}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FileDialogRequestError {
+    Rejected(String),
+    Canceled(&'static str),
+    Failed(bevy_widgetry_job::JobFailure),
+}
+impl FileDialogRequestError {
+    pub(crate) fn failure(&self) -> Option<&bevy_widgetry_job::JobFailure> {
+        match self {
+            Self::Failed(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+impl fmt::Display for FileDialogRequestError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Rejected(message) => f.write_str(message),
+            Self::Canceled(message) => f.write_str(message),
+            Self::Failed(error) => fmt::Display::fmt(error, f),
+        }
+    }
+}
+
+#[track_caller]
+pub(crate) fn request_failure(
+    context: FileDialogRequestContext,
+    fault: FileDialogRequestFault,
+) -> FileDialogFailure {
+    failure(
+        FileDialogError::Request {
+            context: Box::new(context),
+            fault: Box::new(fault),
+        },
+        "file_dialog.request",
+    )
+}
+
+#[track_caller]
+pub(crate) fn request_io(
+    mut context: FileDialogRequestContext,
+    source: std::io::Error,
+) -> bevy_widgetry_job::JobFailure {
+    if is_managed_io(&source) {
+        let report = bevy_widgetry_job::JobFailure::from(source).into_report();
+        let context = Arc::new(context);
+        let failures = report
+            .shared_diagnostics()
+            .map(|source| {
+                let mut contexts = source.contexts().to_vec();
+                contexts.push(context.frame());
+                let diagnostic = ManagedRequestDiagnostic {
+                    origin: source.origin().clone(),
+                    contexts,
+                    kind: FileDialogError::RequestManaged {
+                        context: context.clone(),
+                        source,
+                    },
+                };
+                bevy_widgetry_job::JobFailure::from(WidgetryEcsError::from_shared(Arc::new(
+                    diagnostic,
+                )))
+            })
+            .reduce(bevy_widgetry_job::JobFailure::combine);
+        return failures.unwrap_or_else(|| report.into());
+    }
+    if let Some(native) = source
+        .get_ref()
+        .and_then(|error| error.downcast_ref::<NativeRequestIo>())
+    {
+        context.operation = native.operation;
+        context.resource = native.path.clone();
+        context.index = native.index;
+    }
+    failure(
+        FileDialogError::RequestIo {
+            context: Box::new(context),
+            source,
+        },
+        "file_dialog.request.io",
+    )
+    .into()
+}
+
+// A string frame cannot retain shared candidate paths on an existing failure.
+// This propagation wrapper keeps the typed payload with the original lifecycle.
+struct ManagedRequestDiagnostic {
+    kind: FileDialogError,
+    origin: Arc<ErrorOrigin>,
+    contexts: Vec<ErrorFrame>,
+}
+impl fmt::Display for ManagedRequestDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.kind, f)
+    }
+}
+impl fmt::Debug for ManagedRequestDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+impl Error for ManagedRequestDiagnostic {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.kind)
+    }
+}
+impl Diagnostic for ManagedRequestDiagnostic {
+    fn origin(&self) -> &Arc<ErrorOrigin> {
+        &self.origin
+    }
+    fn contexts(&self) -> &[ErrorFrame] {
+        &self.contexts
+    }
+}
+
+#[derive(Debug)]
+struct NativeRequestIo {
+    operation: FileDialogRequestOperation,
+    path: Option<PathBuf>,
+    index: Option<usize>,
+    source: std::io::Error,
+}
+impl fmt::Display for NativeRequestIo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.source, f)
+    }
+}
+impl Error for NativeRequestIo {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.source)
+    }
+}
+pub(crate) fn native_request_io(
+    operation: FileDialogRequestOperation,
+    path: Option<PathBuf>,
+    index: Option<usize>,
+    source: std::io::Error,
+) -> std::io::Error {
+    std::io::Error::new(
+        source.kind(),
+        NativeRequestIo {
+            operation,
+            path,
+            index,
+            source,
+        },
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -185,7 +432,7 @@ pub(crate) fn directory_io(
     context: FileDialogDirectoryContext,
     source: std::io::Error,
 ) -> bevy_widgetry_job::JobFailure {
-    if is_managed_directory_io(&source) {
+    if is_managed_io(&source) {
         return bevy_widgetry_job::JobFailure::from(source).with_context(context.frame());
     }
     let mut context = context;
@@ -208,7 +455,7 @@ pub(crate) fn directory_io(
     .into()
 }
 
-pub(crate) fn is_managed_directory_io(error: &std::io::Error) -> bool {
+pub(crate) fn is_managed_io(error: &std::io::Error) -> bool {
     error.get_ref().is_some_and(|source| {
         source.is::<bevy_widgetry_job::JobFailure>()
             || source.is::<bevy_widgetry_job::SendFailure>()
@@ -333,6 +580,11 @@ pub enum FileDialogStateFault {
 impl fmt::Display for FileDialogError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::RequestManaged { context, source } => {
+                write!(f, "{source} [{:?}]", context.frame())
+            }
+            Self::RequestIo { .. } => f.write_str("FileDialog 请求 I/O 失败"),
+            Self::Request { fault, .. } => fmt::Display::fmt(fault, f),
             Self::DirectoryIo { .. } => f.write_str("FileDialog 目录 I/O 失败"),
             Self::Directory { fault, .. } => fmt::Display::fmt(fault, f),
             Self::Wake { .. } => f.write_str("FileDialog 原生事件循环唤醒失败"),
@@ -344,6 +596,8 @@ impl fmt::Display for FileDialogError {
 impl Error for FileDialogError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::RequestManaged { source, .. } => Some(source.as_ref()),
+            Self::RequestIo { source, .. } => Some(source),
             Self::DirectoryIo { source, .. } => Some(source),
             Self::Wake { source } => Some(source.as_ref()),
             _ => None,

@@ -188,23 +188,51 @@ impl WidgetryFileDialog {
         root: Entity,
         reply: crate::WidgetryFileDialogReply,
     ) -> Result<bool, FileDialogOperationFailure> {
-        if world.get::<Self>(root).is_none() {
-            return Ok(false);
-        }
-        let mut next = world
-            .get::<WidgetryFileDialogState>(root)
-            .ok_or_else(|| api_failure(world, Some(root), None, FileDialogApiFault::MissingState))?
-            .clone();
-        let visited = matches!(reply, crate::WidgetryFileDialogReply::Started { .. });
-        if !next.receive(reply).map_err(|failure| {
+        let failure = reply.request_failure().map(|failure| {
             failure.with_context(
                 bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.deliver")
                     .field("root", root),
             )
-        })? {
-            return Ok(false);
+        });
+        let result = (|| {
+            if world.get::<Self>(root).is_none() {
+                return Ok(false);
+            }
+            let mut next = world
+                .get::<WidgetryFileDialogState>(root)
+                .ok_or_else(|| {
+                    api_failure(world, Some(root), None, FileDialogApiFault::MissingState)
+                })?
+                .clone();
+            let visited = matches!(reply, crate::WidgetryFileDialogReply::Started { .. });
+            if !next.receive(reply).map_err(|failure| {
+                failure.with_context(
+                    bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.deliver")
+                        .field("root", root),
+                )
+            })? {
+                return Ok(false);
+            }
+            commit(world, root, next, visited, None)
+        })();
+        match (result, failure) {
+            (Ok(changed), Some(failure)) => {
+                if changed {
+                    failure.record_handled(
+                        "终止本次文件请求并提交可恢复错误状态",
+                        "FileDialog 已保存本次请求的失败提示",
+                    );
+                } else {
+                    failure
+                        .record_handled("放弃已过期或目标已销毁的文件请求", "当前会话状态保持不变");
+                }
+                Ok(changed)
+            }
+            (Err(error), Some(failure)) => Err(FileDialogOperationFailure::Job(
+                failure.combine(error.into()),
+            )),
+            (result, None) => result,
         }
-        commit(world, root, next, visited, None)
     }
 }
 

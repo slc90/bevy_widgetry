@@ -178,7 +178,7 @@ impl WidgetryFileDialogState {
         }
         match reply {
             WidgetryFileDialogReply::Locations { token, outcome } => {
-                if token.session != self.token.session {
+                if !self.matches_directory(token) {
                     return Ok(false);
                 }
                 match outcome {
@@ -186,7 +186,7 @@ impl WidgetryFileDialogState {
                         self.locations = locations.into();
                         self.location_error = None;
                     }
-                    Err(error) => self.location_error = Some(error),
+                    Err(error) => self.location_error = Some(error.to_string()),
                 }
                 Ok(true)
             }
@@ -305,7 +305,7 @@ impl WidgetryFileDialogState {
                         self.navigate(WidgetryFileDialogNavigation::Refresh)?;
                         self.reveal_path = Some(request.path);
                     }
-                    Err(error) => self.error = Some(error),
+                    Err(error) => self.error = Some(error.to_string()),
                 }
                 Ok(true)
             }
@@ -356,7 +356,7 @@ impl WidgetryFileDialogState {
                 }
                 self.confirmation = WidgetryFileDialogConfirmation::Idle;
                 self.validation_job = None;
-                self.error = Some(error);
+                self.error = Some(error.to_string());
                 Ok(true)
             }
             WidgetryFileDialogReply::Selection(prepared) => {

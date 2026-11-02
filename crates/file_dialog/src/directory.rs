@@ -1,4 +1,4 @@
-use crate::error::{directory_failure, directory_io, is_managed_directory_io};
+use crate::error::{directory_failure, directory_io, is_managed_io};
 use crate::retention::{Control, CpuSendError, CpuWork, Retention};
 use crate::*;
 use bevy_widgetry_job::JobFailure;
@@ -108,7 +108,7 @@ fn io_failure(
     details: FileDialogDirectoryContext,
     error: io::Error,
 ) -> DirectoryError {
-    if !is_managed_directory_io(&error)
+    if !is_managed_io(&error)
         && error.kind() == io::ErrorKind::Interrupted
         && (context.is_cancelled() || control.stopped(service))
     {

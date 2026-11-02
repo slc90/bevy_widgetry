@@ -5,6 +5,264 @@ use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
 
+fn validating_dialog(filename: &str) -> Result<(App, Entity, WidgetryFileDialogToken)> {
+    let mut app = scene_app();
+    app.insert_resource(WidgetryFileDialogRuntimeOptions {
+        automatic: false,
+        ..default()
+    });
+    app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::SaveFile } })?
+        .id();
+    let token = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .ok_or_else(|| BevyError::error("validation fixture state missing"))?
+        .token();
+    WidgetryFileDialog::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::Started {
+            token,
+            path: "C:/fixture".into(),
+        },
+    )?;
+    WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Filename(filename.into()),
+    )?;
+    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+    let token = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .ok_or_else(|| BevyError::error("validation fixture state missing"))?
+        .token();
+    Ok((app, root, token))
+}
+
+#[test]
+fn request_failures_are_handled_after_commit_or_explicit_stale_discard() {
+    let (mut app, root, token) = validating_dialog("file.txt").unwrap();
+    let logs = LogCapture::default();
+    let failure = logs.run(|| {
+        bevy_widgetry_job::JobFailure::from(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "validation denied",
+        ))
+    });
+    let origin = failure.diagnostics().next().unwrap().origin().clone();
+    assert!(
+        logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+            .is_empty()
+    );
+    logs.run(|| {
+        WidgetryFileDialog::deliver(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogReply::ValidationFailed {
+                token,
+                error: FileDialogRequestError::Failed(failure),
+            },
+        )
+    })
+    .unwrap();
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
+    assert!(state.error().unwrap().contains("validation denied"));
+    assert_eq!(
+        logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+            .len(),
+        1
+    );
+    assert_eq!(
+        logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+            .len(),
+        1
+    );
+
+    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm).unwrap();
+    let current = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    assert_ne!(current, token);
+    let failure = logs.run(|| {
+        bevy_widgetry_job::JobFailure::from(std::io::Error::other("stale validation failed"))
+    });
+    let origin = failure.diagnostics().next().unwrap().origin().clone();
+    assert!(
+        !logs
+            .run(|| WidgetryFileDialog::deliver(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogReply::ValidationFailed {
+                    token,
+                    error: FileDialogRequestError::Failed(failure)
+                }
+            ))
+            .unwrap()
+    );
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(state.token(), current);
+    assert_eq!(
+        state.confirmation(),
+        &WidgetryFileDialogConfirmation::Validating
+    );
+    assert!(state.error().is_none());
+    let handled = logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled);
+    assert_eq!(handled.len(), 1);
+    assert!(handled[0].fields["action"].contains("过期"));
+}
+
+#[test]
+fn stale_location_failure_is_discarded_without_overwriting_the_new_directory() {
+    let (mut app, root, token) = validating_dialog("file.txt").unwrap();
+    WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Path("C:/next".into())),
+    )
+    .unwrap();
+    let current = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    assert_ne!(current.generation, token.generation);
+    let logs = LogCapture::default();
+    let failure = logs.run(|| {
+        bevy_widgetry_job::JobFailure::from(std::io::Error::other("old location query failed"))
+    });
+    let origin = failure.diagnostics().next().unwrap().origin().clone();
+    assert!(
+        !logs
+            .run(|| WidgetryFileDialog::deliver(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogReply::Locations {
+                    token,
+                    outcome: Err(FileDialogRequestError::Failed(failure))
+                }
+            ))
+            .unwrap()
+    );
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(state.token(), current);
+    assert!(state.location_error().is_none());
+    assert_eq!(
+        logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn request_delivery_failure_keeps_original_and_boundary_errors_unhandled() {
+    let mut app = scene_app();
+    let root = app.world_mut().spawn(WidgetryFileDialog).id();
+    let token = WidgetryFileDialogState::new(Default::default())
+        .unwrap()
+        .token();
+    let logs = LogCapture::default();
+    let failure = logs.run(|| {
+        bevy_widgetry_job::JobFailure::from(std::io::Error::other("original operation failed"))
+    });
+    let origin = failure.diagnostics().next().unwrap().origin().clone();
+    let error = logs
+        .run(|| {
+            WidgetryFileDialog::deliver(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogReply::ValidationFailed {
+                    token,
+                    error: FileDialogRequestError::Failed(failure),
+                },
+            )
+        })
+        .err()
+        .unwrap()
+        .into_bevy_error();
+    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    let diagnostics: Vec<_> = error
+        .downcast_ref::<WidgetryEcsError>()
+        .unwrap()
+        .diagnostics()
+        .collect();
+    assert_eq!(diagnostics.len(), 2);
+    assert!(std::sync::Arc::ptr_eq(diagnostics[0].origin(), &origin));
+    assert!(
+        diagnostics[0]
+            .contexts()
+            .iter()
+            .any(|frame| frame.operation() == "file_dialog.reply")
+    );
+    for diagnostic in diagnostics {
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn filename_rejection_and_normal_cancellation_have_no_diagnostics() {
+    let (mut app, root, token) = validating_dialog("bad?.txt").unwrap();
+    let logs = LogCapture::default();
+    logs.run(|| {
+        let failure = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .validation_job()
+            .unwrap()
+            .prepare()
+            .unwrap_err();
+        assert!(matches!(failure, FileDialogRequestError::Rejected(_)));
+        WidgetryFileDialog::deliver(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogReply::ValidationFailed {
+                token,
+                error: failure,
+            },
+        )
+        .unwrap();
+        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)
+            .unwrap();
+        let token = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token();
+        WidgetryFileDialog::deliver(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogReply::ValidationFailed {
+                token,
+                error: FileDialogRequestError::Canceled("validation canceled"),
+            },
+        )
+        .unwrap();
+    });
+    assert!(logs.records().is_empty());
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .confirmation(),
+        &WidgetryFileDialogConfirmation::Idle
+    );
+}
+
 #[test]
 fn snapshot_failures_preserve_directory_entry_and_original_boundary_origin() {
     let state = WidgetryFileDialogState::new(Default::default()).unwrap();

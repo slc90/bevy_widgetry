@@ -1,4 +1,5 @@
-use crate::error::native_directory_io;
+use crate::FileDialogRequestOperation;
+use crate::error::{native_directory_io, native_request_io};
 use crate::{FileDialogDirectoryContext, FileDialogDirectoryOperation};
 use crate::{
     WidgetryFileDialogCandidate, WidgetryFileDialogEntryData, WidgetryFileDialogEntryKind,
@@ -235,31 +236,71 @@ impl WidgetryFileDialogFileSystem for WidgetryFileDialogNativeFileSystem {
     fn validate(&self, candidate: &WidgetryFileDialogCandidate) -> io::Result<bool> {
         match candidate.result() {
             WidgetryFileDialogResult::SavePath(path) => {
-                let parent = path
-                    .parent()
-                    .ok_or_else(|| io::Error::other("save path has no parent"))?;
-                if !fs::metadata(parent)?.is_dir() {
-                    return Err(io::Error::other("save parent is not a directory"));
+                let parent = path.parent().ok_or_else(|| {
+                    native_request_io(
+                        FileDialogRequestOperation::SaveParentMetadata,
+                        Some(path.clone()),
+                        None,
+                        io::Error::other("save path has no parent"),
+                    )
+                })?;
+                if !fs::metadata(parent)
+                    .map_err(|error| {
+                        native_request_io(
+                            FileDialogRequestOperation::SaveParentMetadata,
+                            Some(parent.to_owned()),
+                            None,
+                            error,
+                        )
+                    })?
+                    .is_dir()
+                {
+                    return Err(native_request_io(
+                        FileDialogRequestOperation::SaveParentMetadata,
+                        Some(parent.to_owned()),
+                        None,
+                        io::Error::other("save parent is not a directory"),
+                    ));
                 }
                 match fs::symlink_metadata(path) {
                     Ok(_) => {
-                        if !fs::metadata(path)?.is_file() {
-                            return Err(io::Error::other("save target is not a file"));
+                        if !fs::metadata(path)
+                            .map_err(|error| {
+                                native_request_io(
+                                    FileDialogRequestOperation::SaveTargetMetadata,
+                                    Some(path.clone()),
+                                    None,
+                                    error,
+                                )
+                            })?
+                            .is_file()
+                        {
+                            return Err(native_request_io(
+                                FileDialogRequestOperation::SaveTargetMetadata,
+                                Some(path.clone()),
+                                None,
+                                io::Error::other("save target is not a file"),
+                            ));
                         }
                         Ok(true)
                     }
                     Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-                    Err(error) => Err(error),
+                    Err(error) => Err(native_request_io(
+                        FileDialogRequestOperation::SaveTargetLinkMetadata,
+                        Some(path.clone()),
+                        None,
+                        error,
+                    )),
                 }
             }
-            WidgetryFileDialogResult::File(path) => validate_path(path, false),
-            WidgetryFileDialogResult::Directory(path) => validate_path(path, true),
+            WidgetryFileDialogResult::File(path) => validate_path(path, false, None),
+            WidgetryFileDialogResult::Directory(path) => validate_path(path, true, None),
             WidgetryFileDialogResult::Files(paths)
             | WidgetryFileDialogResult::Directories(paths) => {
                 let directory =
                     matches!(candidate.result(), WidgetryFileDialogResult::Directories(_));
-                for path in paths.iter() {
-                    validate_path(path, directory)?;
+                for (index, path) in paths.iter().enumerate() {
+                    validate_path(path, directory, Some(index))?;
                 }
                 Ok(true)
             }
@@ -270,12 +311,25 @@ impl WidgetryFileDialogFileSystem for WidgetryFileDialogNativeFileSystem {
     }
 
     fn create_directory(&self, path: &Path) -> io::Result<()> {
-        fs::create_dir(path)
+        fs::create_dir(path).map_err(|error| {
+            native_request_io(
+                FileDialogRequestOperation::CreateDirectory,
+                Some(path.to_owned()),
+                None,
+                error,
+            )
+        })
     }
 
     fn locations(&self) -> io::Result<Vec<WidgetryFileDialogLocation>> {
-        let user = directories::UserDirs::new()
-            .ok_or_else(|| io::Error::other("user directories unavailable"))?;
+        let user = directories::UserDirs::new().ok_or_else(|| {
+            native_request_io(
+                FileDialogRequestOperation::UserDirectories,
+                None,
+                None,
+                io::Error::other("user directories unavailable"),
+            )
+        })?;
         let mut locations = vec![WidgetryFileDialogLocation {
             name: "Home".into(),
             path: user.home_dir().to_owned(),
@@ -301,19 +355,38 @@ impl WidgetryFileDialogFileSystem for WidgetryFileDialogNativeFileSystem {
                 }),
                 Ok(_) => {}
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error),
+                Err(error) => {
+                    return Err(native_request_io(
+                        FileDialogRequestOperation::LocationMetadata,
+                        Some(path),
+                        None,
+                        error,
+                    ));
+                }
             }
         }
         Ok(locations)
     }
 }
 
-fn validate_path(path: &Path, directory: bool) -> io::Result<bool> {
-    let metadata = fs::metadata(path)?;
+fn validate_path(path: &Path, directory: bool, index: Option<usize>) -> io::Result<bool> {
+    let metadata = fs::metadata(path).map_err(|error| {
+        native_request_io(
+            FileDialogRequestOperation::CandidateMetadata,
+            Some(path.to_owned()),
+            index,
+            error,
+        )
+    })?;
     if (directory && metadata.is_dir()) || (!directory && metadata.is_file()) {
         Ok(true)
     } else {
-        Err(io::Error::other("candidate kind changed"))
+        Err(native_request_io(
+            FileDialogRequestOperation::CandidateMetadata,
+            Some(path.to_owned()),
+            index,
+            io::Error::other("candidate kind changed"),
+        ))
     }
 }
 
@@ -322,6 +395,24 @@ fn validate_path(path: &Path, directory: bool) -> io::Result<bool> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn a_missing_save_target_is_an_expected_candidate_without_diagnostics() {
+        let directory = tempfile::tempdir().unwrap();
+        let candidate = crate::WidgetryFileDialogCandidate {
+            token: crate::WidgetryFileDialogState::new(Default::default())
+                .unwrap()
+                .token(),
+            result: WidgetryFileDialogResult::SavePath(directory.path().join("new.txt")),
+        };
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        assert!(
+            !logs
+                .run(|| WidgetryFileDialogNativeFileSystem.validate(&candidate))
+                .unwrap()
+        );
+        assert!(logs.records().is_empty());
+    }
 
     #[test]
     fn native_directory_stream_preserves_metadata_and_reports_invalid_path() -> io::Result<()> {

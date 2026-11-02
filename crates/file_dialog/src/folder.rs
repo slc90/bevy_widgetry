@@ -17,12 +17,22 @@ pub(crate) fn spawn(
                 if cancel_if_requested(&context) {
                     return Ok(());
                 }
+                let details = FileDialogRequestContext {
+                    root: None,
+                    token: request.token(),
+                    mode: None,
+                    operation: FileDialogRequestOperation::CreateDirectory,
+                    path: Some(request.path().to_owned()),
+                    resource: None,
+                    paths: None,
+                    index: None,
+                };
                 let outcome = backend
                     .0
                     .create_directory(request.path())
-                    .map_err(crate::retention::WorkError::from);
+                    .map_err(|error| crate::error::request_io(details, error));
                 let completion = outcome.clone();
-                let outcome = outcome.map_err(|error| error.to_string());
+                let outcome = outcome.map_err(FileDialogRequestError::Failed);
                 // Once the OS call returns, cancellation cannot undo the side effect or its outcome.
                 match context
                     .send(WidgetryFileDialogReply::FolderCreated { request, outcome })
@@ -159,6 +169,37 @@ mod tests {
                     assert_eq!(request.token(), token);
                     assert_eq!(request.path(), path);
                     assert_eq!(result.is_ok(), outcome == 0);
+                    if let Err(FileDialogRequestError::Failed(reply_failure)) = result {
+                        let JobOutcome::Failed(terminal_failure) = &expected else {
+                            panic!("missing failed terminal result")
+                        };
+                        assert_eq!(reply_failure, terminal_failure);
+                        let mut cause = reply_failure.diagnostics().next().unwrap().source();
+                        let mut matched = false;
+                        while let Some(error) = cause {
+                            if let Some(FileDialogError::RequestIo { context, source }) =
+                                error.downcast_ref::<FileDialogError>()
+                            {
+                                assert_eq!(context.token, token);
+                                assert_eq!(context.path.as_deref(), Some(path.as_path()));
+                                assert_eq!(
+                                    context.operation,
+                                    FileDialogRequestOperation::CreateDirectory
+                                );
+                                assert_eq!(
+                                    source.kind(),
+                                    if outcome == 1 {
+                                        io::ErrorKind::PermissionDenied
+                                    } else {
+                                        io::ErrorKind::AlreadyExists
+                                    }
+                                );
+                                matched = true;
+                            }
+                            cause = error.source();
+                        }
+                        assert!(matched);
+                    }
                 }
                 assert!(
                     matches!(receiver.recv_blocking().unwrap(), JobRead::Finished(result) if result == expected)

@@ -368,7 +368,13 @@ fn pick_filename_syncs_selection_and_enter_uses_real_identity_and_validation() {
         root,
         WidgetryFileDialogReply::ValidationFailed {
             token: candidate.token(),
-            error: "file disappeared before confirmation".into(),
+            error: FileDialogRequestError::Failed(
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "file disappeared before confirmation",
+                )
+                .into(),
+            ),
         },
     )
     .unwrap();
@@ -512,7 +518,7 @@ fn filename_confirmation_revalidates_a_file_removed_after_snapshot() {
         root,
         WidgetryFileDialogReply::ValidationFailed {
             token: candidate.token(),
-            error: error.to_string(),
+            error: FileDialogRequestError::Failed(error.into()),
         },
     )
     .unwrap();

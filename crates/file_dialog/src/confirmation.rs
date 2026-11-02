@@ -68,9 +68,24 @@ impl WidgetryFileDialogValidationJob {
         self.token
     }
 
-    pub fn prepare(self) -> Result<WidgetryFileDialogCandidate, String> {
+    pub fn prepare(self) -> Result<WidgetryFileDialogCandidate, FileDialogRequestError> {
+        let context = FileDialogRequestContext {
+            root: None,
+            token: self.token,
+            mode: Some(self.mode),
+            operation: FileDialogRequestOperation::PrepareCandidate,
+            path: Some(self.directory.clone()),
+            resource: None,
+            paths: None,
+            index: None,
+        };
+        let fault = |fault| {
+            FileDialogRequestError::Failed(
+                crate::error::request_failure(context.clone(), fault).into(),
+            )
+        };
         let result = if self.mode == WidgetryFileDialogMode::SaveFile {
-            valid_name(&self.filename)?;
+            valid_name(&self.filename).map_err(FileDialogRequestError::Rejected)?;
             let mut filename = self.filename;
             if Path::new(&filename).extension().is_none() {
                 if let Some(extension) = &self.filter.default_extension {
@@ -78,14 +93,18 @@ impl WidgetryFileDialogValidationJob {
                     filename.push(extension);
                 }
             } else if !self.allow_different_extension && !self.filter.matches(&filename) {
-                return Err("filename suffix does not match filter".into());
+                return Err(FileDialogRequestError::Rejected(
+                    "filename suffix does not match filter".into(),
+                ));
             }
-            valid_name(&filename)?;
+            valid_name(&filename).map_err(FileDialogRequestError::Rejected)?;
             WidgetryFileDialogResult::SavePath(self.directory.join(filename))
         } else if self.mode == WidgetryFileDialogMode::PickDirectory && self.selected.is_empty() {
             WidgetryFileDialogResult::Directory(self.directory)
         } else {
-            let snapshot = self.snapshot.ok_or("selection has no directory snapshot")?;
+            let snapshot = self
+                .snapshot
+                .ok_or_else(|| fault(FileDialogRequestFault::SelectionSnapshotMissing))?;
             let paths: Arc<[PathBuf]> = snapshot
                 .visible
                 .iter()
@@ -94,19 +113,27 @@ impl WidgetryFileDialogValidationJob {
                     snapshot
                         .entry(*id)
                         .map(|entry| entry.path.clone())
-                        .ok_or_else(|| "selected EntryId is missing".to_owned())
+                        .ok_or_else(|| {
+                            fault(FileDialogRequestFault::SelectedEntryMissing { id: *id })
+                        })
                 })
                 .collect::<Result<Vec<_>, _>>()?
                 .into();
             if paths.len() != self.selected.len() {
-                return Err("selection is outside visible snapshot".into());
+                return Err(fault(FileDialogRequestFault::SelectionOutsideSnapshot {
+                    selected: self.selected.len(),
+                    visible: paths.len(),
+                }));
             }
             for id in self.selected.iter() {
-                if !snapshot
-                    .entry(*id)
-                    .is_some_and(|entry| self.mode.accepts(entry.kind))
-                {
-                    return Err("selection kind incompatible with mode".into());
+                let entry = snapshot.entry(*id).ok_or_else(|| {
+                    fault(FileDialogRequestFault::SelectedEntryMissing { id: *id })
+                })?;
+                if !self.mode.accepts(entry.kind) {
+                    return Err(fault(FileDialogRequestFault::SelectionKind {
+                        id: *id,
+                        kind: entry.kind,
+                    }));
                 }
             }
             match self.mode {
@@ -122,7 +149,11 @@ impl WidgetryFileDialogValidationJob {
                 WidgetryFileDialogMode::PickDirectories if !paths.is_empty() => {
                     WidgetryFileDialogResult::Directories(paths)
                 }
-                _ => return Err("selection count incompatible with mode".into()),
+                _ => {
+                    return Err(fault(FileDialogRequestFault::SelectionCount {
+                        actual: paths.len(),
+                    }));
+                }
             }
         };
         Ok(WidgetryFileDialogCandidate {

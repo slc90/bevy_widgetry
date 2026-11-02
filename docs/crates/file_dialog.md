@@ -83,6 +83,18 @@ Snapshot 构造、追加及缓存重投影也返回 `FileDialogFailure`，分类
 
 单条目录条目失败按既定行为跳过并继续，每条都记录源头 ERROR 与实际跳过 DEBUG；Partial 的可读摘要仍最多 8 条。没有条目路径时只记录目录与序号。正常取消、CPU Busy 和等待不创建错误；已形成的 CPU 失败及真实 I/O 失败不因迟到取消被改写，明确取消后的原始 Interrupted 则按协作取消处理。Runtime 在提交失败状态或明确放弃旧请求后记录处理。
 
+候选准备与单次文件操作使用 `FileDialogRequestError`：`Rejected` 表示非法文件名 / 后缀等可恢复业务提示，`Canceled` 表示正常停止，`Failed(JobFailure)` 保存真实失败。`ValidationJob::prepare` 及 ValidationFailed、FolderCreated、Locations 回执均使用此分类；手工 Adapter 传入真实失败时保留原诊断对象。内部候选选择契约失效不是用户输入提示，返回包含 Token / 模式 / EntryId 的领域失败。
+
+原生候选验证、创建目录与位置查询失败保留实际操作阶段、已知路径及原始 I/O source；多选校验还记录失败项在候选中的索引，不复制整个目录快照。SavePath 目标尚不存在仍是合法判断。真实后台失败在 Item 与 Finished 之间保持同一 origin，迟到取消不改写已返回的失败或已完成的副作用。
+
+自定义 Backend 的单路径失败保存实际候选路径，多路径失败共享原候选 Paths；Backend 没有指出失败项时不编造路径或索引。诊断格式化只输出多路径候选数量，完整集合由错误对象保留。
+
+Backend 递送已有 JobFailure / SendFailure 时，`RequestManaged` 传播包装保留类型化请求上下文、共享原 origin 与 source；不重新生成诊断 ID 或捕获栈。
+
+请求上下文的 `path` 保留单个候选或请求路径，`resource` 单独保存原生失败涉及的实际资源。例如 SaveFile 的父目录检查失败，同时保留完整候选文件名与失败父目录；多选保留共享 `paths`，并由 `resource` / `index` 指出已知失败项。
+
+公开递送在失败状态实际提交后记录处理 DEBUG；旧请求或目标销毁时明确记录放弃，保持当前状态。递送或状态提交本身失败时保留原请求诊断与新的失败并继续传播，不记录已处理。位置回执匹配 Session / Generation；同代 Query 改变仍可接受位置结果，导航后的旧位置失败不能覆盖新目录。
+
 普通 API 不赋予 Bevy Severity。Template、排队请求及 System / Observer 边界显式使用 Error Severity，保留原 ID / origin / source；组合结果的 Bevy `From` 转换也使用该受管边界，不落入原生 Panic 默认转换。构造 Template 失败沿 Core Scene 清理本次新建 Root，不回滚既有 Entity 的全部 Patch。
 
 合法同值、已关闭会话的 Cancel / Confirm、过期正常回执及已销毁目标的递送继续返回无变化，不记录错误。非法用户输入导致的候选业务提示仍由确认状态表达。偏好合并失败保留既有已提交偏好，并在实际提交 Failed 状态和保存抑制结果后按原 error_id 记录处理 DEBUG；Failed 文本只是显示投影。

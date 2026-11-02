@@ -1220,16 +1220,20 @@ fn folder_result_retries_recovers_and_cancelled_root_ignores_late_completion() {
         root,
         WidgetryFileDialogReply::FolderCreated {
             request,
-            outcome: Err("permission denied".into()),
+            outcome: Err(FileDialogRequestError::Failed(
+                std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied")
+                    .into(),
+            )),
         },
     )
     .unwrap();
-    assert_eq!(
+    assert!(
         app.world()
             .get::<WidgetryFileDialogState>(root)
             .unwrap()
-            .error(),
-        Some("permission denied")
+            .error()
+            .unwrap()
+            .contains("permission denied")
     );
     WidgetryFileDialog::apply(
         app.world_mut(),
@@ -1602,16 +1606,19 @@ fn validation_error_recovers_and_accepting_overwrite_resolves_exact_candidate_on
         root,
         WidgetryFileDialogReply::ValidationFailed {
             token,
-            error: "parent vanished".into(),
+            error: FileDialogRequestError::Failed(
+                std::io::Error::new(std::io::ErrorKind::NotFound, "parent vanished").into(),
+            ),
         },
     )
     .unwrap();
-    assert_eq!(
+    assert!(
         app.world()
             .get::<WidgetryFileDialogState>(root)
             .unwrap()
-            .error(),
-        Some("parent vanished")
+            .error()
+            .unwrap()
+            .contains("parent vanished")
     );
     assert!(app.world().resource::<Results>().0.is_empty());
     WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm).unwrap();

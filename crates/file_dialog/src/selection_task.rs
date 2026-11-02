@@ -18,7 +18,19 @@ pub(crate) fn spawn(
             if cancel_if_requested(&context) {
                 return Ok(());
             }
-            let prepared = job.prepare().map_err(crate::retention::WorkError::from)?;
+            let details = FileDialogRequestContext {
+                root: Some(control.root),
+                token: control.token,
+                mode: None,
+                operation: FileDialogRequestOperation::PrepareSelection,
+                path: None,
+                resource: None,
+                paths: None,
+                index: None,
+            };
+            let prepared = job.prepare().map_err(|failure| {
+                crate::retention::WorkError::from(failure).with_context(details.frame())
+            })?;
             let retained = vec![
                 Retained::Snapshot(prepared.snapshot.clone()),
                 Retained::Selection(prepared.selected.clone()),
