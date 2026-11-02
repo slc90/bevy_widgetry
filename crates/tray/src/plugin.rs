@@ -1,8 +1,10 @@
 use crate::bridge::{self, Bridge, Registration, WidgetryTrayClick};
+use crate::{TrayError, TrayFailure};
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::winit::EventLoopProxyWrapper;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::ErrorFrame;
+use bevy_widgetry_internal_log::widgetry_info;
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 pub struct WidgetryTrayPlugin {
@@ -25,9 +27,16 @@ struct TrayInstance {
 }
 
 impl WidgetryTrayPlugin {
-    pub fn new(ico: &'static [u8], tooltip: impl Into<String>) -> Result<Self> {
+    pub fn new(ico: &'static [u8], tooltip: impl Into<String>) -> Result<Self, TrayFailure> {
         let rgba = image::load_from_memory_with_format(ico, image::ImageFormat::Ico)
-            .map_err(|error| tray_error("ICO 图标解码失败", error))?
+            .map_err(|source| {
+                TrayFailure::new(
+                    TrayError::Decode {
+                        source: Box::new(source),
+                    },
+                    ErrorFrame::new("decode ICO").field("bytes", ico.len()),
+                )
+            })?
             .into_rgba8();
         Ok(Self {
             config: TrayConfig {
@@ -58,28 +67,60 @@ fn initialize(
     mut owner: NonSendMut<TrayOwner>,
     mut commands: Commands,
 ) -> Result {
-    let Some(proxy) = proxy else {
-        return Err(tray_error("创建托盘需要 WinitPlugin", "missing event loop"));
-    };
+    initialize_instance(&config, proxy.as_deref(), &mut owner, &mut commands)
+        .map_err(TrayFailure::into_bevy_error)
+}
+
+fn initialize_instance(
+    config: &TrayConfig,
+    proxy: Option<&EventLoopProxyWrapper>,
+    owner: &mut TrayOwner,
+    commands: &mut Commands,
+) -> Result<(), TrayFailure> {
     let (width, height) = config.rgba.dimensions();
-    let native_icon = Icon::from_rgba(config.rgba.as_raw().clone(), width, height)
-        .map_err(|error| tray_error("RGBA 图标转换失败", error))?;
+    let frame = || {
+        ErrorFrame::new("initialize tray")
+            .field("width", width)
+            .field("height", height)
+            .field("tooltip", &config.tooltip)
+    };
+    let Some(proxy) = proxy else {
+        return Err(TrayFailure::new(TrayError::MissingEventLoop, frame()));
+    };
+    let native_icon =
+        Icon::from_rgba(config.rgba.as_raw().clone(), width, height).map_err(|source| {
+            TrayFailure::new(
+                TrayError::Rgba {
+                    width,
+                    height,
+                    source,
+                },
+                frame(),
+            )
+        })?;
     let icon = TrayIconBuilder::new()
         .with_icon(native_icon)
         .with_tooltip(&config.tooltip)
         .build()
-        .map_err(|error| tray_error("原生托盘图标创建失败", error))?;
+        .map_err(|source| TrayFailure::new(TrayError::Create { source }, frame()))?;
     // tray-icon keeps a helper window even if Shell registration fails.
     // A successful tooltip update verifies registration and preserves the OS error on failure.
-    icon.set_tooltip(Some(&config.tooltip))
-        .map_err(|error| tray_error("原生托盘图标注册确认失败", error))?;
-    let proxy = (**proxy).clone();
-    let (bridge, inbox) = Bridge::new(move || {
+    icon.set_tooltip(Some(&config.tooltip)).map_err(|source| {
+        TrayFailure::new(
+            TrayError::Register {
+                id: icon.id().clone(),
+                source,
+            },
+            frame().field("tray", format_args!("{:?}", icon.id())),
+        )
+    })?;
+    let proxy = (*proxy).clone();
+    let (bridge, inbox) = Bridge::new(icon.id().clone(), move || {
         proxy
             .send_event(bevy::winit::WinitUserEvent::WakeUp)
-            .map_err(BevyError::error)
+            .map_err(|error| Box::new(error) as _)
     });
-    let registration = Registration::new(icon.id().clone(), &bridge)?;
+    let registration = Registration::new(icon.id().clone(), &bridge);
     owner.0 = Some(TrayInstance {
         _registration: registration,
         _icon: icon,
@@ -89,15 +130,18 @@ fn initialize(
     Ok(())
 }
 
-fn release_on_exit(mut owner: NonSendMut<TrayOwner>, mut exit: MessageReader<AppExit>) {
+fn release_on_exit(
+    mut owner: NonSendMut<TrayOwner>,
+    mut exit: MessageReader<AppExit>,
+    inbox: Option<Res<bridge::Inbox>>,
+) -> Result {
     if exit.read().next().is_some() {
         owner.0 = None;
+        if let Some(inbox) = inbox {
+            return bridge::forward_errors(&inbox);
+        }
     }
-}
-
-fn tray_error(context: &str, error: impl std::fmt::Display) -> BevyError {
-    widgetry_error!(context, error = %error, "托盘初始化失败");
-    BevyError::error(format!("{context}: {error}"))
+    Ok(())
 }
 
 #[cfg(test)]
@@ -106,12 +150,56 @@ mod tests {
     use super::*;
 
     #[test]
+    fn real_startup_reports_source_id_and_original_origin_to_host() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+        let mut app = App::new();
+        app.insert_resource(TrayConfig {
+            rgba: image::RgbaImage::new(16, 16),
+            tooltip: "test".into(),
+        })
+        .insert_non_send(TrayOwner::default())
+        .add_systems(Startup, initialize);
+        app.set_error_handler(ErrorCapture::handler());
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        errors.run(|| logs.run(|| app.update()));
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].error.severity(),
+            bevy::ecs::error::Severity::Error
+        );
+        let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+        assert_eq!(
+            diagnostic.origin().backtrace().status(),
+            std::backtrace::BacktraceStatus::Captured
+        );
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+        assert!(
+            diagnostic.contexts()[0]
+                .fields()
+                .contains(&("width".into(), "16".into()))
+        );
+        assert!(app.world().non_send::<TrayOwner>().0.is_none());
+    }
+
+    #[test]
     fn rejects_invalid_ico_without_panicking() {
         let error = WidgetryTrayPlugin::new(b"not an icon", "test")
             .err()
             .expect("invalid ICO must fail");
         assert!(error.to_string().contains("ICO"));
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(matches!(error.kind(), TrayError::Decode { .. }));
+        use std::error::Error;
+        assert!(error.kind().source().unwrap().is::<image::ImageError>());
     }
 
     #[test]

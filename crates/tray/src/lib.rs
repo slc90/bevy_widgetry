@@ -2,8 +2,10 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod bridge;
+mod error;
 mod plugin;
 
 pub use bridge::WidgetryTrayClick;
+pub use error::{TrayError, TrayFailure};
 
 pub use plugin::WidgetryTrayPlugin;

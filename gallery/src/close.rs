@@ -51,15 +51,23 @@ struct GalleryTrayState {
 }
 
 pub(crate) fn install(app: &mut App) -> Result {
-    app.add_plugins(WidgetryTrayPlugin::new(
-        crate::assets::TRAY_ICON,
-        "Widget Gallery",
-    )?)
+    app.add_plugins(
+        WidgetryTrayPlugin::new(crate::assets::TRAY_ICON, "Widget Gallery")
+            .map_err(tray_startup_failure)?,
+    )
     .init_resource::<GalleryTrayState>()
     .add_systems(First, focus_restored)
     .add_systems(Update, (restore_from_tray, close_requests).chain());
     shutdown::install(app);
     Ok(())
+}
+
+fn tray_startup_failure(failure: bevy_widgetry::tray::TrayFailure) -> BevyError {
+    let failure = failure.with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
+        "gallery.startup.tray",
+    ));
+    error!(error_id = %failure.origin().id(), phase = "unhandled", origin = ?failure.origin().location(), backtrace = %failure.origin().backtrace(), context = ?failure.contexts(), "Gallery 启动因未处理的托盘错误终止");
+    failure.into_bevy_error()
 }
 
 fn close_requests(
@@ -291,6 +299,39 @@ fn focus_restored(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tray_startup_failure_reports_original_origin_before_app_runs() {
+        use bevy_widgetry::diagnostics::bevy::WidgetryEcsError;
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let logs = LogCapture::with_targets(["bevy_widgetry", "widget_gallery::close"]);
+        let (error, origin) = logs.run(|| {
+            let failure = WidgetryTrayPlugin::new(b"invalid", "test").err().unwrap();
+            let origin = failure.origin().clone();
+            (tray_startup_failure(failure), origin)
+        });
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        let diagnostic = error
+            .downcast_ref::<WidgetryEcsError>()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap();
+        assert!(std::sync::Arc::ptr_eq(&origin, diagnostic.origin()));
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        let reports = logs.diagnostic_records(origin.id(), DiagnosticPhase::Unhandled);
+        assert_eq!(reports.len(), 1);
+        assert!(reports[0].fields.contains_key("backtrace"));
+        assert!(reports[0].fields.contains_key("origin"));
+        assert!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+    }
 
     #[test]
     fn close_dialog_defaults_to_tray_before_first_update() {

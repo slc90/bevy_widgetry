@@ -83,7 +83,7 @@ Facade 为 25 个控件提供默认全部启用的独立可选依赖与 Feature�
 
 Job 控制能力经 Facade 默认关闭的 `job` Feature 导出，业务 crate 可直接依赖基础设施 job，不反向依赖 Facade。Job 直接依赖 diagnostics 的 Bevy 桥接，提交、访问和收发失败保留领域分类与统一诊断，由直接消费者在 ECS 边界显式转换。Gallery 显式启用该 Feature 并安装唯一 JobManagerPlugin，后台结果可唤醒 Reactive 主循环。
 
-Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、内部日志、ICO 解码所需的 Image、tray-icon 与 Crossbeam Channel，不依赖 Window 或 Gallery，也不管理窗口。Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
+Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、diagnostics 的 Bevy 桥接、内部日志、ICO 解码所需的 Image、tray-icon 与 Crossbeam Channel，不依赖 Window 或 Gallery，也不管理窗口。原生回调的诊断由实例收件箱无损保留，ECS 边界批量传播；Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
 
 Windows 空闲息屏与休眠抑制由独立的 [power_inhibit](crates/power_inhibit.md) crate 提供，经 Facade 默认关闭的 `power_inhibit` Feature 导出。它仅依赖 Bevy、内部日志和 windows-sys，通过同步 Resource API 管理进程电源请求，不依赖 Window、Tray 或 Gallery。私有 FFI 使用标准库 OwnedHandle 管理句柄，新 crate 单独配置 unsafe lint，其他成员继续继承 Workspace 的 forbid。
 

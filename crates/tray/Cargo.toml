@@ -10,6 +10,10 @@ bevy_widgetry_internal_log = { path = "../internal_log" }
 image = { workspace = true, features = ["ico"] }
 tray-icon.workspace = true
 crossbeam-channel.workspace = true
+bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
 
 [lints]
 workspace = true
