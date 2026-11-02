@@ -117,7 +117,14 @@ fn apply(world: &mut World, root: Entity) -> Result {
         world,
         field,
         &theme.text_field,
-    )?;
+    )
+    .map_err(|error| {
+        error
+            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                "number_input.text_field.apply_owned_text_field_colors",
+            ))
+            .into_bevy_error()
+    })?;
     for button in [decrease, increase] {
         let colors = if world.get::<InteractionDisabled>(button).is_some() {
             theme.button.disabled

@@ -1,4 +1,8 @@
 use crate::text_field::{Parts, ReadOnly, TextFieldBase, WidgetryTextField};
+use crate::{
+    TextFieldFailure,
+    error::{missing, query},
+};
 use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -35,7 +39,7 @@ fn apply_text_field_style(
     colors: &WidgetryTheme,
     focused_entity: Option<Entity>,
     (
-        _entity,
+        root,
         overrides,
         read_only,
         hovered,
@@ -44,7 +48,7 @@ fn apply_text_field_style(
     ): <TextFieldStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
     frames: &mut Query<(&mut BackgroundColor, &mut BorderColor)>,
     editors: &mut Query<(&mut TextColor, &mut TextCursorStyle)>,
-) -> Result {
+) -> Result<(), TextFieldFailure> {
     let focused = focused_entity == Some(parts.editor);
 
     let colors = overrides.0.resolve(&colors.text_field);
@@ -62,12 +66,24 @@ fn apply_text_field_style(
     } else {
         colors.normal
     };
-    let (background, border) = frames
-        .get_mut(parts.frame)
-        .map_err(|_| invalid_target(parts.frame))?;
-    let (text, cursor) = editors
-        .get_mut(parts.editor)
-        .map_err(|_| invalid_target(parts.editor))?;
+    let (background, border) = frames.get_mut(parts.frame).map_err(|source| {
+        query(
+            root,
+            parts.frame,
+            "BackgroundColor / BorderColor",
+            source,
+            "text_field.style",
+        )
+    })?;
+    let (text, cursor) = editors.get_mut(parts.editor).map_err(|source| {
+        query(
+            root,
+            parts.editor,
+            "TextColor / TextCursorStyle",
+            source,
+            "text_field.style",
+        )
+    })?;
     apply_outputs(state, (background, border, text, cursor));
     Ok(())
 }
@@ -106,7 +122,8 @@ pub(super) fn update_widgetry_text_field_style_changed(
     let focused = input_focus.get();
 
     for item in &mut query {
-        apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)?;
+        apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)
+            .map_err(|error| error.into_bevy_error())?;
     }
     Ok(())
 }
@@ -131,7 +148,8 @@ pub(super) fn update_widgetry_text_field_style_focus_changed(
     let focused = input_focus.get();
 
     for item in &mut query {
-        apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)?;
+        apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)
+            .map_err(|error| error.into_bevy_error())?;
     }
     Ok(())
 }
@@ -154,7 +172,8 @@ pub(super) fn update_widgetry_text_field_style_removed(
 
     for entity in removed_disabled.read() {
         if let Ok(item) = query.get_mut(entity) {
-            apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)?;
+            apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)
+                .map_err(|error| error.into_bevy_error())?;
         }
     }
     Ok(())
@@ -175,9 +194,11 @@ pub(super) fn refresh_text_field_theme(
                 .iter(world)
                 .collect::<Vec<_>>();
             for root in roots {
-                let colors =
-                    crate::WidgetryTextFieldColorOverrides::get(world, root)?.resolve(&theme);
-                apply_owned_text_field_colors(world, root, &colors)?;
+                let colors = crate::WidgetryTextFieldColorOverrides::get(world, root)
+                    .map_err(|error| error.into_bevy_error())?
+                    .resolve(&theme);
+                apply_owned_text_field_colors(world, root, &colors)
+                    .map_err(|error| error.into_bevy_error())?;
             }
             Ok(())
         },
@@ -188,7 +209,7 @@ pub fn apply_owned_text_field_colors(
     world: &mut bevy::prelude::World,
     entity: Entity,
     colors: &bevy_widgetry_theme::WidgetryTextFieldColors,
-) -> Result<(), bevy::prelude::BevyError> {
+) -> Result<(), TextFieldFailure> {
     use bevy::prelude::*;
     crate::hint::apply_color(world, entity, colors.hint_warning)?;
     let colors = if world.get::<ReadOnly>(entity).is_some() {
@@ -198,7 +219,7 @@ pub fn apply_owned_text_field_colors(
     };
     let parts = world
         .get::<Parts>(entity)
-        .ok_or_else(|| invalid_target(entity))?;
+        .ok_or_else(|| missing(entity, entity, "Parts", "text_field.apply_owned_colors"))?;
     let (frame, editor) = (parts.frame, parts.editor);
     let focused = world.get_resource::<InputFocus>().and_then(InputFocus::get) == Some(editor);
     let state = if world.get::<InteractionDisabled>(entity).is_some() {
@@ -211,15 +232,27 @@ pub fn apply_owned_text_field_colors(
         colors.normal
     };
     let mut frame_query = world.query::<(&mut BackgroundColor, &mut BorderColor)>();
-    let (mut background, mut border) = frame_query
-        .get_mut(world, frame)
-        .map_err(|_| invalid_target(entity))?;
+    let (mut background, mut border) = frame_query.get_mut(world, frame).map_err(|source| {
+        query(
+            entity,
+            frame,
+            "BackgroundColor / BorderColor",
+            source,
+            "text_field.apply_owned_colors",
+        )
+    })?;
     background.set_if_neq(BackgroundColor(state.background));
     border.set_if_neq(BorderColor::all(state.border));
     let mut editor_query = world.query::<(&mut TextColor, &mut TextCursorStyle)>();
-    let (mut text, mut cursor) = editor_query
-        .get_mut(world, editor)
-        .map_err(|_| invalid_target(entity))?;
+    let (mut text, mut cursor) = editor_query.get_mut(world, editor).map_err(|source| {
+        query(
+            entity,
+            editor,
+            "TextColor / TextCursorStyle",
+            source,
+            "text_field.apply_owned_colors",
+        )
+    })?;
     text.set_if_neq(TextColor(state.foreground));
     if cursor.color != state.caret
         || cursor.selection_color != state.selection_background
@@ -232,9 +265,4 @@ pub fn apply_owned_text_field_colors(
         cursor.selected_text_color = Some(state.selection_foreground);
     }
     Ok(())
-}
-
-fn invalid_target(entity: Entity) -> BevyError {
-    bevy_widgetry_internal_log::widgetry_error!(?entity, "TextField 缺失托管颜色输出");
-    BevyError::error("TextField 缺失托管颜色输出")
 }

@@ -1,7 +1,30 @@
 use super::*;
 use bevy::ui_widgets::ValueChange;
+use bevy_widgetry::diagnostics::{ErrorFrame, WidgetryFailure, bevy::BoundaryFailure};
 use bevy_widgetry::list_view::WidgetryListItemId;
+use bevy_widgetry::table::WidgetryTableEditorReadError;
 use bevy_widgetry::table::WidgetryTableSubmitEdit;
+
+#[derive(Debug)]
+struct EditorMappingError {
+    root: Entity,
+    part: &'static str,
+}
+
+impl std::fmt::Display for EditorMappingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Table 编辑器缺失部件: {}", self.part)
+    }
+}
+impl std::error::Error for EditorMappingError {}
+
+fn missing_editor(root: Entity, part: &'static str) -> WidgetryTableEditorReadError {
+    let kind = EditorMappingError { root, part };
+    let frame = ErrorFrame::new("gallery.read_table_editor")
+        .field("root", kind.root)
+        .field("part", kind.part);
+    WidgetryTableEditorReadError::diagnostic(WidgetryFailure::new(kind, frame))
+}
 
 #[derive(Component)]
 struct BooleanEditor {
@@ -51,10 +74,10 @@ fn descendant<C: Component>(world: &World, root: Entity) -> Option<Entity> {
     None
 }
 
-fn text(world: &World, root: Entity) -> Result<String, String> {
+fn text(world: &World, root: Entity) -> Result<String, WidgetryTableEditorReadError> {
     let field = descendant::<WidgetryTextField>(world, root)
-        .ok_or_else(|| "TextField missing".to_owned())?;
-    WidgetryTextField::text(world, field).map_err(|e| e.to_string())
+        .ok_or_else(|| missing_editor(root, "TextField"))?;
+    WidgetryTextField::text(world, field).map_err(WidgetryTableEditorReadError::diagnostic)
 }
 
 fn text_scene(value: String, multiline: bool, name: &'static str) -> impl Scene {
@@ -95,11 +118,13 @@ pub(super) fn install(app: &mut App) -> Result {
         },
         |world, root| {
             text(world, root)?.parse::<u32>().map_err(|_| {
-                tr(
-                    *world.resource::<Language>(),
-                    TextKey::Table(TableKey::InvalidEditValue),
+                WidgetryTableEditorReadError::Rejected(
+                    tr(
+                        *world.resource::<Language>(),
+                        TextKey::Table(TableKey::InvalidEditValue),
+                    )
+                    .to_owned(),
                 )
-                .to_owned()
             })
         },
     ));
@@ -116,11 +141,13 @@ pub(super) fn install(app: &mut App) -> Result {
                 .ok()
                 .filter(|v| v.is_finite() && (0.0..=1.0).contains(v));
             value.map(ProgressValue).ok_or_else(|| {
-                tr(
-                    *world.resource::<Language>(),
-                    TextKey::Table(TableKey::InvalidEditValue),
+                WidgetryTableEditorReadError::Rejected(
+                    tr(
+                        *world.resource::<Language>(),
+                        TextKey::Table(TableKey::InvalidEditValue),
+                    )
+                    .to_owned(),
                 )
-                .to_owned()
             })
         },
     ));
@@ -149,10 +176,10 @@ pub(super) fn install(app: &mut App) -> Result {
                 ]
             }
         }, |world, root| {
-            let combo = descendant::<WidgetryComboBox<bool>>(world, root).ok_or_else(|| "ComboBox missing".to_owned())?;
-            let selected = WidgetryComboBox::<bool>::selected_id(world, combo).map_err(|e| e.to_string())?.ok_or_else(|| "Choose a value".to_owned())?;
-            let model = world.get::<WidgetryListModel<bool>>(combo).ok_or_else(|| "Model missing".to_owned())?;
-            model.index_of(selected).and_then(|i| model.get(i)).copied().ok_or_else(|| "Selection missing".to_owned())
+            let combo = descendant::<WidgetryComboBox<bool>>(world, root).ok_or_else(|| missing_editor(root, "ComboBox"))?;
+            let selected = WidgetryComboBox::<bool>::selected_id(world, combo).map_err(|error| WidgetryTableEditorReadError::Failed(BoundaryFailure::Native(error)))?.ok_or_else(|| WidgetryTableEditorReadError::Rejected("Choose a value".to_owned()))?;
+            let model = world.get::<WidgetryListModel<bool>>(combo).ok_or_else(|| missing_editor(root, "WidgetryListModel<bool>"))?;
+            model.index_of(selected).and_then(|i| model.get(i)).copied().ok_or_else(|| missing_editor(root, "Selection"))
         }));
     app.add_observer(
         |event: On<WidgetryTableEditRequested>,

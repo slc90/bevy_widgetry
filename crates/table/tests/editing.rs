@@ -9,6 +9,77 @@ struct Draft(String);
 #[derive(Resource, Default)]
 struct Requests(Vec<WidgetryTableEditRequested>);
 
+#[test]
+fn text_field_read_failure_reaches_host_with_original_diagnostic_instead_of_validation_feedback() {
+    use bevy_widgetry_core::input_target::WidgetryInputTarget;
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+    use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
+    let (mut app, source, root, _) = common::fixture(1, 1);
+    app.add_plugins(WidgetryTextFieldPlugin);
+    app.set_error_handler(ErrorCapture::handler());
+    app.register_table_cell_editor(WidgetryTableCellEditor::new(
+        WidgetryTableEditorMode::SingleLine,
+        |value: &String| bsn_list! { @WidgetryTextField { @value: {value.clone()} } },
+        |world, editor| {
+            let field = world.get::<Children>(editor).unwrap()[0];
+            WidgetryTextField::text(world, field).map_err(WidgetryTableEditorReadError::diagnostic)
+        },
+    ));
+    app.world_mut()
+        .entity_mut(root)
+        .insert(WidgetryTableEditing::new(|_, _, _| true));
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let cell = WidgetryTableCell {
+        row: model.row_id(0).unwrap(),
+        column: model.column_id(0).unwrap(),
+    };
+    WidgetryTable::<u32>::begin_edit(app.world_mut(), root, cell).unwrap();
+    let editor = app
+        .world()
+        .get::<WidgetryTableEditState>(root)
+        .unwrap()
+        .editor();
+    let field = app.world().get::<Children>(editor).unwrap()[0];
+    let text = app
+        .world()
+        .get::<WidgetryInputTarget>(field)
+        .unwrap()
+        .target;
+    app.world_mut()
+        .entity_mut(text)
+        .remove::<bevy::text::EditableText>();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            WidgetryTable::<u32>::queue_submit_edit(&mut app.world_mut().commands(), root);
+            app.world_mut().flush();
+        })
+    });
+    let records = errors.take_records();
+    assert_eq!(records.len(), 1);
+    let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+    assert_eq!(
+        logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+            .len(),
+        1
+    );
+    assert_eq!(logs.records().len(), 1);
+    assert!(
+        diagnostic
+            .contexts()
+            .iter()
+            .any(|frame| frame.operation() == "table.read_editor")
+    );
+    assert!(
+        app.world()
+            .get::<WidgetryTableEditState>(root)
+            .unwrap()
+            .pending()
+            .is_none()
+    );
+}
+
 fn editor() -> WidgetryTableCellEditor<String> {
     WidgetryTableCellEditor::new(
         WidgetryTableEditorMode::SingleLine,
@@ -467,7 +538,9 @@ fn multiline_requires_control_enter_and_parser_errors_do_not_emit_requests() {
             let child = world.get::<Children>(root).unwrap()[0];
             let value = &world.get::<Draft>(child).unwrap().0;
             if value == "invalid" {
-                Err("parse failure".into())
+                Err(WidgetryTableEditorReadError::Rejected(
+                    "parse failure".into(),
+                ))
             } else {
                 Ok(value.clone())
             }
@@ -731,7 +804,7 @@ fn real_textfield_propagates_native_enter_and_control_enter_to_the_edit_transact
             move |v:&String|bsn_list!{@WidgetryTextField{@value:{v.clone()},@multiline:multiline}},
             |world,root| {
                 let field=world.get::<Children>(root).unwrap()[0];
-                WidgetryTextField::text(world,field).map_err(|e|e.to_string())
+                WidgetryTextField::text(world,field).map_err(WidgetryTableEditorReadError::diagnostic)
             }));
         app.world_mut()
             .entity_mut(root)

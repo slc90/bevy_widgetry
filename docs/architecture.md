@@ -167,4 +167,6 @@ ProgressBar 直接依赖 diagnostics 的 Bevy 桥接。状态、尺寸与颜色�
 
 Slider 直接依赖 diagnostics 的 Bevy 桥接，公开数值 / 颜色 API 返回领域失败并保留完整 f32 配置和判定类别；输入与样式边界保留原诊断，样式按结构键去重并聚合所有 Root。Waveform 进度投影在消费 Slider 失败时补充自身上下文。
 
+TextField 直接依赖 diagnostics 的 Bevy 桥接，普通与只读控件共享内容、映射、AutoSize 和颜色领域诊断。NumberInput、ComboBox、FileDialog 消费时保留原诊断并补充调用上下文。Table 也直接依赖该桥接，其 Editor read 回调区分正常业务拒绝与下层诊断失败，避免 TextField 错误被降成字符串反馈。
+
 Cursor 直接依赖 diagnostics 的 Bevy 桥接，共用按业务键保存原诊断的 `FailureState`；该通用状态实现位于 diagnostics，Core 保留重导出入口。Cursor 的资源缓存拥有图集失败身份，各 Window 的实际静态/System 回退消费不新建错误身份。

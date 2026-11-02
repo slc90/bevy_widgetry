@@ -358,7 +358,14 @@ fn apply_part(
         if let Some(field) = field {
             bevy_widgetry_text_field::internal::apply_owned_text_field_colors(
                 world, entity, &field,
-            )?;
+            )
+            .map_err(|error| {
+                error
+                    .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                        "file_dialog.text_field.apply_owned_text_field_colors",
+                    ))
+                    .into_bevy_error()
+            })?;
         }
         let scroll = match kind {
             PartKind::Sidebar => Some(colors.sidebar_scroll),

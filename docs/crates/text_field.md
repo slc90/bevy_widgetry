@@ -46,7 +46,9 @@ AutoSize 从 Parley 最新排版读取视觉行数（包括软换行与预编辑
 
 用户输入在官方编辑提交前按队列顺序约束。先处理选择、删除，再按实际试替换全文确定最长合法插入前缀；键入、粘贴和 IME 正式提交共用该语义。预编辑仍交给官方编辑器，既不提前裁剪，也不计入正式正文。普通非 Widgetry `EditableText` 不受影响。
 
-同步设置返回 `Ok(true)` / `Ok(false)` 表示正文是否改变，目标类型不符或编辑组件缺失返回 Error severity 的错误；Commands 在执行时验证。Setter 丢弃旧编辑及待处理粘贴，结束旧组合态，优先保留新正文中仍合法的光标与选区，否则折叠至末尾。官方 `TextEditChange` 保留其正文或光标变化语义，不另建 Widgetry 文本 Authority 或事件转接。
+查询、聚焦、内容、颜色和内部组合查询 API 返回 `TextFieldFailure`（`WidgetryFailure<TextFieldError>`）。同步设置返回 `Ok(true)` / `Ok(false)` 表示正文是否改变，目标类型不符、映射 / 编辑组件 / 必需资源缺失返回可匹配的领域错误；Commands 在执行时验证，并在实际 ECS 边界显式转为 `Severity::Error`。Setter 丢弃旧编辑及待处理粘贴，结束旧组合态，优先保留新正文中仍合法的光标与选区，否则折叠至末尾。官方 `TextEditChange` 保留其正文或光标变化语义，不另建 Widgetry 文本 Authority 或事件转接。
+
+诊断保存 Root、缺失部件实体和类型，以及已知的 editor / frame 与请求操作。AutoSize 配置错误保存 multiline 与原始行数限制，结构查询保留原始 Bevy 查询原因；Core 颜色失败沿原 ID 传播。源头记录一次 ERROR 并保存原始回溯，传播不重复记录。Setter 的计数投影可能在正式文本已写入后失败，错误上下文标明已写入和内容是否变化，不承诺失败时回滚正文或 IME 清理。剪贴板读取实际失败时记录源头并在放弃该次粘贴后记录 DEBUG，继续处理其他编辑。
 
 ```rust
 bsn! {

@@ -1,17 +1,24 @@
 use crate::text_field::{Parts, TextFieldEditor};
+use crate::{
+    TextFieldError, TextFieldFailure,
+    error::{failure, query},
+};
 use bevy::{
+    ecs::query::QueryEntityError,
     prelude::*,
     text::{EditableText, FontCx, LayoutCx},
 };
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState},
+};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AutoSize {
     pub min_rows: usize,
     pub max_rows: usize,
 }
-
 impl Default for AutoSize {
     fn default() -> Self {
         Self {
@@ -20,32 +27,53 @@ impl Default for AutoSize {
         }
     }
 }
-
+#[derive(PartialEq, Eq)]
+enum ResizeKey {
+    Height,
+    MissingEditor(Entity),
+    QueryMismatch(Entity),
+    Aliased(Entity),
+    Owner(Entity, Entity),
+}
 #[derive(Component)]
 pub(crate) struct Configuration {
     rows: Option<AutoSize>,
-    height_failure: UnmigratedFailureState,
+    failure: FailureState<ResizeKey>,
 }
-
 impl Configuration {
-    pub(crate) fn new(multiline: bool, config: Option<AutoSize>) -> Result<Self, BevyError> {
+    pub(crate) fn new(multiline: bool, config: Option<AutoSize>) -> Result<Self, TextFieldFailure> {
         if let Some(config) = config
             && (!multiline || config.min_rows == 0 || config.min_rows > config.max_rows)
         {
-            widgetry_error!(
-                multiline,
-                min_rows = config.min_rows,
-                max_rows = config.max_rows,
-                "TextField AutoSize 配置无效"
-            );
-            return Err(BevyError::error(
-                "TextField AutoSize 要求 multiline 且 1 <= min_rows <= max_rows",
+            return Err(failure(
+                TextFieldError::InvalidAutoSize { multiline, config },
+                ErrorFrame::new("text_field.initialize_auto_size"),
             ));
         }
         Ok(Self {
             rows: config,
-            height_failure: UnmigratedFailureState::default(),
+            failure: FailureState::default(),
         })
+    }
+    fn report(
+        &mut self,
+        key: ResizeKey,
+        create: impl FnOnce() -> TextFieldFailure,
+        failures: &mut DiagnosticBatch,
+    ) {
+        let previous = self
+            .failure
+            .active()
+            .map(|diagnostic| diagnostic.origin().clone());
+        let error = self.failure.failure(key, || Arc::new(create()));
+        for diagnostic in error.shared_diagnostics() {
+            if !previous
+                .as_ref()
+                .is_some_and(|origin| Arc::ptr_eq(origin, diagnostic.origin()))
+            {
+                failures.push_shared(diagnostic);
+            }
+        }
     }
 }
 
@@ -55,38 +83,76 @@ pub(crate) fn resize_editors(
     mut fonts: ResMut<FontCx>,
     mut layouts: ResMut<LayoutCx>,
 ) -> Result {
-    let mut failure = None;
+    let mut failures = DiagnosticBatch::default();
     for (root, mut state, parts, node) in &mut roots {
         let Some(config) = state.rows else { continue };
-        let result = if node.height == Val::Auto {
-            Ok(())
-        } else {
-            Err(BevyError::error(
-                "TextField AutoSize 要求根 Node.height 为 Auto",
-            ))
+        let frame = || {
+            ErrorFrame::new("text_field.resize_auto_size")
+                .field("root", root)
+                .field("editor", parts.editor)
+                .field("frame", parts.frame)
         };
-        let mut new_failure = false;
-        if let Err(error) = state.height_failure.observe(
-            result,
-            |error| {
-                new_failure = true;
-                widgetry_error!(?root, %error, "TextField AutoSize 高度冲突");
-            },
-            || widgetry_info!(?root, "TextField AutoSize 高度恢复正常"),
-        ) {
-            if new_failure {
-                failure = Some(error);
-            }
+        if node.height != Val::Auto {
+            state.report(
+                ResizeKey::Height,
+                || {
+                    failure(
+                        TextFieldError::HeightConflict {
+                            root,
+                            height: node.height,
+                        },
+                        frame(),
+                    )
+                },
+                &mut failures,
+            );
             continue;
         }
-        let (mut edit, owner) = editors.get_mut(parts.editor).map_err(|_| {
-            widgetry_error!(?root, "TextField AutoSize 编辑器缺失");
-            BevyError::error("TextField AutoSize 编辑器缺失")
-        })?;
+        let (mut edit, owner) = match editors.get_mut(parts.editor) {
+            Ok(editor) => editor,
+            Err(source) => {
+                let key = match &source {
+                    QueryEntityError::NotSpawned(error) => ResizeKey::MissingEditor(error.entity()),
+                    QueryEntityError::QueryDoesNotMatch(entity, _) => {
+                        ResizeKey::QueryMismatch(*entity)
+                    }
+                    QueryEntityError::AliasedMutability(entity) => ResizeKey::Aliased(*entity),
+                };
+                state.report(
+                    key,
+                    || {
+                        query(
+                            root,
+                            parts.editor,
+                            "EditableText / TextFieldEditor",
+                            source,
+                            "text_field.resize_auto_size",
+                        )
+                        .with_context(frame())
+                    },
+                    &mut failures,
+                );
+                continue;
+            }
+        };
         if owner.root != root {
-            widgetry_error!(?root, "TextField AutoSize 编辑器身份不匹配");
-            return Err(BevyError::error("TextField AutoSize 编辑器身份不匹配"));
+            state.report(
+                ResizeKey::Owner(parts.editor, owner.root),
+                || {
+                    failure(
+                        TextFieldError::InvalidEditorOwner {
+                            root,
+                            editor: parts.editor,
+                            actual: owner.root,
+                        },
+                        frame(),
+                    )
+                },
+                &mut failures,
+            );
+            continue;
         }
+        state.failure.recover(frame);
         let lines = edit
             .editor_mut()
             .layout(&mut fonts, &mut layouts.0)
@@ -97,5 +163,5 @@ pub(crate) fn resize_editors(
             edit.visible_lines = Some(rows);
         }
     }
-    failure.map_or(Ok(()), Err)
+    failures.into_bevy_error().map_or(Ok(()), Err)
 }

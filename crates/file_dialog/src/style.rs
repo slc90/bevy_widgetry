@@ -499,9 +499,24 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
     if path_changed {
         if let Some(path_entity) = path_entity {
             let path = state.current_path().map(display_path).unwrap_or_default();
-            let edit = bevy_widgetry_text_field::WidgetryTextField::editor(world, path_entity)?;
+            let edit = bevy_widgetry_text_field::WidgetryTextField::editor(world, path_entity)
+                .map_err(|error| {
+                    error
+                        .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                            "file_dialog.text_field.editor",
+                        ))
+                        .into_bevy_error()
+                })?;
             if edit.value().to_string() != path {
-                WidgetryTextField::set_text_in_world(world, path_entity, &path)?;
+                WidgetryTextField::set_text_in_world(world, path_entity, &path).map_err(
+                    |error| {
+                        error
+                            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                                "file_dialog.text_field.set_text_in_world",
+                            ))
+                            .into_bevy_error()
+                    },
+                )?;
             }
         }
         world

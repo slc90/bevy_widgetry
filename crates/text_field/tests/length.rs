@@ -317,12 +317,14 @@ fn setter_preserves_legal_selection_clears_old_work_and_validates_at_command_exe
     assert_eq!(
         WidgetryTextField::set_text_in_world(app.world_mut(), invalid, "bad")
             .unwrap_err()
+            .into_bevy_error()
             .severity(),
         Severity::Error
     );
     assert_eq!(
         WidgetryReadOnlyTextField::text(app.world(), entity)
             .unwrap_err()
+            .into_bevy_error()
             .severity(),
         Severity::Error
     );

@@ -18,7 +18,13 @@ fn clear_slot_text(
         .find(|&entity| roots.contains(entity));
     commands.queue(move |world: &mut World| -> Result {
         let root = root.ok_or_else(|| BevyError::error("组合 TextField 根实体缺失"))?;
-        let changed = WidgetryTextField::set_text_in_world(world, root, "")?;
+        let changed = WidgetryTextField::set_text_in_world(world, root, "").map_err(|error| {
+            error
+                .with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
+                    "gallery.text_field.set_text_in_world",
+                ))
+                .into_bevy_error()
+        })?;
         info!(changed, "清空组合 TextField 正文");
         Ok(())
     });

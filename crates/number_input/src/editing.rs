@@ -143,17 +143,45 @@ pub(crate) fn project<T: WidgetryNumber>(
 pub(crate) fn text(world: &World, root: Entity) -> Result<String, BevyError> {
     let field = field(world, root)?;
     if world.get::<ReadOnly>(root).is_some() {
-        WidgetryReadOnlyTextField::text(world, field)
+        WidgetryReadOnlyTextField::text(world, field).map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("number_input.read_text")
+                        .field("root", root)
+                        .field("field", field),
+                )
+                .into_bevy_error()
+        })
     } else {
-        WidgetryTextField::text(world, field)
+        WidgetryTextField::text(world, field).map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("number_input.read_text")
+                        .field("root", root)
+                        .field("field", field),
+                )
+                .into_bevy_error()
+        })
     }
 }
 
 fn set_text(world: &mut World, root: Entity, field: Entity, text: String) -> Result {
     if world.get::<ReadOnly>(root).is_some() {
-        WidgetryReadOnlyTextField::set_text_in_world(world, field, text)?;
+        WidgetryReadOnlyTextField::set_text_in_world(world, field, text).map_err(|error| {
+            error
+                .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                    "number_input.text_field.set_text_in_world",
+                ))
+                .into_bevy_error()
+        })?;
     } else {
-        WidgetryTextField::set_text_in_world(world, field, text)?;
+        WidgetryTextField::set_text_in_world(world, field, text).map_err(|error| {
+            error
+                .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                    "number_input.text_field.set_text_in_world",
+                ))
+                .into_bevy_error()
+        })?;
     }
     Ok(())
 }
@@ -451,4 +479,51 @@ fn on_focus<T: WidgetryNumber>(
         }
         ensure_full::<T>(world, root)
     });
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod diagnostic_tests {
+    use super::*;
+    use bevy_widgetry_core::scene::spawn_scene;
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+
+    #[test]
+    fn text_field_failure_keeps_origin_and_number_input_context() {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(crate::WidgetryNumberInputPlugin);
+        app.set_error_handler(ErrorCapture::handler());
+        let root = spawn_scene(
+            app.world_mut(),
+            bsn! { @WidgetryNumberInput::<f64> { @value: {Some(5.0)} } },
+        )
+        .unwrap();
+        let editor = editor(app.world(), root).unwrap();
+        app.world_mut().entity_mut(editor).remove::<EditableText>();
+        let logs = LogCapture::default();
+        let errors = ErrorCapture::default();
+        logs.run(|| {
+            errors.run(|| {
+                app.world_mut()
+                    .commands()
+                    .queue(move |world: &mut World| text(world, root).map(|_| ()));
+                app.world_mut().flush();
+            })
+        });
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+        assert!(
+            diagnostic
+                .contexts()
+                .iter()
+                .any(|frame| frame.operation() == "number_input.read_text")
+        );
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert_eq!(logs.records().len(), 1);
+    }
 }

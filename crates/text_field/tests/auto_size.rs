@@ -278,12 +278,7 @@ fn fixed_root_height_conflict_reaches_the_host_once_and_recovers_when_auto() {
     let recovered = logs
         .records()
         .iter()
-        .filter(|record| {
-            record
-                .fields
-                .get("message")
-                .is_some_and(|message| message.contains("AutoSize") && message.contains("恢复"))
-        })
+        .filter(|record| record.matches_field("phase", "recovered"))
         .count();
     assert_eq!(recovered, 1);
     app.world_mut().get_mut::<Node>(root).unwrap().height = px(90);

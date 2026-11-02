@@ -2,6 +2,8 @@
 
 本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
 
+`diagnostics.rs` 保护普通 / 只读编辑器丢失时的领域分类、Root / editor / frame 与操作上下文、共享 origin 与源头一次 ERROR；计数输出失败发生在正文写入之后时，诊断报告真实阶段，Command 保留诊断进入宿主。缺少必需资源在写入前拒绝，正常截断与同值无错误。content Unit Test 区分 Parts 与 LengthLimit 缺失，原有 AutoSize / IME / Count / Style 测试继续覆盖正常契约。
+
 ## States
 
 - 普通 / ReadOnly、Enabled / Disabled、Hover / Focus。

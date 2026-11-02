@@ -9,6 +9,7 @@ bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_cursor = { path = "../cursor" }
 bevy_widgetry_theme = { path = "../theme" }
 bevy.workspace = true
+bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_internal_log = { path = "../internal_log" }
 

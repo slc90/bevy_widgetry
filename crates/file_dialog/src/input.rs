@@ -91,7 +91,14 @@ pub(crate) fn sync_filename(
         return Ok(());
     }
     if edit.value().to_string() != text {
-        bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(world, entity, &text)?;
+        bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(world, entity, &text)
+            .map_err(|error| {
+                error
+                    .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                        "file_dialog.text_field.set_text_in_world",
+                    ))
+                    .into_bevy_error()
+            })?;
     }
     world.entity_mut(entity).insert(projection);
     Ok(())

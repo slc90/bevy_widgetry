@@ -113,13 +113,13 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
     };
     bsn! {
         @root_reference(#TextFieldRoot)
-        template(move |_| crate::auto_size::Configuration::new(props.multiline, props.auto_size))
+        template(move |context| crate::auto_size::Configuration::new(props.multiline, props.auto_size).map_err(|error| error.with_context(bevy_widgetry_diagnostics::ErrorFrame::new("text_field.initialize").field("root", context.entity.id())).into_bevy_error()))
         TextFieldBase
         @{read_only}
         Parts { editor: #TextFieldEditor, frame: #TextFieldFrame }
         WidgetryInputTarget { target: #TextFieldEditor }
         template(move |_| Ok(crate::length::LengthLimit(props.max_length)))
-        template(move |_| props.colors.clone().initial())
+        template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
         Hovered(false)
         Node { flex_direction: FlexDirection::Column, min_width: px(0) }
         Children [

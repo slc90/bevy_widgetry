@@ -19,7 +19,14 @@ fn initialize(roots: Query<(Entity, &Parts), Added<Parts>>, mut commands: Comman
             if world.get::<Node>(decrease).is_none() || world.get::<Node>(increase).is_none() {
                 return Err(invalid("NumberInput step button is missing"));
             }
-            let frame = bevy_widgetry_text_field::internal::frame(world, field)?;
+            let frame =
+                bevy_widgetry_text_field::internal::frame(world, field).map_err(|error| {
+                    error
+                        .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                            "number_input.text_field.frame",
+                        ))
+                        .into_bevy_error()
+                })?;
             let mut node = world
                 .get_mut::<Node>(frame)
                 .ok_or_else(|| invalid("NumberInput text frame is missing"))?;

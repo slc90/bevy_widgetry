@@ -32,12 +32,18 @@ fn internal_frame_lookup_supports_both_variants_and_reports_invalid_targets() {
     let logs = bevy_widgetry_test_utils::LogCapture::default();
     let error =
         logs.run(|| bevy_widgetry_text_field::internal::frame(app.world(), invalid).unwrap_err());
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
     let frame = bevy_widgetry_text_field::internal::frame(app.world(), normal).unwrap();
     app.world_mut().entity_mut(frame).remove::<Node>();
     let error =
         logs.run(|| bevy_widgetry_text_field::internal::frame(app.world(), normal).unwrap_err());
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
     assert_eq!(logs.records().len(), 2);
     assert!(
         logs.records()

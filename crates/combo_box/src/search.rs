@@ -77,7 +77,13 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         let (_, field, _) = parts::<T>(world, root)
             .ok_or_else(|| update_error(root, "未启用搜索或搜索部件缺失"))?;
         Ok(WidgetryComboBoxSearchState {
-            query: WidgetryTextField::text(world, field)?,
+            query: WidgetryTextField::text(world, field).map_err(|error| {
+                error
+                    .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                        "combo_box.text_field.text",
+                    ))
+                    .into_bevy_error()
+            })?,
             matching_items: world
                 .get::<WidgetryListProjection>(list)
                 .map_or(0, WidgetryListProjection::len),
@@ -91,7 +97,13 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
 fn refresh<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result<(), BevyError> {
     let (_, field, list) =
         parts::<T>(world, root).ok_or_else(|| update_error(root, "搜索部件缺失"))?;
-    let query = WidgetryTextField::text(world, field)?;
+    let query = WidgetryTextField::text(world, field).map_err(|error| {
+        error
+            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                "combo_box.text_field.text",
+            ))
+            .into_bevy_error()
+    })?;
     let current = world
         .get::<SearchRuntime>(field)
         .ok_or_else(|| update_error(root, "搜索 Runtime 缺失"))?;
@@ -173,12 +185,26 @@ pub(crate) fn open<T: Send + Sync + 'static>(
     if world.get::<Visibility>(popup) != Some(&Visibility::Visible) {
         return Ok(());
     }
-    WidgetryTextField::set_text_in_world(world, field, "")?;
+    WidgetryTextField::set_text_in_world(world, field, "").map_err(|error| {
+        error
+            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                "combo_box.text_field.set_text_in_world",
+            ))
+            .into_bevy_error()
+    })?;
     refresh::<T>(world, root)?;
     // Resolve the fresh projection through the existing navigation entry point.
     bevy_widgetry_list_view::internal::set_active::<T, WidgetryListItemId>(world, list, None)?;
     navigate::<T>(world, list, KeyCode::Home)?;
-    WidgetryTextField::focus_in_world(world, field)
+    WidgetryTextField::focus_in_world(world, field).map_err(|error| {
+        error
+            .with_context(
+                bevy_widgetry_core::scene::ErrorFrame::new("combo_box.focus_search")
+                    .field("root", root)
+                    .field("field", field),
+            )
+            .into_bevy_error()
+    })
 }
 
 pub(crate) fn on_key<T: Send + Sync + 'static>(

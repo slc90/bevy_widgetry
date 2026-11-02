@@ -13,7 +13,7 @@ pub use editing::{
     WidgetryTableCellEditor, WidgetryTableEditRequestId, WidgetryTableEditRequested,
     WidgetryTableEditResult, WidgetryTableEditState, WidgetryTableEditing,
     WidgetryTableEditorAppExt, WidgetryTableEditorMode, WidgetryTableEditorPopup,
-    WidgetryTableEditorRegistry, WidgetryTableSubmitEdit,
+    WidgetryTableEditorReadError, WidgetryTableEditorRegistry, WidgetryTableSubmitEdit,
 };
 mod interaction;
 mod selection;

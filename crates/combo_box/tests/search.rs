@@ -119,6 +119,53 @@ fn selected(f: &Fixture) -> Option<WidgetryListItemId> {
 }
 
 #[test]
+fn search_read_keeps_the_text_field_diagnostic_at_the_command_boundary() {
+    use bevy_widgetry_core::input_target::WidgetryInputTarget;
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+    let mut f = fixture(3);
+    f.app.set_error_handler(ErrorCapture::handler());
+    let editor = f
+        .app
+        .world()
+        .get::<WidgetryInputTarget>(f.input)
+        .unwrap()
+        .target;
+    f.app
+        .world_mut()
+        .entity_mut(editor)
+        .remove::<bevy::text::EditableText>();
+    let logs = LogCapture::default();
+    let errors = ErrorCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            let root = f.root;
+            f.app
+                .world_mut()
+                .commands()
+                .queue(move |world: &mut World| {
+                    WidgetryComboBox::<String>::search_state(world, root).map(|_| ())
+                });
+            f.app.world_mut().flush();
+        })
+    });
+    let records = errors.take_records();
+    assert_eq!(records.len(), 1);
+    let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+    assert!(
+        diagnostic
+            .contexts()
+            .iter()
+            .any(|frame| frame.operation() == "combo_box.text_field.text")
+    );
+    assert_eq!(
+        logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+            .len(),
+        1
+    );
+    assert_eq!(logs.records().len(), 1);
+}
+
+#[test]
 fn search_rows_fill_popup_width_after_filtering_empty_recovery_and_resize() {
     use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 

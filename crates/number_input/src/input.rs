@@ -21,7 +21,13 @@ pub(crate) fn step<T: WidgetryNumber>(world: &mut World, root: Entity, increase:
     ensure_full::<T>(world, root)?;
     apply_pending(world, root)?;
     let field = field(world, root)?;
-    let text = WidgetryTextField::text(world, field)?;
+    let text = WidgetryTextField::text(world, field).map_err(|error| {
+        error
+            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                "number_input.text_field.text",
+            ))
+            .into_bevy_error()
+    })?;
     let state = state::<T>(world, root)?;
     let start = T::parse_decimal(&text)
         .filter(|v| state.accepts(*v))
@@ -37,7 +43,13 @@ pub(crate) fn step<T: WidgetryNumber>(world: &mut World, root: Entity, increase:
     {
         value = max;
     }
-    WidgetryTextField::focus_in_world(world, field)?;
+    WidgetryTextField::focus_in_world(world, field).map_err(|error| {
+        error
+            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                "number_input.text_field.focus_in_world",
+            ))
+            .into_bevy_error()
+    })?;
     WidgetryNumberInput::<T>::set_value_in_world(world, root, value)?;
     Ok(())
 }

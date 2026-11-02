@@ -1,36 +1,45 @@
 use crate::text_field::{
     Parts, TextFieldEditor, TextFieldFrame, WidgetryTextFieldPrefix, WidgetryTextFieldSuffix,
 };
+use crate::{
+    TextFieldError, TextFieldFailure,
+    error::{failure, missing},
+};
 use bevy::{
     prelude::*,
     text::{EditableTextFilter, FontHinting, LineHeight, TextLayout},
 };
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 
-pub fn frame(world: &World, root: Entity) -> Result<Entity, BevyError> {
-    world
+pub fn frame(world: &World, root: Entity) -> Result<Entity, TextFieldFailure> {
+    let parts = world
         .get::<Parts>(root)
-        .map(|parts| parts.frame)
-        .filter(|frame| world.get::<Node>(*frame).is_some())
-        .ok_or_else(|| {
-            widgetry_error!(?root, "TextField 内部框架实体缺失");
-            BevyError::error("TextField 内部框架实体缺失")
-        })
+        .ok_or_else(|| missing(root, root, "Parts", "text_field.frame"))?;
+    if world.get::<Node>(parts.frame).is_none() {
+        return Err(missing(root, parts.frame, "Node", "text_field.frame")
+            .with_context(ErrorFrame::new("text_field.frame").field("editor", parts.editor)));
+    }
+    Ok(parts.frame)
 }
 
-fn configure(world: &mut World, root: Entity) -> Result {
-    let parts = world.get::<Parts>(root).ok_or_else(|| {
-        widgetry_error!(?root, "TextField 部件映射缺失");
-        BevyError::error("TextField 部件映射缺失")
-    })?;
+fn configure(world: &mut World, root: Entity) -> Result<(), TextFieldFailure> {
+    let parts = world
+        .get::<Parts>(root)
+        .ok_or_else(|| missing(root, root, "Parts", "text_field.configure_slots"))?;
     let (frame, editor) = (parts.frame, parts.editor);
     let children = world
         .get::<Children>(frame)
         .map(|c| c.to_vec())
         .unwrap_or_default();
     if !children.contains(&editor) || world.get::<TextFieldEditor>(editor).is_none() {
-        widgetry_error!(?root, "TextField 内部编辑实体缺失");
-        return Err(BevyError::error("TextField 内部编辑实体缺失"));
+        return Err(failure(
+            TextFieldError::InvalidEditorMapping {
+                root,
+                frame,
+                editor,
+            },
+            ErrorFrame::new("text_field.configure_slots"),
+        ));
     }
     let mut prefix = None;
     let mut suffix = None;
@@ -41,13 +50,15 @@ fn configure(world: &mut World, root: Entity) -> Result {
             || (is_prefix && prefix.replace(child).is_some())
             || (is_suffix && suffix.replace(child).is_some())
         {
-            widgetry_error!(
-                ?root,
-                ?child,
-                "TextField 内容必须是唯一的 Prefix 或 Suffix 容器"
-            );
-            return Err(BevyError::error(
-                "TextField 内容必须是唯一的 Prefix 或 Suffix 容器",
+            return Err(failure(
+                TextFieldError::InvalidSlots {
+                    root,
+                    frame,
+                    child,
+                    prefix: is_prefix,
+                    suffix: is_suffix,
+                },
+                ErrorFrame::new("text_field.configure_slots"),
             ));
         }
     }
@@ -97,24 +108,34 @@ pub(crate) fn configure_slots(
         }
     }
     for root in roots {
-        commands.queue(move |world: &mut World| configure(world, root));
+        commands.queue(move |world: &mut World| {
+            configure(world, root).map_err(|error| error.into_bevy_error())
+        });
     }
 }
 
-fn projection_target(world: &mut World, root: Entity, editor: Entity) -> Result<bool> {
+fn projection_target(
+    world: &mut World,
+    root: Entity,
+    editor: Entity,
+) -> Result<bool, TextFieldFailure> {
     if world.get_entity(root).is_err() {
         return Ok(false);
     }
     if world.get::<TextFieldEditor>(editor).is_none() {
-        widgetry_error!(?root, ?editor, "TextField 配置投影目标缺失");
-        return Err(BevyError::error("TextField 配置投影目标缺失"));
+        return Err(missing(
+            root,
+            editor,
+            "TextFieldEditor",
+            "text_field.project_configuration",
+        ));
     }
     Ok(true)
 }
 
 fn project<T: Component>(commands: &mut Commands, root: Entity, editor: Entity, value: T) {
     commands.queue(move |world: &mut World| -> Result {
-        if projection_target(world, root, editor)? {
+        if projection_target(world, root, editor).map_err(|error| error.into_bevy_error())? {
             world.entity_mut(editor).insert(value);
         }
         Ok(())
@@ -123,7 +144,7 @@ fn project<T: Component>(commands: &mut Commands, root: Entity, editor: Entity, 
 
 fn remove_projection<T: Component>(commands: &mut Commands, root: Entity, editor: Entity) {
     commands.queue(move |world: &mut World| -> Result {
-        if projection_target(world, root, editor)? {
+        if projection_target(world, root, editor).map_err(|error| error.into_bevy_error())? {
             world.entity_mut(editor).remove::<T>();
         }
         Ok(())

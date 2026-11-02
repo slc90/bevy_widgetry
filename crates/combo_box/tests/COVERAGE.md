@@ -1,5 +1,7 @@
 # combo_box Integration Test Coverage
 
+`search.rs` 还验证内部 TextField 编辑器缺失时，Search API 与 Command 保留下层诊断和 ComboBox 操作上下文，只有一次源头 ERROR，失败进入宿主而非转为字符串或空查询。
+
 本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
 
 ## States

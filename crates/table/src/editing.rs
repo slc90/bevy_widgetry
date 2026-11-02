@@ -6,10 +6,41 @@ use bevy::picking::events::PointerPress;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry_core::scene::spawn_scene;
+use bevy_widgetry_diagnostics::{
+    ErrorFrame, WidgetryFailure,
+    bevy::{BoundaryFailure, WidgetryEcsError},
+};
 use bevy_widgetry_internal_log::widgetry_error;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+pub enum WidgetryTableEditorReadError {
+    Rejected(String),
+    Failed(BoundaryFailure),
+}
+
+impl std::fmt::Debug for WidgetryTableEditorReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rejected(reason) => f.debug_tuple("Rejected").field(reason).finish(),
+            Self::Failed(BoundaryFailure::Widgetry(error)) => {
+                f.debug_tuple("Failed").field(error).finish()
+            }
+            Self::Failed(BoundaryFailure::Native(error)) => {
+                f.debug_tuple("Native").field(error).finish()
+            }
+        }
+    }
+}
+
+impl WidgetryTableEditorReadError {
+    pub fn diagnostic<E: std::error::Error + Send + Sync + 'static>(
+        failure: WidgetryFailure<E>,
+    ) -> Self {
+        Self::Failed(BoundaryFailure::Widgetry(WidgetryEcsError::new(failure)))
+    }
+}
 
 #[derive(Component, Clone, Default, Reflect)]
 #[reflect(Component, from_reflect = false)]
@@ -38,7 +69,7 @@ pub enum WidgetryTableEditorMode {
 
 pub struct WidgetryTableCellEditor<V> {
     scene: Arc<dyn Fn(&V) -> Box<dyn SceneList> + Send + Sync>,
-    read: Arc<dyn Fn(&World, Entity) -> Result<V, String> + Send + Sync>,
+    read: Arc<dyn Fn(&World, Entity) -> Result<V, WidgetryTableEditorReadError> + Send + Sync>,
     mode: WidgetryTableEditorMode,
 }
 
@@ -46,7 +77,7 @@ impl<V> WidgetryTableCellEditor<V> {
     pub fn new<S: SceneList + 'static>(
         mode: WidgetryTableEditorMode,
         scene: impl Fn(&V) -> S + Send + Sync + 'static,
-        read: impl Fn(&World, Entity) -> Result<V, String> + Send + Sync + 'static,
+        read: impl Fn(&World, Entity) -> Result<V, WidgetryTableEditorReadError> + Send + Sync + 'static,
     ) -> Self {
         Self {
             scene: Arc::new(move |v| Box::new(scene(v))),
@@ -61,7 +92,11 @@ struct Editor {
     value_type: TypeId,
     scene:
         Arc<dyn Fn(&WidgetryTableCellValue) -> Result<Box<dyn SceneList>, BevyError> + Send + Sync>,
-    read: Arc<dyn Fn(&World, Entity) -> Result<WidgetryTableCellValue, String> + Send + Sync>,
+    read: Arc<
+        dyn Fn(&World, Entity) -> Result<WidgetryTableCellValue, WidgetryTableEditorReadError>
+            + Send
+            + Sync,
+    >,
     mode: WidgetryTableEditorMode,
 }
 
@@ -244,8 +279,11 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             .inspect_err(|error| widgetry_error!(?root, ?cell, %error, "Table 开始编辑失败"))
     }
     pub fn submit_edit(world: &mut World, root: Entity) -> Result<bool, BevyError> {
-        submit::<T>(world, root)
-            .inspect_err(|error| widgetry_error!(?root, %error, "Table 提交编辑失败"))
+        submit::<T>(world, root).inspect_err(|error| {
+            if !error.is::<WidgetryEcsError>() {
+                widgetry_error!(?root, %error, "Table 提交编辑失败");
+            }
+        })
     }
     pub fn cancel_edit(world: &mut World, root: Entity) -> Result<bool, BevyError> {
         if world.get::<Self>(root).is_none() {
@@ -504,9 +542,19 @@ fn submit<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result<b
     }
     let value = match (state.registration.read)(world, state.editor) {
         Ok(value) => value,
-        Err(error) => {
+        Err(WidgetryTableEditorReadError::Rejected(error)) => {
             feedback(world, root, Some(error))?;
             return Ok(false);
+        }
+        Err(WidgetryTableEditorReadError::Failed(error)) => {
+            return Err(error
+                .with_context(
+                    ErrorFrame::new("table.read_editor")
+                        .field("root", root)
+                        .field("editor", state.editor)
+                        .field("cell", format_args!("{:?}", state.cell)),
+                )
+                .into_bevy_error());
         }
     };
     let mut registry = required(world.get_resource_mut::<WidgetryTableEditorRegistry>())?;

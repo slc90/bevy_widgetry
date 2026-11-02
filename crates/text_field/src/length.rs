@@ -1,10 +1,14 @@
 use crate::text_field::TextFieldEditor;
+use crate::{
+    TextFieldError,
+    error::{failure, missing},
+};
 use bevy::{
     clipboard::Clipboard,
     prelude::*,
     text::{EditableText, EditableTextFilter, FontCx, LayoutCx, TextEdit},
 };
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_warn};
+use bevy_widgetry_diagnostics::{ErrorFrame, bevy::DiagnosticBatch};
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Component)]
@@ -63,13 +67,17 @@ pub(crate) fn initialize_limits(
     mut query: Query<(&TextFieldEditor, &mut EditableText), Added<TextFieldEditor>>,
     limits: Query<&LengthLimit>,
 ) -> Result {
-    let mut failure = None;
+    let mut failures = DiagnosticBatch::default();
     for (owner, mut edit) in &mut query {
         let Ok(limit) = limits.get(owner.root) else {
             edit.pending_edits.clear();
             edit.pending_paste = None;
-            widgetry_error!(root = ?owner.root, "TextField 长度配置缺失");
-            failure = Some(BevyError::error("TextField 长度配置缺失"));
+            failures.push(missing(
+                owner.root,
+                owner.root,
+                "LengthLimit",
+                "text_field.apply_length_limit",
+            ));
             continue;
         };
         edit.max_characters = None;
@@ -79,7 +87,7 @@ pub(crate) fn initialize_limits(
             edit.editor_mut().set_text(limited);
         }
     }
-    failure.map_or(Ok(()), Err)
+    failures.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub(crate) fn apply_limited_edits(
@@ -101,7 +109,7 @@ pub(crate) fn apply_limited_edits(
     else {
         return Ok(());
     };
-    let mut failure = None;
+    let mut failures = DiagnosticBatch::default();
     for (entity, owner, mut edit, filter) in &mut query {
         if edit.pending_edits.is_empty() && edit.pending_paste.is_none() {
             continue;
@@ -109,8 +117,12 @@ pub(crate) fn apply_limited_edits(
         let Ok(limit) = limits.get(owner.root) else {
             edit.pending_edits.clear();
             edit.pending_paste = None;
-            widgetry_error!(root = ?owner.root, "TextField 长度配置缺失");
-            failure = Some(BevyError::error("TextField 长度配置缺失"));
+            failures.push(missing(
+                owner.root,
+                owner.root,
+                "LengthLimit",
+                "text_field.apply_length_limit",
+            ));
             continue;
         };
         let Some(max) = limit.0 else { continue };
@@ -118,9 +130,13 @@ pub(crate) fn apply_limited_edits(
         if filter.is_some() {
             edit.pending_edits.clear();
             edit.pending_paste = None;
-            widgetry_error!(?entity, "max_length 不能与 EditableTextFilter 组合");
-            failure = Some(BevyError::error(
-                "max_length 不能与 EditableTextFilter 组合",
+            failures.push(failure(
+                TextFieldError::FilterConflict {
+                    root: owner.root,
+                    editor: entity,
+                    max,
+                },
+                ErrorFrame::new("text_field.apply_limited_edits"),
             ));
             continue;
         }
@@ -128,7 +144,7 @@ pub(crate) fn apply_limited_edits(
         if let Some(mut read) = edit.pending_paste.take() {
             match read.poll_result() {
                 Some(Ok(text)) => pending.push_front(TextEdit::Insert(text.into())),
-                Some(Err(error)) => widgetry_warn!(?entity, %error, "TextField 剪贴板读取失败"),
+                Some(Err(error)) => abandon_paste(owner.root, entity, error),
                 None => {
                     edit.pending_paste = Some(read);
                     edit.pending_edits.extend(pending);
@@ -148,7 +164,7 @@ pub(crate) fn apply_limited_edits(
                     match read.poll_result() {
                         Some(Ok(text)) => TextEdit::Insert(text.into()),
                         Some(Err(error)) => {
-                            widgetry_warn!(?entity, %error, "TextField 剪贴板读取失败");
+                            abandon_paste(owner.root, entity, error);
                             continue;
                         }
                         None => {
@@ -180,7 +196,22 @@ pub(crate) fn apply_limited_edits(
         }
         // The official apply_text_edits still observes the generation and emits TextEditChange.
     }
-    failure.map_or(Ok(()), Err)
+    failures.into_bevy_error().map_or(Ok(()), Err)
+}
+
+fn abandon_paste(root: Entity, editor: Entity, source: bevy::clipboard::ClipboardError) {
+    let error = failure(
+        TextFieldError::Clipboard {
+            root,
+            editor,
+            source,
+        },
+        ErrorFrame::new("text_field.read_clipboard"),
+    );
+    error.record_handled(
+        "abandon_paste",
+        "已丢弃本次失败的粘贴请求，继续处理其余编辑",
+    );
 }
 
 #[cfg(test)]

@@ -252,7 +252,8 @@ fn field(read_only: bool) -> Box<dyn Scene> {
 
 fn field_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
     if !apply {
-        return WidgetryTextFieldColorOverrides::clear_in_world(world, entity);
+        return WidgetryTextFieldColorOverrides::clear_in_world(world, entity)
+            .map_err(|error| error.into_bevy_error());
     }
     let mut colors = WidgetryTextFieldColorOverrides::default();
     if world.get::<WidgetryReadOnlyTextField>(entity).is_some() {
@@ -261,6 +262,7 @@ fn field_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, 
         colors.editable.focused.border = Some(PURPLE);
     }
     WidgetryTextFieldColorOverrides::set_in_world(world, entity, colors)
+        .map_err(|error| error.into_bevy_error())
 }
 
 pub(super) fn scroll_examples() -> impl Scene {

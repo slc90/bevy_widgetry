@@ -17,7 +17,11 @@ pub(crate) fn sync_colors(
     }
 }
 
-pub(crate) fn apply_color(world: &mut World, root: Entity, color: Color) -> Result {
+pub(crate) fn apply_color(
+    world: &mut World,
+    root: Entity,
+    color: Color,
+) -> Result<(), crate::TextFieldFailure> {
     let hint = world.get::<Children>(root).and_then(|children| {
         children
             .iter()
@@ -27,11 +31,7 @@ pub(crate) fn apply_color(world: &mut World, root: Entity, color: Color) -> Resu
         world
             .get_mut::<TextColor>(hint)
             .ok_or_else(|| {
-                bevy_widgetry_internal_log::widgetry_error!(
-                    ?root,
-                    "TextField HintText 颜色输出缺失"
-                );
-                BevyError::error("TextField HintText 颜色输出缺失")
+                crate::error::missing(root, hint, "TextColor", "text_field.apply_hint_color")
             })?
             .set_if_neq(TextColor(color));
     }
