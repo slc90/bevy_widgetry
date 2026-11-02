@@ -340,6 +340,9 @@ mod tests {
 
     #[test]
     fn exhausted_generation_retains_old_registration() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut registry = RendererRegistry::default();
         registry
             .register::<u32>(Arc::new(|_| {

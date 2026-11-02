@@ -205,6 +205,9 @@ mod tests {
 
     #[test]
     fn fixed_and_flexible_widths_share_one_ordered_geometry() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::<()>::default();
         let ids: Vec<_> = (0..3)
             .map(|_| {
@@ -254,6 +257,9 @@ mod tests {
 
     #[test]
     fn invalid_and_overflow_geometry_return_error() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         for value in [0.0, -1.0, f32::NAN, f32::INFINITY] {
             let layout = WidgetryTableLayout {
                 row_height: value,

@@ -154,7 +154,6 @@ pub mod tree {
 
 #[cfg(feature = "table")]
 pub mod table {
-    pub use bevy_widgetry_table::WidgetryTableSubmitEdit;
     pub use bevy_widgetry_table::{
         TableAxis, TableError, TableFailure, TableIdentity, TableLayoutFault, TableLayoutField,
         TableRegion, TableRendererFault, TableRendererRole, TableRuntimeFault, TableViewRejection,
@@ -171,6 +170,10 @@ pub mod table {
         WidgetryTableRowHeaders, WidgetryTableRowId, WidgetryTableSelection,
         WidgetryTableSelectionRange, WidgetryTableState, WidgetryTableStateColorOverrides,
         WidgetryTableStyle,
+    };
+    pub use bevy_widgetry_table::{
+        TableCopyCellFault, TableCopyFailure, TableCopyFault, WidgetryTableCopyFormatError,
+        WidgetryTableSubmitEdit,
     };
     pub use bevy_widgetry_table::{
         WidgetryTableCellEditor, WidgetryTableEditRequestId, WidgetryTableEditRequested,

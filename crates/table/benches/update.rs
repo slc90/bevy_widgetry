@@ -226,7 +226,10 @@ fn main() -> Result {
                         "column_reorder_commit" => reorder_columns(fixture)?,
                         "copy_all" => {
                             let text =
-                                WidgetryTable::<u32>::selection_tsv(app.world_mut(), fixture.root)?
+                                WidgetryTable::<u32>::selection_tsv(app.world_mut(), fixture.root)
+                                    .map_err(
+                                        bevy_widgetry_table::TableCopyFailure::into_bevy_error,
+                                    )?
                                     .ok_or_else(|| missing("TSV selection"))?;
                             if !text.starts_with("0/0\t")
                                 || !text.ends_with(&format!("{}/{}", rows - 1, columns - 1))

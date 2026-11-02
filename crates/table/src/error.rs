@@ -136,6 +136,9 @@ pub enum TableViewRejection {
 }
 #[derive(Debug)]
 pub enum TableError {
+    Copy {
+        fault: Box<crate::TableCopyFault>,
+    },
     Runtime {
         fault: TableRuntimeFault,
     },
@@ -192,6 +195,7 @@ pub enum TableError {
 impl fmt::Display for TableError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Copy { .. } => "Table 复制选区失败",
             Self::Runtime { .. } => "Table 运行结构或 renderer 失效",
             Self::InvalidColors { .. } => "Table 配色目标失效或属于托管部件",
             Self::Core { .. } => "Table 配色校验失败",
@@ -208,6 +212,7 @@ impl fmt::Display for TableError {
 impl Error for TableError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Copy { fault } => Some(fault.as_ref()),
             Self::Core { source } => Some(source.as_ref()),
             Self::Layout { fault } => Some(fault.as_ref()),
             _ => None,

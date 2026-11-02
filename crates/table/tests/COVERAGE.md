@@ -118,3 +118,8 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 - Body、ColumnHeaders、RowHeaders、FrozenBody 依次缺少ScrollPosition时，各部件保留自己的区域、实际Entity、新origin与源头ERROR，不因同名Component被前一处故障覆盖。
 
 - 导航Focus产生待执行Reveal时移除Body的ScrollPosition，交互同步和清理后普通投影保持同一Body区域及诊断origin。列拖拽读取Body的ComputedNode/ScrollPosition也沿用该区域现场。
+
+## 复制诊断
+
+- `copy_diagnostics.rs` 保护受管格式化回调的自定义cause、原始origin/ID、源头一次ERROR及逐格View/Source/Row/Column上下文；普通外部错误可在完整原因链downcast，重复独立请求产生不同ID。排队复制经真实Command/Handler保留同一诊断与Severity::Error，不把传播记录为已处理。
+- `clipboard.rs` 保留实际系统剪贴板的原子写入、guard、格式化/类型/缺失拒绝，以及制表符/引号/Unicode/换行回归。源码Unit Test保护带引号字段/分隔符的容量边界、原生写入失败的ClipboardError与字节规模，以及零次/一次提交边界；写入失败模拟使用与真实提交相同的原生结果适配，不将其视为OS锁竞争的验证。

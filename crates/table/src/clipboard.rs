@@ -1,27 +1,123 @@
+use crate::runtime_error::Site;
 use crate::*;
 use bevy::clipboard::{Clipboard, ClipboardPlugin};
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::sync::Arc;
+pub type TableCopyFailure = bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+
+#[derive(Debug)]
+pub enum WidgetryTableCopyFormatError {
+    Diagnostic(TableCopyFailure),
+    External(Box<dyn std::error::Error + Send + Sync>),
+}
+impl WidgetryTableCopyFormatError {
+    pub fn diagnostic<E: std::error::Error + Send + Sync + 'static>(
+        failure: bevy_widgetry_diagnostics::WidgetryFailure<E>,
+    ) -> Self {
+        Self::Diagnostic(TableCopyFailure::new(failure))
+    }
+    pub fn external(error: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self::External(Box::new(error))
+    }
+}
+
+#[derive(Debug)]
+pub enum TableCopyCellFault {
+    RowUnavailable,
+    ColumnUnavailable,
+    ValueUnavailable,
+    MissingFormatter {
+        actual: TypeId,
+    },
+    FormatterType {
+        actual: TypeId,
+        expected: TypeId,
+    },
+    Callback {
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
+#[derive(Debug)]
+pub enum TableCopyFault {
+    MissingPart {
+        entity: Entity,
+        component: &'static str,
+    },
+    ColumnIndex {
+        index: usize,
+        len: usize,
+    },
+    Cell {
+        cell: WidgetryTableCell,
+        reason: TableCopyCellFault,
+    },
+    LengthOverflow {
+        field_len: usize,
+        output_len: usize,
+        quoted: bool,
+        separator: Option<char>,
+    },
+    Reserve {
+        field_len: usize,
+        output_len: usize,
+        additional: usize,
+        source: std::collections::TryReserveError,
+    },
+    Clipboard {
+        bytes: usize,
+        source: bevy::clipboard::ClipboardError,
+    },
+}
+impl std::fmt::Display for TableCopyFault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::MissingPart { .. } => "Table 复制所需部件失效",
+            Self::ColumnIndex { .. } => "Table 复制列位置失效",
+            Self::Cell { .. } => "Table 复制单元格取值或格式化失败",
+            Self::LengthOverflow { .. } => "Table TSV 字段长度溢出",
+            Self::Reserve { .. } => "Table TSV 分配容量失败",
+            Self::Clipboard { .. } => "原生剪贴板写入失败",
+        })
+    }
+}
+impl std::error::Error for TableCopyFault {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Cell {
+                reason: TableCopyCellFault::Callback { source },
+                ..
+            } => Some(source.as_ref()),
+            Self::Reserve { source, .. } => Some(source),
+            Self::Clipboard { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
 
 pub struct WidgetryTableCopyFormatter<V>(
-    Arc<dyn Fn(&V) -> Result<String, BevyError> + Send + Sync>,
+    Arc<dyn Fn(&V) -> Result<String, WidgetryTableCopyFormatError> + Send + Sync>,
 );
 
 impl<V> WidgetryTableCopyFormatter<V> {
-    pub fn new(format: impl Fn(&V) -> Result<String, BevyError> + Send + Sync + 'static) -> Self {
+    pub fn new(
+        format: impl Fn(&V) -> Result<String, WidgetryTableCopyFormatError> + Send + Sync + 'static,
+    ) -> Self {
         Self(Arc::new(format))
     }
 }
 
 struct Formatter {
     value_type: TypeId,
-    format: Arc<dyn Fn(&WidgetryTableCellValue) -> Result<String, BevyError> + Send + Sync>,
+    format: Arc<
+        dyn Fn(&WidgetryTableCellValue) -> Option<Result<String, WidgetryTableCopyFormatError>>
+            + Send
+            + Sync,
+    >,
 }
 
 impl<V: Send + Sync + 'static> From<WidgetryTableCopyFormatter<V>> for Formatter {
@@ -29,10 +125,7 @@ impl<V: Send + Sync + 'static> From<WidgetryTableCopyFormatter<V>> for Formatter
         Self {
             value_type: TypeId::of::<V>(),
             format: Arc::new(move |value| {
-                let value = value
-                    .downcast_ref::<V>()
-                    .ok_or_else(|| BevyError::error("Table copy formatter type mismatch"))?;
-                (formatter.0)(value)
+                value.downcast_ref::<V>().map(|value| (formatter.0)(value))
             }),
         }
     }
@@ -110,63 +203,91 @@ impl WidgetryTableCopyAppExt for App {
 }
 
 impl<T: Send + Sync + 'static> WidgetryTable<T> {
-    pub fn selection_tsv(world: &mut World, root: Entity) -> Result<Option<String>, BevyError> {
-        prepare::<T>(world, root).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root, %error, "Table TSV 生成失败");
-            }
-        })
+    pub fn selection_tsv(
+        world: &mut World,
+        root: Entity,
+    ) -> Result<Option<String>, TableCopyFailure> {
+        prepare::<T>(world, root)
     }
-
-    pub fn copy_selection(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+    pub fn copy_selection(world: &mut World, root: Entity) -> Result<bool, TableCopyFailure> {
+        let site = Site::view::<T>(world, root);
         commit_copy(prepare::<T>(world, root), |text| {
-            world
-                .get_resource_mut::<Clipboard>()
-                .ok_or_else(|| BevyError::error("Table copy requires Clipboard"))?
-                .set_text(text)
-                .map_err(BevyError::error)
-        })
-        .inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root, %error, "Table 复制选区失败");
-            }
+            let mut clipboard = copy_required(
+                world.get_resource_mut::<Clipboard>(),
+                site,
+                root,
+                "Clipboard",
+            )?;
+            write_clipboard(text, site, |text| clipboard.set_text(text))
         })
     }
-
     pub fn queue_copy_selection(commands: &mut Commands, root: Entity) {
-        commands.queue(move |world: &mut World| Self::copy_selection(world, root).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::copy_selection(world, root)
+                .map(|_| ())
+                .map_err(TableCopyFailure::into_bevy_error)
+        });
     }
 }
-
+#[track_caller]
+fn copy_failure(fault: TableCopyFault, site: Site) -> TableCopyFailure {
+    let frame = site
+        .frame("table.copy")
+        .field("failure", format_args!("{fault:?}"));
+    TableCopyFailure::new(TableFailure::new(
+        TableError::Copy {
+            fault: Box::new(fault),
+        },
+        frame,
+    ))
+}
+#[track_caller]
+fn copy_required<V>(
+    value: Option<V>,
+    site: Site,
+    entity: Entity,
+    component: &'static str,
+) -> Result<V, TableCopyFailure> {
+    value.ok_or_else(|| copy_failure(TableCopyFault::MissingPart { entity, component }, site))
+}
 fn prepare<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
-) -> Result<Option<String>, BevyError> {
-    let source = world
-        .get::<WidgetryTable<T>>(root)
-        .ok_or_else(|| BevyError::error("Table copy requires a live matching View"))?
-        .source();
+) -> Result<Option<String>, TableCopyFailure> {
+    let site = Site::view::<T>(world, root);
+    let source = copy_required(
+        world.get::<WidgetryTable<T>>(root),
+        site,
+        root,
+        "WidgetryTable<T>",
+    )?
+    .source();
     if world.get::<InteractionDisabled>(root).is_some()
         || world.get::<WidgetryTableEditState>(root).is_some()
     {
         return Ok(None);
     }
-    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
-    let model = world
-        .get::<WidgetryTableModel<T>>(source)
-        .ok_or_else(|| BevyError::error("Table copy requires a live matching Model"))?;
-    let view = world
-        .get::<WidgetryTableViewState>(root)
-        .ok_or_else(|| BevyError::error("Table copy requires a View projection"))?;
-    let state = world
-        .get::<WidgetryTableState>(root)
-        .ok_or_else(|| BevyError::error("Table copy requires selection state"))?;
+    crate::view_state::refresh::<T>(world, root).map_err(|failure| {
+        TableCopyFailure::new(failure).with_context(site.frame("table.copy.projection"))
+    })?;
+    let model = copy_required(
+        world.get::<WidgetryTableModel<T>>(source),
+        site,
+        source,
+        "WidgetryTableModel<T>",
+    )?;
+    let view = copy_required(
+        world.get::<WidgetryTableViewState>(root),
+        site,
+        root,
+        "WidgetryTableViewState",
+    )?;
+    let state = copy_required(
+        world.get::<WidgetryTableState>(root),
+        site,
+        root,
+        "WidgetryTableState",
+    )?;
     if !crate::interaction::valid(model, view, state.selection()) {
         return Ok(None);
     }
@@ -179,9 +300,16 @@ fn prepare<T: Send + Sync + 'static>(
     let rows = view.ordered_rows()[range.rows()].to_vec();
     let columns = range
         .columns()
-        .map(|i| {
-            view.column_id(i)
-                .ok_or_else(|| BevyError::error("Table copy column is unavailable"))
+        .map(|index| {
+            view.column_id(index).ok_or_else(|| {
+                copy_failure(
+                    TableCopyFault::ColumnIndex {
+                        index,
+                        len: view.ordered_columns().len(),
+                    },
+                    site,
+                )
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
     let registry = world.get_resource::<WidgetryTableCopyFormatterRegistry>();
@@ -189,32 +317,48 @@ fn prepare<T: Send + Sync + 'static>(
     for (r, row) in rows.into_iter().enumerate() {
         for (c, column) in columns.iter().copied().enumerate() {
             let cell = WidgetryTableCell { row, column };
-            let text = (|| {
-                let ri = model
-                    .row_index(row)
-                    .ok_or_else(|| BevyError::error("Row is unavailable"))?;
-                let ci = model
-                    .column_index(column)
-                    .ok_or_else(|| BevyError::error("Column is unavailable"))?;
-                let value = model
-                    .cell_at(ri, ci)
-                    .ok_or_else(|| BevyError::error("Cell value is unavailable"))?;
-                let formatter = registry
-                    .and_then(|registry| {
-                        registry
-                            .columns
-                            .get(&(source, column))
-                            .or_else(|| registry.defaults.get(&value.type_id()))
-                    })
-                    .ok_or_else(|| BevyError::error("No registered Table copy formatter"))?;
-                if formatter.value_type != value.type_id() {
-                    return Err(BevyError::error("Table copy formatter type mismatch"));
+            let location = site.at(TableRegion::Cell, Some(row), Some(column));
+            let fail = |reason| copy_failure(TableCopyFault::Cell { cell, reason }, location);
+            let ri = model
+                .row_index(row)
+                .ok_or_else(|| fail(TableCopyCellFault::RowUnavailable))?;
+            let ci = model
+                .column_index(column)
+                .ok_or_else(|| fail(TableCopyCellFault::ColumnUnavailable))?;
+            let value = model
+                .cell_at(ri, ci)
+                .ok_or_else(|| fail(TableCopyCellFault::ValueUnavailable))?;
+            let actual = value.type_id();
+            let formatter = registry
+                .and_then(|registry| {
+                    registry
+                        .columns
+                        .get(&(source, column))
+                        .or_else(|| registry.defaults.get(&actual))
+                })
+                .ok_or_else(|| fail(TableCopyCellFault::MissingFormatter { actual }))?;
+            let mismatch = || {
+                fail(TableCopyCellFault::FormatterType {
+                    actual,
+                    expected: formatter.value_type,
+                })
+            };
+            if formatter.value_type != actual {
+                return Err(mismatch());
+            }
+            let text = match (formatter.format)(&value).ok_or_else(mismatch)? {
+                Ok(text) => text,
+                Err(WidgetryTableCopyFormatError::Diagnostic(error)) => {
+                    return Err(error.with_context(
+                        location
+                            .frame("table.copy.formatter")
+                            .field("value_type", format_args!("{actual:?}")),
+                    ));
                 }
-                (formatter.format)(&value)
-            })()
-            .map_err(|error: BevyError| {
-                BevyError::error(format!("Table copy cell {cell:?}: {error}"))
-            })?;
+                Err(WidgetryTableCopyFormatError::External(source)) => {
+                    return Err(fail(TableCopyCellFault::Callback { source }));
+                }
+            };
             let separator = if c > 0 {
                 Some('\t')
             } else if r > 0 {
@@ -223,24 +367,35 @@ fn prepare<T: Send + Sync + 'static>(
                 None
             };
             append_field(&mut output, &text, separator)
-                .map_err(|error| BevyError::error(format!("Table copy cell {cell:?}: {error}")))?;
+                .map_err(|fault| copy_failure(fault, location))?;
         }
     }
     Ok(Some(output))
 }
 
-fn append_field(output: &mut String, text: &str, separator: Option<char>) -> Result<(), BevyError> {
+fn append_field(
+    output: &mut String,
+    text: &str,
+    separator: Option<char>,
+) -> Result<(), TableCopyFault> {
     let quoted = text.contains(['\t', '\r', '\n', '"']);
-    let extra = if quoted {
-        text.bytes().filter(|&b| b == b'"').count().checked_add(2)
-    } else {
-        Some(0)
-    };
-    let additional = extra
-        .and_then(|extra| text.len().checked_add(extra))
-        .and_then(|len| len.checked_add(usize::from(separator.is_some())))
-        .ok_or_else(|| BevyError::error("Table TSV field length overflow"))?;
-    output.try_reserve(additional).map_err(BevyError::error)?;
+    let quote_count = quoted.then(|| text.bytes().filter(|&b| b == b'"').count());
+    let additional = field_length(text.len(), quote_count, separator.is_some()).ok_or(
+        TableCopyFault::LengthOverflow {
+            field_len: text.len(),
+            output_len: output.len(),
+            quoted,
+            separator,
+        },
+    )?;
+    output
+        .try_reserve(additional)
+        .map_err(|source| TableCopyFault::Reserve {
+            field_len: text.len(),
+            output_len: output.len(),
+            additional,
+            source,
+        })?;
     if let Some(separator) = separator {
         output.push(separator);
     }
@@ -263,10 +418,35 @@ fn append_field(output: &mut String, text: &str, separator: Option<char>) -> Res
     Ok(())
 }
 
+fn field_length(field_len: usize, quote_count: Option<usize>, separator: bool) -> Option<usize> {
+    let extra = match quote_count {
+        Some(count) => count.checked_add(2)?,
+        None => 0,
+    };
+    field_len
+        .checked_add(extra)?
+        .checked_add(usize::from(separator))
+}
+fn write_clipboard(
+    text: &str,
+    site: Site,
+    write: impl FnOnce(&str) -> Result<(), bevy::clipboard::ClipboardError>,
+) -> Result<(), TableCopyFailure> {
+    write(text).map_err(|source| {
+        copy_failure(
+            TableCopyFault::Clipboard {
+                bytes: text.len(),
+                source,
+            },
+            site,
+        )
+    })
+}
+
 fn commit_copy(
-    text: Result<Option<String>, BevyError>,
-    write: impl FnOnce(&str) -> Result<(), BevyError>,
-) -> Result<bool, BevyError> {
+    text: Result<Option<String>, TableCopyFailure>,
+    write: impl FnOnce(&str) -> Result<(), TableCopyFailure>,
+) -> Result<bool, TableCopyFailure> {
     let Some(text) = text? else {
         return Ok(false);
     };
@@ -314,13 +494,92 @@ mod tests {
     use super::*;
 
     #[test]
+    fn serialized_field_lengths_check_quotes_separator_and_capacity_boundaries() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        assert_eq!(field_length(0, None, false), Some(0));
+        assert_eq!(field_length(4, Some(2), true), Some(9));
+        assert_eq!(field_length(usize::MAX, None, false), Some(usize::MAX));
+        assert_eq!(field_length(usize::MAX, None, true), None);
+        assert_eq!(
+            field_length(usize::MAX - 2, Some(0), false),
+            Some(usize::MAX)
+        );
+        assert_eq!(field_length(usize::MAX - 1, Some(0), false), None);
+        assert_eq!(field_length(1, Some(usize::MAX), false), None);
+    }
+
+    #[test]
+    fn native_write_failure_keeps_clipboard_source_and_output_size() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        let site = Site::view::<u32>(&World::new(), Entity::PLACEHOLDER);
+        let text = String::from("private TSV 内容");
+        let bytes = text.len();
+        let error = logs
+            .run(|| {
+                commit_copy(Ok(Some(text)), |text| {
+                    write_clipboard(text, site, |_| {
+                        Err(bevy::clipboard::ClipboardError::ClipboardOccupied)
+                    })
+                })
+            })
+            .unwrap_err();
+        let diagnostic = error.diagnostics().next().unwrap();
+        let mut cause = diagnostic.source();
+        let mut found = false;
+        while let Some(source) = cause {
+            if let Some(TableCopyFault::Clipboard {
+                bytes: actual,
+                source: bevy::clipboard::ClipboardError::ClipboardOccupied,
+            }) = source.downcast_ref::<TableCopyFault>()
+            {
+                assert_eq!(*actual, bytes);
+                found = true;
+            }
+            if let Some(native) = source.downcast_ref::<bevy::clipboard::ClipboardError>() {
+                assert!(matches!(
+                    native,
+                    bevy::clipboard::ClipboardError::ClipboardOccupied
+                ));
+            }
+            cause = source.source();
+        }
+        assert!(found);
+        assert_eq!(
+            logs.diagnostic_records(
+                diagnostic.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
+        );
+        assert!(!format!("{error}").contains("private TSV"));
+    }
+
+    #[test]
     fn clipboard_commit_is_called_once_only_after_complete_success() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut writes = Vec::new();
         assert!(
-            commit_copy(Err(BevyError::error("last cell failed")), |text| {
-                writes.push(text.to_owned());
-                Ok(())
-            })
+            commit_copy(
+                Err(copy_failure(
+                    TableCopyFault::MissingPart {
+                        entity: Entity::PLACEHOLDER,
+                        component: "last cell"
+                    },
+                    Site::view::<u32>(&World::new(), Entity::PLACEHOLDER)
+                )),
+                |text| {
+                    writes.push(text.to_owned());
+                    Ok(())
+                }
+            )
             .is_err()
         );
         assert!(

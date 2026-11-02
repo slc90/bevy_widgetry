@@ -485,6 +485,9 @@ mod tests {
 
     #[test]
     fn row_identity_is_unique_and_axes_are_independent() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::default();
         let a = model.push_row(10).unwrap();
         let b = model.push_row(20).unwrap();
@@ -495,6 +498,9 @@ mod tests {
 
     #[test]
     fn axis_lookups_follow_mutations_and_reject_removed_ids() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::<u32>::default();
         let check = |model: &WidgetryTableModel<u32>| {
             assert_eq!(model.row_indices.len(), model.row_count());
@@ -554,6 +560,9 @@ mod tests {
 
     #[test]
     fn pairs_project_current_values_after_independent_axis_changes() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::default();
         let a = model.push_row(("Alice".to_owned(), 21)).unwrap();
         let b = model.insert_row(0, ("Bob".to_owned(), 30)).unwrap();
@@ -601,6 +610,9 @@ mod tests {
 
     #[test]
     fn stale_pairs_never_alias_reinserted_values_and_empty_axes_stay_independent() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::default();
         let old_row = model.push_row(("A".into(), 1)).unwrap();
         let old_col = model.push_column(column(Field::Age)).unwrap();
@@ -634,6 +646,9 @@ mod tests {
 
     #[test]
     fn invalid_operations_preserve_order_and_counters() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::<(String, u32)>::default();
         assert!(!model.move_row(0, 0));
         assert!(!model.move_column(0, 0));
@@ -678,6 +693,9 @@ mod tests {
 
     #[test]
     fn exhausted_counters_return_logged_errors_without_mutation() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::default();
         let row = model.push_row(("A".into(), 1)).unwrap();
         let col = model.push_column(column(Field::Age)).unwrap();
@@ -752,6 +770,9 @@ mod tests {
     }
     #[test]
     fn insertion_failure_enters_managed_boundary_with_actual_index() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::<u32>::default();
         let error = model.insert_row(1, 7).unwrap_err();
         assert!(matches!(

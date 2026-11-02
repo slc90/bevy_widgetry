@@ -64,6 +64,9 @@ mod tests {
 
     #[test]
     fn boundaries_use_actual_column_geometry() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryTableModel::<()>::default();
         let ids: Vec<_> = (0..3)
             .map(|_| {

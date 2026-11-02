@@ -10,7 +10,8 @@ mod clipboard;
 mod column_reorder;
 mod runtime_error;
 pub use clipboard::{
-    WidgetryTableCopyAppExt, WidgetryTableCopyFormatter, WidgetryTableCopyFormatterRegistry,
+    TableCopyCellFault, TableCopyFailure, TableCopyFault, WidgetryTableCopyAppExt,
+    WidgetryTableCopyFormatError, WidgetryTableCopyFormatter, WidgetryTableCopyFormatterRegistry,
 };
 pub use column_reorder::WidgetryTableColumnReordering;
 mod editing;
@@ -63,3 +64,7 @@ pub use view::{
 
 mod colors;
 pub use colors::*;
+
+// Tracing callsite interest is shared, so concurrent LogCapture subscribers can lose source events.
+#[cfg(test)]
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

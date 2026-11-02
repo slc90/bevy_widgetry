@@ -434,6 +434,9 @@ mod tests {
 
     #[test]
     fn manual_column_order_retains_identity_and_appends_new_schema_columns() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut app = bevy_widgetry_test_utils::scene_app();
         let world = app.world_mut();
         let mut model = WidgetryTableModel::<u32>::default();

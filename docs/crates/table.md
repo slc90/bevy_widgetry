@@ -51,11 +51,11 @@ Enter / 双击进入编辑，单行 Enter、多行 Ctrl+Enter 提交。Esc 或�
 
 ## TSV 复制
 
-`WidgetryTableCopyFormatter<V>::new` 接受 `&V -> Result<String, BevyError>`。`WidgetryTableCopyAppExt` 注册值类型默认或 `(Source, ColumnId)` 列覆盖，覆盖优先；类型不匹配明确失败，不回退到 UI 文本或 Debug。运行时 `WidgetryTableCopyFormatterRegistry` 可注册、移除类型默认或清理 Source 列覆盖，与 Renderer/Editor 注册表独立。
+`WidgetryTableCopyFormatter<V>::new` 接受 `&V -> Result<String, WidgetryTableCopyFormatError>`。`diagnostic(failure)` 承接受管领域失败并保留原始 ID、origin 和原因链；`external(error)` 保留标准外部错误的具体类型。格式化失败统一补充 View / Model Source / 稳定 Cell / 值类型上下文，不通过字符串重新包装。`WidgetryTableCopyAppExt` 注册值类型默认或 `(Source, ColumnId)` 列覆盖，覆盖优先；类型不匹配明确失败，不回退到 UI 文本或 Debug。运行时 `WidgetryTableCopyFormatterRegistry` 可注册、移除类型默认或清理 Source 列覆盖，与 Renderer/Editor 注册表独立。
 
-`selection_tsv(world, view)` 返回当前完整逻辑选区的 `Option<String>`，先刷新行投影，再冻结稳定 Row/Column ID 序列，以 Model 强类型值生成 TSV。顺序跟随当前 View，包含离屏 Cell，排除过滤行，不含列标题、行号、Corner 或图标。单格、整行列、连续范围和 All 共用同一路径。字段含 Tab、CR/LF 或双引号时加引号并将内部双引号加倍，不修剪或改写原始内容。
+`selection_tsv(world, view)` 返回 `Result<Option<String>, TableCopyFailure>`，其中成功值是当前完整逻辑选区的文本；先刷新行投影，再冻结稳定 Row/Column ID 序列，以 Model 强类型值生成 TSV。顺序跟随当前 View，包含离屏 Cell，排除过滤行，不含列标题、行号、Corner 或图标。单格、整行列、连续范围和 All 共用同一路径。字段含 Tab、CR/LF 或双引号时加引号并将内部双引号加倍，不修剪或改写原始内容。
 
-`copy_selection` / `queue_copy_selection` 在所有字段成功后一次写入 Bevy `Clipboard`，成功返回 true；无选区、空投影、根 Disabled 或编辑期间返回 false 且不写入。普通 Table 焦点的 Ctrl+C 调用相同入口；Editor 内快捷键归输入控件所有。任意缺失格式化器、错误类型、格式化/取值/序列化失败都会整体拒绝，返回 Error 并记录 View 和可定位的稳定 Cell 身份，保留旧剪贴板。系统写入失败也明确返回 Error。TablePlugin 自动安装 Bevy ClipboardPlugin。
+`copy_selection` / `queue_copy_selection` 在所有字段成功后一次写入 Bevy `Clipboard`，成功返回 true；无选区、空投影、根 Disabled 或编辑期间返回 false 且不写入。普通 Table 焦点的 Ctrl+C 调用相同入口；Editor 内快捷键归输入控件所有。任意缺失格式化器、错误类型、格式化/取值/序列化失败都会整体拒绝，返回 Error 并记录 View 和可定位的稳定 Cell 身份，保留旧剪贴板。`copy_selection` 同样返回 `TableCopyFailure`；自身失败由 `TableError::Copy` / `TableCopyFault` 区分缺失部件、失效行列和值、缺少或错误类型的 formatter、字段长度溢出和分配失败。原生写入失败保留 `ClipboardError` 和输出字节数，不在诊断中写入整段 TSV。Queue / Keyboard 边界显式转换并以 Severity::Error 交给宿主。TablePlugin 自动安装 Bevy ClipboardPlugin。
 
 同帧投影清空、过滤或 Model 删除端点造成选区失效时，复制按空选区处理，不依赖下一帧自动修复；已成功解析选区内的真实取值或格式化失败仍整体报错。
 

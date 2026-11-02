@@ -717,6 +717,9 @@ mod tests {
 
     #[test]
     fn stable_tables_skip_palette_and_visible_region_style_work() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (mut app, _, _) = fixture();
         STYLE_WORK.with_borrow_mut(|work| {
             work.0.clear();
@@ -733,6 +736,9 @@ mod tests {
 
     #[test]
     fn local_hover_and_disabled_removal_only_recolor_the_target() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (mut app, _, roots) = fixture();
         let cell = *app
             .world()
@@ -788,6 +794,9 @@ mod tests {
 
     #[test]
     fn selection_regions_focus_and_style_geometry_use_their_own_invalidation() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (mut app, source, roots) = fixture();
         let row = app
             .world()
@@ -884,6 +893,9 @@ mod tests {
 
     #[test]
     fn palette_and_output_failures_recover_without_repeated_diagnostics() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy::ecs::{error::Severity, schedule::SingleThreadedExecutor};
         use bevy::log::tracing::Level;
         use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, switch_theme};

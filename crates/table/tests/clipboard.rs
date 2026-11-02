@@ -249,11 +249,13 @@ fn formatter_overrides_preserve_fields_and_fail_with_stable_cell_identity() {
         source,
         column,
         WidgetryTableCopyFormatter::new(|_: &String| {
-            Err(BevyError::error("business formatting failure"))
+            Err(WidgetryTableCopyFormatError::external(
+                std::io::Error::other("business formatting failure"),
+            ))
         }),
     );
     let error = WidgetryTable::<u32>::selection_tsv(app.world_mut(), root).unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(error.diagnostics().next().is_some());
     let text = error.to_string();
     assert!(
         text.contains(&format!("{row:?}"))
@@ -296,7 +298,9 @@ fn copy_is_atomic_for_missing_mismatched_and_failing_formatters_and_invalid_sour
                     source,
                     column,
                     WidgetryTableCopyFormatter::new(|_: &String| {
-                        Err(BevyError::from("rejected format"))
+                        Err(WidgetryTableCopyFormatError::external(
+                            std::io::Error::other("rejected format"),
+                        ))
                     }),
                 );
             }
@@ -305,7 +309,29 @@ fn copy_is_atomic_for_missing_mismatched_and_failing_formatters_and_invalid_sour
         let error = capture
             .run(|| WidgetryTable::<u32>::copy_selection(app.world_mut(), root))
             .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        let mut cause = error.diagnostics().next().unwrap().source();
+        let mut classified = false;
+        while let Some(source) = cause {
+            if let Some(TableCopyFault::Cell { reason, .. }) =
+                source.downcast_ref::<TableCopyFault>()
+            {
+                classified = match (step, reason) {
+                    (0, TableCopyCellFault::MissingFormatter { actual }) => {
+                        *actual == std::any::TypeId::of::<String>()
+                    }
+                    (1, TableCopyCellFault::FormatterType { actual, expected }) => {
+                        *actual == std::any::TypeId::of::<String>()
+                            && *expected == std::any::TypeId::of::<bool>()
+                    }
+                    (2, TableCopyCellFault::Callback { source }) => {
+                        source.downcast_ref::<std::io::Error>().is_some()
+                    }
+                    _ => false,
+                };
+            }
+            cause = source.source();
+        }
+        assert!(classified);
         assert!(
             error.to_string().contains("WidgetryTableRowId")
                 && error.to_string().contains("WidgetryTableColumnId")

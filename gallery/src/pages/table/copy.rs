@@ -71,7 +71,9 @@ pub(super) fn run(world: &mut World, root: Entity, view: DemoTable) {
         }
         Ok(false) => (TableKey::CopySkipped, None),
         Err(error) => {
-            warn!(?root,%error,"Table 示例复制失败，保留原有剪贴板");
+            for diagnostic in error.diagnostics() {
+                diagnostic.record_handled("cancel_table_copy", "已取消复制并保留原有剪贴板");
+            }
             (TableKey::CopyFailed, Some(error.to_string()))
         }
     };
