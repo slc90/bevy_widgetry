@@ -178,6 +178,42 @@ fn invalid_moves_are_atomic_and_report_error_severity() {
         };
         let before = [root, a, b, leaf].map(|p| children(app.world(), p));
         let error = WidgetryTreeView::move_node(app.world_mut(), view, intent).unwrap_err();
+        let TreeError::Move { rejection } = error.kind() else {
+            panic!("unexpected domain error");
+        };
+        assert_eq!(rejection.view, view);
+        assert_eq!(rejection.model_root, Some(root));
+        assert_eq!(rejection.movement, intent);
+        match reason {
+            "self" => assert_eq!(rejection.reason, TreeMoveReason::SelfMove),
+            "cycle_inside" | "cycle_before" | "cycle_after" => assert!(matches!(
+                rejection.reason,
+                TreeMoveReason::ParentCycle { .. }
+            )),
+            "deleted" => {
+                assert!(matches!(rejection.reason,TreeMoveReason::NotInTree{node,..} if node==c))
+            }
+            "foreign" => assert_eq!(
+                rejection.reason,
+                TreeMoveReason::MissingParent { entity: c }
+            ),
+            "moving_disabled" | "parent_disabled" => {
+                assert_eq!(rejection.reason, TreeMoveReason::Disabled { entity: a })
+            }
+            "target_disabled" => {
+                assert_eq!(rejection.reason, TreeMoveReason::Disabled { entity: b })
+            }
+            "unknown" | "loading" => assert!(
+                matches!(rejection.reason,TreeMoveReason::UnloadedChildren{target,..} if target==b)
+            ),
+            _ => panic!("unexpected case"),
+        }
+        let error = error.into_bevy_error();
+        assert!(
+            error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_some()
+        );
         assert_eq!(
             error.severity(),
             bevy::ecs::error::Severity::Error,
@@ -189,6 +225,75 @@ fn invalid_moves_are_atomic_and_report_error_severity() {
             "{reason}"
         );
     }
+}
+
+#[test]
+fn drag_configuration_and_queued_move_failures_keep_domain_identity() {
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+    let (mut app, root, [view, _], [a, b, c, _, _]) = fixture();
+    let missing = app.world_mut().spawn_empty().id();
+    assert!(
+        matches!(WidgetryTreeView::draggable(app.world(),missing).unwrap_err().kind(),TreeError::InvalidView{view:actual} if *actual==missing)
+    );
+    let source = app.world().get::<WidgetryTreeView>(view).unwrap().source();
+    let list = app.world().get::<Children>(view).unwrap()[0];
+    app.world_mut().despawn(list);
+    for failure in [
+        WidgetryTreeView::draggable(app.world(), view).unwrap_err(),
+        WidgetryTreeView::set_draggable(app.world_mut(), view, true).unwrap_err(),
+    ] {
+        assert!(
+            matches!(failure.kind(),TreeError::MissingList{view:actual,source:actual_source} if (*actual,*actual_source)==(view,source))
+        );
+    }
+    app.set_error_handler(ErrorCapture::handler());
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            WidgetryTreeView::queue_move_node(
+                &mut app.world_mut().commands(),
+                view,
+                movement(a, b, WidgetryTreeDropPlacement::Inside),
+            );
+            WidgetryTreeView::queue_set_draggable(&mut app.world_mut().commands(), view, true);
+            app.world_mut().flush();
+        })
+    });
+    let records = errors.take_records();
+    assert_eq!(records.len(), 2);
+    for record in &records {
+        assert_eq!(record.error.severity(), bevy::ecs::error::Severity::Error);
+        let diagnostic = record.managed().unwrap().diagnostics().next().unwrap();
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+    }
+    assert_ne!(
+        records[0]
+            .managed()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap()
+            .origin()
+            .id(),
+        records[1]
+            .managed()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap()
+            .origin()
+            .id()
+    );
+    assert_eq!(children(app.world(), root), vec![a, b, c]);
 }
 
 #[test]

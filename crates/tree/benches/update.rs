@@ -328,7 +328,9 @@ fn main() -> Result {
                         target_entity: fixture.branch,
                         placement,
                     },
-                )? {
+                )
+                .map_err(bevy_widgetry_tree::TreeFailure::into_bevy_error)?
+                {
                     return Err(missing("Tree move became a no-op"));
                 }
                 fixture.app.update();

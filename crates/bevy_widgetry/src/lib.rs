@@ -139,6 +139,7 @@ pub mod list_view {
 #[cfg(feature = "tree")]
 pub mod tree {
     pub use bevy_widgetry_tree::{
+        TreeError, TreeFailure, TreeMoveReason, TreeMoveRejection,
         WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
         WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
         WidgetryTreeAppExt, WidgetryTreeChildrenState, WidgetryTreeColorOverrides,

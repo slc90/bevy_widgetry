@@ -61,5 +61,7 @@
 
 ## 覆盖边界
 
+`movement.rs` 还核对结构化移动拒绝的 View / Model Root / 请求及具体原因，保持失败后层级原子性；拖放 Root / 内部 List 配置失败和真实 queued Handler 的 Severity、单次源头日志、独立请求 ID。私有移动单元回归保护无效预览及合法 no-op 不产生日志，以及缺失 child index 保留实际父级和节点。
+
 共享 Model 的多 View 输入、数据和生命周期耦合由上述用例保护；Gallery 的中英文实时切换、不同视口展示和离页资源清理由任务级 BRP 验证，不作为库自动化测试结论。
 

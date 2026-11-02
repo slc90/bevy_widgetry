@@ -2,6 +2,8 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod behavior;
+mod error;
+pub use error::{TreeError, TreeFailure, TreeMoveReason, TreeMoveRejection};
 mod model;
 mod movement;
 mod registration;

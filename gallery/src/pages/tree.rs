@@ -178,8 +178,10 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
         let view = demo_view(world, action.view_kind)?;
         match action.kind {
             Action::ToggleDrag => {
-                let enabled = !WidgetryTreeView::draggable(world, view)?;
-                WidgetryTreeView::set_draggable(world, view, enabled)?;
+                let enabled = !WidgetryTreeView::draggable(world, view)
+                    .map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error)?;
+                WidgetryTreeView::set_draggable(world, view, enabled)
+                    .map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error)?;
                 info!(?view, enabled, "设置 Tree 拖拽开关");
             }
             Action::ToggleDisabled => {
@@ -317,7 +319,8 @@ fn edit_shared(world: &mut World, action: TreeAction) -> Result {
                     target_entity,
                     placement,
                 },
-            )?;
+            )
+            .map_err(bevy_widgetry::tree::TreeFailure::into_bevy_error)?;
         }
         _ => return Ok(()),
     }
@@ -451,6 +454,15 @@ fn update_status(world: &mut World) {
         let Some(tree) = world.get::<WidgetryTreeState>(*view) else {
             continue;
         };
+        let draggable = match WidgetryTreeView::draggable(world, *view) {
+            Ok(value) => value,
+            Err(error) => {
+                world
+                    .commands()
+                    .queue(move |_: &mut World| -> Result { Err(error.into_bevy_error()) });
+                continue;
+            }
+        };
         let selected = WidgetryTreeView::selection(world, *view)
             .map(|state| {
                 let mut nodes = state.selected_ids().iter().copied().collect::<Vec<_>>();
@@ -502,13 +514,11 @@ fn update_status(world: &mut World) {
                     "drag",
                     tr(
                         language,
-                        TextKey::Common(
-                            if WidgetryTreeView::draggable(world, *view).unwrap_or(false) {
-                                CommonKey::Enabled
-                            } else {
-                                CommonKey::Disabled
-                            },
-                        ),
+                        TextKey::Common(if draggable {
+                            CommonKey::Enabled
+                        } else {
+                            CommonKey::Disabled
+                        }),
                     )
                     .to_owned(),
                 ),

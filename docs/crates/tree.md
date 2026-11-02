@@ -41,6 +41,7 @@ Invalid Root / Node、缺失 Renderer、非法行高或缩进需要报告。Lazy
 
 ## 已知限制
 
+
 - 拖放限于当前 View，不提供跨 View 转移或自动滚动。多个 View 共享原始数据更新，各自按本地展开状态显示。
 
 - Renderer Registry 当前按 Component 类型注册，不支持任意逐 View 相同类型 Renderer。
@@ -56,3 +57,5 @@ Invalid Root / Node、缺失 Renderer、非法行高或缩进需要报告。Lazy
 `WidgetryTreeMove { moving_entity, target_entity, placement }` 与 `WidgetryTreeDropPlacement::{Before, Inside, After}` 表达真实节点间的结构意图。`move_node(world, view, movement)` 与 `queue_move_node` 在执行时重新解析实时 ChildOf/Children，Before/After 插入目标所在兄弟序列，Inside 追加到目标的 Children。只搬运一个节点，其后代自然随子树移动；原多选集合不变。有效同位置返回 `Ok(false)`，无事件；实际移动先写层级，再发送该 View 的 `NodeMoved { movement, old_parent, new_parent }`，各 View 的投影、深度和展开图标在正常更新周期同步。
 
 失效节点、异树、自身、拟议父节点属于源后代、无效父子链、源/目标或业务祖先 Disabled 均拒绝并返回 Error，失败不写入局部层级、不发移动或加载事件。Inside 在提交时再次读取目标的 ChildrenState，Unknown/Loading 均拒绝，Loaded 或普通本地节点允许；Before/After 不因目标自身未加载而拒绝。拖动中 Loaded 变为 Loading 同样取消提交，不启动加载或缓存待执行移动。程序化移动不依赖拖拽开关，允许操作 Disabled View，但仍验证业务节点的 Disabled 及层级限制。
+
+节点移动与拖放开关 API 使用 `TreeFailure`。`TreeError::Move` 保存纯数据的 `TreeMoveRejection`：View、可确定的 Model Source / Root、完整移动请求及已知旧 / 新父级；`TreeMoveReason` 区分无效 View / Source / 内部 List、自身移动、跨树或失效成员、实际禁用祖先、缺失父级 / index、未加载 children 和循环父链。失败不修改层级；同父同索引仍返回 `Ok(false)`。拖放预览只计算拒绝，不创建诊断或 ERROR；实际非法公开请求才捕获诊断。拖放查询 / 设置共享 Root / List 校验，下层 ListView 配置失败保留原原因与 origin，排队入口显式转为 `Severity::Error`。
