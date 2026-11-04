@@ -26,6 +26,7 @@
 
 - 不是通用日志框架，不提供文件管理、Filter 或 Subscriber 安装。
 - Debug 用于有诊断价值的程序生命周期、内部执行阶段、状态转换及真实错误的实际处理，不记录普通函数调用和逐帧同步。
+- Widgetry Plugin 在 `build()` 完成时使用 Debug 记录一次注册完成；泛型 Plugin 每个成功注册的实例分别记录，重复注册不重复输出。
 - Trace 仅用于临时开发诊断，正式提交前必须移除实现代码中的调用；宏定义保留，由 Workspace Clippy `disallowed_macros` 禁止遗留调用。
 - Gallery 的应用日志使用官方 Bevy Macro，而不是这些内部 Macro。
 

@@ -4,7 +4,7 @@ use crate::{
     WidgetryFileDialogSessionId, WidgetryFileDialogState, WidgetryFileDialogStorage,
 };
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 #[derive(SceneComponent, FromTemplate, Default)]
 #[scene(WidgetryFileDialogProps)]
@@ -35,7 +35,7 @@ impl Plugin for WidgetryFileDialogPlugin {
         }
         crate::style::install(app);
         crate::window::install(app);
-        widgetry_info!("WidgetryFileDialogPlugin 注册完成");
+        widgetry_debug!("WidgetryFileDialogPlugin 注册完成");
     }
 }
 
@@ -51,7 +51,7 @@ impl Plugin for WidgetryFileDialogHeadlessPlugin {
             .init_resource::<crate::runtime::Runtime>()
             .init_resource::<crate::runtime::FlushRequest>()
             .add_systems(Update, crate::runtime::update);
-        widgetry_info!("WidgetryFileDialogHeadlessPlugin 注册完成");
+        widgetry_debug!("WidgetryFileDialogHeadlessPlugin 注册完成");
     }
 }
 

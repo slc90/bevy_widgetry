@@ -15,7 +15,7 @@ pub use error::{CollapsibleError, CollapsibleFailure, CollapsibleStructureError}
 pub use state::WidgetryCollapsibleChanged;
 
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetryCollapsiblePlugin;
 
@@ -35,6 +35,6 @@ impl Plugin for WidgetryCollapsiblePlugin {
         if !app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>() {
             app.add_plugins(bevy::input_focus::tab_navigation::TabNavigationPlugin);
         }
-        widgetry_info!("WidgetryCollapsiblePlugin 注册完成");
+        widgetry_debug!("WidgetryCollapsiblePlugin 注册完成");
     }
 }

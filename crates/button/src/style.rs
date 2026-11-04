@@ -21,7 +21,7 @@ use bevy::{
 };
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryButtonProps)]
 #[require(crate::colors::ColorState, crate::loading::LoadingState)]
@@ -249,7 +249,7 @@ impl Plugin for WidgetryButtonPlugin {
                 // Run styling afterwards so new Buttons reach foreground propagation in the same frame.
                 .in_set(WidgetryUiSystems::Colors),
         );
-        widgetry_info!("WidgetryButtonPlugin 注册完成");
+        widgetry_debug!("WidgetryButtonPlugin 注册完成");
     }
 }
 

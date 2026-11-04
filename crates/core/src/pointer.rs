@@ -23,7 +23,7 @@ use bevy::{
     },
     prelude::*,
 };
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetryPointerPlugin;
 
@@ -62,7 +62,7 @@ impl Plugin for WidgetryPointerPlugin {
                 .after(update_interactions)
                 .before(pointer_events),
         );
-        widgetry_info!("WidgetryPointerPlugin 注册完成");
+        widgetry_debug!("WidgetryPointerPlugin 注册完成");
     }
 }
 

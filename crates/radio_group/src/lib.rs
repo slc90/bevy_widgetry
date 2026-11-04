@@ -14,7 +14,7 @@ use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy::ui_widgets::{RadioGroupPlugin, radio_self_update};
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 pub use error::{RadioGroupError, RadioGroupFailure};
 pub use group::WidgetryRadioGroup;
 pub use option::{WidgetryRadioOption, WidgetryRadioOptionProps};
@@ -56,7 +56,7 @@ impl Plugin for WidgetryRadioGroupPlugin {
             )
                 .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
-        widgetry_info!("WidgetryRadioGroupPlugin 注册完成");
+        widgetry_debug!("WidgetryRadioGroupPlugin 注册完成");
     }
 }
 

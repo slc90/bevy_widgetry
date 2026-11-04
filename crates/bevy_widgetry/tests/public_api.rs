@@ -1051,7 +1051,8 @@ fn standalone_widget_plugins_and_facade_share_ui_theme_and_pointer_plugins() {
                 assert_eq!(
                     records
                         .iter()
-                        .filter(|record| record.level == bevy::log::Level::INFO
+                        .filter(|record| record.level == bevy::log::Level::DEBUG
+                            && record.target == "bevy_widgetry"
                             && record
                                 .fields
                                 .get("message")

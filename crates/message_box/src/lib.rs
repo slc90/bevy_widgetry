@@ -9,7 +9,7 @@ mod scene;
 
 use bevy::prelude::*;
 use bevy_widgetry_button::WidgetryButtonPlugin;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_window::WidgetryWindowPlugin;
 pub use scene::{
     WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxResult,
@@ -40,7 +40,7 @@ impl Plugin for WidgetryMessageBoxPlugin {
                 Last,
                 lifecycle::close_requests.before(bevy::window::close_when_requested),
             );
-        widgetry_info!("WidgetryMessageBoxPlugin 注册完成");
+        widgetry_debug!("WidgetryMessageBoxPlugin 注册完成");
     }
 }
 

@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::reflect::{GetTypeRegistration, TypeRegistry};
 use bevy::ui_widgets::ScrollAreaPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_theme::WidgetryThemePlugin;
 use std::any::Any;
 use std::marker::PhantomData;
@@ -125,7 +125,7 @@ impl Plugin for WidgetryTablePlugin {
         crate::selection_drag::install(app);
         crate::style::install(app);
         app.add_systems(Last, crate::interaction::clear_pointer_focus);
-        widgetry_info!("WidgetryTablePlugin 注册完成");
+        widgetry_debug!("WidgetryTablePlugin 注册完成");
     }
 }
 
@@ -161,7 +161,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
             PostUpdate,
             crate::projection::request_geometry_redraw::<T>.after(bevy::ui::UiSystems::Layout),
         );
-        widgetry_info!(
+        widgetry_debug!(
             row_type = std::any::type_name::<T>(),
             "TypedTablePlugin 注册完成"
         );
@@ -337,6 +337,40 @@ impl RendererRegistry {
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::LogCapture;
+
+    #[test]
+    fn typed_registration_logs_debug_once_per_type() {
+        let _guard = crate::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let capture = LogCapture::default();
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        capture.run(|| {
+            app.register_widgetry_table::<String>()
+                .register_widgetry_table::<String>()
+                .register_widgetry_table::<u32>();
+        });
+        for (message, expected) in [
+            ("WidgetryTablePlugin 注册完成", 1),
+            ("TypedTablePlugin 注册完成", 2),
+        ] {
+            let records: Vec<_> = capture
+                .records()
+                .into_iter()
+                .filter(|record| {
+                    record
+                        .fields
+                        .get("message")
+                        .is_some_and(|value| value == message)
+                })
+                .collect();
+            assert_eq!(records.len(), expected);
+            for record in records {
+                assert_eq!(record.level, bevy::log::Level::DEBUG);
+                assert_eq!(record.target, "bevy_widgetry");
+            }
+        }
+    }
 
     #[test]
     fn exhausted_generation_retains_old_registration() {

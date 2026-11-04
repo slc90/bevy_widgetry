@@ -12,7 +12,7 @@ pub use error::{ProgressBarError, ProgressBarFailure};
 pub use progress::{WidgetryProgressBar, WidgetryProgressBarProps, WidgetryProgressState};
 
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetryProgressBarPlugin;
 
@@ -24,6 +24,6 @@ impl Plugin for WidgetryProgressBarPlugin {
         app.register_type::<progress::ProgressState>()
             .register_type::<WidgetryProgressState>();
         style::install(app);
-        widgetry_info!("WidgetryProgressBarPlugin 注册完成");
+        widgetry_debug!("WidgetryProgressBarPlugin 注册完成");
     }
 }

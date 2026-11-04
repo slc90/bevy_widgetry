@@ -14,7 +14,7 @@ pub use error::{SplitterError, SplitterFailure, SplitterLayoutError};
 pub use splitter::{WidgetrySplitter, WidgetrySplitterOrientation, WidgetrySplitterProps};
 
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetrySplitterPlugin;
 
@@ -28,6 +28,6 @@ impl Plugin for WidgetrySplitterPlugin {
         layout::install(app);
         input::install(app);
         style::install(app);
-        widgetry_info!("WidgetrySplitterPlugin 注册完成");
+        widgetry_debug!("WidgetrySplitterPlugin 注册完成");
     }
 }

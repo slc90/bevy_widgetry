@@ -14,7 +14,7 @@ pub use time::{Date, Month, Weekday};
 pub use view::WidgetryDatePickerLanguage;
 
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetryDatePickerPlugin;
 
@@ -34,6 +34,6 @@ impl Plugin for WidgetryDatePickerPlugin {
         }
         today::install(app);
         view::install(app);
-        widgetry_info!("WidgetryDatePickerPlugin 注册完成");
+        widgetry_debug!("WidgetryDatePickerPlugin 注册完成");
     }
 }

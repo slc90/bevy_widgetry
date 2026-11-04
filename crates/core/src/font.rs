@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy::text::{FontSource, detect_text_needs_rerender};
 use bevy::ui::UiSystems;
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 #[derive(Resource)]
 struct DefaultFont(FontSource);
@@ -57,7 +57,7 @@ impl Plugin for WidgetryFontPlugin {
                 .after(UiSystems::Prepare)
                 .before(detect_text_needs_rerender),
         );
-        widgetry_info!("WidgetryFontPlugin 注册完成");
+        widgetry_debug!("WidgetryFontPlugin 注册完成");
     }
 }
 

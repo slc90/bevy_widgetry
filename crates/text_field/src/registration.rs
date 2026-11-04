@@ -2,7 +2,7 @@ use crate::{auto_size, composition, count, hint, input, length, style};
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::text::EditableTextSystems;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_theme::WidgetryThemePlugin;
 
 pub struct WidgetryTextFieldPlugin;
@@ -77,6 +77,6 @@ impl Plugin for WidgetryTextFieldPlugin {
             )
                 .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
-        widgetry_info!("WidgetryTextFieldPlugin 注册完成");
+        widgetry_debug!("WidgetryTextFieldPlugin 注册完成");
     }
 }

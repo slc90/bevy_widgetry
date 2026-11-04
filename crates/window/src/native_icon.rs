@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WINIT_WINDOWS;
 use bevy_widgetry_diagnostics::{ErrorFrame, bevy::FailureState};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use std::sync::Arc;
 use winit::platform::windows::WindowExtWindows;
 use winit::window::Icon;
@@ -79,7 +79,7 @@ impl Plugin for NativeIconPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.0.clone())
             .add_systems(Update, set_primary_window_icons);
-        widgetry_info!("NativeIconPlugin 注册完成");
+        widgetry_debug!("NativeIconPlugin 注册完成");
     }
 }
 

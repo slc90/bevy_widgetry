@@ -18,7 +18,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState},
 };
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_theme::WidgetryThemeMode;
 use std::sync::Arc;
 use std::time::Duration;
@@ -136,7 +136,7 @@ impl Plugin for WidgetryHoldButtonPlugin {
                 update_shadows.after(WidgetryUiSystems::ContentColors),
             );
         crate::headless::install(app);
-        widgetry_info!("WidgetryHoldButtonPlugin 注册完成");
+        widgetry_debug!("WidgetryHoldButtonPlugin 注册完成");
     }
 }
 

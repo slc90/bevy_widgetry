@@ -8,7 +8,7 @@ use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::WidgetryButtonPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_list_view::{WidgetryListViewPlugin, WidgetryListViewSystems};
 
 pub struct WidgetryTreePlugin;
@@ -89,6 +89,6 @@ impl Plugin for WidgetryTreePlugin {
                 .in_set(WidgetryUiSystems::Build)
                 .before(WidgetryListViewSystems::SyncState),
         );
-        widgetry_info!("WidgetryTreePlugin 注册完成");
+        widgetry_debug!("WidgetryTreePlugin 注册完成");
     }
 }

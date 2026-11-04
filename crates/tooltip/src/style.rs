@@ -11,7 +11,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState},
 };
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin};
 use std::sync::Arc;
 
@@ -402,7 +402,7 @@ impl Plugin for WidgetryTooltipPlugin {
                 PreUpdate,
                 ignore_tooltip_descendants.before(PickingSystems::Backend),
             );
-        widgetry_info!("WidgetryTooltipPlugin 注册完成");
+        widgetry_debug!("WidgetryTooltipPlugin 注册完成");
     }
 }
 

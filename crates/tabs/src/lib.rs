@@ -18,7 +18,7 @@ use bevy::input_focus::InputFocusSystems;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetryTabsPlugin;
 
@@ -52,6 +52,6 @@ impl Plugin for WidgetryTabsPlugin {
                 PostUpdate,
                 selection::initialize.in_set(WidgetryUiSystems::Build),
             );
-        widgetry_info!("WidgetryTabsPlugin 注册完成");
+        widgetry_debug!("WidgetryTabsPlugin 注册完成");
     }
 }

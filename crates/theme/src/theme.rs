@@ -1,7 +1,7 @@
 use crate::*;
 use bevy::prelude::*;
 use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use std::{error::Error, fmt};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -219,7 +219,7 @@ impl WidgetryThemeMode {
 impl Plugin for WidgetryThemePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WidgetryThemeMode>();
-        widgetry_info!("WidgetryThemePlugin 注册完成");
+        widgetry_debug!("WidgetryThemePlugin 注册完成");
     }
 }
 

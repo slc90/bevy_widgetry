@@ -17,7 +17,7 @@ use bevy::{
     window::{CursorIcon, CursorSystems, SystemCursorIcon, WindowClosed, WindowFocused},
 };
 use bevy_widgetry_asset::WidgetryAssetPlugin;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetryCursorPlugin;
 
@@ -49,7 +49,7 @@ impl Plugin for WidgetryCursorPlugin {
                     .before(CursorSystems::Update)
                     .run_if(writer_enabled),
             );
-        widgetry_info!("WidgetryCursorPlugin 注册完成");
+        widgetry_debug!("WidgetryCursorPlugin 注册完成");
     }
 
     fn finish(&self, app: &mut App) {

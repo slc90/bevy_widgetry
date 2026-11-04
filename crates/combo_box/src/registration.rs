@@ -3,7 +3,7 @@ use bevy::input_focus::InputFocusSystems;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_list_view::{WidgetryListViewAppExt, WidgetryListViewSystems};
 use std::marker::PhantomData;
 
@@ -96,7 +96,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
                     .after(WidgetryListViewSystems::SyncState)
                     .in_set(WidgetryUiSystems::Build),
             );
-        widgetry_info!(
+        widgetry_debug!(
             item_type = std::any::type_name::<T>(),
             "TypedComboBoxPlugin 注册完成"
         );
@@ -131,6 +131,15 @@ mod tests {
             ("TypedComboBoxPlugin 注册完成", 2),
             ("TypedListViewPlugin 注册完成", 2),
         ] {
+            for record in capture.records().iter().filter(|record| {
+                record
+                    .fields
+                    .get("message")
+                    .is_some_and(|value| value == message)
+            }) {
+                assert_eq!(record.level, bevy::log::Level::DEBUG);
+                assert_eq!(record.target, "bevy_widgetry");
+            }
             assert_eq!(
                 capture
                     .records()

@@ -17,7 +17,7 @@ use bevy_widgetry_core::offscreen::{
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_diagnostics::ErrorFrame;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 #[derive(Component, Default)]
 pub(crate) struct InitializationFailure(ViewFailureState);
@@ -491,6 +491,6 @@ impl Plugin for WaveformRenderPlugin {
                     .before(bevy::camera::CameraUpdateSystems),
             )
             .add_systems(PostUpdate, render.in_set(OffscreenUpdate));
-        widgetry_info!("WaveformRenderPlugin 注册完成");
+        widgetry_debug!("WaveformRenderPlugin 注册完成");
     }
 }

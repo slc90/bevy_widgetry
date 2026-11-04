@@ -12,7 +12,7 @@ use bevy::input_focus::{InputFocusSystems, tab_navigation::TabNavigationPlugin};
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 pub use colors::*;
 pub use error::{SegmentedError, SegmentedFailure};
 pub use group::WidgetrySegmented;
@@ -48,7 +48,7 @@ impl Plugin for WidgetrySegmentedPlugin {
                 .before(InputFocusSystems::Dispatch)
                 .before(PickingSystems::Hover),
         );
-        widgetry_info!("WidgetrySegmentedPlugin 注册完成");
+        widgetry_debug!("WidgetrySegmentedPlugin 注册完成");
     }
 }
 

@@ -4,7 +4,7 @@ use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::winit::EventLoopProxyWrapper;
 use bevy_widgetry_diagnostics::ErrorFrame;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 pub struct WidgetryTrayPlugin {
@@ -56,7 +56,7 @@ impl Plugin for WidgetryTrayPlugin {
             .add_systems(Startup, initialize)
             .add_systems(PreUpdate, bridge::forward_clicks)
             .add_systems(Last, release_on_exit);
-        widgetry_info!("WidgetryTrayPlugin 注册完成");
+        widgetry_debug!("WidgetryTrayPlugin 注册完成");
     }
 }
 

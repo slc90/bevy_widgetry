@@ -18,7 +18,7 @@ pub use number::WidgetryNumber;
 pub use value::{WidgetryNumberInput, WidgetryNumberInputProps};
 
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetryNumberInputPlugin;
 
@@ -44,6 +44,6 @@ impl Plugin for WidgetryNumberInputPlugin {
         register!(
             i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64
         );
-        widgetry_info!("WidgetryNumberInputPlugin 注册完成");
+        widgetry_debug!("WidgetryNumberInputPlugin 注册完成");
     }
 }

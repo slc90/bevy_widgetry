@@ -1,7 +1,7 @@
 use crate::{PowerError, PowerFailure, PowerFailures, PowerOperation, PowerPhase, RequestKind};
 use bevy::prelude::*;
 use bevy_widgetry_diagnostics::ErrorFrame;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use std::io;
 
 #[derive(Resource, Default)]
@@ -24,7 +24,7 @@ pub struct WidgetryPowerInhibitPlugin;
 impl Plugin for WidgetryPowerInhibitPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PowerInhibit>();
-        widgetry_info!("WidgetryPowerInhibitPlugin 注册完成");
+        widgetry_debug!("WidgetryPowerInhibitPlugin 注册完成");
     }
 }
 

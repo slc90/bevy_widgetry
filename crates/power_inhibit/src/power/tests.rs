@@ -440,7 +440,7 @@ fn plugin_default_and_drop_failure_have_the_expected_lifecycle_logs() {
     );
     let records = capture.records();
     assert_eq!(records.len(), 5);
-    assert_eq!(records[0].level, bevy::log::Level::INFO);
+    assert_eq!(records[0].level, bevy::log::Level::DEBUG);
     assert!(records[0].fields["message"].contains("WidgetryPowerInhibitPlugin 注册完成"));
     use bevy_widgetry_test_utils::DiagnosticPhase;
     let sources: Vec<_> = records

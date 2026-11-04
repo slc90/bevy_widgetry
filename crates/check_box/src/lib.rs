@@ -13,7 +13,7 @@ use bevy::ui_widgets::CheckboxPlugin;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 pub use checkbox::WidgetryCheckBox;
 pub use error::{CheckBoxError, CheckBoxFailure};
 pub use tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
@@ -60,7 +60,7 @@ impl Plugin for WidgetryCheckBoxPlugin {
                 )
                     .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
             );
-        widgetry_info!("WidgetryCheckBoxPlugin 注册完成");
+        widgetry_debug!("WidgetryCheckBoxPlugin 注册完成");
     }
 }
 

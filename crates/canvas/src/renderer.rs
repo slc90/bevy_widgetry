@@ -15,7 +15,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, WidgetryEcsError},
 };
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use std::collections::HashMap;
 mod nodes;
 mod outline;
@@ -703,7 +703,7 @@ impl Plugin for CanvasPlugin {
                     .in_set(OffscreenUpdate)
                     .before(bevy::camera::visibility::VisibilitySystems::UpdateFrusta),
             );
-        widgetry_info!("CanvasPlugin 注册完成");
+        widgetry_debug!("CanvasPlugin 注册完成");
     }
 }
 

@@ -1,7 +1,7 @@
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::UiSystems;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WidgetryUiSystems {
@@ -68,6 +68,6 @@ impl Plugin for WidgetryUiPlugin {
                 .before(UiSystems::Stack)
                 .before(bevy::text::detect_text_needs_rerender),
         );
-        widgetry_info!("WidgetryUiPlugin 注册完成");
+        widgetry_debug!("WidgetryUiPlugin 注册完成");
     }
 }

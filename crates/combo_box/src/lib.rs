@@ -15,7 +15,7 @@ use bevy::ui_widgets::popover::PopoverPlugin;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::WidgetryButtonPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_list_view::WidgetryListViewPlugin;
 pub use combo_box::{WidgetryComboBox, WidgetryComboBoxContent, WidgetryComboBoxProps};
 pub use registration::WidgetryComboBoxAppExt;
@@ -42,7 +42,7 @@ impl Plugin for WidgetryComboBoxPlugin {
         app.add_observer(search::contain_keys);
         app.add_observer(popup::handle_outside_click)
             .add_observer(field::own_dropdown_icon);
-        widgetry_info!("WidgetryComboBoxPlugin 注册完成");
+        widgetry_debug!("WidgetryComboBoxPlugin 注册完成");
     }
 }
 

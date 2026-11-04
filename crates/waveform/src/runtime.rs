@@ -6,7 +6,7 @@ use crate::{
 use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, TaskPool};
 use bevy_widgetry_diagnostics::{ErrorFrame, bevy::DiagnosticBatch};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::{widgetry_debug, widgetry_info};
 use bevy_widgetry_job::{
     JobFailure, JobId, JobManager, JobManagerPlugin, JobOptions, JobOutcome, JobRead, JobReceiver,
     SendStatus,
@@ -1283,7 +1283,7 @@ impl Plugin for WaveformPlugin {
         app.add_message::<bevy::window::RequestRedraw>()
             .add_systems(Update, update_waveforms.in_set(WaveformSystems::Update))
             .add_systems(Last, redraw_pending_reductions);
-        widgetry_info!("WaveformPlugin 注册完成");
+        widgetry_debug!("WaveformPlugin 注册完成");
     }
 }
 

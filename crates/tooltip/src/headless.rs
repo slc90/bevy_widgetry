@@ -11,7 +11,7 @@ use bevy::{
     window::RequestRedraw,
 };
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use std::time::Duration;
 
 const COLD_WARMUP: Duration = Duration::from_millis(200);
@@ -248,7 +248,7 @@ impl Plugin for TooltipPlugin {
             .add_message::<RequestRedraw>()
             .add_observer(tooltip_removed)
             .add_systems(PreUpdate, update_tooltip.in_set(PickingSystems::PostHover));
-        widgetry_info!("TooltipPlugin 注册完成");
+        widgetry_debug!("TooltipPlugin 注册完成");
     }
 }
 

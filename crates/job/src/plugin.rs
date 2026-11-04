@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
     winit::{EventLoopProxyWrapper, WinitUserEvent},
 };
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use std::sync::Arc;
 
 pub struct JobManagerPlugin;
@@ -25,7 +25,7 @@ impl Plugin for JobManagerPlugin {
             .init_resource::<FrameWake>()
             .add_systems(First, begin_frame.in_set(JobManagerSystems::BeginFrame))
             .add_systems(Last, end_frame.in_set(JobManagerSystems::EndFrame));
-        widgetry_info!("JobManagerPlugin 注册完成");
+        widgetry_debug!("JobManagerPlugin 注册完成");
     }
 }
 

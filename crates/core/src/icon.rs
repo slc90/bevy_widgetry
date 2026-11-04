@@ -18,7 +18,7 @@ use crate::{
 };
 use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryIconProps)]
@@ -611,7 +611,7 @@ impl Plugin for WidgetryIconPlugin {
                 PostUpdate,
                 sync_icon_color.in_set(WidgetryUiSystems::ContentColors),
             );
-        widgetry_info!("WidgetryIconPlugin 注册完成");
+        widgetry_debug!("WidgetryIconPlugin 注册完成");
     }
 }
 
@@ -707,7 +707,7 @@ mod tests {
             let entity = app.world_mut().spawn_scene(bsn! { WidgetryIcon { svg: {handle.clone()} } }).unwrap().id();
             app.update();
             app.update();
-            assert!(capture.records().iter().all(|record| record.level == bevy::log::Level::INFO));
+            assert!(capture.records().iter().all(|record| record.level == bevy::log::Level::DEBUG));
             let oversized = resvg::usvg::Tree::from_str(
                 r#"<svg xmlns="http://www.w3.org/2000/svg" width="4294967295" height="4294967295"/>"#,
                 &resvg::usvg::Options::default(),

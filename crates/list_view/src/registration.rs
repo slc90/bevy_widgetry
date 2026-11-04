@@ -12,7 +12,7 @@ use crate::{WidgetryListDataSource, WidgetryListItemId, WidgetryListKey, Widgetr
 use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
 use bevy_widgetry_theme::WidgetryThemePlugin;
 use std::marker::PhantomData;
@@ -57,7 +57,7 @@ impl Plugin for WidgetryListViewPlugin {
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
         }
-        widgetry_info!("WidgetryListViewPlugin 注册完成");
+        widgetry_debug!("WidgetryListViewPlugin 注册完成");
     }
 }
 
@@ -96,7 +96,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> Plugin for TypedListViewPlugi
             .add_observer(on_drag_end::<T, K>)
             .add_observer(on_disabled_added::<T, K>)
             .add_observer(on_disabled_removed::<T, K>);
-        widgetry_info!(
+        widgetry_debug!(
             item_type = std::any::type_name::<T>(),
             "TypedListViewPlugin 注册完成"
         );
@@ -184,6 +184,10 @@ mod tests {
                     .fields
                     .get("message")
                     .is_some_and(|message| message.contains("TypedListViewPlugin 注册完成"))
+            })
+            .inspect(|record| {
+                assert_eq!(record.level, bevy::log::Level::DEBUG);
+                assert_eq!(record.target, "bevy_widgetry");
             })
             .count();
         assert_eq!(registrations, 2);

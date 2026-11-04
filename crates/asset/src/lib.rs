@@ -9,7 +9,7 @@ pub use cursor_animation::BuiltinCursorAnimation;
 use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use constants::KAMURI_STATIC_ATLAS;
 use constants::{
     CHECKBOX_CHECK_ICON, CHECKBOX_INDETERMINATE_ICON, CHEVRON_DOWN_ICON, CHEVRON_UP_ICON,
@@ -167,6 +167,6 @@ impl Plugin for WidgetryAssetPlugin {
         {
             embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
         }
-        widgetry_info!("WidgetryAssetPlugin 注册完成");
+        widgetry_debug!("WidgetryAssetPlugin 注册完成");
     }
 }

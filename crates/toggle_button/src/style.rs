@@ -226,6 +226,6 @@ impl Plugin for WidgetryToggleButtonPlugin {
         }
         app.add_observer(commit_input);
         app.add_systems(PostUpdate, update_colors.in_set(WidgetryUiSystems::Colors));
-        bevy_widgetry_internal_log::widgetry_info!("WidgetryToggleButtonPlugin 注册完成");
+        bevy_widgetry_internal_log::widgetry_debug!("WidgetryToggleButtonPlugin 注册完成");
     }
 }

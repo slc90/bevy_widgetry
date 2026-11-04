@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
 use bevy::ui::UiSystems;
 use bevy_widgetry_diagnostics::ErrorFrame;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 mod error;
 pub use error::{
     OffscreenBinding, OffscreenBindingRejection, OffscreenError, OffscreenFailure,
@@ -563,7 +563,7 @@ impl Plugin for WidgetryOffscreenPlugin {
                     .before(VisibilitySystems::CheckVisibility)
                     .before(bevy::ui::widget::update_viewport_render_target_size),
             );
-        widgetry_info!("WidgetryOffscreenPlugin 注册完成");
+        widgetry_debug!("WidgetryOffscreenPlugin 注册完成");
     }
 }
 

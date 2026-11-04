@@ -16,7 +16,7 @@ pub use lifecycle::{SliderDragEnded, SliderDragOutcome, SliderDragStarted};
 pub use slider::{WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps};
 
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetrySliderPlugin;
 
@@ -30,6 +30,6 @@ impl Plugin for WidgetrySliderPlugin {
         }
         input::install(app);
         style::install(app);
-        widgetry_info!("WidgetrySliderPlugin 注册完成");
+        widgetry_debug!("WidgetrySliderPlugin 注册完成");
     }
 }
