@@ -136,15 +136,15 @@ SVG以rect（含rx/ry）、ellipse及原始path命令M/L/Q/C/A/Z保留参数几�
 
 ## PNG 离屏导出
 
-`CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正。输出按最终像素坐标逐块渲染，内部块默认不超过2048×512像素，两侧最多扩展2像素并在读回后裁去，保留跨块描边、曲线及透明叠加。各块按实际RenderDevice纹理和Buffer上限缩小，并通过包含4×MSAA、线性浮点中间目标和读回副本的512 MiB工作集估算（块像素数×80加对齐读回及32 MiB行带预算）。整幅输出不再受单张GPU纹理或整幅工作集限制，支持1920×1080区域的1×/2×/4×导出；单行RGBA不超过32 MiB，最终像素数不超过u32::MAX，两轴不超过2^24以保留整数像素坐标。逐块检查相机中心和尺寸相对理想像素映射的最坏边界误差，超过1/256像素或无法表示的投影明确失败，不缩小输出；首块在请求校验时检查，后续块在分配读回前检查。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回EmptyDocument。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回RendererUnavailable。CanvasPlugin自动复用或安装App共享的JobManagerPlugin；Manager停止接纳后返回Job(ShuttingDown)，不分配导出渲染资源。
+`CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正。输出按最终像素坐标逐块渲染，内部块默认不超过2048×512像素，两侧最多扩展2像素并在读回后裁去，保留跨块描边、曲线及透明叠加。各块按实际RenderDevice纹理和Buffer上限缩小，并通过包含4×MSAA、线性浮点中间目标和读回副本的512 MiB工作集估算（块像素数×80加对齐读回及32 MiB行带预算）。整幅输出不再受单张GPU纹理或整幅工作集限制，支持1920×1080区域的1×/2×/4×导出；单行RGBA不超过32 MiB，最终像素数不超过u32::MAX，两轴不超过2^24以保留整数像素坐标。逐块检查相机中心和尺寸相对理想像素映射的最坏边界误差，超过1/256像素或无法表示的投影明确失败，不缩小输出；首块在请求校验时检查，后续块在分配读回前检查。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回原因链保留 EmptyDocument 的 JobFailure。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回原因链保留 RendererUnavailable 的 JobFailure。CanvasPlugin自动复用或安装App共享的JobManagerPlugin；Manager停止接纳后返回保留 SubmitError::ShuttingDown 的 JobFailure，不分配导出渲染资源。
 
 请求快照包含已提交Rectangle、Ellipse、Path的独立几何副本、Paint、Transform及Document顺序，后续Document修改不改变本次输出。每个请求从Core公共离屏层分配独立Image/RenderLayers，专用Camera和几何代理在各块间复用；4×MSAA在线性浮点中间目标中合成，关闭屏幕空间抖动与色调映射，经StraightAlpha转换后写出sRGB透明RGBA，避免8位中间混色放大半透明边缘误差。图形按Document顺序排列，填充后紧接自身描边，再映射为导出专属深度，不因模型Z超出相机范围而丢图形。Path导出代理使用与View相同的GPU裁剪，避免远子路径CPU视锥舍入漏绘。独立于View是否存在、Pan/Zoom、背景、编辑控制点和窗口比例；已有View的相机、目标及导航不被修改。
 
-RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对当前块使用Bevy异步读回；不是现有View或窗口截图。同一次导出登记一个CPU Job，执行体依次消费读回块，组装最多32 MiB的CPU行带，通过png流式编码器按整行直接覆盖写盘；不常驻整幅RGBA，不另建截图Job或编码Job。消费者处理完当前块且GPU读回结束后才准备下一块，各块使用独立就绪信号，避免迟到信号串线。请求Entity携带只读`CanvasPngExport`，可通过`job_id()`查询唯一JobId并请求Manager取消。收到该Job的Finished后发送`CanvasPngExportFinished { entity, job_id, document, path, result }`，result为实际写盘成功的像素尺寸或CanvasExportError。事件内可查询真实Job终态，通知后自动移除执行记录。请求提交成功不等于文件完成，应用须监听这个完成事件；每块读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
+RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对当前块使用Bevy异步读回；不是现有View或窗口截图。同一次导出登记一个CPU Job，执行体依次消费读回块，组装最多32 MiB的CPU行带，通过png流式编码器按整行直接覆盖写盘；不常驻整幅RGBA，不另建截图Job或编码Job。消费者处理完当前块且GPU读回结束后才准备下一块，各块使用独立就绪信号，避免迟到信号串线。请求Entity携带只读`CanvasPngExport`，可通过`job_id()`查询唯一JobId并请求Manager取消。收到该Job的Finished后发送`CanvasPngExportFinished { entity, job_id, document, path, result }`，result为实际写盘成功的像素尺寸或CanvasPngStop。事件内可查询真实Job终态，通知后自动移除执行记录。请求提交成功不等于文件完成，应用须监听这个完成事件；每块读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
 
 准备或尚未提交截图时可确认取消并清理；GPU读回已经提交时保持Stopping等待实际读回，不能提前销毁Image/Scene或复用层号。GPU等待超过30秒将业务结果标记为Render错误，已提交读回仍需结束并释放资源后才得到Failed及一次完成通知；若底层一直不返回，须由宿主应用的全局关闭超时决策处理。迟到或重复截图核查原请求Entity、JobId、截图Entity和阶段，不重复编码或写盘。请求Entity提前销毁会请求取消，私有收割状态继续持有必要资源直至读回/编码实际结束，并发送一次原身份的完成事件。
 
-编码开始前、块间等待及写出各行前响应取消，完成清理后调用acknowledge_cancel，Job为Canceled，事件返回CanvasExportError::Canceled；同步编码/写盘已经完成时，晚取消仍为Completed，真实编码或写盘错误仍为Failed。流式输出中途失败或取消可能留下不完整目标文件，须以完成事件判断结果。失败或取消不伪装成功；SVG继续同步导出，不登记Job。Pending期间在Last发送RequestRedraw，确保无新输入时GPU准备、清理及最终通知仍可推进；所有导出收尾后停止额外重绘。
+编码开始前、块间等待及写出各行前响应取消，完成清理后调用acknowledge_cancel，Job为Canceled，事件返回CanvasPngStop::Canceled（正常取消控制结果，无错误诊断）；同步编码/写盘已经完成时，晚取消仍为Completed，真实编码或写盘错误仍为Failed。流式输出中途失败或取消可能留下不完整目标文件，须以完成事件判断结果。失败或取消不伪装成功；SVG继续同步导出，不登记Job。Pending期间在Last发送RequestRedraw，确保无新输入时GPU准备、清理及最终通知仍可推进；所有导出收尾后停止额外重绘。
 
 可重复的DX12导出Benchmark见`crates/canvas/benches/png_export.rs`：64个已提交混合Rectangle、Ellipse与多子路径曲线Path，512/2048像素方形目标及1920×1080区域的1×/2×/4×输出，测量请求到渲染、读回、编码写盘、资源回收及完成通知的整个流程。GPU初始化在计时外，包含轮询等待；不代表Native Window呈现帧时间或60 FPS验收。
 
@@ -207,9 +207,9 @@ Delete在精确有效CanvasView根焦点及有焦点Window下删除该View全部
 可重复的批量移动 Benchmark：`cargo bench -p bevy_widgetry_canvas --bench batch --locked`，覆盖100/1000个混合Rectangle、Ellipse和Path，两个共享View。每个样本通过真实Picking Pointer移动全部已选成员并执行完整Headless App帧，同时检查相同Document位移、独立选择、顺序及共享Mesh数量保持。预热20次后另取200个样本，结果保存在`target/benchmark/canvas-batch-criterion-*/samples.csv`；包含输入、模型更新及双View投影的CPU/ECS成本，不包含GPU提交或窗口呈现。
 
 
-Canvas Renderer 传播 Core Offscreen 原始诊断并补充 View Owner，多 View 的失败在同次 ECS 边界全部保留。PNG 导出中的 Offscreen 分配/释放失败以 `CanvasExportError::Offscreen` 保留；Scene 构造失败保留 `SceneFailure`。`Cleanup` 同时保存原失败与 Offscreen 清理诊断，异步完成事件在清理结束后给出两者，后到的编码结果不会覆盖清理失败。终止该请求时按原 ID 记录实际处理。
+Canvas Renderer 传播 Core Offscreen 原始诊断并补充 View Owner，多 View 的失败在同次 ECS 边界全部保留。PNG 导出中的 Offscreen 分配/释放失败以 `CanvasExportError::Offscreen` 保留；Scene 构造失败保留 `SceneFailure`。`Cleanup` 同时保存原失败与 Offscreen 清理诊断，异步完成事件在清理结束后给出两者，后到的编码结果不会覆盖清理失败。主失败由 Finished 的应用 Owner 消费或转入 ECS，资源回收本身不标记处理。
 
-PNG 后台工作失败通过 CanvasExportError::Background 共享 JobFailure 报告，保留原IO/编码对象及已有Offscreen/Scene诊断。主失败和清理失败合并保留各自origin；Bridge、任务终态和完成事件共享原诊断，完成资源收尾并终止导出后记录实际处理。
+PNG 后台工作失败通过 CanvasExportError::Background 共享 JobFailure 报告，保留原IO/编码对象及已有Offscreen/Scene诊断。主失败和清理失败合并保留各自origin；Bridge、任务终态和完成事件共享原诊断，完成资源收尾后由 Finished 的应用 Owner 实际提示/放弃才记录处理。
 
 ## 模型与编辑诊断
 
@@ -218,3 +218,5 @@ PNG 后台工作失败通过 CanvasExportError::Background 共享 JobFailure 报
 Renderer 按 View 阶段与 shape 分别持有持续故障，同一业务输入持续失败复用原 origin；同帧多个失败完整上报，健康图形继续更新。正常隐藏与零尺寸等待不代表恢复；非法网格更新先检查共享资源，拒绝后保留健康 fill。合法空选择、取消、未完成 Pen draft 与原有通知顺序保持。SVG 与 PNG 的导出诊断见各自接口。
 
 SVG 同步导出返回统一 `JobFailure`，原因链保留 `CanvasExportError` 分类或原始 `CanvasError`。导出上下文保存 document、目标 path 和 region；不支持颜色另存 shape 与实际 Color。I/O 保留 `io::Error`，模型诊断只追加语境，不重新生成 origin。生成与校验成功后才写文件，失败交由调用方实际提示/放弃或继续传播。
+
+PNG 请求返回 `JobFailure`，完成事件为 `Result<UVec2, CanvasPngStop>`：`Canceled` 是不实现 Error 的正常控制结果，`Failed(JobFailure)` 保留真实诊断。Finished 是宿主的失败消费通道，JobOutcome 仅观察同一失败且共享 origin；观察事件或释放 GPU 资源不产生处理 DEBUG。宿主必须实际终止/提示后调用 `record_handled`，或把同一 failure 转入 ECS。Render 结构失败按 `CanvasRenderIssue` 匹配，图像转换、资源插入、Scene、编码与 I/O 原因保留，诊断增加 document/path/export/job/tile/尺寸或限制。主失败与清理失败合并完整保留。

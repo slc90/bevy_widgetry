@@ -248,7 +248,7 @@ fn path_export_rejection_and_kind_guards_preserve_existing_data() {
             file.path(),
             CanvasPngOptions::default()
         )),
-        Err(CanvasExportError::RendererUnavailable)
+        Err(ref error) if error.to_string().contains("Canvas PNG renderer unavailable")
     ));
     assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
     let p = CanvasPath {

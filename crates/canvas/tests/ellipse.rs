@@ -244,7 +244,7 @@ fn ellipse_png_without_renderer_fails_before_modifying_the_destination() {
             file.path(),
             CanvasPngOptions::default()
         )),
-        Err(CanvasExportError::RendererUnavailable)
+        Err(ref error) if error.to_string().contains("Canvas PNG renderer unavailable")
     ));
     assert_eq!(std::fs::read(file.path()).unwrap(), b"keep me");
 }

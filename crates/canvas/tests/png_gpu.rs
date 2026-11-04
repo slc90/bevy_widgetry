@@ -71,9 +71,7 @@ fn gpu_shutdown_rejection_preserves_one_source_diagnostic() {
             CanvasPngOptions::default(),
         )
         .unwrap_err();
-        let CanvasExportError::Job(failure) = failure else {
-            panic!("expected Job failure");
-        };
+        let failure = cause::<bevy_widgetry_job::SubmitFailure>(&failure).unwrap();
         assert!(matches!(
             failure.kind(),
             bevy_widgetry_job::SubmitError::ShuttingDown { .. }
@@ -597,7 +595,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
             "unused.png",
             CanvasPngOptions::default()
         ),
-        Err(CanvasExportError::RendererUnavailable)
+        Err(ref error) if matches!(cause::<CanvasExportError>(error), Some(CanvasExportError::RendererUnavailable))
     ));
     let base = counts(&mut app);
     let directory = tempfile::tempdir().unwrap();
@@ -722,7 +720,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
                 ..default()
             }
         ),
-        Err(CanvasExportError::InvalidResolution)
+        Err(ref error) if matches!(cause::<CanvasExportError>(error), Some(CanvasExportError::InvalidResolution))
     ));
     assert_eq!(std::fs::read(&protected).unwrap(), b"preserve");
     assert_eq!(counts(&mut app), with_views);
@@ -855,7 +853,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
             &existing,
             CanvasPngOptions::default()
         ),
-        Err(CanvasExportError::EmptyDocument)
+        Err(ref error) if matches!(cause::<CanvasExportError>(error), Some(CanvasExportError::EmptyDocument))
     ));
     assert_eq!(std::fs::read(existing).unwrap(), original);
 
@@ -2587,4 +2585,69 @@ fn gpu_path_fill_curves_are_independent_of_a_huge_stroke_width() {
         image.get_pixel(128, 108).0[3].abs_diff(191) <= 3,
         "wide stroke must not flatten the fill curve"
     );
+}
+
+fn cause<'a, T: std::error::Error + 'static>(
+    error: &'a (dyn std::error::Error + 'static),
+) -> Option<&'a T> {
+    let mut current = Some(error);
+    while let Some(error) = current {
+        if let Some(found) = error.downcast_ref::<T>() {
+            return Some(found);
+        }
+        current = error.source();
+    }
+    None
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_default_region_resolution_failure_keeps_attempted_dimensions() {
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::new(20.0, 10.0),
+            corner_radius: 0.0,
+        },
+        Transform::default(),
+        CanvasPaint {
+            stroke: None,
+            ..default()
+        },
+    )
+    .unwrap();
+    let before = counts(&mut app);
+    let failure = CanvasDocument::export_png(
+        app.world_mut(),
+        document,
+        "untouched.png",
+        CanvasPngOptions {
+            region: None,
+            scale: 1e6,
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(
+        cause::<CanvasExportError>(&failure),
+        Some(CanvasExportError::InvalidResolution)
+    ));
+    let diagnostic = failure.diagnostics().next().unwrap();
+    let fields = diagnostic
+        .contexts()
+        .iter()
+        .find(|f| f.operation() == "canvas.png.request")
+        .unwrap()
+        .fields();
+    assert!(fields.iter().any(|(key, value)| key == "region"
+        && value.contains("Some(Rect")
+        && value.contains("-10.0")));
+    assert!(
+        fields.iter().any(
+            |(key, value)| key == "attempted_size" && value == "Some([20000000.0, 10000000.0])"
+        )
+    );
+    assert_eq!(counts(&mut app), before);
 }

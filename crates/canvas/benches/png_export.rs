@@ -12,7 +12,7 @@ use bevy_widgetry_test_utils::benchmark::{Harness, artifact::error, missing, run
 use std::time::{Duration, Instant};
 
 #[derive(Resource, Default)]
-struct Completion(Option<std::result::Result<UVec2, String>>);
+struct Completion(Option<std::result::Result<UVec2, CanvasPngStop>>);
 
 struct Fixture {
     app: App,
@@ -64,7 +64,7 @@ fn fixture() -> Result<Fixture> {
     .init_resource::<Completion>()
     .add_observer(
         |event: On<CanvasPngExportFinished>, mut completion: ResMut<Completion>| {
-            completion.0 = Some(event.result.as_ref().copied().map_err(ToString::to_string));
+            completion.0 = Some(event.result.clone());
         },
     );
     app.set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler());
@@ -181,7 +181,7 @@ fn export(fixture: &mut Fixture, size: UVec2) -> Result {
             scale: size.x as f32 / region.x,
         },
     )
-    .map_err(error)?;
+    .map_err(|failure| failure.into_bevy_error())?;
     let deadline = Instant::now() + Duration::from_secs(35);
     loop {
         frame(&mut fixture.app)?;
@@ -192,7 +192,11 @@ fn export(fixture: &mut Fixture, size: UVec2) -> Result {
             .0
             .take()
         {
-            if result.map_err(error)? != size {
+            if result.map_err(|stop| match stop {
+                CanvasPngStop::Failed(failure) => failure.into_bevy_error(),
+                CanvasPngStop::Canceled => error("PNG benchmark canceled"),
+            })? != size
+            {
                 return Err(missing("PNG output dimensions"));
             }
             break;

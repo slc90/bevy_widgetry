@@ -227,11 +227,14 @@ fn start(
                     scale: scale as f32,
                 },
             )
+            .map_err(CanvasExportError::Background)
             .and_then(|entity| {
                 let job = world
                     .get::<CanvasPngExport>(entity)
                     .ok_or_else(|| {
-                        CanvasExportError::Render("PNG request has no export identity".into())
+                        CanvasExportError::Render(
+                            bevy_widgetry::canvas::CanvasRenderIssue::MissingExportIdentity,
+                        )
                     })?
                     .job_id();
                 Ok(FileState::Exporting {
@@ -354,14 +357,24 @@ fn completed(
                     Err(error) => FileState::Failed(error.to_string()),
                 },
                 Ok(_) => FileState::Failed("PNG output dimensions do not match the stage".into()),
-                Err(CanvasExportError::Canceled) => FileState::Canceled,
-                Err(error) => FileState::Failed(error.to_string()),
+                Err(bevy_widgetry::canvas::CanvasPngStop::Canceled) => FileState::Canceled,
+                Err(bevy_widgetry::canvas::CanvasPngStop::Failed(error)) => {
+                    FileState::Failed(error.to_string())
+                }
             };
             cleanup(temporary);
-            if let FileState::Failed(error) = &state {
+            if let FileState::Failed(error) = &state
+                && !matches!(
+                    event.result,
+                    Err(bevy_widgetry::canvas::CanvasPngStop::Failed(_))
+                )
+            {
                 warn!(session, stage=number, path=%file.path.display(), %error,"绘画阶段 PNG 导出失败");
             }
             file.state = state;
+            if let Err(bevy_widgetry::canvas::CanvasPngStop::Failed(error)) = &event.result {
+                error.record_handled("终止阶段 PNG 导出并保存失败状态", "导出失败");
+            }
             let session = session.clone();
             let number = *number;
             commands.queue(move |world: &mut World| {
@@ -717,7 +730,7 @@ mod tests {
             job_id: job,
             document,
             path: temp.clone(),
-            result: Err(CanvasExportError::Canceled),
+            result: Err(bevy_widgetry::canvas::CanvasPngStop::Canceled),
         });
         app.world_mut().flush();
         assert!(!temp.exists());

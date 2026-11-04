@@ -1,4 +1,4 @@
-use super::CanvasExportError;
+use super::{CanvasExportError, CanvasRenderIssue};
 use crate::CanvasDocument;
 use bevy::prelude::*;
 use bevy::{
@@ -24,7 +24,8 @@ use bevy::{
     sprite_render::PreparedMaterial2d,
 };
 use bevy_widgetry_core::{offscreen::OffscreenTarget, scene::spawn_scene};
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
+use bevy_widgetry_job::JobFailure;
 use bevy_widgetry_job::{
     JobContext, JobId, JobManager, JobManagerPlugin, JobOptions, JobOutcome, JobRead, JobReceiver,
     JobState,
@@ -35,7 +36,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{
     sync::{
-        Arc, Mutex, MutexGuard,
+        Arc, Mutex, MutexGuard, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -56,13 +57,27 @@ impl Default for CanvasPngOptions {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum CanvasPngStop {
+    Canceled,
+    Failed(JobFailure),
+}
+impl std::fmt::Display for CanvasPngStop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Canceled => f.write_str("Canvas PNG export canceled"),
+            Self::Failed(error) => std::fmt::Display::fmt(error, f),
+        }
+    }
+}
+
 #[derive(EntityEvent)]
 pub struct CanvasPngExportFinished {
     pub entity: Entity,
     pub job_id: JobId,
     pub document: Entity,
     pub path: PathBuf,
-    pub result: std::result::Result<UVec2, CanvasExportError>,
+    pub result: std::result::Result<UVec2, CanvasPngStop>,
 }
 
 impl CanvasDocument {
@@ -71,10 +86,17 @@ impl CanvasDocument {
         document: Entity,
         path: impl AsRef<Path>,
         options: CanvasPngOptions,
-    ) -> std::result::Result<Entity, CanvasExportError> {
+    ) -> std::result::Result<Entity, JobFailure> {
         let path = path.as_ref();
+        let mut actual_region = options.region;
+        let mut attempted_size = None;
         let result = (|| {
             let snapshot = super::snapshot(world, document, options.region)?;
+            actual_region = Some(snapshot.region);
+            attempted_size = Some([
+                (f64::from(snapshot.region.width()) * f64::from(options.scale)).ceil(),
+                (f64::from(snapshot.region.height()) * f64::from(options.scale)).ceil(),
+            ]);
             if !options.scale.is_finite() || options.scale <= 0.0 {
                 return Err(CanvasExportError::InvalidScale);
             }
@@ -99,13 +121,22 @@ impl CanvasDocument {
             )?;
             begin(world, document, path.to_owned(), snapshot, tiles)
         })();
-        result.inspect_err(|error| {
-            if !matches!(
-                error,
-                CanvasExportError::Job(_) | CanvasExportError::Model(_)
-            ) {
-                widgetry_error!(?document,?path,%error,"Canvas PNG 导出请求失败");
-            }
+        result.map_err(|error| {
+            error.into_failure(
+                ErrorFrame::new("canvas.png.request")
+                    .field("document", document)
+                    .field("path", path.display())
+                    .field("region", format_args!("{actual_region:?}"))
+                    .field("scale", options.scale)
+                    .field("attempted_size", format_args!("{attempted_size:?}"))
+                    .field(
+                        "device_limits",
+                        format_args!(
+                            "{:?}",
+                            world.get_resource::<RenderDevice>().map(|d| d.limits())
+                        ),
+                    ),
+            )
         })
     }
 }
@@ -297,6 +328,7 @@ struct CleanupQueue(Vec<(Arc<Bridge>, RenderResources)>);
 
 #[derive(Default)]
 struct Bridge {
+    owner: OnceLock<ErrorFrame>,
     state: Mutex<Handoff>,
     changed: Event,
 }
@@ -304,10 +336,11 @@ struct Bridge {
 #[derive(Default)]
 struct Handoff {
     input: Option<ExportInput>,
-    result: Option<std::result::Result<UVec2, CanvasExportError>>,
+    result: Option<std::result::Result<UVec2, CanvasPngStop>>,
     released: bool,
     cleanup_failure: Option<bevy_widgetry_job::JobFailure>,
     consumed: bool,
+    poisoned: bool,
 }
 
 enum ExportInput {
@@ -317,19 +350,49 @@ enum ExportInput {
 }
 
 impl Bridge {
+    fn frame(&self, operation: &str) -> ErrorFrame {
+        self.owner
+            .get()
+            .cloned()
+            .unwrap_or_else(|| ErrorFrame::new(operation))
+            .field("stage", operation)
+    }
     fn lock(&self) -> MutexGuard<'_, Handoff> {
         self.state.lock().unwrap_or_else(|error| {
-            widgetry_error!("Canvas PNG 交接锁中毒，恢复状态以完成收尾");
-            error.into_inner()
+            let mut handoff = error.into_inner();
+            if !handoff.poisoned {
+                handoff.poisoned = true;
+                let failure = CanvasExportError::Render(CanvasRenderIssue::HandoffPoisoned)
+                    .into_failure(self.frame("canvas.png.handoff"));
+                handoff.cleanup_failure = Some(match handoff.cleanup_failure.take() {
+                    Some(previous) => previous.combine(failure),
+                    None => failure,
+                });
+            }
+            handoff
         })
     }
 
     fn deliver(&self, input: ExportInput) {
+        let input = match input {
+            ExportInput::Failed(error) => ExportInput::Failed(CanvasExportError::Background(
+                error.into_failure(self.frame("canvas.png.deliver")),
+            )),
+            other => other,
+        };
         let mut handoff = self.lock();
         // A later cancellation must not erase a failure the encoder has yet to consume.
-        if !matches!(handoff.input, Some(ExportInput::Failed(_))) {
-            handoff.input = Some(input);
-        }
+        handoff.input = Some(match (handoff.input.take(), input) {
+            (Some(ExportInput::Failed(first)), ExportInput::Failed(second)) => {
+                ExportInput::Failed(CanvasExportError::Background(
+                    first
+                        .into_failure(self.frame("canvas.png.handoff"))
+                        .combine(second.into_failure(self.frame("canvas.png.handoff"))),
+                ))
+            }
+            (Some(ExportInput::Failed(first)), _) => ExportInput::Failed(first),
+            (_, input) => input,
+        });
         drop(handoff);
         self.changed.notify(usize::MAX);
     }
@@ -433,6 +496,11 @@ fn begin(
         .get_resource::<JobManager>()
         .ok_or(CanvasExportError::RendererUnavailable)?;
     let bridge = Arc::new(Bridge::default());
+    let _owner = bridge.owner.set(
+        ErrorFrame::new("canvas.png.export")
+            .field("document", document)
+            .field("path", path.display()),
+    );
     let handoff = bridge.clone();
     let output = path.clone();
     let (id, receiver) = manager
@@ -475,17 +543,10 @@ async fn encode(
     let result = encode_tiles(&context, &bridge, &path, tiles)
         .await
         .map(|()| tiles.size);
-    let canceled = matches!(result, Err(CanvasExportError::Canceled));
-    let (result, failure) = match result {
-        Err(CanvasExportError::Canceled) => (Err(CanvasExportError::Canceled), None),
-        Err(error) => {
-            let failure = error.into_job_failure();
-            (
-                Err(CanvasExportError::Background(failure.clone())),
-                Some(failure),
-            )
-        }
-        Ok(size) => (Ok(size), None),
+    let canceled = matches!(result, Err(CanvasPngStop::Canceled));
+    let failure = match &result {
+        Err(CanvasPngStop::Failed(error)) => Some(error.clone()),
+        _ => None,
     };
     bridge.lock().result = Some(result);
     bridge.released().await;
@@ -509,29 +570,60 @@ async fn encode_tiles(
     bridge: &Bridge,
     path: &Path,
     mut tiles: Tiles,
-) -> std::result::Result<(), CanvasExportError> {
+) -> std::result::Result<(), CanvasPngStop> {
+    let failure = |error: CanvasExportError, tiles: Tiles| {
+        CanvasPngStop::Failed(
+            error.into_failure(
+                bridge
+                    .frame("canvas.png.encode")
+                    .field("path", path.display())
+                    .field("job_id", context.id().get())
+                    .field("size", tiles.size)
+                    .field("tile", tiles.origin)
+                    .field("tile_size", tiles.tile().render_size)
+                    .field("region", format_args!("{:?}", tiles.region)),
+            ),
+        )
+    };
     let mut input = bridge.input().await;
-    let first = tile_image(input, context)?;
-    let file = std::fs::File::create(path).map_err(CanvasExportError::Io)?;
+    let first = tile_image(input, context).map_err(|error| match error {
+        CanvasPngStop::Failed(error) => CanvasPngStop::Failed(
+            error.with_context(
+                bridge
+                    .frame("canvas.png.decode")
+                    .field("job_id", context.id().get())
+                    .field("tile", tiles.origin),
+            ),
+        ),
+        other => other,
+    })?;
+    let file = std::fs::File::create(path)
+        .map_err(|error| failure(CanvasExportError::Io(error), tiles))?;
     let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), tiles.size.x, tiles.size.y);
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
     encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
-    let mut writer = encoder.write_header().map_err(encoding_error)?;
-    let mut stream = writer.stream_writer().map_err(encoding_error)?;
+    let mut writer = encoder
+        .write_header()
+        .map_err(|error| failure(encoding_error(error), tiles))?;
+    let mut stream = writer
+        .stream_writer()
+        .map_err(|error| failure(encoding_error(error), tiles))?;
     let row_bytes = tiles.size.x as usize * 4;
     let mut band = vec![0; row_bytes * tiles.step.y as usize];
     let mut image = first;
     loop {
         let tile = tiles.tile();
-        copy_tile(&mut band, row_bytes, &image, tile)?;
+        copy_tile(&mut band, row_bytes, &image, tile).map_err(|error| failure(error, tiles))?;
         drop(image);
         if tile.origin.x + tile.size.x == tiles.size.x {
             for row in band[..row_bytes * tile.size.y as usize].chunks_exact(row_bytes) {
                 if context.is_cancelled() {
-                    return Err(CanvasExportError::Canceled);
+                    return Err(CanvasPngStop::Canceled);
                 }
-                stream.write_all(row).map_err(CanvasExportError::Io)?;
+                stream
+                    .write_all(row)
+                    .map_err(|error| failure(CanvasExportError::Io(error), tiles))?;
             }
         }
         if !tiles.advance() {
@@ -539,24 +631,61 @@ async fn encode_tiles(
         }
         bridge.lock().consumed = true;
         input = bridge.input().await;
-        image = tile_image(input, context)?;
+        image = tile_image(input, context).map_err(|error| match error {
+            CanvasPngStop::Failed(error) => CanvasPngStop::Failed(
+                error.with_context(
+                    bridge
+                        .frame("canvas.png.decode")
+                        .field("job_id", context.id().get())
+                        .field("tile", tiles.origin),
+                ),
+            ),
+            other => other,
+        })?;
     }
-    stream.finish().map_err(encoding_error)?;
-    writer.finish().map_err(encoding_error)
+    let frame = finish_frame(bridge, path, context.id().get(), tiles.size);
+    stream.finish().map_err(|error| {
+        CanvasPngStop::Failed(encoding_error(error).into_failure(frame.clone()))
+    })?;
+    finish_png(writer, frame)
+}
+
+fn finish_frame(bridge: &Bridge, path: &Path, job: u64, size: UVec2) -> ErrorFrame {
+    bridge
+        .frame("canvas.png.finish")
+        .field("path", path.display())
+        .field("job_id", job)
+        .field("size", size)
+}
+
+fn finish_png<W: Write>(
+    writer: png::Writer<W>,
+    frame: ErrorFrame,
+) -> std::result::Result<(), CanvasPngStop> {
+    writer
+        .finish()
+        .map_err(|error| CanvasPngStop::Failed(encoding_error(error).into_failure(frame)))
 }
 
 fn tile_image(
     input: ExportInput,
     context: &JobContext<()>,
-) -> std::result::Result<image::RgbaImage, CanvasExportError> {
+) -> std::result::Result<image::RgbaImage, CanvasPngStop> {
     match input {
-        ExportInput::Image(_) if context.is_cancelled() => Err(CanvasExportError::Canceled),
+        ExportInput::Image(_) if context.is_cancelled() => Err(CanvasPngStop::Canceled),
         ExportInput::Image(image) => image
             .try_into_dynamic()
             .map(|image| image.into_rgba8())
-            .map_err(|error| CanvasExportError::Render(error.to_string())),
-        ExportInput::Failed(error) => Err(error),
-        ExportInput::Canceled => Err(CanvasExportError::Canceled),
+            .map_err(|error| {
+                CanvasPngStop::Failed(JobFailure::external(
+                    error,
+                    ErrorFrame::new("canvas.png.image"),
+                ))
+            }),
+        ExportInput::Failed(error) => Err(CanvasPngStop::Failed(
+            error.into_failure(ErrorFrame::new("canvas.png.image")),
+        )),
+        ExportInput::Canceled => Err(CanvasPngStop::Canceled),
     }
 }
 
@@ -567,9 +696,10 @@ fn copy_tile(
     tile: Tile,
 ) -> std::result::Result<(), CanvasExportError> {
     if image.dimensions() != (tile.render_size.x, tile.render_size.y) {
-        return Err(CanvasExportError::Render(
-            "Readback tile dimensions do not match the request".into(),
-        ));
+        return Err(CanvasExportError::Render(CanvasRenderIssue::ReadbackSize {
+            expected: tile.render_size,
+            actual: UVec2::new(image.width(), image.height()),
+        }));
     }
     let crop = tile.origin - tile.render_origin;
     for y in 0..tile.size.y as usize {
@@ -606,7 +736,7 @@ fn next_tile(world: &mut World, entity: Entity) -> std::result::Result<(), Canva
     let owner = job
         .resources
         .as_mut()
-        .ok_or_else(|| CanvasExportError::Render("Export tile resources missing".into()))?;
+        .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingTileResources))?;
     let image = owner.target.image().clone();
     let scene = owner.scene;
     let ready = Arc::new(AtomicBool::new(false));
@@ -615,7 +745,7 @@ fn next_tile(world: &mut World, entity: Entity) -> std::result::Result<(), Canva
     owner.capture = None;
     let camera = world
         .get::<Parts>(scene)
-        .ok_or_else(|| CanvasExportError::Render("Export scene parts missing".into()))?
+        .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingSceneParts))?
         .camera;
     set_image(world, image.clone(), size)?;
     let center = region.center();
@@ -632,9 +762,7 @@ fn next_tile(world: &mut World, entity: Entity) -> std::result::Result<(), Canva
     if let Some(mut probe) = world.get_mut::<Probe>(camera) {
         probe.ready = ready;
     } else {
-        return Err(CanvasExportError::Render(
-            "Export readiness probe missing".into(),
-        ));
+        return Err(CanvasExportError::Render(CanvasRenderIssue::MissingProbe));
     }
     Ok(())
 }
@@ -661,7 +789,12 @@ fn set_image(
     world
         .resource_mut::<Assets<Image>>()
         .insert(image_handle.id(), image)
-        .map_err(|error| CanvasExportError::Render(error.to_string()))
+        .map_err(|error| {
+            CanvasExportError::Background(JobFailure::external(
+                error,
+                ErrorFrame::new("canvas.png.native_render"),
+            ))
+        })
 }
 
 fn prepare(
@@ -704,7 +837,7 @@ fn prepare(
         }
     };
     let Some(parts) = world.get::<Parts>(scene) else {
-        let error = CanvasExportError::Render("Export scene parts missing".to_owned())
+        let error = CanvasExportError::Render(CanvasRenderIssue::MissingSceneParts)
             .with_cleanup(target.release(world));
         world.despawn(scene);
         return Err(error);
@@ -714,7 +847,7 @@ fn prepare(
     world
         .entity_mut(entity)
         .get_mut::<CanvasPngExport>()
-        .ok_or_else(|| CanvasExportError::Render("Export operation missing".into()))?
+        .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingOperation))?
         .resources = Some(RenderResources {
         target,
         scene,
@@ -728,7 +861,7 @@ fn prepare(
     let job = world
         .get::<CanvasPngExport>(entity)
         .and_then(|job| job.resources.as_ref())
-        .ok_or_else(|| CanvasExportError::Render("Export job missing".to_owned()))?;
+        .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingOperation))?;
     let probe = Probe {
         meshes: job.meshes.iter().map(Handle::id).collect(),
         materials: job.materials.iter().map(Handle::id).collect(),
@@ -773,11 +906,11 @@ fn geometry(
             .add(ColorMaterial { color, ..default() });
         let mut export = world
             .get_mut::<CanvasPngExport>(job)
-            .ok_or_else(|| CanvasExportError::Render("Export job missing".to_owned()))?;
+            .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingOperation))?;
         let owner = export
             .resources
             .as_mut()
-            .ok_or_else(|| CanvasExportError::Render("Export resources missing".to_owned()))?;
+            .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingResources))?;
         owner.meshes.push(mesh.clone());
         owner.materials.push(material.clone());
         let mut transform = shape.transform;
@@ -795,7 +928,7 @@ fn geometry(
                 bevy::camera::visibility::NoFrustumCulling
             },
         )
-        .map_err(|error| CanvasExportError::Render(error.to_string()))?;
+        .map_err(CanvasExportError::Scene)?;
     }
     Ok(())
 }
@@ -852,9 +985,7 @@ fn poll_jobs(world: &mut World) -> Result {
                         world,
                         entity,
                         &bridge,
-                        ExportInput::Failed(CanvasExportError::Render(
-                            "Timed out waiting for export GPU rendering/readback".into(),
-                        )),
+                        ExportInput::Failed(CanvasExportError::Render(CanvasRenderIssue::Timeout)),
                     );
                 } else if state == Some(JobState::Stopping)
                     && (preparing
@@ -894,9 +1025,9 @@ fn poll_jobs(world: &mut World) -> Result {
                     Ok(JobRead::Finished(outcome)) => operation.finished = Some(outcome),
                     Ok(JobRead::Item(_) | JobRead::Empty) => {}
                     Ok(JobRead::Closed) => {
-                        return Err(BevyError::error(
-                            "Canvas PNG receiver closed before Finished",
-                        ));
+                        return Err(CanvasExportError::Render(CanvasRenderIssue::ReceiverClosed)
+                            .into_failure(bridge.frame("canvas.png.receive"))
+                            .into_bevy_error());
                     }
                     Err(error) => {
                         return Err(error.into_bevy_error());
@@ -909,11 +1040,12 @@ fn poll_jobs(world: &mut World) -> Result {
             let mut handoff = bridge.lock();
             if handoff.result.is_none() {
                 handoff.result = Some(Err(match outcome {
-                    JobOutcome::Canceled => CanvasExportError::Canceled,
-                    JobOutcome::Failed(error) => CanvasExportError::Background(error),
-                    JobOutcome::Completed => {
-                        CanvasExportError::Render("PNG Job completed without a result".into())
-                    }
+                    JobOutcome::Canceled => CanvasPngStop::Canceled,
+                    JobOutcome::Failed(error) => CanvasPngStop::Failed(error),
+                    JobOutcome::Completed => CanvasPngStop::Failed(
+                        CanvasExportError::Render(CanvasRenderIssue::UnexpectedCompletion)
+                            .into_failure(bridge.frame("canvas.png.complete")),
+                    ),
                 }));
             }
         }
@@ -939,26 +1071,21 @@ fn poll_jobs(world: &mut World) -> Result {
             continue;
         };
         let mut handoff = operation.bridge.lock();
-        let result = handoff
-            .result
-            .take()
-            .ok_or_else(|| BevyError::error("Canvas PNG completion result missing"))?;
+        let result = handoff.result.take().ok_or_else(|| {
+            CanvasExportError::Render(CanvasRenderIssue::MissingCompletion)
+                .into_failure(operation.bridge.frame("canvas.png.complete"))
+                .into_bevy_error()
+        })?;
         let result = match (result, handoff.cleanup_failure.take()) {
-            (Err(CanvasExportError::Canceled), Some(cleanup)) | (Ok(_), Some(cleanup)) => {
-                Err(CanvasExportError::Background(cleanup))
+            (Err(CanvasPngStop::Canceled), Some(cleanup)) | (Ok(_), Some(cleanup)) => {
+                Err(CanvasPngStop::Failed(cleanup))
             }
-            (Err(primary), Some(cleanup)) => Err(CanvasExportError::Background(
-                primary.into_job_failure().combine(cleanup),
-            )),
+            (Err(CanvasPngStop::Failed(primary)), Some(cleanup)) => {
+                Err(CanvasPngStop::Failed(primary.combine(cleanup)))
+            }
             (result, None) => result,
         };
         drop(handoff);
-        if let Err(error) = &result
-            && !matches!(error, CanvasExportError::Canceled)
-            && !error.record_managed_handled()
-        {
-            widgetry_error!(job_id=operation.id.get(), ?entity, document=?operation.document, path=?operation.path, %error, "Canvas PNG 导出失败");
-        }
         world.trigger(CanvasPngExportFinished {
             entity,
             job_id: operation.id,
@@ -977,6 +1104,24 @@ fn poll_jobs(world: &mut World) -> Result {
 }
 
 fn fail_export(world: &mut World, entity: Entity, bridge: &Bridge, input: ExportInput) {
+    let frame = world
+        .get::<CanvasPngExport>(entity)
+        .map(|job| {
+            bridge
+                .frame("canvas.png.render")
+                .field("export", entity)
+                .field("job_id", job.id.get())
+                .field("tile", job.tiles.origin)
+                .field("size", job.tiles.size)
+                .field("render_size", job.tiles.tile().render_size)
+        })
+        .unwrap_or_else(|| bridge.frame("canvas.png.render").field("export", entity));
+    let input = match input {
+        ExportInput::Failed(error) => {
+            ExportInput::Failed(CanvasExportError::Background(error.into_failure(frame)))
+        }
+        other => other,
+    };
     if let Some(mut job) = world.get_mut::<CanvasPngExport>(entity) {
         job.phase = Phase::Writing;
     }
@@ -1099,7 +1244,14 @@ fn cleanup_resources(world: &mut World) {
                 .remove(material.id());
         }
         let mut handoff = bridge.lock();
-        handoff.cleanup_failure = cleanup.err().map(|error| error.into_bevy_error().into());
+        if let Err(error) = cleanup {
+            let error = JobFailure::from(error.into_bevy_error())
+                .with_context(bridge.frame("canvas.png.cleanup"));
+            handoff.cleanup_failure = Some(match handoff.cleanup_failure.take() {
+                Some(previous) => previous.combine(error),
+                None => error,
+            });
+        }
         handoff.released = true;
         drop(handoff);
         bridge.changed.notify(usize::MAX);
@@ -1574,7 +1726,7 @@ mod tests {
             world.resource::<JobManager>().status(id).unwrap().state == JobState::Running
         });
         bridge.deliver(ExportInput::Failed(CanvasExportError::Render(
-            "original GPU failure".into(),
+            CanvasRenderIssue::Timeout,
         )));
         app.world().resource::<JobManager>().cancel(id).unwrap();
         poll_jobs(app.world_mut()).unwrap();
@@ -1587,7 +1739,7 @@ mod tests {
                 .result
                 .as_ref()
                 .unwrap_err()
-                .contains("original GPU failure")
+                .contains("Timeout")
         );
         assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
         assert!(app.world().resource::<Exports>().0.is_empty());
@@ -1664,10 +1816,23 @@ mod tests {
                 if event.result.is_ok() {
                     assert_eq!(image::image_dimensions(&event.path).unwrap(), (10, 10));
                     assert_eq!(outcome, JobOutcome::Completed);
-                } else if matches!(event.result, Err(CanvasExportError::Canceled)) {
+                } else if matches!(event.result, Err(CanvasPngStop::Canceled)) {
                     assert_eq!(outcome, JobOutcome::Canceled);
                 } else {
-                    assert!(matches!(outcome, JobOutcome::Failed(_)));
+                    let (
+                        Err(CanvasPngStop::Failed(event_failure)),
+                        JobOutcome::Failed(job_failure),
+                    ) = (&event.result, &outcome)
+                    else {
+                        panic!("expected managed failure in both channels")
+                    };
+                    assert_eq!(
+                        event_failure.diagnostics().count(),
+                        job_failure.diagnostics().count()
+                    );
+                    for (event, job) in event_failure.diagnostics().zip(job_failure.diagnostics()) {
+                        assert!(Arc::ptr_eq(event.origin(), job.origin()));
+                    }
                 }
                 notices.0.push(Notice {
                     entity: event.entity,
@@ -1746,10 +1911,10 @@ mod tests {
         let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let observed = seen.clone();
         app.add_observer(move |event: On<CanvasPngExportFinished>| {
-            let Err(CanvasExportError::Background(failure)) = &event.result else {
+            let Err(CanvasPngStop::Failed(failure)) = &event.result else {
                 panic!("completion must retain the typed cleanup and primary failures");
             };
-            assert!(failure.to_string().contains("primary GPU failure"));
+            assert!(failure.to_string().contains("Timeout"));
             assert_eq!(failure.diagnostics().count(), 2);
             observed.fetch_add(1, Ordering::Relaxed);
         });
@@ -1777,7 +1942,7 @@ mod tests {
             app.world_mut(),
             entity,
             &bridge,
-            ExportInput::Failed(CanvasExportError::Render("primary GPU failure".into())),
+            ExportInput::Failed(CanvasExportError::Render(CanvasRenderIssue::Timeout)),
         );
         logs.run(|| pump(&mut app, |world| world.resource::<Notices>().0.len() == 1));
         assert_eq!(seen.load(Ordering::Relaxed), 1);
@@ -1792,7 +1957,7 @@ mod tests {
         );
         assert_eq!(
             logs.diagnostic_records(&id, DiagnosticPhase::Handled).len(),
-            1,
+            0,
             "{:?}",
             logs.records()
         );
@@ -1924,7 +2089,7 @@ mod tests {
                 .result
                 .as_ref()
                 .unwrap_err()
-                .contains("Timed out")
+                .contains("Timeout")
         );
         assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
         app.update();
@@ -2043,6 +2208,109 @@ mod tests {
         assert!(notices[0].result.as_ref().unwrap_err().contains("I/O"));
         assert_eq!(notices[0].id, id);
         assert!(matches!(notices[0].outcome, JobOutcome::Failed(_)));
+        let JobOutcome::Failed(failure) = &notices[0].outcome else {
+            panic!("expected failed export")
+        };
+        let diagnostic = failure.diagnostics().next().unwrap();
+        let mut source: &dyn std::error::Error = diagnostic;
+        while !source.is::<std::io::Error>() {
+            source = source.source().unwrap();
+        }
+        assert!(diagnostic.contexts().iter().any(|frame| {
+            frame.fields().iter().any(|(key, value)| {
+                key == "path" && value == &directory.path().display().to_string()
+            })
+        }));
+        assert!(
+            diagnostic
+                .contexts()
+                .iter()
+                .any(|frame| frame.fields().iter().any(|(key, _)| key == "tile"))
+        );
+    }
+
+    #[test]
+    fn final_flush_failure_has_finish_context_without_an_out_of_bounds_tile() {
+        struct FailFlush(Arc<AtomicBool>);
+        impl Write for FailFlush {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                if self.0.load(Ordering::Acquire) {
+                    Err(std::io::Error::other("final flush failure"))
+                } else {
+                    Ok(())
+                }
+            }
+        }
+        let flag = Arc::new(AtomicBool::new(false));
+        let encoder = png::Encoder::new(FailFlush(flag.clone()), 1, 1);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(&[0]).unwrap();
+        flag.store(true, Ordering::Release);
+        let frame = finish_frame(&Bridge::default(), Path::new("result.png"), 1, UVec2::ONE);
+        let Err(CanvasPngStop::Failed(failure)) = finish_png(writer, frame) else {
+            panic!("flush should fail")
+        };
+        let diagnostic = failure.diagnostics().next().unwrap();
+        let mut cause: &dyn std::error::Error = diagnostic;
+        while !cause.is::<std::io::Error>() {
+            cause = cause.source().unwrap();
+        }
+        let frame = &diagnostic.contexts()[0];
+        assert!(
+            frame
+                .fields()
+                .iter()
+                .any(|(key, value)| key == "stage" && value == "canvas.png.finish")
+        );
+        assert!(
+            frame
+                .fields()
+                .iter()
+                .any(|(key, value)| key == "path" && value == "result.png")
+        );
+        assert!(
+            !frame
+                .fields()
+                .iter()
+                .any(|(key, _)| key == "tile" || key == "tile_size")
+        );
+    }
+
+    #[test]
+    fn handoff_retains_independent_failures_and_normal_cancel_has_no_diagnostic() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let bridge = Bridge::default();
+            bridge.deliver(ExportInput::Canceled);
+            assert!(logs.records().is_empty());
+            bridge.deliver(ExportInput::Failed(CanvasExportError::Render(
+                CanvasRenderIssue::Timeout,
+            )));
+            bridge.deliver(ExportInput::Failed(CanvasExportError::Render(
+                CanvasRenderIssue::MissingProbe,
+            )));
+            bridge.deliver(ExportInput::Canceled);
+            let Some(ExportInput::Failed(error)) = bridge.lock().input.take() else {
+                panic!("failure must win over cancellation")
+            };
+            let failure = error.into_failure(ErrorFrame::new("test.consume"));
+            assert_eq!(failure.diagnostics().count(), 2);
+            for diagnostic in failure.diagnostics() {
+                assert_eq!(
+                    logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                        .len(),
+                    1
+                );
+                assert!(
+                    logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                        .is_empty()
+                );
+            }
+        });
     }
 
     #[test]

@@ -735,7 +735,8 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
                     region: demo.region,
                     scale: demo.scale,
                 },
-            )?;
+            )
+            .map_err(CanvasExportError::Background)?;
             world.entity_mut(request).insert(PendingExport {
                 result: demo.result,
             });
@@ -765,7 +766,7 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
             error.record_handled("停止 Canvas PNG 导出并显示失败状态", "导出请求被拒绝")
         }
         Some(CanvasExportError::Background(error)) => {
-            error.record_handled("停止 Canvas SVG 导出并显示失败状态", "导出失败")
+            error.record_handled("停止 Canvas 文件导出并显示失败状态", "导出失败")
         }
         _ => {}
     }
@@ -792,18 +793,30 @@ fn png_finished(
                 ],
             )
         }
-        Err(error) => {
-            warn!(request=?event.entity,path=?event.path,%error,"Canvas PNG 文件导出失败");
-            LocalizedText::with_args(
-                TextKey::Canvas(CanvasKey::Failed),
-                vec![("error", error.to_string())],
-            )
-        }
+        Err(error) => LocalizedText::with_args(
+            TextKey::Canvas(CanvasKey::Failed),
+            vec![("error", error.to_string())],
+        ),
+    };
+    let failure = match &event.result {
+        Err(bevy_widgetry::canvas::CanvasPngStop::Failed(error)) => Some(error.clone()),
+        _ => None,
     };
     commands.queue(move |world: &mut World| -> Result {
         // An export may finish after the page that requested it has been removed.
-        if world.get_entity(result).is_ok() {
-            bind(world, result, binding)?;
+        if world.get_entity(result).is_ok()
+            && let Err(error) = bind(world, result, binding)
+        {
+            return Err(match failure {
+                Some(failure) => failure.combine(error.into()).into_bevy_error(),
+                None => error,
+            });
+        }
+        if let Some(failure) = failure {
+            failure.record_handled(
+                "显示导出失败状态或放弃已关闭页面的导出",
+                "终止本次 PNG 导出",
+            );
         }
         Ok(())
     });

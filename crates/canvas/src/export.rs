@@ -4,9 +4,25 @@ use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
 use bevy_widgetry_job::JobFailure;
 use std::{fmt, path::Path};
 mod png;
-pub use png::{CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions};
+pub use png::{CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop};
 pub(crate) fn install(app: &mut App) {
     png::install(app);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CanvasRenderIssue {
+    MissingTileResources,
+    MissingSceneParts,
+    MissingProbe,
+    MissingOperation,
+    MissingResources,
+    MissingExportIdentity,
+    Timeout,
+    UnexpectedCompletion,
+    ReceiverClosed,
+    MissingCompletion,
+    HandoffPoisoned,
+    ReadbackSize { expected: UVec2, actual: UVec2 },
 }
 
 #[derive(Debug)]
@@ -24,7 +40,7 @@ pub enum CanvasExportError {
     InvalidScale,
     InvalidResolution,
     RendererUnavailable,
-    Render(String),
+    Render(CanvasRenderIssue),
     Offscreen(bevy_widgetry_core::offscreen::OffscreenFailures),
     Cleanup {
         primary: Box<CanvasExportError>,
@@ -35,7 +51,6 @@ pub enum CanvasExportError {
     Io(std::io::Error),
     Job(bevy_widgetry_job::SubmitFailure),
     Background(bevy_widgetry_job::JobFailure),
-    Canceled,
 }
 
 impl fmt::Display for CanvasExportError {
@@ -52,7 +67,6 @@ impl fmt::Display for CanvasExportError {
             Self::Io(error) => write!(f, "Canvas export I/O failed: {error}"),
             Self::Job(error) => write!(f, "Canvas PNG Job submission failed: {error}"),
             Self::Background(error) | Self::Model(error) => fmt::Display::fmt(error, f),
-            Self::Canceled => f.write_str("Canvas PNG export canceled"),
             Self::InvalidScale => f.write_str("PNG scale must be finite and positive"),
             Self::InvalidResolution => {
                 f.write_str("PNG resolution exceeds texture, buffer or memory limits")
@@ -61,7 +75,7 @@ impl fmt::Display for CanvasExportError {
             Self::Offscreen(error) => write!(f, "Canvas PNG offscreen failed: {error}"),
             Self::Cleanup { primary, cleanup } => write!(f, "{primary}; cleanup: {cleanup}"),
             Self::Scene(error) => write!(f, "Canvas PNG scene failed: {error}"),
-            Self::Render(error) => write!(f, "Canvas PNG rendering failed: {error}"),
+            Self::Render(error) => write!(f, "Canvas PNG rendering failed: {error:?}"),
             Self::Encoding(error) => write!(f, "Canvas PNG encoding failed: {error}"),
             Self::UnsupportedColor { shape, color } => {
                 write!(
@@ -357,22 +371,6 @@ impl CanvasExportError {
             error => WidgetryFailure::new(error, frame).into(),
         }
     }
-    fn into_job_failure(self) -> bevy_widgetry_job::JobFailure {
-        use bevy_widgetry_job::JobFailure;
-        match self {
-            Self::Job(error) => error.into(),
-            Self::Background(error) | Self::Model(error) => error,
-            Self::Offscreen(error) => error.into_bevy_error().into(),
-            Self::Scene(error) => error.into_bevy_error().into(),
-            Self::Cleanup { primary, cleanup } => primary
-                .into_job_failure()
-                .combine(cleanup.into_bevy_error().into()),
-            error => JobFailure::external(
-                error,
-                bevy_widgetry_diagnostics::ErrorFrame::new("canvas.export.work"),
-            ),
-        }
-    }
     fn with_cleanup(
         self,
         result: Result<(), bevy_widgetry_core::offscreen::OffscreenFailures>,
@@ -383,34 +381,6 @@ impl CanvasExportError {
                 primary: Box::new(self),
                 cleanup,
             },
-        }
-    }
-
-    fn record_managed_handled(&self) -> bool {
-        match self {
-            Self::Background(error) | Self::Model(error) => {
-                error.record_handled("终止 PNG 导出并完成资源清理", "导出失败");
-                true
-            }
-            Self::Offscreen(error) => {
-                for diagnostic in error.diagnostics() {
-                    diagnostic.record_handled("终止 PNG 导出并完成资源清理", "导出失败");
-                }
-                true
-            }
-            Self::Scene(error) => {
-                for diagnostic in error.diagnostics().diagnostics() {
-                    diagnostic.record_handled("终止 PNG 导出并完成资源清理", "导出失败");
-                }
-                true
-            }
-            Self::Cleanup { primary, cleanup } => {
-                for diagnostic in cleanup.diagnostics() {
-                    diagnostic.record_handled("完成可用资源的回收并终止 PNG 导出", "部分清理失败");
-                }
-                primary.record_managed_handled()
-            }
-            _ => false,
         }
     }
 }

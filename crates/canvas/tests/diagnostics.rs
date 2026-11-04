@@ -169,6 +169,7 @@ fn export_model_rejections_preserve_owner_and_emit_only_the_source_error() {
                         CanvasPngOptions::default(),
                     )
                     .map(|_| ())
+                    .map_err(CanvasExportError::Model)
                 } else {
                     CanvasDocument::export_svg(&mut world, document, file.path(), None)
                         .map_err(CanvasExportError::Model)

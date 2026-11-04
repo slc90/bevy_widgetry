@@ -21,7 +21,10 @@ mod scale;
 mod selection;
 mod view;
 
-pub use export::{CanvasExportError, CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions};
+pub use export::{
+    CanvasExportError, CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop,
+    CanvasRenderIssue,
+};
 pub use model::{
     CanvasDocument, CanvasEllipse, CanvasFillRule, CanvasGeometry, CanvasLineCap, CanvasLineJoin,
     CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
