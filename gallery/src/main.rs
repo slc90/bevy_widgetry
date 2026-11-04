@@ -10,6 +10,7 @@ mod canvas_experiment;
 mod close;
 mod color_showcase;
 mod config;
+mod diagnostics;
 mod file_dialog_benchmark;
 mod gallery;
 mod header;
@@ -43,31 +44,51 @@ use bevy_widgetry::window::{
 };
 use std::path::PathBuf;
 
-fn main() -> Result {
-    let executable = std::env::current_exe().map_err(|error| {
-        error!(%error, "无法确定 Gallery executable 路径");
-        BevyError::error(error)
-    })?;
-    let loaded = config::load(executable.with_file_name("config").join("config.ron"));
+fn main() -> std::process::ExitCode {
+    let mut logging_ready = false;
+    let mut guard = None;
+    let result = run(&mut logging_ready, &mut guard);
+    let mut exit = match result {
+        Ok(exit) => exit,
+        Err(error) => {
+            diagnostics::startup(error, logging_ready);
+            AppExit::error()
+        }
+    };
+    if let Some(guard) = guard
+        && let Err(failure) = guard.finish()
+    {
+        diagnostics::logging_shutdown(&failure);
+        exit = AppExit::error();
+    }
+    match exit {
+        AppExit::Success => std::process::ExitCode::SUCCESS,
+        AppExit::Error(code) => std::process::ExitCode::from(code.get()),
+    }
+}
+
+fn run(
+    logging_ready: &mut bool,
+    guard: &mut Option<bevy_widgetry::app_logging::LoggingGuard>,
+) -> Result<AppExit> {
+    let executable = std::env::current_exe().map_err(diagnostics::error)?;
     let log_dir = match std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT") {
         Some(output) => PathBuf::from(output).join("logs"),
         None => executable.with_file_name("logs"),
     };
-    let logging = AppLogging::new(log_dir).map_err(|failure| {
-        eprintln!(
-            "Gallery 日志启动因未处理错误终止 phase=unhandled error_id={} error={} origin={} backtrace={}",
-            failure.origin().id(), failure,
-            failure.origin().location(),
-            failure.origin().backtrace()
-        );
-        failure.into_bevy_error()
-    })?;
+    let logging = AppLogging::new(log_dir).map_err(|failure| failure.into_bevy_error())?;
     let mut app = App::new();
+    app.set_error_handler(diagnostics::handler);
+    *guard = Some(logging.install(&mut app));
+    app.add_plugins(log_plugin());
+    *logging_ready = true;
+    if let Some(mode) = std::env::var_os("GALLERY_DIAGNOSTIC_PROBE") {
+        return diagnostics::run_probe(&mut app, &mode);
+    }
+    let loaded = config::load(executable.with_file_name("config").join("config.ron"));
     app.insert_resource(loaded.config.language);
     app.insert_resource(loaded.config.theme);
     i18n::install(&mut app);
-    let _log_guard = logging.install(&mut app);
-    app.add_plugins(log_plugin());
     app.insert_resource(WinitSettings::desktop_app());
     app.insert_resource(WidgetryCursorTheme::System);
     app.add_plugins(
@@ -122,7 +143,6 @@ fn main() -> Result {
         bevy_widgetry::window::taskbar_icon!("src/assets/icons/widget_gallery_taskbar.png")
             .map_err(window_startup_failure)?,
     );
-    loaded.report();
     app.insert_resource(loaded.config)
         .insert_resource(loaded.file);
     header::install(&mut app)?;
@@ -133,15 +153,13 @@ fn main() -> Result {
     page_lifecycle_benchmark::install(&mut app)?;
     close::install(&mut app)?;
     canvas_experiment::install(&mut app);
-    app.run();
-    Ok(())
+    Ok(app.run())
 }
 
 fn window_startup_failure(failure: bevy_widgetry::window::WindowFailure) -> BevyError {
     let failure = failure.with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
         "gallery.startup",
     ));
-    error!(error_id = %failure.origin().id(), phase = "unhandled", origin = ?failure.origin().location(), backtrace = %failure.origin().backtrace(), context = ?failure.contexts(), "Gallery 启动因未处理的窗口错误终止");
     failure.into_bevy_error()
 }
 
@@ -163,8 +181,10 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) -> Result {
     let (target, mut window) = primary_window.single_mut().map_err(|error| {
-        error!(%error, "Gallery 初始化需要唯一主窗口");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 初始化需要唯一主窗口"),
+        )
     })?;
     // winit sets size before positioning the window, so initialization across displays with different DPI can scale its physical size.
     // Restore the fixed startup size in Startup after native creation and positioning so the first frame does not use the scaled size.
@@ -215,6 +235,7 @@ mod startup_tests {
                 .iter()
                 .any(|frame| frame.operation() == "gallery.startup")
         );
+        logs.run(|| diagnostics::startup(error, true));
         assert_eq!(
             logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
                 .len(),

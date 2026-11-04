@@ -78,8 +78,10 @@ fn scene() -> impl Scene {
 }
 
 fn invalid(reason: &str) -> BevyError {
-    error!(reason, "ProgressBar 演示内部结构失效");
-    BevyError::error(reason.to_owned())
+    crate::diagnostics::at(
+        reason.to_owned(),
+        bevy_widgetry::diagnostics::ErrorFrame::new("ProgressBar 演示内部结构失效"),
+    )
 }
 
 fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands) {

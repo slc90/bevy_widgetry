@@ -17,7 +17,7 @@ use bevy::{
     window::{CursorIcon, CursorSystems, SystemCursorIcon, WindowClosed, WindowFocused},
 };
 use bevy_widgetry_asset::WidgetryAssetPlugin;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::widgetry_info;
 
 pub struct WidgetryCursorPlugin;
 
@@ -65,11 +65,21 @@ fn writer_enabled(enabled: Res<CursorWriterEnabled>) -> bool {
 }
 
 fn reject_duplicate_writer() -> Result {
-    widgetry_error!("WidgetryCursorPlugin 不可与 CursorIconPlugin 同时安装");
-    Err(BevyError::error(
-        "WidgetryCursorPlugin conflicts with CursorIconPlugin",
-    ))
+    Err(bevy_widgetry_diagnostics::WidgetryFailure::new(
+        CursorWriterConflict,
+        bevy_widgetry_diagnostics::ErrorFrame::new("cursor.install"),
+    )
+    .into_bevy_error())
 }
+
+#[derive(Debug)]
+struct CursorWriterConflict;
+impl std::fmt::Display for CursorWriterConflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("WidgetryCursorPlugin conflicts with CursorIconPlugin")
+    }
+}
+impl std::error::Error for CursorWriterConflict {}
 
 fn coordinate(
     mut inputs: MessageReader<PointerInput>,

@@ -31,9 +31,17 @@ pub(super) fn save(In(value): In<Option<Value>>, world: &mut World) -> BrpResult
 
 pub(super) fn persist(world: &mut World, id: &str, session: &mut Session) {
     session.dirty = true;
+    let path = session.directory.join("document.json");
+    let context = || {
+        bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.save")
+            .field("session", id)
+            .field("path", path.display())
+    };
     let result = snapshot(world, id, session).and_then(|archive| {
-        let bytes = serde_json::to_vec_pretty(&archive).map_err(BrpError::resource_error)?;
-        replace(&session.directory.join("document.json"), &bytes).map_err(BrpError::resource_error)
+        let bytes = serde_json::to_vec_pretty(&archive)
+            .map_err(|error| crate::diagnostics::response_error_at(error, context()))?;
+        replace(&path, &bytes)
+            .map_err(|error| crate::diagnostics::response_error_at(error, context()))
     });
     match result {
         Ok(()) => {
@@ -41,7 +49,6 @@ pub(super) fn persist(world: &mut World, id: &str, session: &mut Session) {
             session.save_error = None;
         }
         Err(error) => {
-            warn!(session = id, path = %session.directory.display(), error = %error.message, "绘画已生效但工作存档保存失败");
             session.save_error = Some(error.message);
         }
     }
@@ -53,13 +60,13 @@ fn snapshot(world: &mut World, id: &str, session: &Session) -> Result<Archive, B
         .iter()
         .map(|(id, entity)| (*entity, id))
         .collect();
-    let order =
-        CanvasDocument::shape_order(world, session.document).map_err(BrpError::resource_error)?;
+    let order = CanvasDocument::shape_order(world, session.document)
+        .map_err(crate::diagnostics::managed_response_error)?;
     let mut active = BTreeSet::new();
     let mut shapes = Vec::with_capacity(order.len());
     for entity in order {
         let id = reverse.get(&entity).ok_or_else(|| {
-            BrpError::resource_error("Document contains a shape without a stable ID")
+            crate::diagnostics::response_error("Document contains a shape without a stable ID")
         })?;
         active.insert(id.as_str());
         shapes.push(drawing::record(world, session, id)?);
@@ -96,7 +103,12 @@ fn replace(path: &Path, bytes: &[u8]) -> io::Result<()> {
         && temporary.exists()
         && let Err(error) = std::fs::remove_file(&temporary)
     {
-        warn!(%error, path = %temporary.display(), "绘画存档临时文件清理失败");
+        let failure = crate::diagnostics::failure(
+            crate::diagnostics::GalleryError::Operation(error.into()),
+            bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.cleanup")
+                .field("path", temporary.display()),
+        );
+        failure.record_handled("放弃清理临时存档", "保留原始存档结果");
     }
     result
 }
@@ -109,7 +121,8 @@ pub(super) fn load(world: &mut World, id: &str) -> Result<Session, BrpError> {
 }
 
 fn load_from(world: &mut World, id: &str, directory: PathBuf) -> Result<Session, BrpError> {
-    let bytes = std::fs::read(directory.join("document.json")).map_err(BrpError::resource_error)?;
+    let bytes = std::fs::read(directory.join("document.json"))
+        .map_err(crate::diagnostics::response_error)?;
     let archive: Archive = serde_json::from_slice(&bytes).map_err(invalid_params)?;
     if archive.version != 1
         || archive.session != id
@@ -135,7 +148,7 @@ fn load_from(world: &mut World, id: &str, directory: PathBuf) -> Result<Session,
         }
     }
     let next_stage = super::stages::next_number(&directory, archive.next_stage)
-        .map_err(BrpError::resource_error)?;
+        .map_err(crate::diagnostics::response_error)?;
     let document = world
         .spawn((CanvasDocument, Name::new(format!("PaintingDocument-{id}"))))
         .id();
@@ -159,7 +172,7 @@ fn load_from(world: &mut World, id: &str, directory: PathBuf) -> Result<Session,
             let paint = drawing::decode::<CanvasPaint>(world, shape.paint)?;
             let transform = drawing::decode::<Transform>(world, shape.transform)?;
             let entity = drawing::create_shape(world, document, geometry, paint, transform)
-                .map_err(BrpError::resource_error)?;
+                .map_err(crate::diagnostics::managed_response_error)?;
             session.shapes.insert(shape.id, entity);
         }
         Ok(())
@@ -176,6 +189,62 @@ fn load_from(world: &mut World, id: &str, directory: PathBuf) -> Result<Session,
 mod tests {
     use super::*;
     use std::os::windows::fs::OpenOptionsExt;
+
+    #[test]
+    fn failed_save_reports_session_and_path_and_keeps_the_previous_archive() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+
+        let mut world = World::new();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("document.json");
+        replace(&path, b"previous archive").unwrap();
+        let locked = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .unwrap();
+        let mut session = Session {
+            document: world.spawn(CanvasDocument).id(),
+            size: UVec2::new(100, 200),
+            directory: directory.path().into(),
+            window: None,
+            shapes: BTreeMap::new(),
+            next_stage: 1,
+            dirty: false,
+            save_error: None,
+        };
+        let logs = LogCapture::with_targets(["widget_gallery", "bevy_widgetry"]);
+        logs.run(|| persist(&mut world, "painting-locked", &mut session));
+        assert!(session.dirty);
+        assert!(session.save_error.is_some());
+        drop(locked);
+        assert_eq!(std::fs::read(&path).unwrap(), b"previous archive");
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+        let records = logs.records();
+        let source: Vec<_> = records
+            .iter()
+            .filter(|record| record.phase() == Some(DiagnosticPhase::Source))
+            .collect();
+        assert_eq!(source.len(), 1);
+        let reason = &source[0].fields["error"];
+        assert!(reason.contains("painting-locked"), "{reason}");
+        assert!(
+            reason.contains(&format!("{:?}", path.display().to_string())),
+            "{reason}"
+        );
+        let handled: Vec<_> = records
+            .iter()
+            .filter(|record| record.phase() == Some(DiagnosticPhase::Handled))
+            .collect();
+        assert_eq!(handled.len(), 1);
+        assert_eq!(source[0].fields["error_id"], handled[0].fields["error_id"]);
+        logs.run(|| persist(&mut world, "painting-locked", &mut session));
+        assert!(!session.dirty);
+        assert!(session.save_error.is_none());
+        assert_eq!(logs.records().len(), records.len());
+        let archive: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(archive["session"], "painting-locked");
+    }
 
     #[test]
     fn atomic_replace_preserves_previous_file_on_windows_sharing_failure() {

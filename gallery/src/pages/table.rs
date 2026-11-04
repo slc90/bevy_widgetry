@@ -458,8 +458,12 @@ fn view(world: &mut World, target: DemoTable) -> Result<Entity, BevyError> {
         .find(|(_, table)| **table == target)
         .map(|(entity, _)| entity)
         .ok_or_else(|| {
-            error!(demo = ?target.0, side = target.1, "Gallery Table 示例缺少 View");
-            BevyError::error("Gallery Table View missing")
+            crate::diagnostics::at(
+                "Gallery Table View missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("Gallery Table 示例缺少 View")
+                    .field("demo", format_args!("{:?}", target.0))
+                    .field("side", target.1),
+            )
         })
 }
 
@@ -477,7 +481,9 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
             Action::ToggleColumnReordering => {
                 let mut config = world
                     .get_mut::<WidgetryTableColumnReordering>(root)
-                    .ok_or_else(|| BevyError::error("Table column reordering config missing"))?;
+                    .ok_or_else(|| {
+                        crate::diagnostics::error("Table column reordering config missing")
+                    })?;
                 config.enabled = !config.enabled;
                 info!(?root, enabled = config.enabled, "切换 Table 列拖拽");
             }
@@ -490,7 +496,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                 let index = world.resource::<TableDemoSources>().next_column;
                 let mut model = world
                     .get_mut::<WidgetryTableModel<DemoRow>>(action.source)
-                    .ok_or_else(|| BevyError::error("Table Model missing"))?;
+                    .ok_or_else(|| crate::diagnostics::error("Table Model missing"))?;
                 let at = model.column_count().min(1);
                 let column = model
                     .insert_column(at, column(index, false, false))
@@ -510,7 +516,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
             Action::RemoveColumn | Action::MoveColumn => {
                 let mut model = world
                     .get_mut::<WidgetryTableModel<DemoRow>>(action.source)
-                    .ok_or_else(|| BevyError::error("Table Model missing"))?;
+                    .ok_or_else(|| crate::diagnostics::error("Table Model missing"))?;
                 if matches!(action.kind, Action::RemoveColumn) {
                     model.remove_column(0);
                     info!(?root, "删除 Model 首列");
@@ -546,7 +552,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
             Action::CycleFrozen => {
                 let mut layout = world
                     .get_mut::<WidgetryTableLayout>(root)
-                    .ok_or_else(|| BevyError::error("Table Layout missing"))?;
+                    .ok_or_else(|| crate::diagnostics::error("Table Layout missing"))?;
                 layout.frozen_columns = match layout.frozen_columns {
                     0 => 1,
                     1 => 2,
@@ -564,9 +570,9 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                 info!(?root, "切换 Table 编辑模式");
             }
             Action::ToggleProjection => {
-                let mut demo = world
-                    .get_mut::<ProjectionDemo>(root)
-                    .ok_or_else(|| BevyError::error("Gallery Table projection control missing"))?;
+                let mut demo = world.get_mut::<ProjectionDemo>(root).ok_or_else(|| {
+                    crate::diagnostics::error("Gallery Table projection control missing")
+                })?;
                 demo.enabled = !demo.enabled;
                 demo.applied = None;
                 info!(?root, enabled = demo.enabled, "切换 Table 受控行投影");
@@ -607,8 +613,13 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                 let mut model = world
                     .get_mut::<WidgetryTableModel<DemoRow>>(action.source)
                     .ok_or_else(|| {
-                        error!(source = ?action.source, "Gallery Table 示例缺少 Model");
-                        BevyError::error("Gallery Table Model missing")
+                        crate::diagnostics::at(
+                            "Gallery Table Model missing",
+                            bevy_widgetry::diagnostics::ErrorFrame::new(
+                                "Gallery Table 示例缺少 Model",
+                            )
+                            .field("source", format_args!("{:?}", action.source)),
+                        )
                     })?;
                 if matches!(action.kind, Action::UpdateRow) {
                     if let Some(row) = model
@@ -648,8 +659,13 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                 let mut model = world
                     .get_mut::<WidgetryTableModel<DemoRow>>(action.source)
                     .ok_or_else(|| {
-                        error!(source = ?action.source, "Gallery Table 示例缺少 Model");
-                        BevyError::error("Gallery Table Model missing")
+                        crate::diagnostics::at(
+                            "Gallery Table Model missing",
+                            bevy_widgetry::diagnostics::ErrorFrame::new(
+                                "Gallery Table 示例缺少 Model",
+                            )
+                            .field("source", format_args!("{:?}", action.source)),
+                        )
                     })?;
                 match action.kind {
                     Action::InsertRow => {
@@ -682,8 +698,11 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
             }
             Action::ResizeViewport => {
                 let mut node = world.get_mut::<Node>(root).ok_or_else(|| {
-                    error!(?root, "Gallery Table 示例缺少 Node");
-                    BevyError::error("Gallery Table Node missing")
+                    crate::diagnostics::at(
+                        "Gallery Table Node missing",
+                        bevy_widgetry::diagnostics::ErrorFrame::new("Gallery Table 示例缺少 Node")
+                            .field("root", format_args!("{:?}", root)),
+                    )
                 })?;
                 node.width = if node.width == percent(100) {
                     px(720)
@@ -705,22 +724,24 @@ fn refresh_shared_projection(world: &mut World) -> Result {
     for root in roots {
         let source = world
             .get::<WidgetryTable<DemoRow>>(root)
-            .ok_or_else(|| BevyError::error("Gallery Table View missing"))?
+            .ok_or_else(|| crate::diagnostics::error("Gallery Table View missing"))?
             .source();
-        let entity = world.get_entity(source).map_err(BevyError::error)?;
+        let entity = world
+            .get_entity(source)
+            .map_err(crate::diagnostics::error)?;
         let model = entity
             .get_ref::<WidgetryTableModel<DemoRow>>()
-            .ok_or_else(|| BevyError::error("Gallery Table Model missing"))?;
+            .ok_or_else(|| crate::diagnostics::error("Gallery Table Model missing"))?;
         let tick = model.last_changed();
-        let demo = world
-            .get::<ProjectionDemo>(root)
-            .ok_or_else(|| BevyError::error("Gallery Table projection settings missing"))?;
+        let demo = world.get::<ProjectionDemo>(root).ok_or_else(|| {
+            crate::diagnostics::error("Gallery Table projection settings missing")
+        })?;
         if demo.applied == Some(tick) {
             continue;
         }
         let state = world
             .get::<WidgetryTableViewState>(root)
-            .ok_or_else(|| BevyError::error("Gallery Table projection missing"))?;
+            .ok_or_else(|| crate::diagnostics::error("Gallery Table projection missing"))?;
         let (sort, filters) = if demo.applied.is_none() {
             let column = model.column_id(0);
             if demo.enabled {
@@ -768,11 +789,11 @@ fn project(
     }
     let source = world
         .get::<WidgetryTable<DemoRow>>(root)
-        .ok_or_else(|| BevyError::error("Gallery Table View missing"))?
+        .ok_or_else(|| crate::diagnostics::error("Gallery Table View missing"))?
         .source();
     let model = world
         .get::<WidgetryTableModel<DemoRow>>(source)
-        .ok_or_else(|| BevyError::error("Gallery Table Model missing"))?;
+        .ok_or_else(|| crate::diagnostics::error("Gallery Table Model missing"))?;
     let mut rows = (0..model.row_count())
         .filter(|&index| {
             let Some(row) = model.row(index) else {
@@ -799,7 +820,7 @@ fn project(
         .collect::<Vec<_>>();
     if let Some(sort) = sort {
         if model.column_index(sort.column).is_none() {
-            return Err(BevyError::error("Gallery sort column missing"));
+            return Err(crate::diagnostics::error("Gallery sort column missing"));
         }
         rows.sort_by(|&a, &b| {
             let values = model
@@ -972,20 +993,33 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
         let model = world
             .get::<WidgetryTableModel<DemoRow>>(source)
             .ok_or_else(|| {
-                error!(?source, "Gallery Table status 缺少 Model");
-                BevyError::error("Gallery Table status Model missing")
+                crate::diagnostics::at(
+                    "Gallery Table status Model missing",
+                    bevy_widgetry::diagnostics::ErrorFrame::new("Gallery Table status 缺少 Model")
+                        .field("source", format_args!("{:?}", source)),
+                )
             })?;
         let state = world.get::<WidgetryTableState>(root).ok_or_else(|| {
-            error!(?root, "Gallery Table status 缺少 logical state");
-            BevyError::error("Gallery Table status state missing")
+            crate::diagnostics::at(
+                "Gallery Table status state missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new(
+                    "Gallery Table status 缺少 logical state",
+                )
+                .field("root", format_args!("{:?}", root)),
+            )
         })?;
         let events = world.get::<DemoEvents>(root).ok_or_else(|| {
-            error!(?root, "Gallery Table status 缺少 event state");
-            BevyError::error("Gallery Table status events missing")
+            crate::diagnostics::at(
+                "Gallery Table status events missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new(
+                    "Gallery Table status 缺少 event state",
+                )
+                .field("root", format_args!("{:?}", root)),
+            )
         })?;
         let projection = world
             .get::<WidgetryTableViewState>(root)
-            .ok_or_else(|| BevyError::error("Gallery Table row projection missing"))?;
+            .ok_or_else(|| crate::diagnostics::error("Gallery Table row projection missing"))?;
         let indices = cells
             .iter()
             .filter(|(owner, _)| *owner == root)

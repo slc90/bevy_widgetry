@@ -137,8 +137,10 @@ fn add_rectangle(world: &mut World, document: Entity) -> Result {
 fn enter(world: &mut World) -> Result {
     let directory = std::env::current_exe()
         .map_err(|error| {
-            error!(%error, "无法确定 Canvas 导出目录");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("无法确定 Canvas 导出目录"),
+            )
         })?
         .with_file_name("exports");
     let document = world
@@ -341,8 +343,10 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
 }
 
 fn invalid(reason: &str) -> BevyError {
-    error!(reason, "Canvas 演示内部结构失效");
-    BevyError::error(reason.to_owned())
+    crate::diagnostics::at(
+        reason.to_owned(),
+        bevy_widgetry::diagnostics::ErrorFrame::new("Canvas 演示内部结构失效"),
+    )
 }
 
 fn bind(world: &mut World, entity: Entity, binding: LocalizedText) -> Result {
@@ -715,7 +719,15 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
         );
     }
     let result = (|| -> std::result::Result<_, CanvasExportError> {
-        std::fs::create_dir_all(&demo.directory).map_err(CanvasExportError::Io)?;
+        std::fs::create_dir_all(&demo.directory).map_err(|source| {
+            CanvasExportError::Background(bevy_widgetry::job::JobFailure::from(
+                crate::diagnostics::failure(
+                    crate::diagnostics::GalleryError::Operation(source.into()),
+                    bevy_widgetry::diagnostics::ErrorFrame::new("gallery.canvas.export_directory")
+                        .field("path", demo.directory.display()),
+                ),
+            ))
+        })?;
         if matches!(action, Action::Svg) {
             let path = demo.directory.join("canvas.svg");
             CanvasDocument::export_svg(world, demo.document, &path, demo.region)
@@ -747,12 +759,6 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
     let (binding, failure) = match result {
         Ok(binding) => (binding, None),
         Err(error) => {
-            if !matches!(
-                error,
-                CanvasExportError::Job(_) | CanvasExportError::Background(_)
-            ) {
-                warn!(%error,"Canvas 文件导出失败");
-            }
             let binding = LocalizedText::with_args(
                 TextKey::Canvas(CanvasKey::Failed),
                 vec![("error", error.to_string())],

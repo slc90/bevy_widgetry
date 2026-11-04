@@ -84,10 +84,10 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
     commands.queue(move |world: &mut World| -> Result {
         let Some(operation)=world.get::<Demo>(launcher).copied() else {return Ok(());};
         let Some(owner)=ancestor_with::<PageOwner>(world,launcher) else {return Ok(());};
-        let item=world.get::<ChildOf>(launcher).map(ChildOf::parent).ok_or_else(|| BevyError::error("FileDialog launcher container missing"))?;
-        let result=world.get::<Children>(item).and_then(|children| children.iter().find(|entity| world.get::<DemoResult>(*entity).is_some())).ok_or_else(|| BevyError::error("FileDialog result text missing"))?;
+        let item=world.get::<ChildOf>(launcher).map(ChildOf::parent).ok_or_else(|| crate::diagnostics::error("FileDialog launcher container missing"))?;
+        let result=world.get::<Children>(item).and_then(|children| children.iter().find(|entity| world.get::<DemoResult>(*entity).is_some())).ok_or_else(|| crate::diagnostics::error("FileDialog result text missing"))?;
         if world.get::<DemoResult>(result).and_then(|state| state.active).is_some_and(|root| world.get_entity(root).is_ok()) {return Ok(());}
-        let parent=world.query_filtered::<Entity,With<PrimaryWindow>>().single(world).map_err(|error| BevyError::error(format!("FileDialog primary window unavailable: {error}")))?;
+        let parent=world.query_filtered::<Entity,With<PrimaryWindow>>().single(world).map_err(|error| crate::diagnostics::at(error, bevy_widgetry::diagnostics::ErrorFrame::new("gallery.file_dialog.primary_window")))?;
         let modal=world.query_filtered::<Entity,(With<ModalityToggle>,With<Checked>)>().iter(world).any(|entity| ancestor_with::<PageOwner>(world,entity)==Some(owner));
         let window=WidgetryFileDialogWindow {parent:Some(parent),modality:if modal {WidgetryFileDialogModality::Modal} else {WidgetryFileDialogModality::NonModal},native:Window {title:tr(*world.resource::<Language>(), operation.title()).into(),..WidgetryFileDialogWindow::default().native}};
         let filters=operation.filters(*world.resource::<Language>());

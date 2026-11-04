@@ -87,7 +87,11 @@ fn enter(world: &mut World) -> Result {
     let selected = match time::OffsetDateTime::now_local() {
         Ok(now) => Some(now.date()),
         Err(error) => {
-            warn!(%error, "DatePicker 演示无法读取本地日期，主实例保持未选择");
+            let failure = crate::diagnostics::failure(
+                crate::diagnostics::GalleryError::Operation(error.into()),
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.date_picker.local_date"),
+            );
+            failure.record_handled("保持日期主实例未选择", "可继续手动选择日期");
             None
         }
     };
@@ -209,8 +213,11 @@ fn operate(
         .iter_ancestors(event.entity)
         .find_map(|ancestor| parts.get(ancestor).ok().map(|parts| parts.picker))
         .ok_or_else(|| {
-            error!(entity=?event.entity, "DatePicker 操作按钮缺少示例归属");
-            BevyError::error("DatePicker operation owner is missing")
+            crate::diagnostics::at(
+                "DatePicker operation owner is missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("DatePicker 操作按钮缺少示例归属")
+                    .field("entity", format_args!("{:?}", event.entity)),
+            )
         })?;
     commands.queue(move |world: &mut World| -> Result {
         let changed = match action {
@@ -249,8 +256,11 @@ fn operate(
             .map_err(DatePickerFailure::into_bevy_error)?,
         };
         let mut state = world.get_mut::<DatePickerDemoState>(root).ok_or_else(|| {
-            error!(?root, "DatePicker 示例观测状态缺失");
-            BevyError::error("DatePicker demo state is missing")
+            crate::diagnostics::at(
+                "DatePicker demo state is missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("DatePicker 示例观测状态缺失")
+                    .field("root", format_args!("{:?}", root)),
+            )
         })?;
         state.last_action = Some(action.key());
         state.last_changed = changed;
@@ -274,8 +284,11 @@ fn refresh(world: &mut World) -> Result {
         let month = WidgetryDatePicker::displayed_month(world, picker)
             .map_err(DatePickerFailure::into_bevy_error)?;
         let state = world.get::<DatePickerDemoState>(picker).ok_or_else(|| {
-            error!(?picker, "DatePicker 示例观测状态缺失");
-            BevyError::error("DatePicker demo state is missing")
+            crate::diagnostics::at(
+                "DatePicker demo state is missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("DatePicker 示例观测状态缺失")
+                    .field("picker", format_args!("{:?}", picker)),
+            )
         })?;
         let value = LocalizedText::with_args(
             TextKey::DatePicker(DatePickerKey::Status),
@@ -330,8 +343,11 @@ fn refresh(world: &mut World) -> Result {
         };
         for (entity, text) in [(status, value), (history, events), (operation, result)] {
             let mut current = world.get_mut::<Text>(entity).ok_or_else(|| {
-                error!(?entity, "DatePicker 观测面板文字缺失");
-                BevyError::error("DatePicker readout Text is missing")
+                crate::diagnostics::at(
+                    "DatePicker readout Text is missing",
+                    bevy_widgetry::diagnostics::ErrorFrame::new("DatePicker 观测面板文字缺失")
+                        .field("entity", format_args!("{:?}", entity)),
+                )
             })?;
             changed |= current.set_if_neq(Text(text));
         }

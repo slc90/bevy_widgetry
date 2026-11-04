@@ -33,8 +33,10 @@ pub(super) fn install(app: &mut App) -> Result {
     app.insert_resource(channel.clone())
         .add_plugins(RenderDiagnosticsPlugin);
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
-        error!("Splash benchmark 需要 RenderApp");
-        return Err(BevyError::error("Splash benchmark 需要 RenderApp"));
+        return Err(crate::diagnostics::at(
+            "Splash benchmark 需要 RenderApp",
+            bevy_widgetry::diagnostics::ErrorFrame::new("Splash benchmark 需要 RenderApp"),
+        ));
     };
     render_app
         .insert_resource(channel)

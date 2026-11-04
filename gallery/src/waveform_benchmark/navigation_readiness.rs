@@ -18,9 +18,9 @@ struct Readiness {
 }
 
 pub(super) fn install(app: &mut App, output: PathBuf) -> Result {
-    fs::create_dir_all(&output)?;
+    fs::create_dir_all(&output).map_err(|error| crate::diagnostics::error(error))?;
     if output.join("ready.txt").exists() {
-        return Err(BevyError::error(
+        return Err(crate::diagnostics::error(
             "waveform navigation output contains stale readiness",
         ));
     }
@@ -90,7 +90,7 @@ fn capture_when_ready(world: &mut World) -> Result {
             && (world.get::<Button>(*entity).is_none()
                 || world.get::<InteractionDisabled>(*entity).is_some())
         {
-            return Err(BevyError::error(
+            return Err(crate::diagnostics::error(
                 "waveform navigation WaveformNav is not interactive",
             ));
         }
@@ -149,12 +149,12 @@ fn capture_when_ready(world: &mut World) -> Result {
                 return Ok(());
             }
         }
-        let node = world
-            .get::<ComputedNode>(entity)
-            .ok_or_else(|| BevyError::error("waveform navigation content has no layout"))?;
-        let transform = world
-            .get::<UiGlobalTransform>(entity)
-            .ok_or_else(|| BevyError::error("waveform navigation content has no transform"))?;
+        let node = world.get::<ComputedNode>(entity).ok_or_else(|| {
+            crate::diagnostics::error("waveform navigation content has no layout")
+        })?;
+        let transform = world.get::<UiGlobalTransform>(entity).ok_or_else(|| {
+            crate::diagnostics::error("waveform navigation content has no transform")
+        })?;
         let center = transform.to_scale_angle_translation().2;
         regions.push((center - node.size() * 0.5, center + node.size() * 0.5));
     }
@@ -187,11 +187,17 @@ fn on_capture(
             redraw.write(RequestRedraw);
             return Ok(());
         }
-        let background = image.get_color_at(x0, y0)?;
+        let background = image
+            .get_color_at(x0, y0)
+            .map_err(|error| crate::diagnostics::error(error))?;
         let mut changed = 0;
         for y in y0..y1 {
             for x in x0..x1 {
-                if image.get_color_at(x, y)? != background {
+                if image
+                    .get_color_at(x, y)
+                    .map_err(|error| crate::diagnostics::error(error))?
+                    != background
+                {
                     changed += 1;
                 }
             }
@@ -203,19 +209,22 @@ fn on_capture(
     }
     image
         .clone()
-        .try_into_dynamic()?
-        .save(readiness.output.join("ready.png"))?;
+        .try_into_dynamic()
+        .map_err(|error| crate::diagnostics::error(error))?
+        .save(readiness.output.join("ready.png"))
+        .map_err(|error| crate::diagnostics::error(error))?;
     fs::write(
         readiness.output.join("ready.tmp"),
         format!(
             "Button page; {} rendered navigation Text/Icon regions; WaveformNav enabled; 1920x1080; DX12\n",
             readiness.regions.len()
         ),
-    )?;
+    ).map_err(|error| crate::diagnostics::error(error))?;
     fs::rename(
         readiness.output.join("ready.tmp"),
         readiness.output.join("ready.txt"),
-    )?;
+    )
+    .map_err(|error| crate::diagnostics::error(error))?;
     readiness.published = true;
     Ok(())
 }

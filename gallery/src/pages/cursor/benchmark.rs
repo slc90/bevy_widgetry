@@ -91,6 +91,8 @@ fn record(
 }
 
 fn failure(error: std::io::Error) -> BevyError {
-    error!(%error, "Cursor benchmark 文件操作失败");
-    BevyError::error(error)
+    crate::diagnostics::at(
+        error,
+        bevy_widgetry::diagnostics::ErrorFrame::new("Cursor benchmark 文件操作失败"),
+    )
 }

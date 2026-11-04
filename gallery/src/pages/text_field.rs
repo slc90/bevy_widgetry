@@ -17,7 +17,7 @@ fn clear_slot_text(
         .iter_ancestors(event.entity)
         .find(|&entity| roots.contains(entity));
     commands.queue(move |world: &mut World| -> Result {
-        let root = root.ok_or_else(|| BevyError::error("组合 TextField 根实体缺失"))?;
+        let root = root.ok_or_else(|| crate::diagnostics::error("组合 TextField 根实体缺失"))?;
         let changed = WidgetryTextField::set_text_in_world(world, root, "").map_err(|error| {
             error
                 .with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
@@ -37,7 +37,7 @@ fn toggle_auto_width(
     let (_, mut node) = fields
         .iter_mut()
         .find(|(name, _)| name.as_str() == "TextFieldAutoSize")
-        .ok_or_else(|| BevyError::error("AutoSize 演示输入框缺失"))?;
+        .ok_or_else(|| crate::diagnostics::error("AutoSize 演示输入框缺失"))?;
     let width = if node.width == px(480) { 240.0 } else { 480.0 };
     node.width = px(width);
     info!(width, "切换 AutoSize 输入框宽度");

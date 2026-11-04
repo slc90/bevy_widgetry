@@ -40,7 +40,11 @@ fn summary(mut samples: Vec<f64>) -> Value {
     json!({ "samples": len, "median_ms": samples.get(len / 2), "p95_ms": samples.get(len * 95 / 100), "max_ms": samples.last(), "over_2ms": samples.iter().filter(|value| **value > 2.0).count(), "over_16_7ms": samples.iter().filter(|value| **value > 16.7).count() })
 }
 
-fn main() -> Result {
+fn main() -> std::process::ExitCode {
+    bevy_widgetry_test_utils::benchmark::artifact::finish(run())
+}
+
+fn run() -> Result {
     let artifact = Artifact::new(
         "file_dialog-runtime",
         "headless App; all background work and snapshot lifetime managed by JobManager; no rendering",
@@ -65,7 +69,7 @@ fn main() -> Result {
         let mut peaks = (0, 0, 0);
         for sample in 0..12 {
             let start = Instant::now();
-            let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::PickFiles, @initial_directory: {Some(PathBuf::from("C:/fixture"))} } })?.id();
+            let root = bevy_widgetry_core::scene::spawn_scene(app.world_mut(), bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::PickFiles, @initial_directory: {Some(PathBuf::from("C:/fixture"))} } }).map_err(|failure| failure.into_bevy_error())?;
             let mut first_seen = false;
             loop {
                 if start.elapsed() > Duration::from_secs(60) {
@@ -75,7 +79,7 @@ fn main() -> Result {
                 let current = state(&app, root)?;
                 if let WidgetryFileDialogDirectoryState::Failed(failure) = current.directory_state()
                 {
-                    return Err(error(failure));
+                    return Err(error(failure.clone()));
                 }
                 if !first_seen && !current.entries().is_empty() {
                     if sample > 1 {
@@ -102,7 +106,9 @@ fn main() -> Result {
                     app.world_mut(),
                     root,
                     WidgetryFileDialogAction::Search(search.into()),
-                )? {
+                )
+                .map_err(|failure| failure.into_bevy_error())?
+                {
                     return Err(error(
                         "cached projection benchmark unexpectedly became a no-op",
                     ));
@@ -116,7 +122,7 @@ fn main() -> Result {
                     if let WidgetryFileDialogDirectoryState::Failed(failure) =
                         current.directory_state()
                     {
-                        return Err(error(failure));
+                        return Err(error(failure.clone()));
                     }
                     if !current.projection_pending() {
                         let expected = if search.is_empty() { items } else { 1 };
@@ -140,7 +146,9 @@ fn main() -> Result {
                 } else {
                     WidgetryFileDialogAction::ClearSelection
                 };
-                if !WidgetryFileDialog::apply(app.world_mut(), root, action)? {
+                if !WidgetryFileDialog::apply(app.world_mut(), root, action)
+                    .map_err(|failure| failure.into_bevy_error())?
+                {
                     return Err(error("selection benchmark unexpectedly became a no-op"));
                 }
                 loop {
@@ -152,7 +160,7 @@ fn main() -> Result {
                     if let WidgetryFileDialogDirectoryState::Failed(failure) =
                         current.directory_state()
                     {
-                        return Err(error(failure));
+                        return Err(error(failure.clone()));
                     }
                     if !current.selection_pending() {
                         if current.selected().len() != if select { items } else { 0 } {
@@ -175,20 +183,22 @@ fn main() -> Result {
                 measure(&mut app, &mut idle);
             }
             let start = Instant::now();
-            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
+            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)
+                .map_err(|failure| failure.into_bevy_error())?;
             cancel.push(start.elapsed().as_secs_f64() * 1000.0);
             let start = Instant::now();
             app.world_mut().despawn(root);
             app.update();
             close.push(start.elapsed().as_secs_f64() * 1000.0);
 
-            let root = app
-                .world_mut()
-                .spawn_scene(bsn! { @WidgetryFileDialog {
+            let root = bevy_widgetry_core::scene::spawn_scene(
+                app.world_mut(),
+                bsn! { @WidgetryFileDialog {
                     @mode: WidgetryFileDialogMode::PickFiles,
                     @initial_directory: {Some(PathBuf::from("C:/fixture"))}
-                } })?
-                .id();
+                } },
+            )
+            .map_err(|failure| failure.into_bevy_error())?;
             let setup = Instant::now();
             loop {
                 if setup.elapsed() > Duration::from_secs(60) {
@@ -198,14 +208,15 @@ fn main() -> Result {
                 let current = state(&app, root)?;
                 if let WidgetryFileDialogDirectoryState::Failed(failure) = current.directory_state()
                 {
-                    return Err(error(failure));
+                    return Err(error(failure.clone()));
                 }
                 if current.directory_state() == &WidgetryFileDialogDirectoryState::Ready {
                     break;
                 }
                 thread::yield_now();
             }
-            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)
+                .map_err(|failure| failure.into_bevy_error())?;
             while state(&app, root)?.selection_pending() {
                 if setup.elapsed() > Duration::from_secs(60) {
                     return Err(error("validation fixture selection timed out"));
@@ -214,7 +225,8 @@ fn main() -> Result {
                 thread::yield_now();
             }
             let start = Instant::now();
-            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)
+                .map_err(|failure| failure.into_bevy_error())?;
             loop {
                 if start.elapsed() > Duration::from_secs(60) {
                     return Err(error("candidate validation timed out"));

@@ -72,15 +72,21 @@ pub(crate) fn install(app: &mut App) -> Result {
         return Ok(());
     };
     let output = PathBuf::from(output);
-    fs::create_dir_all(&output)?;
+    fs::create_dir_all(&output).map_err(|error| crate::diagnostics::error(error))?;
     navigation_readiness::install(app, output.join("navigation"))?;
-    let mut frames = BufWriter::new(File::create_new(output.join("frames.csv"))?);
+    let mut frames = BufWriter::new(
+        File::create_new(output.join("frames.csv"))
+            .map_err(|error| crate::diagnostics::error(error))?,
+    );
     writeln!(
         frames,
         "frame,elapsed_s,interval_ms,main_update_ms,producer_ms,producer_frame,displayed_frame,backlog,dropped_samples,read_frames,width,height,raw_bytes,reduced_bytes,mesh_bytes,entity_indices,images,meshes,capture,burst,asset_extract_ms,render_schedule_ms,active_entities,algorithm,preview,file_queries,file_discarded,file_queued,file_query_ms,file_io_ms,file_query_cpu_ms,file_bytes,file_bucket,file_request,file_target_generation,file_output_len,file_range_end,file_algorithm"
-    )?;
-    let mut diagnostics = BufWriter::new(File::create_new(output.join("render.csv"))?);
-    writeln!(diagnostics, "frame,path,value")?;
+    ).map_err(|error| crate::diagnostics::error(error))?;
+    let mut diagnostics = BufWriter::new(
+        File::create_new(output.join("render.csv"))
+            .map_err(|error| crate::diagnostics::error(error))?,
+    );
+    writeln!(diagnostics, "frame,path,value").map_err(|error| crate::diagnostics::error(error))?;
     let timing = RenderTiming::default();
     app.insert_resource(timing.clone());
     if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
@@ -162,7 +168,7 @@ fn measure(world: &mut World) -> Result {
     {
         return Ok(());
     }
-    let result = world.resource_scope(|world, mut state: Mut<Measurement>| -> Result {
+    world.resource_scope(|world, mut state: Mut<Measurement>| -> Result {
         if state.finished { return Ok(()); }
         let now = Instant::now();
         let start = *state.start.get_or_insert(now);
@@ -173,13 +179,13 @@ fn measure(world: &mut World) -> Result {
         let frame = state.frame;
         let update_ms = state.update_start.elapsed().as_secs_f64() * 1000.0;
         if elapsed >= 90.0 {
-            state.frames.flush()?;
-            state.diagnostics.flush()?;
-            let mut captures = BufWriter::new(File::create_new(state.output.join("observable.csv"))?);
-            writeln!(captures, "source_frame,readback_upper_ms,pixels_nonempty,algorithm")?;
-            for (source_frame, latency, nonempty, algorithm) in &state.captures { writeln!(captures, "{source_frame},{latency},{nonempty},{algorithm}")?; }
-            captures.flush()?;
-            fs::write(state.output.join("done.txt"), format!("frames={frame}\nelapsed_seconds={elapsed}\n"))?;
+            state.frames.flush().map_err(|error| crate::diagnostics::error(error))?;
+            state.diagnostics.flush().map_err(|error| crate::diagnostics::error(error))?;
+            let mut captures = BufWriter::new(File::create_new(state.output.join("observable.csv")).map_err(|error| crate::diagnostics::error(error))?);
+            writeln!(captures, "source_frame,readback_upper_ms,pixels_nonempty,algorithm").map_err(|error| crate::diagnostics::error(error))?;
+            for (source_frame, latency, nonempty, algorithm) in &state.captures { writeln!(captures, "{source_frame},{latency},{nonempty},{algorithm}").map_err(|error| crate::diagnostics::error(error))?; }
+            captures.flush().map_err(|error| crate::diagnostics::error(error))?;
+            fs::write(state.output.join("done.txt"), format!("frames={frame}\nelapsed_seconds={elapsed}\n")).map_err(|error| crate::diagnostics::error(error))?;
             state.finished = true;
             return Ok(());
         }
@@ -188,12 +194,12 @@ fn measure(world: &mut World) -> Result {
             state.burst_started = true;
         }
         let last_seek = world.resource::<WaveformDemoSources>().last_seek.filter(|(_,entity,_)| *entity == root).map(|(time,_,frame)|(time,frame));
-        let displayed = world.get::<WaveformDemoState>(root).ok_or_else(|| BevyError::error("benchmark root missing"))?.displayed_frame;
-        let file = if state.replay { world.resource::<WaveformDemoSources>().disk_stats().map_err(|error| BevyError::error(error.to_string()))? } else { None };
+        let displayed = world.get::<WaveformDemoState>(root).ok_or_else(|| crate::diagnostics::error("benchmark root missing"))?.displayed_frame;
+        let file = if state.replay { world.resource::<WaveformDemoSources>().disk_stats().map_err(|error| error.into_bevy_error())? } else { None };
         let snapshot_ready = if state.replay {
-            let runtime = world.get::<bevy_widgetry::waveform::WaveformRuntime>(root).ok_or_else(||BevyError::error("Replay runtime missing"))?;
-            let cursor = world.get::<bevy_widgetry::waveform::WaveformCursor>(root).ok_or_else(||BevyError::error("Replay cursor missing"))?;
-            let sample = world.get::<WaveformDemoState>(root).ok_or_else(||BevyError::error("Replay sample missing"))?;
+            let runtime = world.get::<bevy_widgetry::waveform::WaveformRuntime>(root).ok_or_else(||crate::diagnostics::error("Replay runtime missing"))?;
+            let cursor = world.get::<bevy_widgetry::waveform::WaveformCursor>(root).ok_or_else(||crate::diagnostics::error("Replay cursor missing"))?;
+            let sample = world.get::<WaveformDemoState>(root).ok_or_else(||crate::diagnostics::error("Replay sample missing"))?;
             runtime.stats().kind != bevy_widgetry::waveform::WaveformUpdateKind::Pending && runtime.last_error().is_none()
                 && file.as_ref().and_then(|stats|stats.last_read.as_ref()).is_some_and(|read|
                     read.request.range.end == displayed && read.request.target_generation == cursor.seek_generation
@@ -204,7 +210,7 @@ fn measure(world: &mut World) -> Result {
             last_seek.is_some_and(|(time, target)| snapshot_ready && target == displayed && state.captured_seek != Some(time)) && state.pending.is_none()
         } else { elapsed > 12.0 && frame.is_multiple_of(60) && state.pending.is_none() };
         let capture = state.pending.is_some() || frame <= state.capture_until || request_capture;
-        let sample = world.get::<WaveformDemoState>(root).ok_or_else(|| BevyError::error("benchmark stress state missing"))?;
+        let sample = world.get::<WaveformDemoState>(root).ok_or_else(|| crate::diagnostics::error("benchmark stress state missing"))?;
         let sources = world.resource::<WaveformDemoSources>();
         let producer_ms = sources.producer_ms;
         let burst = sources.burst;
@@ -223,10 +229,10 @@ fn measure(world: &mut World) -> Result {
         });
         let identity = file.as_ref().and_then(|stats|stats.last_read.as_ref()).map_or_else(|| "0,0,0,0,".to_owned(), |read|format!("{},{},{},{},{:?}",read.request.id,read.request.target_generation,read.request.output_len,read.request.range.end,read.request.algorithm));
         let line = format!("{frame},{elapsed},{interval},{update_ms},{producer_ms},{},{},{},{},{},{},{},{},{},{mesh_bytes},{},{},{},{capture},{burst},{extract_ms},{render_ms},{active_entities},{},{},{queries},{discarded},{queued},{query_ms},{io_ms},{cpu_ms},{bytes},{bucket},{identity}\n", sample.producer_frame, sample.displayed_frame, sample.producer_frame.saturating_sub(sample.displayed_frame), sample.dropped_samples, sample.read_frames, sample.output_width, sample.height, sample.raw_capacity_bytes, sample.reduced_capacity_bytes, world.entities().len(), world.resource::<Assets<Image>>().len(), world.resource::<Assets<Mesh>>().len(), sample.algorithm, sample.preview);
-        state.frames.write_all(line.as_bytes())?;
+        state.frames.write_all(line.as_bytes()).map_err(|error| crate::diagnostics::error(error))?;
         if let Some(store) = world.get_resource::<DiagnosticsStore>() {
             for diagnostic in store.iter() {
-                if let Some(value) = diagnostic.value() { writeln!(state.diagnostics, "{frame},{},{}", diagnostic.path(), value)?; }
+                if let Some(value) = diagnostic.value() { writeln!(state.diagnostics, "{frame},{},{}", diagnostic.path(), value).map_err(|error| crate::diagnostics::error(error))?; }
             }
         }
         // This is a conservative upper bound from generated data to pixels available through GPU readback.
@@ -242,10 +248,10 @@ fn measure(world: &mut World) -> Result {
                     let mut current = Some(*entity);
                     while let Some(entity) = current { if entity == root { return true; } current = world.get::<ChildOf>(entity).map(ChildOf::parent); }
                     false
-                }).map(|(entity,_)|entity).ok_or_else(|| BevyError::error("Replay benchmark plot missing"))?
+                }).map(|(entity,_)|entity).ok_or_else(|| crate::diagnostics::error("Replay benchmark plot missing"))?
             } else { root };
-            let node = world.get::<ComputedNode>(capture_root).ok_or_else(|| BevyError::error("benchmark layout missing"))?;
-            let transform = world.get::<UiGlobalTransform>(capture_root).ok_or_else(|| BevyError::error("benchmark transform missing"))?;
+            let node = world.get::<ComputedNode>(capture_root).ok_or_else(|| crate::diagnostics::error("benchmark layout missing"))?;
+            let transform = world.get::<UiGlobalTransform>(capture_root).ok_or_else(|| crate::diagnostics::error("benchmark transform missing"))?;
             let center = transform.to_scale_angle_translation().2;
             let min = (center - node.size() * 0.5).max(Vec2::ZERO).as_uvec2();
             let max = (center + node.size() * 0.5).max(Vec2::ZERO).as_uvec2();
@@ -254,11 +260,7 @@ fn measure(world: &mut World) -> Result {
             world.write_message(RequestRedraw);
         }
         Ok(())
-    });
-    if let Err(ref failure) = result {
-        error!(%failure, "Waveform GUI benchmark 记录失败");
-    }
-    result
+    })
 }
 
 fn on_capture(event: On<ScreenshotCaptured>, mut state: ResMut<Measurement>) {

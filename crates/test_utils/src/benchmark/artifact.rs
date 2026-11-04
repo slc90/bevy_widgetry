@@ -13,8 +13,53 @@ pub struct Artifact {
     pub workspace: PathBuf,
 }
 
-pub fn error(error: impl std::fmt::Display) -> BevyError {
-    BevyError::error(error.to_string())
+#[derive(Debug)]
+struct BenchmarkError(Box<dyn std::error::Error + Send + Sync>);
+impl std::fmt::Display for BenchmarkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("benchmark operation failed")
+    }
+}
+impl std::error::Error for BenchmarkError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.0.as_ref())
+    }
+}
+
+#[track_caller]
+pub fn error(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> BevyError {
+    bevy_widgetry_diagnostics::WidgetryFailure::new(
+        BenchmarkError(error.into()),
+        bevy_widgetry_diagnostics::ErrorFrame::new("benchmark.operation"),
+    )
+    .into_bevy_error()
+}
+
+pub fn report_failure(error: &BevyError) {
+    if let Some(managed) = error.downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+    {
+        for diagnostic in managed.diagnostics() {
+            eprintln!(
+                "ERROR phase=unhandled error_id={} error={} origin={} backtrace={} 工具操作失败",
+                diagnostic.origin().id(),
+                diagnostic,
+                diagnostic.origin().location(),
+                diagnostic.origin().backtrace()
+            );
+        }
+    } else {
+        eprintln!("ERROR phase=unhandled error={error} details={error:?} 工具操作失败");
+    }
+}
+
+pub fn finish(result: Result) -> std::process::ExitCode {
+    match result {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) => {
+            report_failure(&error);
+            std::process::ExitCode::FAILURE
+        }
+    }
 }
 
 fn hardware() -> Result<Value> {
@@ -140,5 +185,34 @@ impl Artifact {
             digest.update(&buffer[..size]);
         }
         Ok(format!("{:x}", digest.finalize()))
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    #[test]
+    fn benchmark_errors_keep_the_original_source_and_captured_origin() {
+        let error = error(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        let diagnostic = error
+            .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap();
+        assert!(
+            diagnostic
+                .source()
+                .unwrap()
+                .source()
+                .unwrap()
+                .is::<std::io::Error>()
+        );
+        assert_eq!(
+            diagnostic.origin().backtrace().status(),
+            std::backtrace::BacktraceStatus::Captured
+        );
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
     }
 }

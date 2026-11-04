@@ -65,6 +65,7 @@ pub(crate) struct DemoSources {
     pub last_seek: Option<(Instant, Entity, u64)>,
     gestures: HashMap<Entity, WaveformPlayback>,
     asset: Handle<ReplayAsset>,
+    asset_failure: Option<Arc<bevy::asset::AssetLoadError>>,
     elapsed: Duration,
     last: Option<Instant>,
     replay_start: Option<Duration>,
@@ -184,7 +185,7 @@ fn change_algorithm(
     let choice = models
         .get(combo.source())?
         .get_by_id(id)
-        .ok_or_else(|| BevyError::error("algorithm choice missing"))?;
+        .ok_or_else(|| crate::diagnostics::error("algorithm choice missing"))?;
     for root in &roots {
         Waveform::set_algorithm(&mut commands, root, choice.0);
     }
@@ -219,6 +220,7 @@ impl FromWorld for DemoSources {
             asset: world
                 .resource::<AssetServer>()
                 .load(GalleryWaveform::BasicReplay.path()),
+            asset_failure: None,
             elapsed: Duration::ZERO,
             last: None,
             replay_start: None,
@@ -366,7 +368,7 @@ fn drive(world: &mut World) -> Result {
         world.resource_mut::<DemoSources>().last = None;
         return Ok(());
     }
-    let result = world.resource_scope(|world, mut sources: Mut<DemoSources>| -> Result {
+    world.resource_scope(|world, mut sources: Mut<DemoSources>| -> Result {
         let now = Instant::now();
         let delta = sources
             .last
@@ -410,11 +412,41 @@ fn drive(world: &mut World) -> Result {
                 }
             }
         }
+        if let Some(bevy::asset::LoadState::Failed(source)) = world
+            .resource::<AssetServer>()
+            .get_load_state(sources.asset.id())
+            && !sources
+                .asset_failure
+                .as_ref()
+                .is_some_and(|previous| Arc::ptr_eq(previous, &source))
+        {
+            sources.asset_failure = Some(source.clone());
+            if let bevy::asset::AssetLoadError::AssetLoaderError(loader) = source.as_ref()
+                && let Some(managed) = loader
+                    .error()
+                    .downcast_ref::<bevy_widgetry::diagnostics::bevy::WidgetryEcsError>(
+                )
+            {
+                for diagnostic in managed.diagnostics() {
+                    diagnostic.record_handled("放弃内置回放资源并保持现有会话", "资源加载失败");
+                }
+            } else {
+                let failure = crate::diagnostics::failure(
+                    crate::diagnostics::GalleryError::Operation(source.into()),
+                    bevy_widgetry::diagnostics::ErrorFrame::new("gallery.waveform.asset")
+                        .field("asset", format_args!("{:?}", sources.asset.id())),
+                );
+                failure.record_handled("放弃内置回放资源并保持现有会话", "资源加载失败");
+            }
+        }
         if sources.replay_start.is_none()
             && let Some(asset) = world.resource::<Assets<ReplayAsset>>().get(&sources.asset)
         {
+            if sources.asset_failure.take().is_some() {
+                info!("Gallery 内置回放资源已恢复");
+            }
             if asset.0.rate != 8000 || asset.0.frames != 240000 || asset.0.channels.len() != 4 {
-                return Err(BevyError::error(
+                return Err(crate::diagnostics::error(
                     "Basic Replay asset specification mismatch",
                 ));
             }
@@ -454,13 +486,13 @@ fn drive(world: &mut World) -> Result {
                         let total = world
                             .get::<WaveformRuntime>(root)
                             .and_then(WaveformRuntime::metadata)
-                            .ok_or_else(|| BevyError::error("Replay metadata missing"))?
+                            .ok_or_else(|| crate::diagnostics::error("Replay metadata missing"))?
                             .total_duration()
                             .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?
-                            .ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                            .ok_or_else(|| crate::diagnostics::error("Replay duration missing"))?;
                         let advance =
                             Duration::try_from_secs_f64(delta.as_secs_f64() * playback.speed)
-                                .map_err(|error| BevyError::error(error.to_string()))?;
+                                .map_err(crate::diagnostics::error)?;
                         playback.position = playback.position.saturating_add(advance).min(total);
                         playback.playing = playback.position < total;
                         Waveform::set_playback_in_world(world, root, playback)
@@ -472,7 +504,7 @@ fn drive(world: &mut World) -> Result {
                         .map_or(8000, |metadata| metadata.sample_rate);
                     let mut state = world
                         .get_mut::<WaveformDemoState>(root)
-                        .ok_or_else(|| BevyError::error("Replay demo state missing"))?;
+                        .ok_or_else(|| crate::diagnostics::error("Replay demo state missing"))?;
                     state.playback_seconds = playback.position.as_secs_f64();
                     state.playback_speed = playback.speed;
                     state.preview = playback.preview;
@@ -493,7 +525,7 @@ fn drive(world: &mut World) -> Result {
             };
             let old = world
                 .get::<WaveformRuntime>(root)
-                .ok_or_else(|| BevyError::error("demo runtime missing"))?
+                .ok_or_else(|| crate::diagnostics::error("demo runtime missing"))?
                 .buffered_range()
                 .end;
             let capacity = match kind {
@@ -503,7 +535,7 @@ fn drive(world: &mut World) -> Result {
             };
             let mut state = world
                 .get_mut::<WaveformDemoState>(root)
-                .ok_or_else(|| BevyError::error("demo state missing"))?;
+                .ok_or_else(|| crate::diagnostics::error("demo state missing"))?;
             state.producer_frame = frame;
             state.loop_count = 0;
             if let Some(capacity) = capacity {
@@ -513,7 +545,7 @@ fn drive(world: &mut World) -> Result {
             }
             world
                 .get_mut::<WaveformCursor>(root)
-                .ok_or_else(|| BevyError::error("demo cursor missing"))?
+                .ok_or_else(|| crate::diagnostics::error("demo cursor missing"))?
                 .position = duration_from_frames(frame, rate)
                 .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?;
         }
@@ -521,11 +553,7 @@ fn drive(world: &mut World) -> Result {
             world.write_message(RequestRedraw);
         }
         Ok(())
-    });
-    if let Err(ref failure) = result {
-        error!(%failure, "Waveform demo 输入推进失败");
-    }
-    result
+    })
 }
 
 fn sync_color_cursor(
@@ -683,7 +711,7 @@ fn playback_requested(
         if playback.session_generation != event.session_generation { return Ok(()); }
         match event.action {
             WaveformPlaybackAction::Playing(playing) => {
-                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| crate::diagnostics::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| crate::diagnostics::error("Replay duration missing"))?;
                 if playing && playback.position == total { playback.position = Duration::ZERO; }
                 playback.playing = playing;
             }
@@ -695,7 +723,7 @@ fn playback_requested(
             }
             WaveformPlaybackAction::Seek(position) => {
                 playback.position = position;
-                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| crate::diagnostics::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| crate::diagnostics::error("Replay duration missing"))?;
                 if position == total { playback.playing = false; }
             },
             WaveformPlaybackAction::SeekEnded { position, .. } => {
@@ -704,18 +732,18 @@ fn playback_requested(
                 playback.position = position;
                 playback.preview = false;
                 playback.speed = saved.speed;
-                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| crate::diagnostics::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| crate::diagnostics::error("Replay duration missing"))?;
                 playback.playing = saved.playing && position < total;
             }
         }
         if matches!(event.action, WaveformPlaybackAction::Seek(_) | WaveformPlaybackAction::SeekEnded {..}) {
-            let rate = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.sample_rate;
+            let rate = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| crate::diagnostics::error("Replay metadata missing"))?.sample_rate;
             let mut sources = world.resource_mut::<DemoSources>();
             sources.last_seek = Some((Instant::now(), event.entity, sample_boundary(playback.position, rate).map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?));
         }
         Waveform::set_playback_in_world(world, event.entity, playback).map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?;
         if matches!(event.action, WaveformPlaybackAction::Seek(_)) && playback.playing {
-            world.get_mut::<WaveformCursor>(event.entity).ok_or_else(|| BevyError::error("Replay cursor missing"))?.seek(playback.position);
+            world.get_mut::<WaveformCursor>(event.entity).ok_or_else(|| crate::diagnostics::error("Replay cursor missing"))?.seek(playback.position);
         }
         if !matches!(event.action, WaveformPlaybackAction::Seek(_) | WaveformPlaybackAction::SeekStarted) {
             info!(entity = ?event.entity, playing = playback.playing, speed = playback.speed, "更新 Waveform 回放控制");
@@ -759,19 +787,23 @@ fn enter(world: &mut World) -> Result {
         .map(|parts| (parts.model, parts.combo))
         .collect();
     for (model, combo) in controls {
-        world.entity_mut(combo).apply_scene(bsn! {
+        bevy_widgetry::scene::apply_scene(&mut world.entity_mut(combo), bsn! {
             @WidgetryComboBox::<AlgorithmChoice> { @source: model,
                 @renderer: {WidgetryListViewRenderer::new(|choice: &AlgorithmChoice| {
                     let label = match choice.0 { WaveformAlgorithm::MinMax => "Min/Max", WaveformAlgorithm::Lttb => "LTTB" };
                     bsn_list! { Text(label) bevy_widgetry::text::WidgetryText }
                 })}
             }
-        }).map_err(|error| BevyError::error(error.to_string()))?;
+        }).map_err(|error| error.into_bevy_error())?;
         let index = if std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT").is_some() {
             match std::env::var("GALLERY_WAVEFORM_BENCH_ALGORITHM").as_deref() {
                 Ok("Lttb") => 1,
                 Ok("MinMax") | Err(std::env::VarError::NotPresent) => 0,
-                _ => return Err(BevyError::error("Invalid waveform benchmark algorithm")),
+                _ => {
+                    return Err(crate::diagnostics::error(
+                        "Invalid waveform benchmark algorithm",
+                    ));
+                }
             }
         } else {
             0

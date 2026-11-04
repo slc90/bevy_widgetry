@@ -10,7 +10,28 @@ use bevy_widgetry::{
     scene::spawn_scene,
     text::WidgetryText,
 };
-type WorkError = Box<dyn std::error::Error + Send + Sync>;
+enum WorkError {
+    Rejected(String),
+    Failure(BevyError),
+}
+impl From<String> for WorkError {
+    fn from(reason: String) -> Self {
+        Self::Rejected(reason)
+    }
+}
+impl From<&str> for WorkError {
+    fn from(reason: &str) -> Self {
+        Self::Rejected(reason.to_owned())
+    }
+}
+impl std::fmt::Display for WorkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rejected(reason) => f.write_str(reason),
+            Self::Failure(error) => std::fmt::Display::fmt(error, f),
+        }
+    }
+}
 
 #[derive(Debug)]
 struct RequestedDemoFailure;
@@ -202,9 +223,12 @@ fn exit(world: &mut World) -> Result {
     unmount_page(world, GalleryPage::Job)
 }
 
-fn error(reason: impl std::fmt::Display) -> BevyError {
-    error!(%reason, "Job 演示内部操作失败");
-    BevyError::error(reason.to_string())
+#[track_caller]
+fn error(reason: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> BevyError {
+    crate::diagnostics::at(
+        reason,
+        bevy_widgetry::diagnostics::ErrorFrame::new("Job 演示内部操作失败"),
+    )
 }
 
 fn consume_removed_failure(status: &JobStatus, action: &str) {
@@ -413,26 +437,23 @@ fn start(world: &mut World, demo: &mut Demo, mode: Mode) -> std::result::Result<
             async_work(context, mode, total, worker)
         }),
     }
-    .map_err(|failure| -> WorkError { failure.into() })?;
+    .map_err(|failure| WorkError::Failure(failure.into_bevy_error()))?;
     let (id, receiver) = submitted;
     let status = manager
         .status(id)
-        .map_err(|failure| -> WorkError { failure.into() })?;
+        .map_err(|failure| WorkError::Failure(failure.into_bevy_error()))?;
     let rows = demo.parts.rows;
     let entity = match spawn_scene(world, bsn! { ChildOf(rows) @row(id, mode) }) {
         Ok(entity) => entity,
         Err(failure) => {
-            world
-                .resource::<JobManager>()
-                .cancel(id)
-                .map_err(|failure| -> WorkError { failure.into() })?;
+            world.resource::<JobManager>().cancel_if_present(id);
             world.resource_mut::<Orphans>().0.push(id);
-            return Err(failure.to_string().into());
+            return Err(WorkError::Failure(failure.into_bevy_error()));
         }
     };
     let row = *world
         .get::<Row>(entity)
-        .ok_or_else(|| "Job row parts missing".to_owned())?;
+        .ok_or_else(|| WorkError::Failure(error("Job row parts missing")))?;
     demo.runs.push(Run {
         id,
         mode,
@@ -462,19 +483,10 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
         }
         world.resource_scope(|world, mut demo: Mut<Demo>| -> Result {
             let result = apply(world, &mut demo, action);
-            match &result {
-                Ok(result) => info!(?action, %result, "执行 Job 演示操作"),
-                Err(failure) => {
-                    if let Some(error) = failure.downcast_ref::<SubmitFailure>() {
-                        error.record_handled("终止被拒绝的演示操作", "提交失败");
-                    } else if let Some(error) = failure.downcast_ref::<JobAccessFailure>() {
-                        error.record_handled("终止被拒绝的演示操作", "访问被拒绝");
-                    } else {
-                        warn!(?action, %failure, "Job 演示操作被拒绝");
-                    }
-                }
+            if let Ok(result) = &result {
+                info!(?action, %result, "执行 Job 演示操作");
             }
-            bind(
+            let displayed = bind(
                 world,
                 demo.parts.operation,
                 LocalizedText::with_args(
@@ -488,7 +500,31 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                     )],
                 )
                 .with_key_arg("action", TextKey::Job(key(action))),
-            )
+            );
+            if let Err(display_error) = displayed {
+                return Err(match result {
+                    Err(WorkError::Failure(primary)) => {
+                        crate::diagnostics::combine(primary, display_error)
+                    }
+                    _ => display_error,
+                });
+            }
+            if let Err(WorkError::Failure(error)) = result {
+                if error.severity() == bevy::ecs::error::Severity::Error
+                    && let Some(managed) =
+                        error.downcast_ref::<bevy_widgetry::diagnostics::bevy::WidgetryEcsError>()
+                {
+                    for diagnostic in managed.diagnostics() {
+                        diagnostic.record_handled(
+                            "终止 Job 演示操作并显示失败状态",
+                            "保留任务和订阅状态供用户重试",
+                        );
+                    }
+                } else {
+                    return Err(error);
+                }
+            }
+            Ok(())
         })
     });
 }
@@ -526,7 +562,7 @@ fn apply(
             }
             let receiver = manager
                 .subscribe(run.id)
-                .map_err(|failure| -> WorkError { failure.into() })?;
+                .map_err(|failure| WorkError::Failure(failure.into_bevy_error()))?;
             run.b = Consumer {
                 receiver: Some(receiver),
                 ..default()
@@ -546,7 +582,7 @@ fn apply(
         Action::Cancel => manager
             .cancel(run.id)
             .map(|result| format!("{result:?}"))
-            .map_err(|failure| -> WorkError { failure.into() }),
+            .map_err(|failure| WorkError::Failure(failure.into_bevy_error())),
         Action::Remove => manager
             .remove(run.id)
             .map(|status| {
@@ -555,7 +591,7 @@ fn apply(
                 consume_removed_failure(&run.status, "用户移除 Job 演示任务并保留终态展示");
                 "removed".into()
             })
-            .map_err(|failure| -> WorkError { failure.into() }),
+            .map_err(|failure| WorkError::Failure(failure.into_bevy_error())),
         _ => Err("Unexpected Job action".into()),
     }
 }
@@ -655,13 +691,11 @@ fn poll(world: &mut World) -> Result {
                                 info!(job_id=run.id.get(), outcome=?status.outcome, "Job 演示任务执行结束");
                         }
                         run.status = status;
-                        if let Some(JobOutcome::Failed(error)) = &run.status.outcome {
-                            error.record_handled("结束本次 Job 演示任务并保存失败结果", "演示行显示任务失败");
-                        }
                     }
                     None => run.removed = true,
                 }
             }
+            let published = (|| -> Result {
             let shared = match (&run.a.last_batch, &run.b.last_batch) { (Some(a), Some(b)) => Arc::ptr_eq(a,b), _ => false };
             let state = if run.removed { format!("{:?} (record removed)", run.status.state) } else { format!("{:?}", run.status.state) };
             let produced = run.produced.load(Ordering::Acquire);
@@ -687,6 +721,16 @@ fn poll(world: &mut World) -> Result {
                 first_a:run.a.first,first_b:run.b.first,last_a:run.a.last,last_b:run.b.last,
                 progress_a:run.a.progress,progress_b:run.b.progress,attached_a:run.a.receiver.is_some(),attached_b:run.b.receiver.is_some(),
                 finished_a:format!("{:?}",run.a.finished),finished_b:format!("{:?}",run.b.finished), shared_last_batch:shared });
+            Ok(())
+            })();
+            if let Err(display_error) = published {
+                return Err(match &run.status.outcome {
+                    Some(JobOutcome::Failed(primary)) => primary.clone().combine(display_error.into()).into_bevy_error(),
+                    _ => display_error,
+                });
+            }
+            if let Some(JobOutcome::Failed(error)) = &run.status.outcome { error.record_handled("结束本次 Job 演示任务并保存失败结果", "演示行显示任务失败"); }
+
         }
         world.get_mut::<JobDemoState>(demo.root).ok_or_else(|| error("Job diagnostics missing"))?
             .set_if_neq(JobDemoState { selected:demo.selected.map_or(0,JobId::get), slow_b, jobs:snapshots });

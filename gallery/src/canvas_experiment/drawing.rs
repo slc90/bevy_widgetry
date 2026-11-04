@@ -86,7 +86,7 @@ pub(super) fn batch(In(value): In<Option<Value>>, world: &mut World) -> BrpResul
         info!(session = request.session, successful, total = results.len(), "通过 BRP 完成绘图批次");
         Ok(json!({"session": request.session, "results": results, "successful": successful,
             "all_succeeded": results.iter().all(|result| result["ok"] == true),
-            "shape_count": CanvasDocument::shape_order(world, session.document).map_err(BrpError::resource_error)?.len(),
+            "shape_count": CanvasDocument::shape_order(world, session.document).map_err(crate::diagnostics::managed_response_error)?.len(),
             "persistence": {"saved": !session.dirty, "error": session.save_error}}))
     })
 }
@@ -111,7 +111,7 @@ pub(super) fn query(In(value): In<Option<Value>>, world: &mut World) -> BrpResul
                 .map(|(id, entity)| (*entity, id))
                 .collect();
             let order = CanvasDocument::shape_order(world, session.document)
-                .map_err(BrpError::resource_error)?;
+                .map_err(crate::diagnostics::managed_response_error)?;
             let ids: Vec<_> = order
                 .into_iter()
                 .filter_map(|entity| reverse.get(&entity).copied())
@@ -153,7 +153,7 @@ fn apply(
                 .transpose()?
                 .unwrap_or_default();
             let entity = create_shape(world, session.document, geometry, paint, transform)
-                .map_err(BrpError::resource_error)?;
+                .map_err(crate::diagnostics::managed_response_error)?;
             session.shapes.insert(id.clone(), entity);
             Ok(id)
         }
@@ -202,13 +202,13 @@ fn apply(
                     paint,
                 ),
             };
-            result.map_err(BrpError::resource_error)?;
+            result.map_err(crate::diagnostics::managed_response_error)?;
             Ok(id)
         }
         Operation::Delete { id } => {
             let entity = entity(world, session, &id)?;
             CanvasDocument::remove_shape(world, session.document, entity)
-                .map_err(BrpError::resource_error)?;
+                .map_err(crate::diagnostics::managed_response_error)?;
             Ok(id)
         }
         Operation::Order { id, order } => {
@@ -220,7 +220,7 @@ fn apply(
                 Order::Back => CanvasOrder::Back,
             };
             CanvasDocument::reorder_shape(world, session.document, entity, order)
-                .map_err(BrpError::resource_error)?;
+                .map_err(crate::diagnostics::managed_response_error)?;
             Ok(id)
         }
     }
@@ -270,7 +270,7 @@ fn entity(world: &World, session: &Session, id: &str) -> Result<Entity, BrpError
 
 fn component<T: Component>(world: &World, entity: Entity) -> Result<&T, BrpError> {
     world.get::<T>(entity).ok_or_else(|| {
-        BrpError::resource_error(format!(
+        crate::diagnostics::response_error(format!(
             "Shape {} missing {}",
             entity,
             std::any::type_name::<T>()
@@ -285,7 +285,7 @@ pub(super) fn record(world: &World, session: &Session, id: &str) -> Result<Shape
             component::<Transform>(world, entity)?,
             component::<CanvasPaint>(world, entity)?,
         )
-        .map_err(BrpError::resource_error)?;
+        .map_err(crate::diagnostics::managed_response_error)?;
     Ok(ShapeRecord {
         id: id.into(),
         geometry: encode(world, component::<CanvasGeometry>(world, entity)?)?,
@@ -297,14 +297,14 @@ pub(super) fn record(world: &World, session: &Session, id: &str) -> Result<Shape
 fn encode<T: Reflect>(world: &World, value: &T) -> Result<Value, BrpError> {
     let registry = world.resource::<AppTypeRegistry>().read();
     serde_json::to_value(TypedReflectSerializer::new(value, &registry))
-        .map_err(BrpError::resource_error)
+        .map_err(crate::diagnostics::response_error)
 }
 
 pub(super) fn decode<T: Reflect + FromReflect>(world: &World, value: Value) -> Result<T, BrpError> {
     let registry = world.resource::<AppTypeRegistry>().read();
     let registration = registry
         .get(TypeId::of::<T>())
-        .ok_or_else(|| BrpError::resource_error("Drawing type is not registered"))?;
+        .ok_or_else(|| crate::diagnostics::response_error("Drawing type is not registered"))?;
     let reflected = TypedReflectDeserializer::new(registration, &registry)
         .deserialize(value)
         .map_err(invalid_params)?;

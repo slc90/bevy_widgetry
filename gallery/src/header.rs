@@ -95,8 +95,10 @@ fn sync_external_settings(world: &mut World) -> Result {
 }
 
 fn header_sync_error(reason: &str) -> BevyError {
-    error!(reason, "Header ComboBox 同步失败");
-    BevyError::error(reason.to_owned())
+    crate::diagnostics::at(
+        reason.to_owned(),
+        bevy_widgetry::diagnostics::ErrorFrame::new("Header ComboBox 同步失败"),
+    )
 }
 
 pub(crate) fn scene(
@@ -193,20 +195,31 @@ fn initialize_scale_factor_selection(
 ) -> Result {
     for (entity, combo, scale_combo) in &combos {
         let window = windows.get(scale_combo.target_window).map_err(|error| {
-            error!(window = ?scale_combo.target_window, %error, "scale_factor 目标窗口缺失");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor 目标窗口缺失")
+                    .field("window", format_args!("{:?}", scale_combo.target_window)),
+            )
         })?;
         let model = models.get(combo.source()).map_err(|error| {
-            error!(source = ?combo.source(), %error, "scale_factor Model 缺失");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor Model 缺失")
+                    .field("source", format_args!("{:?}", combo.source())),
+            )
         })?;
         let scale = window.scale_factor();
         let id = (0..model.len())
             .find(|index| model.get(*index) == Some(&scale))
             .and_then(|index| model.id(index))
             .ok_or_else(|| {
-                error!(scale_factor = scale, "初始 scale_factor 不在选择器选项中");
-                BevyError::error("初始 scale_factor 不在选择器选项中")
+                crate::diagnostics::at(
+                    "初始 scale_factor 不在选择器选项中",
+                    bevy_widgetry::diagnostics::ErrorFrame::new(
+                        "初始 scale_factor 不在选择器选项中",
+                    )
+                    .field("scale_factor", scale),
+                )
             })?;
         WidgetryComboBox::<f32>::select_id(&mut commands, entity, id);
     }
@@ -228,18 +241,27 @@ fn on_scale_factor_combo_box_changed(
         return Ok(());
     };
     let model = models.get(combo.source()).map_err(|error| {
-        error!(source = ?combo.source(), %error, "scale_factor Model 缺失");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor Model 缺失")
+                .field("source", format_args!("{:?}", combo.source())),
+        )
     })?;
     let scale = *model.get_by_id(selected).ok_or_else(|| {
-        error!(?selected, "scale_factor selection 已失效");
-        BevyError::error("scale_factor selection 已失效")
+        crate::diagnostics::at(
+            "scale_factor selection 已失效",
+            bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor selection 已失效")
+                .field("selected", format_args!("{:?}", selected)),
+        )
     })?;
     let mut window = windows
         .get_mut(scale_combo.target_window)
         .map_err(|error| {
-            error!(window = ?scale_combo.target_window, %error, "scale_factor 目标窗口缺失");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor 目标窗口缺失")
+                    .field("window", format_args!("{:?}", scale_combo.target_window)),
+            )
         })?;
     if window.resolution.scale_factor_override() != Some(scale) {
         window.resolution.set_scale_factor_override(Some(scale));
@@ -255,18 +277,19 @@ fn on_theme_combo_box_changed(
     theme_combo_boxes: Query<&WidgetryComboBox<WidgetryThemeMode>, With<ThemeComboBox>>,
     models: Query<&WidgetryListModel<WidgetryThemeMode>>,
     mut commands: Commands,
-) {
+) -> Result {
     let Ok(combo) = theme_combo_boxes.get(event.source) else {
-        return;
+        return Ok(());
     };
-    let Some(mode) = models
+    let Some(selected) = event.value else {
+        return Ok(());
+    };
+    let model = models
         .get(combo.source())
-        .ok()
-        .and_then(|model| model.get_by_id(event.value?))
-        .copied()
-    else {
-        return;
-    };
+        .map_err(|source| crate::diagnostics::error(source))?;
+    let mode = *model
+        .get_by_id(selected)
+        .ok_or_else(|| header_sync_error("主题选择器选中项失效"))?;
 
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         if WidgetryThemeMode::set_in_world(world, mode).map_err(|error| error.into_bevy_error())? {
@@ -278,6 +301,7 @@ fn on_theme_combo_box_changed(
         }
         Ok(())
     });
+    Ok(())
 }
 
 fn sync_theme_combo_box(
@@ -285,8 +309,8 @@ fn sync_theme_combo_box(
     combos: Query<(Entity, &WidgetryComboBox<WidgetryThemeMode>), With<ThemeComboBox>>,
     models: Query<&WidgetryListModel<WidgetryThemeMode>>,
     mut commands: Commands,
-) {
-    select_theme(event.mode, &combos, &models, &mut commands);
+) -> Result {
+    select_theme(event.mode, &combos, &models, &mut commands)
 }
 
 fn initialize_theme_selection(
@@ -294,8 +318,8 @@ fn initialize_theme_selection(
     combos: Query<(Entity, &WidgetryComboBox<WidgetryThemeMode>), With<ThemeComboBox>>,
     models: Query<&WidgetryListModel<WidgetryThemeMode>>,
     mut commands: Commands,
-) {
-    select_theme(*theme_mode, &combos, &models, &mut commands);
+) -> Result {
+    select_theme(*theme_mode, &combos, &models, &mut commands)
 }
 
 fn select_theme(
@@ -303,15 +327,18 @@ fn select_theme(
     combos: &Query<(Entity, &WidgetryComboBox<WidgetryThemeMode>), With<ThemeComboBox>>,
     models: &Query<&WidgetryListModel<WidgetryThemeMode>>,
     commands: &mut Commands,
-) {
+) -> Result {
     for (entity, combo) in combos {
-        if let Ok(model) = models.get(combo.source())
-            && let Some(index) = (0..model.len()).find(|index| model.get(*index) == Some(&mode))
-            && let Some(id) = model.id(index)
-        {
-            WidgetryComboBox::<WidgetryThemeMode>::select_id(commands, entity, id);
-        }
+        let model = models
+            .get(combo.source())
+            .map_err(|source| crate::diagnostics::error(source))?;
+        let id = (0..model.len())
+            .find(|index| model.get(*index) == Some(&mode))
+            .and_then(|index| model.id(index))
+            .ok_or_else(|| header_sync_error("当前主题不在选择器选项中"))?;
+        WidgetryComboBox::<WidgetryThemeMode>::select_id(commands, entity, id);
     }
+    Ok(())
 }
 
 fn language_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
@@ -371,12 +398,18 @@ fn on_language_changed(
         return Ok(());
     };
     let model = models.get(combo.source()).map_err(|error| {
-        error!(source = ?combo.source(), %error, "语言选择器 Model 缺失");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("语言选择器 Model 缺失")
+                .field("source", format_args!("{:?}", combo.source())),
+        )
     })?;
     let selected = model.get_by_id(id).copied().ok_or_else(|| {
-        error!(?id, "语言选择器选中项失效");
-        BevyError::error("语言选择器选中项失效")
+        crate::diagnostics::at(
+            "语言选择器选中项失效",
+            bevy_widgetry::diagnostics::ErrorFrame::new("语言选择器选中项失效")
+                .field("id", format_args!("{:?}", id)),
+        )
     })?;
     if language.set_if_neq(selected) {
         info!(?selected, "切换 Gallery 语言");

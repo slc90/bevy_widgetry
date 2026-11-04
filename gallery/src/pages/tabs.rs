@@ -179,8 +179,10 @@ fn status_args(
 }
 
 fn demo_error(reason: &str) -> BevyError {
-    error!(reason, "Tabs 演示结构无效");
-    BevyError::error(reason.to_owned())
+    crate::diagnostics::at(
+        reason.to_owned(),
+        bevy_widgetry::diagnostics::ErrorFrame::new("Tabs 演示结构无效"),
+    )
 }
 
 fn report(world: &mut World, root: Entity) -> Result {

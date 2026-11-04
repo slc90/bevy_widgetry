@@ -29,6 +29,7 @@
 
 - Facade 模块可实际构造并消费 Widget，而不是仅在编译期可见。
 - `diagnostics.rs` 验证无控件 Feature 的基础诊断导出、真实命令中的受管错误识别，以及库 Plugin 装配保留宿主已有 Handler。
+- `public_api.rs` 的 Theme Command 失败按原始领域分类、关联 ID 与结构化源头原因断言，不依赖宿主格式或日志正文复述领域类型。
 - 相同 Source 的 ListView Selection 独立；同帧 Focus / Popup 输入归属正确。
 - Tree 的 View Selection API 直接使用业务 Entity，通过 Facade 构造的内部列表不依赖中间 ListModel。
 - Pressed Cleanup 不清除非 Owner 的程序化 Pressed。

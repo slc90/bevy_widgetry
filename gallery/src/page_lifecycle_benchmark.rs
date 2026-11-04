@@ -29,8 +29,11 @@ pub(crate) fn install(app: &mut App) -> Result {
         Ok(samples)
     })()
     .map_err(|error| {
-        error!(path = %output.display(), %error, "无法准备页面 lifecycle 测量输出");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("无法准备页面 lifecycle 测量输出")
+                .field("path", output.display()),
+        )
     })?;
     app.insert_resource(Measurement {
         output,
@@ -70,7 +73,10 @@ fn measure(world: &mut World) -> Result {
         measurement.samples.flush()
     })()
     .map_err(|error| {
-        error!(path = %measurement.output.display(), %error, "无法写入页面 lifecycle 测量结果");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("无法写入页面 lifecycle 测量结果")
+                .field("path", measurement.output.display()),
+        )
     })
 }

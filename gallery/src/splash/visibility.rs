@@ -2,12 +2,53 @@ use bevy::window::RawHandleWrapper;
 use raw_window_handle::RawWindowHandle;
 use winsafe::{DwmAttr, HRGN, RECT, co, guard::DeleteObjectGuard};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum VisibilityError {
+    Native(winsafe::co::ERROR),
+    Dwm(winsafe::co::HRESULT),
+    MissingHandle,
+    MissingBounds,
+    ZOrderChanged,
+}
+impl std::fmt::Display for VisibilityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Native(_) | Self::Dwm(_) => f.write_str("Splash native visibility query failed"),
+            Self::MissingHandle => f.write_str("Splash window has no Win32 handle"),
+            Self::MissingBounds => f.write_str("Splash window has no DWM physical bounds"),
+            Self::ZOrderChanged => {
+                f.write_str("Window Z-order changed during Splash visibility query")
+            }
+        }
+    }
+}
+impl std::error::Error for VisibilityError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Native(source) => Some(source),
+            Self::Dwm(source) => Some(source),
+            _ => None,
+        }
+    }
+}
+
+impl From<winsafe::co::ERROR> for VisibilityError {
+    fn from(error: winsafe::co::ERROR) -> Self {
+        Self::Native(error)
+    }
+}
+impl From<winsafe::co::HRESULT> for VisibilityError {
+    fn from(error: winsafe::co::HRESULT) -> Self {
+        Self::Dwm(error)
+    }
+}
+
 pub(super) fn is_uncovered(
     handle: &RawHandleWrapper,
     monitors: impl IntoIterator<Item = RECT>,
-) -> std::result::Result<bool, String> {
+) -> std::result::Result<bool, VisibilityError> {
     let RawWindowHandle::Win32(raw) = handle.get_window_handle() else {
-        return Err("主窗口缺少 Win32 handle".into());
+        return Err(VisibilityError::MissingHandle);
     };
     let mut target = None;
     let mut window_count = 0;
@@ -19,7 +60,7 @@ pub(super) fn is_uncovered(
         }
         true
     })
-    .map_err(|error| error.to_string())?;
+    .map_err(VisibilityError::from)?;
     let Some(target) = target else {
         return Ok(false);
     };
@@ -27,17 +68,17 @@ pub(super) fn is_uncovered(
     // GetClientRect/ClientToScreen may be DPI-virtualized while Monitor coordinates are physical.
     let DwmAttr::ExtendedFrameBounds(bounds) = target
         .DwmGetWindowAttribute(co::DWMWA::EXTENDED_FRAME_BOUNDS)
-        .map_err(|error| error.to_string())?
+        .map_err(VisibilityError::from)?
     else {
-        return Err("主窗口缺少 DWM 物理边界".into());
+        return Err(VisibilityError::MissingBounds);
     };
-    let remaining = on_screen_region(bounds, monitors).map_err(|error| error.to_string())?;
+    let remaining = on_screen_region(bounds, monitors).map_err(VisibilityError::from)?;
     if !remaining.RectInRegion(bounds) {
         return Ok(false);
     }
     let mut above = target
         .GetWindow(co::GW::HWNDFIRST)
-        .map_err(|error| error.to_string())?;
+        .map_err(VisibilityError::from)?;
     for _ in 0..window_count {
         if above == target {
             return Ok(true);
@@ -48,16 +89,16 @@ pub(super) fn is_uncovered(
             if styles & (co::WS_EX::LAYERED.raw() | co::WS_EX::TRANSPARENT.raw()) as isize == 0 {
                 let cloak = above
                     .DwmGetWindowAttribute(co::DWMWA::CLOAKED)
-                    .map_err(|error| error.to_string())?;
+                    .map_err(VisibilityError::from)?;
                 if matches!(cloak, DwmAttr::Cloaked(flags) if flags.raw() == 0) {
                     let frame = above
                         .DwmGetWindowAttribute(co::DWMWA::EXTENDED_FRAME_BOUNDS)
-                        .map_err(|error| error.to_string())?;
+                        .map_err(VisibilityError::from)?;
                     if let DwmAttr::ExtendedFrameBounds(rect) = frame {
-                        let cover = HRGN::CreateRectRgn(rect).map_err(|error| error.to_string())?;
+                        let cover = HRGN::CreateRectRgn(rect).map_err(VisibilityError::from)?;
                         if remaining
                             .CombineRgn(&remaining, &cover, co::RGN::DIFF)
-                            .map_err(|error| error.to_string())?
+                            .map_err(VisibilityError::from)?
                             == co::REGION::NULL
                         {
                             return Ok(false);
@@ -68,9 +109,9 @@ pub(super) fn is_uncovered(
         }
         above = above
             .GetWindow(co::GW::HWNDNEXT)
-            .map_err(|error| error.to_string())?;
+            .map_err(VisibilityError::from)?;
     }
-    Err("检查期间窗口 Z-order 已改变".into())
+    Err(VisibilityError::ZOrderChanged)
 }
 
 fn on_screen_region(

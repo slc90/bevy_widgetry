@@ -66,7 +66,6 @@ fn tray_startup_failure(failure: bevy_widgetry::tray::TrayFailure) -> BevyError 
     let failure = failure.with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
         "gallery.startup.tray",
     ));
-    error!(error_id = %failure.origin().id(), phase = "unhandled", origin = ?failure.origin().location(), backtrace = %failure.origin().backtrace(), context = ?failure.contexts(), "Gallery 启动因未处理的托盘错误终止");
     failure.into_bevy_error()
 }
 
@@ -151,8 +150,10 @@ fn open_confirmation(world: &mut World, parent: Entity) -> Result {
         .query_filtered::<Entity, With<CloseChoices>>()
         .single(world)
         .map_err(|error| {
-            error!(%error, "Gallery 关闭确认缺少选项组");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 关闭确认缺少选项组"),
+            )
         })?;
     WidgetryRadioGroup::set_selected(&mut world.commands(), choices, 1);
     world.flush();
@@ -170,8 +171,7 @@ fn dialog_button(confirm: bool, label: CloseKey) -> impl Scene {
                 let Some(root) = world.resource::<GalleryTrayState>().dialog else { return Ok(()); };
                 let choice = if confirm {
                     Some(world.query_filtered::<&Choice, With<Checked>>().single(world).copied().map_err(|error| {
-                        error!(%error, "Gallery 关闭确认缺少唯一选项");
-                        BevyError::error(error)
+                        crate::diagnostics::at(error, bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 关闭确认缺少唯一选项"))
                     })?)
                 } else { None };
                 finish(world, root, choice)
@@ -304,7 +304,7 @@ mod tests {
     fn tray_startup_failure_reports_original_origin_before_app_runs() {
         use bevy_widgetry::diagnostics::bevy::WidgetryEcsError;
         use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
-        let logs = LogCapture::with_targets(["bevy_widgetry", "widget_gallery::close"]);
+        let logs = LogCapture::with_targets(["bevy_widgetry", "widget_gallery"]);
         let (error, origin) = logs.run(|| {
             let failure = WidgetryTrayPlugin::new(b"invalid", "test").err().unwrap();
             let origin = failure.origin().clone();
@@ -323,6 +323,7 @@ mod tests {
                 .len(),
             1
         );
+        logs.run(|| crate::diagnostics::startup(error, true));
         let reports = logs.diagnostic_records(origin.id(), DiagnosticPhase::Unhandled);
         assert_eq!(reports.len(), 1);
         assert!(reports[0].fields.contains_key("backtrace"));

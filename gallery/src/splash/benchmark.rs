@@ -40,8 +40,11 @@ pub(super) fn install(app: &mut App) -> Result {
         return Ok(());
     };
     let mut writer = BufWriter::new(File::create(&path).map_err(|error| {
-        error!(path = ?path, error = %error, "无法创建 Splash benchmark 文件");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("无法创建 Splash benchmark 文件")
+                .field("path", format_args!("{:?}", path)),
+        )
     })?);
     writeln!(
         writer,
@@ -50,8 +53,11 @@ pub(super) fn install(app: &mut App) -> Result {
     .map_err(measurement_error)?;
     let gpu_path = std::path::PathBuf::from(&path).with_extension("gpu.csv");
     let mut gpu = BufWriter::new(File::create(&gpu_path).map_err(|error| {
-        error!(path = ?gpu_path, error = %error, "无法创建 Splash GPU benchmark 文件");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("无法创建 Splash GPU benchmark 文件")
+                .field("path", format_args!("{:?}", gpu_path)),
+        )
     })?);
     writeln!(gpu, "elapsed_ms,path,gpu_ms").map_err(measurement_error)?;
     let now = Instant::now();
@@ -179,6 +185,8 @@ fn finish(
 }
 
 fn measurement_error(error: std::io::Error) -> BevyError {
-    error!(error = %error, "Splash benchmark 写入失败");
-    BevyError::error(error)
+    crate::diagnostics::at(
+        error,
+        bevy_widgetry::diagnostics::ErrorFrame::new("Splash benchmark 写入失败"),
+    )
 }

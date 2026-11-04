@@ -61,21 +61,27 @@ fn signal(channel: usize, frame: u64, rate: u32, seed: u64) -> Option<f32> {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let options = options(std::env::args().skip(1))?;
-    if options.output.try_exists()? {
-        return Err(
-            io::Error::new(io::ErrorKind::AlreadyExists, "destination already exists").into(),
-        );
+fn main() -> std::process::ExitCode {
+    bevy_widgetry_test_utils::benchmark::artifact::finish(run())
+}
+
+fn run() -> bevy::prelude::Result {
+    use bevy_widgetry_test_utils::benchmark::artifact::error;
+    let options = options(std::env::args().skip(1)).map_err(error)?;
+    if options.output.try_exists().map_err(error)? {
+        return Err(error(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "destination already exists",
+        )));
     }
     let frames = options
         .seconds
         .checked_mul(u64::from(options.rate))
-        .ok_or_else(|| invalid("frame count overflow"))?;
+        .ok_or_else(|| error(invalid("frame count overflow")))?;
     let raw_bytes = frames
         .checked_mul(options.channels as u64)
         .and_then(|n| n.checked_mul(5))
-        .ok_or_else(|| invalid("recording size overflow"))?;
+        .ok_or_else(|| error(invalid("recording size overflow")))?;
     let metadata = WaveformMetadata {
         channel_count: options.channels,
         channel_labels: (1..=options.channels)
@@ -87,13 +93,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             total_frames: frames,
         },
     };
-    metadata.validate()?;
+    metadata
+        .validate()
+        .map_err(|failure| failure.into_bevy_error())?;
     if let Some(parent) = options
         .output
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
     {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent).map_err(error)?;
     }
     println!(
         "准备生成记录 path={} raw_bytes={} seed={}",
@@ -105,10 +113,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     build_recording(&options.output, metadata, |channel, range, out| {
         out.extend(range.map(|frame| signal(channel, frame, options.rate, options.seed)));
         Ok(())
-    })?;
+    })
+    .map_err(|failure| failure.into_bevy_error())?;
     println!(
         "记录及双算法索引生成完成 bytes={} elapsed_s={:.3}",
-        std::fs::metadata(&options.output)?.len(),
+        std::fs::metadata(&options.output).map_err(error)?.len(),
         start.elapsed().as_secs_f64()
     );
     Ok(())

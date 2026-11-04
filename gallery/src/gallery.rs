@@ -176,15 +176,20 @@ pub(crate) fn mount_page(
     content: impl SceneList,
 ) -> Result<Entity, BevyError> {
     if target == GalleryPage::Initializing {
-        error!(?target, "Initializing 不能挂载 Gallery 页面");
-        return Err(BevyError::error("Initializing 不能挂载 Gallery 页面"));
+        return Err(crate::diagnostics::at(
+            "Initializing 不能挂载 Gallery 页面",
+            bevy_widgetry::diagnostics::ErrorFrame::new("Initializing 不能挂载 Gallery 页面")
+                .field("target", format_args!("{:?}", target)),
+        ));
     }
     let host = world
         .query_filtered::<Entity, With<GalleryPageHost>>()
         .single(world)
         .map_err(|error| {
-            error!(%error, "Gallery 必须存在唯一 PageHost");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 必须存在唯一 PageHost"),
+            )
         })?;
     if world
         .query_filtered::<Entity, With<GalleryPageContent>>()
@@ -192,8 +197,11 @@ pub(crate) fn mount_page(
         .next()
         .is_some()
     {
-        error!(?target, "挂载 Gallery 页面前必须先销毁旧页面");
-        return Err(BevyError::error("挂载 Gallery 页面前必须先销毁旧页面"));
+        return Err(crate::diagnostics::at(
+            "挂载 Gallery 页面前必须先销毁旧页面",
+            bevy_widgetry::diagnostics::ErrorFrame::new("挂载 Gallery 页面前必须先销毁旧页面")
+                .field("target", format_args!("{:?}", target)),
+        ));
     }
     spawn_scene(world, bsn! { ChildOf(host) @page(target, content) }).map_err(|error| {
         error
@@ -215,8 +223,12 @@ pub(crate) fn unmount_page(world: &mut World, target: GalleryPage) -> Result {
         [] => return Ok(()),
         [(root, page)] if *page == target => *root,
         _ => {
-            error!(?target, ?roots, "退出 Gallery 页面时页面 root 不匹配");
-            return Err(BevyError::error("退出 Gallery 页面时页面 root 不匹配"));
+            return Err(crate::diagnostics::at(
+                "退出 Gallery 页面时页面 root 不匹配",
+                bevy_widgetry::diagnostics::ErrorFrame::new("退出 Gallery 页面时页面 root 不匹配")
+                    .field("target", format_args!("{:?}", target))
+                    .field("roots", format_args!("{:?}", roots)),
+            ));
         }
     };
     world.despawn(root);

@@ -151,6 +151,9 @@ opt-level = 1
 debug = 0
 opt-level = 3
 
+[profile.release]
+debug = "line-tables-only"
+
 # 配合BRP使用的MCP
 # cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag 0.4.2 --locked
 [workspace.metadata.tools]

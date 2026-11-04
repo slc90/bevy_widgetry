@@ -7197,6 +7197,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_brp_runtime",
+ "bevy_ecs",
  "bevy_remote",
  "bevy_widgetry",
  "bevy_widgetry_app_icon_build",

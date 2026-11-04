@@ -86,8 +86,11 @@ fn content<T: Component>(world: &World, root: Entity) -> Result<Entity, BevyErro
         .into_iter()
         .find(|entity| world.get::<T>(*entity).is_some())
         .ok_or_else(|| {
-            error!(?root, "Gallery 固定颜色实例缺少内容");
-            BevyError::error("Gallery 固定颜色实例缺少内容")
+            crate::diagnostics::at(
+                "Gallery 固定颜色实例缺少内容",
+                bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 固定颜色实例缺少内容")
+                    .field("root", format_args!("{:?}", root)),
+            )
         })
 }
 

@@ -283,8 +283,11 @@ fn operate_world(world: &mut World, root: Entity, action: Action) -> Result<(), 
     let source = world
         .get::<WidgetryComboBox<ComboBoxDemoItem>>(root)
         .ok_or_else(|| {
-            error!(?root, "ComboBox demo root missing");
-            BevyError::error("ComboBox demo root missing")
+            crate::diagnostics::at(
+                "ComboBox demo root missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("ComboBox demo root missing")
+                    .field("root", format_args!("{:?}", root)),
+            )
         })?
         .source();
     let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, root)
@@ -292,8 +295,11 @@ fn operate_world(world: &mut World, root: Entity, action: Action) -> Result<(), 
     let mut model = world
         .get_mut::<WidgetryListModel<ComboBoxDemoItem>>(source)
         .ok_or_else(|| {
-            error!(?root, "ComboBox demo source missing");
-            BevyError::error("ComboBox demo source missing")
+            crate::diagnostics::at(
+                "ComboBox demo source missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("ComboBox demo source missing")
+                    .field("root", format_args!("{:?}", root)),
+            )
         })?;
     let index = selected.and_then(|id| model.index_of(id));
     let changed = match action {

@@ -23,24 +23,27 @@ pub(crate) struct ReplayLoader;
 impl AssetLoader for ReplayLoader {
     type Asset = ReplayAsset;
     type Settings = ();
-    type Error = io::Error;
+    type Error = bevy_widgetry::diagnostics::bevy::WidgetryEcsError;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
         _: &(),
-        _: &mut LoadContext<'_>,
-    ) -> io::Result<ReplayAsset> {
+        context: &mut LoadContext<'_>,
+    ) -> std::result::Result<ReplayAsset, Self::Error> {
         let result = async {
             let mut bytes = Vec::new();
             reader.read_to_end(&mut bytes).await?;
             parse(&bytes).map(|data| ReplayAsset(Arc::new(data)))
         }
         .await;
-        if let Err(ref failure) = result {
-            error!(%failure, "Waveform replay asset 加载失败");
-        }
-        result
+        result.map_err(|source| {
+            bevy_widgetry::diagnostics::bevy::WidgetryEcsError::new(crate::diagnostics::failure(
+                crate::diagnostics::GalleryError::Operation(source.into()),
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.waveform.load_asset")
+                    .field("path", context.path()),
+            ))
+        })
     }
 
     fn extensions(&self) -> &[&str] {
@@ -168,7 +171,7 @@ impl LiveSource {
         let mut storage = self
             .0
             .write()
-            .map_err(|_| BevyError::error("live producer lock poisoned"))?;
+            .map_err(|_| crate::diagnostics::error("live producer lock poisoned"))?;
         let start = storage.end;
         let capacity = storage.capacity;
         for (channel, values) in storage.channels.iter_mut().enumerate() {

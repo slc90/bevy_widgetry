@@ -628,6 +628,24 @@ fn duplicate_cursor_writer_is_reported_in_both_plugin_orders() {
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
         assert!(errors[0].to_string().contains("CursorIconPlugin"));
+        let diagnostic = errors[0]
+            .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap();
+        assert_eq!(
+            diagnostic.origin().backtrace().status(),
+            std::backtrace::BacktraceStatus::Captured
+        );
+        assert_eq!(
+            logs.diagnostic_records(
+                diagnostic.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
+        );
         assert_eq!(
             logs.records()
                 .iter()

@@ -122,8 +122,11 @@ fn start_loading(event: On<Activate>, mut commands: Commands) {
         WidgetryButton::set_loading_in_world(world, entity, true)
             .map_err(|error| error.into_bevy_error())?;
         let mut demo = world.get_mut::<LoadingDemo>(entity).ok_or_else(|| {
-            error!(?entity, "Loading 演示状态缺失");
-            BevyError::error("Loading 演示状态缺失")
+            crate::diagnostics::at(
+                "Loading 演示状态缺失",
+                bevy_widgetry::diagnostics::ErrorFrame::new("Loading 演示状态缺失")
+                    .field("entity", format_args!("{:?}", entity)),
+            )
         })?;
         demo.activations += 1;
         info!(
@@ -193,8 +196,10 @@ fn switch_url(
     mut commands: Commands,
 ) -> Result {
     let entity = links.single().map_err(|error| {
-        error!(%error, "LinkButton 演示缺少唯一切换目标");
-        BevyError::error(error.to_string())
+        crate::diagnostics::at(
+            error.to_string(),
+            bevy_widgetry::diagnostics::ErrorFrame::new("LinkButton 演示缺少唯一切换目标"),
+        )
     })?;
     commands.queue(move |world: &mut World| -> Result {
         let next = if WidgetryLinkButton::url(world, entity)

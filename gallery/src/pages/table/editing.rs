@@ -170,7 +170,7 @@ pub(super) fn install(app: &mut App) -> Result {
                             @renderer: {WidgetryListViewRenderer::new(|v: &bool| bsn_list! {Text({v.to_string()}) bevy_widgetry::text::WidgetryText})},
                         }
                         Name("TableBoolEditor") Node { width: percent(100), min_width: px(0) }
-                    }).map_err(BevyError::error)?;
+                    }).map_err(crate::diagnostics::error)?;
                     context.entity.world_scope(|world| WidgetryComboBox::<bool>::select_index(&mut world.commands(), source, selected));
                     Ok(BooleanEditor { value: selected != 0 })
                 })
@@ -233,18 +233,18 @@ fn resolve(world: &mut World, event: &WidgetryTableEditRequested) -> Result {
     }
     let source = world
         .get::<WidgetryTable<DemoRow>>(root)
-        .ok_or_else(|| BevyError::error("Table View missing"))?
+        .ok_or_else(|| crate::diagnostics::error("Table View missing"))?
         .source();
     let mut model = world
         .get_mut::<WidgetryTableModel<DemoRow>>(source)
-        .ok_or_else(|| BevyError::error("Table Model missing"))?;
+        .ok_or_else(|| crate::diagnostics::error("Table Model missing"))?;
     let index = model
         .row_index(event.cell.row)
-        .ok_or_else(|| BevyError::error("Edit Row removed"))?;
+        .ok_or_else(|| crate::diagnostics::error("Edit Row removed"))?;
     let row = model
         .row_mut(index)
         .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?
-        .ok_or_else(|| BevyError::error("Edit Row missing"))?;
+        .ok_or_else(|| crate::diagnostics::error("Edit Row missing"))?;
     if let Some(value) = event.value.downcast_ref::<u32>() {
         row.number = *value;
     } else if let Some(value) = event.value.downcast_ref::<bool>() {

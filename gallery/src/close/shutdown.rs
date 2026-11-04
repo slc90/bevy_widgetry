@@ -98,10 +98,7 @@ pub(super) fn begin(world: &mut World, intent: AppExit) -> Result {
     let handle = world
         .resource::<JobManager>()
         .begin_shutdown(timeout)
-        .map_err(|failure| {
-            error!(%failure, "Gallery 无法开始后台任务收尾");
-            BevyError::error(failure)
-        })?;
+        .map_err(|failure| failure.into_bevy_error())?;
     let remaining = handle.status().remaining.len();
     world.resource_mut::<ExitFlow>().handle = Some(handle);
     {
@@ -120,8 +117,10 @@ pub(super) fn begin(world: &mut World, intent: AppExit) -> Result {
         proxy
             .send_event(WinitUserEvent::WakeUp)
             .map_err(|failure| {
-                error!(%failure, "Gallery 无法唤醒关闭界面");
-                BevyError::error(failure.to_string())
+                crate::diagnostics::at(
+                    failure,
+                    bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 无法唤醒关闭界面"),
+                )
             })?;
     }
     Ok(())
@@ -315,8 +314,10 @@ fn show(world: &mut World) -> Result {
         let root = spawn_scene(world, bsn! { ChildOf(host) @panel() })
             .map_err(|error| error.into_bevy_error())?;
         *world.get::<Panel>(root).ok_or_else(|| {
-            error!("Gallery 关闭界面缺少必要结构");
-            BevyError::error("Gallery shutdown panel parts missing")
+            crate::diagnostics::at(
+                "Gallery shutdown panel parts missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 关闭界面缺少必要结构"),
+            )
         })?
     };
     let status = match stage {
@@ -339,8 +340,10 @@ fn show(world: &mut World) -> Result {
     world
         .get_mut::<Node>(parts.actions)
         .ok_or_else(|| {
-            error!("Gallery 关闭界面缺少决策区域");
-            BevyError::error("Gallery shutdown actions missing")
+            crate::diagnostics::at(
+                "Gallery shutdown actions missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 关闭界面缺少决策区域"),
+            )
         })?
         .display = if matches!(stage, Stage::TimedOut | Stage::Continuing) {
         Display::Flex

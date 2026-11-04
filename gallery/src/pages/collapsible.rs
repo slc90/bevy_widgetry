@@ -273,6 +273,8 @@ fn refresh(world: &mut World) -> Result {
 }
 
 fn demo_error(reason: &str) -> BevyError {
-    error!(reason, "Collapsible 演示结构无效");
-    BevyError::error(reason.to_owned())
+    crate::diagnostics::at(
+        reason.to_owned(),
+        bevy_widgetry::diagnostics::ErrorFrame::new("Collapsible 演示结构无效"),
+    )
 }

@@ -171,8 +171,10 @@ fn scene() -> impl Scene {
 }
 
 fn invalid(reason: &str) -> BevyError {
-    error!(reason, "Splitter 演示内部结构失效");
-    BevyError::error(reason.to_owned())
+    crate::diagnostics::at(
+        reason.to_owned(),
+        bevy_widgetry::diagnostics::ErrorFrame::new("Splitter 演示内部结构失效"),
+    )
 }
 
 fn demo(world: &mut World) -> Result<Demo, BevyError> {

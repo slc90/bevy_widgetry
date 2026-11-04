@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 bevy = { workspace = true, features = ["png", "jpeg"] }
+bevy_ecs = { workspace = true, features = ["backtrace"] }
 bevy_brp_runtime.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry", features = [
   "app_logging",

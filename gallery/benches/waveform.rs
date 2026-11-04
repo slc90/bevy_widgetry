@@ -9,7 +9,11 @@ use std::time::{Duration, Instant};
 
 struct Process(Child);
 
-fn main() -> Result {
+fn main() -> std::process::ExitCode {
+    bevy_widgetry_test_utils::benchmark::artifact::finish(run())
+}
+
+fn run() -> Result {
     let algorithm =
         std::env::var("GALLERY_WAVEFORM_BENCH_ALGORITHM").unwrap_or_else(|_| "MinMax".into());
     if !["MinMax", "Lttb"].contains(&algorithm.as_str()) {
@@ -139,7 +143,12 @@ fn main() -> Result {
     if measured.is_err() {
         let pointer = release_pointer(port);
         let shutdown = rpc(port, "brp_extras/shutdown", json!({}));
-        artifact.write_json("cleanup.json",&json!({"pointer_error":pointer.err().map(|error|error.to_string()),"shutdown_error":shutdown.err().map(|error|error.to_string())}))?;
+        if let Err(error) = artifact.write_json("cleanup.json",&json!({"pointer_error":pointer.as_ref().err().map(ToString::to_string),"shutdown_error":shutdown.as_ref().err().map(ToString::to_string)})) {
+            bevy_widgetry_test_utils::benchmark::artifact::report_failure(&error);
+        }
+        for error in [pointer.err(), shutdown.err()].into_iter().flatten() {
+            bevy_widgetry_test_utils::benchmark::artifact::report_failure(&error);
+        }
     }
     artifact.write_json("result.json", &json!({"status":if measured.is_ok(){"complete"}else{"failed"},"error":measured.as_ref().err().map(ToString::to_string),"shutdown":if measured.is_ok(){"normal"}else{"see cleanup.json; Process drop waits or kills the owned child"}}))?;
     println!("GUI artifact: {}", artifact.directory.display());
@@ -391,7 +400,7 @@ impl Drop for Process {
             Ok(())
         })();
         if let Err(failure) = result {
-            eprintln!("Gallery cleanup failed: {failure}");
+            bevy_widgetry_test_utils::benchmark::artifact::report_failure(&error(failure));
         }
     }
 }

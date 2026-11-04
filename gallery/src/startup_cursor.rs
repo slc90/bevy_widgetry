@@ -49,8 +49,10 @@ pub(crate) struct GalleryFirstFrameReady {
 
 pub(crate) fn install(app: &mut App) -> Result {
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
-        error!("Gallery Cursor 启动检查需要 RenderApp");
-        return Err(BevyError::error("Gallery Cursor 启动检查需要 RenderApp"));
+        return Err(crate::diagnostics::at(
+            "Gallery Cursor 启动检查需要 RenderApp",
+            bevy_widgetry::diagnostics::ErrorFrame::new("Gallery Cursor 启动检查需要 RenderApp"),
+        ));
     };
     render_app
         .init_resource::<PendingCursor>()
@@ -162,8 +164,10 @@ fn observe_presented(
         // Present only schedules presentation.
         // DwmFlush waits for this process's queued DirectX content to display before releasing the Cursor.
         winsafe::DwmFlush().map_err(|error| {
-            error!(error = %error, "等待 Gallery 首帧桌面呈现失败");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("等待 Gallery 首帧桌面呈现失败"),
+            )
         })?;
         startup.presented.store(true, Ordering::Release);
     }

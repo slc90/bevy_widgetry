@@ -122,13 +122,19 @@ fn value_changed(
     let row = parents
         .get(event.source)
         .map_err(|error| {
-            error!(entity=?event.source,%error,"Slider 演示行缺失");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("Slider 演示行缺失")
+                    .field("entity", format_args!("{:?}", event.source)),
+            )
         })?
         .parent();
     let siblings = children.get(row).map_err(|error| {
-        error!(?row,%error,"Slider 演示行内容缺失");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("Slider 演示行内容缺失")
+                .field("row", format_args!("{:?}", row)),
+        )
     })?;
     for sibling in siblings.iter() {
         if let Ok(mut text) = labels.get_mut(sibling) {
@@ -136,8 +142,11 @@ fn value_changed(
             return Ok(());
         }
     }
-    error!(entity=?event.source,"Slider 外部数值 Text 缺失");
-    Err(BevyError::error("Slider external value Text is missing"))
+    Err(crate::diagnostics::at(
+        "Slider external value Text is missing",
+        bevy_widgetry::diagnostics::ErrorFrame::new("Slider 外部数值 Text 缺失")
+            .field("entity", format_args!("{:?}", event.source)),
+    ))
 }
 
 pub(crate) fn color_examples() -> impl Scene {
@@ -177,8 +186,11 @@ fn apply_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool, Be
         .flat_map(|children| children.iter())
         .find(|&entity| world.get::<WidgetrySlider>(entity).is_some())
         .ok_or_else(|| {
-            error!(?root, "Slider 颜色示例目标缺失");
-            BevyError::error("Slider color example target is missing")
+            crate::diagnostics::at(
+                "Slider color example target is missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("Slider 颜色示例目标缺失")
+                    .field("root", format_args!("{:?}", root)),
+            )
         })?;
     if apply {
         let normal = WidgetrySliderStateColorOverrides {

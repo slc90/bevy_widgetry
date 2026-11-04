@@ -188,3 +188,5 @@ ComboBox 直接依赖 diagnostics 的 Bevy 桥接。注册、查询及颜色 API
 构建期 app_icon_build 直接依赖默认无 Bevy 的 diagnostics 和 winresource；Gallery build.rs 独立使用 Tracing 接收与终结构建失败，不接入运行期日志或 ECS。
 
 app_logging 直接依赖 diagnostics 的 Bevy 桥接，用共享诊断保存初始化与输出故障；其 lossless 文件writer和LoggingGuard归宿主生命周期管理，库不替宿主安装Subscriber或ECS Handler。Facade仅重导出配置与类型。
+
+Gallery 的错误终结策略位于应用内部 diagnostics 模块，通过 Facade 的统一诊断桥读取原始 ID、原因与栈。Gallery 显式开启 bevy_ecs/backtrace 以保留原生 Bevy 可用栈；受管诊断仍使用自己的 force_capture，与该 Feature 和环境变量独立。发行安装脚本归 Gallery，匹配 PDB 与 EXE 一起部署。

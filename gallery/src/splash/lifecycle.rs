@@ -42,8 +42,11 @@ pub(super) struct SplashValidation {
 pub(super) fn install(app: &mut App) -> Result {
     let fault = std::env::var("GALLERY_SPLASH_FAULT").unwrap_or_default();
     if !matches!(fault.as_str(), "" | "asset") {
-        error!(fault, "Splash 失败验证模式无效");
-        return Err(BevyError::error("Splash 失败验证模式无效"));
+        return Err(crate::diagnostics::at(
+            "Splash 失败验证模式无效",
+            bevy_widgetry::diagnostics::ErrorFrame::new("Splash 失败验证模式无效")
+                .field("fault", fault),
+        ));
     }
     app.insert_resource(SplashValidation {
         assets_delay_ms: duration("GALLERY_SPLASH_ASSETS_DELAY_MS", 0.0)?,
@@ -66,12 +69,20 @@ fn duration(name: &str, default_value: f32) -> Result<f32> {
         return Ok(default_value);
     };
     let value = value.to_string_lossy().parse::<f32>().map_err(|error| {
-        error!(name, value = ?value, %error, "Splash 验证参数无效");
-        BevyError::error(error)
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("Splash 验证参数无效")
+                .field("name", name)
+                .field("value", format_args!("{:?}", value)),
+        )
     })?;
     if !value.is_finite() || !(0.0..=60000.0).contains(&value) {
-        error!(name, value, "Splash 验证时间必须位于0–60000ms");
-        return Err(BevyError::error("Splash 验证时间必须位于0–60000ms"));
+        return Err(crate::diagnostics::at(
+            "Splash 验证时间必须位于0–60000ms",
+            bevy_widgetry::diagnostics::ErrorFrame::new("Splash 验证时间必须位于0–60000ms")
+                .field("name", name)
+                .field("value", value),
+        ));
     }
     Ok(value)
 }

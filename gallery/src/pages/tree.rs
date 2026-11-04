@@ -237,15 +237,21 @@ fn demo_view(world: &mut World, kind: usize) -> Result<Entity, BevyError> {
         .find(|(_, view)| view.0 == kind)
         .map(|(entity, _)| entity)
         .ok_or_else(|| {
-            error!(view_kind = kind, "Gallery Tree 示例缺少 TreeView");
-            BevyError::error("Gallery TreeView missing")
+            crate::diagnostics::at(
+                "Gallery TreeView missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("Gallery Tree 示例缺少 TreeView")
+                    .field("view_kind", kind),
+            )
         })
 }
 
 fn edit_shared(world: &mut World, action: TreeAction) -> Result {
     let Some(model) = world.get::<WidgetryTreeModel>(action.source) else {
-        error!(source = ?action.source, "Gallery 共享 Tree 缺失 Model");
-        return Err(BevyError::error("Gallery shared Tree Model missing"));
+        return Err(crate::diagnostics::at(
+            "Gallery shared Tree Model missing",
+            bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 共享 Tree 缺失 Model")
+                .field("source", format_args!("{:?}", action.source)),
+        ));
     };
     let root = model.root();
     let view = demo_view(world, action.view_kind)?;
@@ -383,8 +389,13 @@ fn on_tree_event(
                 if let Some(mut folder) = world.get_mut::<Folder>(node) {
                     folder.0 = TextKey::Tree(TreeKey::RemoteFolderLoading);
                 } else {
-                    error!(?node, "Gallery lazy Tree node 缺少 Folder");
-                    return Err(BevyError::error("Gallery lazy Tree Folder missing"));
+                    return Err(crate::diagnostics::at(
+                        "Gallery lazy Tree Folder missing",
+                        bevy_widgetry::diagnostics::ErrorFrame::new(
+                            "Gallery lazy Tree node 缺少 Folder",
+                        )
+                        .field("node", format_args!("{:?}", node)),
+                    ));
                 }
                 let deadline =
                     world.resource::<Time<Real>>().elapsed() + Duration::from_millis(800);

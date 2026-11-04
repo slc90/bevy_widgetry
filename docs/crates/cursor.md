@@ -28,7 +28,7 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 
 `WidgetryCursorHint::ReadOnly` 表达可选择、可复制但不可编辑的区域，与 Disabled 独立。System Theme 或 Kamuri 素材不可用时回退 `SystemCursorIcon::Cell`；Kamuri 使用扫描文档与闭合蓝白挂锁的循环动画，热点 `(25,56)` 固定于锁孔。Hint 只声明光标语义，应用仍负责实际编辑资格；未启用编辑的普通表格不应自动声明 ReadOnly。编辑器内部光标由编辑器自己的最近声明控制。
 
-素材解码/加载或尺寸、像素格式、CPU数据长度校验失败会保留资产身份、路径、实际字段及原加载source，首次纳入时记录一次源头ERROR。共享图集由资源缓存按资产及原因键复用同一origin，已受管Loader集合保留全部诊断。只有真正选择静态图集或System Fallback后，才按原error_id记录一次DEBUG，注明Window和选择结果；确认图像恢复可用后INFO。Loading、运行资源尚未准备和正常主题切换保持静默，不持续制造失败或重绘循环。重复安装与 Bevy 官方 `CursorIconPlugin` 冲突需要报告；Window / Pointer / Lease 失效时不能残留错误的 Cursor 所有权。
+素材解码/加载或尺寸、像素格式、CPU数据长度校验失败会保留资产身份、路径、实际字段及原加载source，首次纳入时记录一次源头ERROR。共享图集由资源缓存按资产及原因键复用同一origin，已受管Loader集合保留全部诊断。只有真正选择静态图集或System Fallback后，才按原error_id记录一次DEBUG，注明Window和选择结果；确认图像恢复可用后INFO。Loading、运行资源尚未准备和正常主题切换保持静默，不持续制造失败或重绘循环。与 Bevy 官方 `CursorIconPlugin` 冲突时通过统一诊断保留首次位置、ID 和原始栈，按 Severity::Error 进入宿主；Window / Pointer / Lease 失效时不能残留错误的 Cursor 所有权。
 
 ## 已知限制
 

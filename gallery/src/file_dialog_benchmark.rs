@@ -42,10 +42,10 @@ impl Sink {
     }
     fn send(&self, value: Value) -> Result {
         let mut events = self.events.lock().map_err(|error| {
-            BevyError::error(format!("FileDialog benchmark trace poisoned: {error}"))
+            crate::diagnostics::error(format!("FileDialog benchmark trace poisoned: {error}"))
         })?;
         if events.len() >= 100_000 {
-            return Err(BevyError::error(
+            return Err(crate::diagnostics::error(
                 "FileDialog benchmark trace capacity exceeded",
             ));
         }
@@ -116,21 +116,23 @@ fn end_update(
 }
 
 fn calibrate(sink: &Sink) -> Result<Value> {
-    let frequency = winsafe::QueryPerformanceFrequency()?;
+    let frequency =
+        winsafe::QueryPerformanceFrequency().map_err(|error| crate::diagnostics::error(error))?;
     if frequency <= 0 {
-        return Err(BevyError::error("QPC frequency is not positive"));
+        return Err(crate::diagnostics::error("QPC frequency is not positive"));
     }
     let mut best = None;
     for _ in 0..8 {
         let before = sink.ns(Instant::now());
-        let qpc = winsafe::QueryPerformanceCounter()?;
+        let qpc =
+            winsafe::QueryPerformanceCounter().map_err(|error| crate::diagnostics::error(error))?;
         let after = sink.ns(Instant::now());
         if best.is_none_or(|(width, _, _, _)| after - before < width) {
             best = Some((after - before, qpc, before, after));
         }
     }
     let Some((_, qpc, before, after)) = best else {
-        return Err(BevyError::error("QPC calibration unavailable"));
+        return Err(crate::diagnostics::error("QPC calibration unavailable"));
     };
     Ok(json!({"frequency":frequency,"qpc":qpc,"before_ns":before,"after_ns":after}))
 }
@@ -142,8 +144,10 @@ fn trace(In(params): In<Option<Value>>, world: &mut World) -> BrpResult {
         .and_then(|value| value.get("from"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
-    let events = sink.events.lock().map_err(BrpError::resource_error)?;
-    let from = usize::try_from(from).map_err(BrpError::resource_error)?;
+    let events = sink.events.lock().map_err(|_| {
+        crate::diagnostics::response_error("FileDialog benchmark trace lock poisoned")
+    })?;
+    let from = usize::try_from(from).map_err(crate::diagnostics::response_error)?;
     if from > events.len() {
         return Err(BrpError::resource_error(
             "Trace cursor exceeds recorded events",
@@ -180,23 +184,25 @@ fn resources(world: &World) -> Value {
 
 fn export(In(_params): In<Option<Value>>, world: &mut World) -> BrpResult {
     let sink = world.resource::<Sink>();
-    let calibration = calibrate(sink).map_err(BrpError::resource_error)?;
-    let events = sink.events.lock().map_err(BrpError::resource_error)?;
+    let calibration = calibrate(sink).map_err(crate::diagnostics::bevy_response_error)?;
+    let events = sink.events.lock().map_err(|_| {
+        crate::diagnostics::response_error("FileDialog benchmark trace lock poisoned")
+    })?;
     let mut file = BufWriter::new(
         std::fs::File::create(sink.output.join("events.jsonl"))
-            .map_err(BrpError::resource_error)?,
+            .map_err(crate::diagnostics::response_error)?,
     );
     for event in events.iter() {
-        serde_json::to_writer(&mut file, event).map_err(BrpError::resource_error)?;
-        writeln!(file).map_err(BrpError::resource_error)?;
+        serde_json::to_writer(&mut file, event).map_err(crate::diagnostics::response_error)?;
+        writeln!(file).map_err(crate::diagnostics::response_error)?;
     }
     serde_json::to_writer(
         &mut file,
         &json!({"event":"clock_check","qpc_calibration":calibration}),
     )
-    .map_err(BrpError::resource_error)?;
-    writeln!(file).map_err(BrpError::resource_error)?;
-    file.flush().map_err(BrpError::resource_error)?;
+    .map_err(crate::diagnostics::response_error)?;
+    writeln!(file).map_err(crate::diagnostics::response_error)?;
+    file.flush().map_err(crate::diagnostics::response_error)?;
     Ok(
         json!({"events":events.len(),"path":sink.output.join("events.jsonl"),"resources":resources(world)}),
     )
@@ -207,13 +213,15 @@ pub(crate) fn install(app: &mut App) -> Result {
         return Ok(());
     };
     if !app.world().contains_resource::<RemoteMethods>() {
-        error!("FileDialog benchmark 需要启用 BRP");
-        return Err(BevyError::error("FileDialog benchmark 需要启用 BRP"));
+        return Err(crate::diagnostics::at(
+            "FileDialog benchmark 需要启用 BRP",
+            bevy_widgetry::diagnostics::ErrorFrame::new("FileDialog benchmark 需要启用 BRP"),
+        ));
     }
     let output = PathBuf::from(output);
-    std::fs::create_dir_all(&output)?;
+    std::fs::create_dir_all(&output).map_err(|error| crate::diagnostics::error(error))?;
     if output.join("events.jsonl").exists() {
-        return Err(BevyError::error(
+        return Err(crate::diagnostics::error(
             "FileDialog benchmark output already exists",
         ));
     }
@@ -234,7 +242,7 @@ pub(crate) fn install(app: &mut App) -> Result {
     let calibration = calibrate(&sink)?;
     sink.send(json!({"protocol":2,"event":"protocol","clock":"app_monotonic_ns","clock_id":clock_id,"process_id":std::process::id(),"qpc_calibration":calibration,"content_probes":sink.content,"t_presented":null,"first_content_frame_endpoint":"post_render_graph_with_extracted_content","display_evidence":"required_external_presentation_adapter"}))?;
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
-        return Err(BevyError::error(
+        return Err(crate::diagnostics::error(
             "FileDialog GUI benchmark requires RenderApp",
         ));
     };

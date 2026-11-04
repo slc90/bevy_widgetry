@@ -41,3 +41,5 @@ Camera / Asset / Layout 尚未就绪时，调用方需要满足相应 Fixture �
 - Headless / Custom Pointer 不等于真实 OS Mouse 和 Native Window 行为。
 - Fixture 只为调用方设置约定环境，具体业务断言仍由各 crate 测试负责。
 
+
+Benchmark artifact 的 error 入口保留原始 source 和首次 origin，显式转换为 Error Severity；finish / report_failure 在独立工具的非 ECS 终结边界通过 stderr 补齐原因、ID、位置与原栈，适用于尚未安装 Subscriber 的 CLI。显示用业务状态字符串仍是独立的测量失败说明，不作为恢复原始库诊断的接口。

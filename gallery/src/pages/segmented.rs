@@ -186,12 +186,12 @@ fn report(world: &mut World, root: Entity, user: bool) -> Result {
         let parent = world
             .get::<ChildOf>(root)
             .map(ChildOf::parent)
-            .ok_or_else(|| BevyError::error("Segmented 演示缺失父容器"))?;
+            .ok_or_else(|| crate::diagnostics::error("Segmented 演示缺失父容器"))?;
         let index = selected_index(world, root)?;
         let (events, programmatic) = {
             let mut state = world
                 .get_mut::<SegmentedDemoState>(parent)
-                .ok_or_else(|| BevyError::error("Segmented 演示状态缺失"))?;
+                .ok_or_else(|| crate::diagnostics::error("Segmented 演示状态缺失"))?;
             if user {
                 state.user_events += 1;
             } else {
@@ -206,10 +206,10 @@ fn report(world: &mut World, root: Entity, user: bool) -> Result {
                     .iter()
                     .find(|child| world.get::<Status>(*child).is_some())
             })
-            .ok_or_else(|| BevyError::error("Segmented 演示状态文字缺失"))?;
+            .ok_or_else(|| crate::diagnostics::error("Segmented 演示状态文字缺失"))?;
         let mut text = world
             .get_mut::<LocalizedText>(label)
-            .ok_or_else(|| BevyError::error("Segmented 演示本地化文字缺失"))?;
+            .ok_or_else(|| crate::diagnostics::error("Segmented 演示本地化文字缺失"))?;
         *text = LocalizedText::with_args(
             TextKey::Segmented(SegmentedKey::Status),
             vec![
@@ -225,10 +225,7 @@ fn report(world: &mut World, root: Entity, user: bool) -> Result {
             info!(?root, index, user, "更新 Segmented 演示选择");
             Ok(())
         }
-        Err(error) => {
-            error!(?root, %error, "更新 Segmented 演示失败");
-            Err(error)
-        }
+        Err(error) => Err(error),
     }
 }
 
@@ -240,7 +237,7 @@ fn selected_index(world: &World, root: Entity) -> Result<usize> {
                 .iter()
                 .position(|child| world.get::<Checked>(child).is_some())
         })
-        .ok_or_else(|| BevyError::error("Segmented 演示缺失选中项"))
+        .ok_or_else(|| crate::diagnostics::error("Segmented 演示缺失选中项"))
 }
 
 fn select_next(
@@ -250,8 +247,7 @@ fn select_next(
 ) {
     for root in &targets {
         commands.queue(move |world: &mut World| -> Result {
-            let index = selected_index(world, root)
-                .inspect_err(|error| error!(?root, %error, "程序选择 Segmented 失败"))?;
+            let index = selected_index(world, root)?;
             WidgetrySegmented::set_selected(&mut world.commands(), root, (index + 1) % 3);
             world
                 .commands()
@@ -299,8 +295,11 @@ fn apply_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool> {
         .and_then(|children| children.get(1))
         .copied()
         .ok_or_else(|| {
-            error!(?root, "Segmented 颜色示例缺失中间项");
-            BevyError::error("Segmented 颜色示例缺失中间项")
+            crate::diagnostics::at(
+                "Segmented 颜色示例缺失中间项",
+                bevy_widgetry::diagnostics::ErrorFrame::new("Segmented 颜色示例缺失中间项")
+                    .field("root", format_args!("{:?}", root)),
+            )
         })?;
     let mut group = WidgetrySegmentedColorOverrides::default();
     let mut option = WidgetrySegmentedOptionColorOverrides::default();

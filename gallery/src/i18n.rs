@@ -77,7 +77,16 @@ pub(crate) fn tr_args(language: Language, key: TextKey, args: &[(&str, String)])
             output.push_str(value);
         } else {
             output.push_str(&rest[start..=end]);
-            error!(?language, ?key, parameter = name, "翻译缺少命名参数");
+            let failure = crate::diagnostics::failure(
+                crate::diagnostics::GalleryError::Operation(
+                    "translation named parameter missing".into(),
+                ),
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.i18n.format")
+                    .field("language", format_args!("{language:?}"))
+                    .field("key", format_args!("{key:?}"))
+                    .field("parameter", name),
+            );
+            failure.record_handled("保留缺失参数占位文本", "继续显示其余翻译内容");
         }
         rest = &rest[end + 1..];
     }

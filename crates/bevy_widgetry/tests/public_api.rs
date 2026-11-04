@@ -635,13 +635,27 @@ fn theme_command_reports_missing_mode_at_execution_without_notifying() {
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
     assert!(errors[0].to_string().contains("WidgetryThemeMode"));
-    assert!(logs.records().iter().any(|entry| {
-        entry.level == bevy::log::Level::ERROR
-            && entry
-                .fields
-                .get("message")
-                .is_some_and(|message| message.contains("WidgetryThemeMode"))
-    }));
+    let diagnostic = errors[0]
+        .downcast_ref::<bevy_widgetry::diagnostics::bevy::WidgetryEcsError>()
+        .unwrap()
+        .diagnostics()
+        .next()
+        .unwrap();
+    assert!(matches!(
+        diagnostic
+            .source()
+            .unwrap()
+            .downcast_ref::<bevy_widgetry::theme::ThemeError>(),
+        Some(bevy_widgetry::theme::ThemeError::MissingMode {
+            mode: WidgetryThemeMode::Light
+        })
+    ));
+    let source = logs.diagnostic_records(
+        diagnostic.origin().id(),
+        bevy_widgetry_test_utils::DiagnosticPhase::Source,
+    );
+    assert_eq!(source.len(), 1);
+    assert!(source[0].fields["error"].contains("WidgetryThemeMode"));
     assert_eq!(app.world().resource::<ThemeNotifications>().0, 0);
     assert!(!app.world().contains_resource::<WidgetryThemeMode>());
 }

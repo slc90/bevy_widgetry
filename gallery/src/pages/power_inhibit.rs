@@ -116,8 +116,10 @@ fn toggle(
         return Ok(());
     }
     if readouts.iter().count() != 3 {
-        error!("休眠抑制页面缺少必要的状态文字");
-        return Err(BevyError::error("power inhibit readouts are missing"));
+        return Err(crate::diagnostics::at(
+            "power inhibit readouts are missing",
+            bevy_widgetry::diagnostics::ErrorFrame::new("休眠抑制页面缺少必要的状态文字"),
+        ));
     }
     let enable = matches!(state.mode, Mode::Off);
     let result = if enable {

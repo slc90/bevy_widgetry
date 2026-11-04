@@ -390,8 +390,10 @@ pub(super) fn install(app: &mut App) {
                 return Ok(());
             }
             let mut sources = sources.ok_or_else(|| {
-                error!("Waveform 重载按钮缺少页面数据源");
-                BevyError::error("Waveform demo sources missing")
+                crate::diagnostics::at(
+                    "Waveform demo sources missing",
+                    bevy_widgetry::diagnostics::ErrorFrame::new("Waveform 重载按钮缺少页面数据源"),
+                )
             })?;
             sources.disk.reload();
             info!("请求重新加载本地 Waveform 回放记录");
@@ -865,6 +867,7 @@ mod tests {
                 last_seek: None,
                 gestures: HashMap::new(),
                 asset: Handle::default(),
+                asset_failure: None,
                 elapsed: Duration::ZERO,
                 last: None,
                 replay_start: None,

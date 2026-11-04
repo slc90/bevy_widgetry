@@ -281,8 +281,11 @@ fn set_preset<T: WidgetryNumber>(
             return Ok(());
         }
     }
-    error!(entity=?event.entity,"NumberInput 预设按钮缺失示例归属");
-    Err(BevyError::error("NumberInput preset example is missing"))
+    Err(crate::diagnostics::at(
+        "NumberInput preset example is missing",
+        bevy_widgetry::diagnostics::ErrorFrame::new("NumberInput 预设按钮缺失示例归属")
+            .field("entity", format_args!("{:?}", event.entity)),
+    ))
 }
 
 fn refresh<T: WidgetryNumber>(world: &mut World) -> Result {
@@ -311,8 +314,11 @@ fn refresh<T: WidgetryNumber>(world: &mut World) -> Result {
         );
         let rendered = text.render(*world.resource::<Language>());
         let current = world.get::<Text>(status).ok_or_else(|| {
-            error!(?status, "NumberInput 状态文字缺失");
-            BevyError::error("NumberInput status Text is missing")
+            crate::diagnostics::at(
+                "NumberInput status Text is missing",
+                bevy_widgetry::diagnostics::ErrorFrame::new("NumberInput 状态文字缺失")
+                    .field("status", format_args!("{:?}", status)),
+            )
         })?;
         if current.0 != rendered {
             world.entity_mut(status).insert((text, Text(rendered)));

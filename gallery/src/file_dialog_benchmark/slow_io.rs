@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods};
+use bevy_remote::{BrpResult, RemoteMethodSystemId, RemoteMethods};
 use bevy_widgetry::file_dialog::*;
 use serde_json::{Value, json};
 use std::io;
@@ -17,7 +17,9 @@ struct SlowFileSystem {
 
 fn release(In(_params): In<Option<Value>>, gate: Res<Gate>) -> BrpResult {
     let (lock, changed) = &*gate.0;
-    *lock.lock().map_err(BrpError::resource_error)? = true;
+    *lock.lock().map_err(|_| {
+        crate::diagnostics::response_error("FileDialog benchmark gate lock poisoned")
+    })? = true;
     changed.notify_all();
     Ok(json!({"released":true}))
 }
@@ -26,7 +28,8 @@ pub(super) fn install(app: &mut App) -> Result {
     let delay = std::env::var("GALLERY_FILE_DIALOG_BENCH_IO_DELAY_MS")
         .ok()
         .map(|value| value.parse::<u64>())
-        .transpose()?;
+        .transpose()
+        .map_err(|error| crate::diagnostics::error(error))?;
     let gated = std::env::var_os("GALLERY_FILE_DIALOG_BENCH_IO_GATE").is_some();
     if delay.is_none() && !gated {
         return Ok(());

@@ -14,6 +14,14 @@ Gallery 使用 Widgetry 自身提供的 Widget 和 Bevy BSN 构造界面，以�
 
 宿主日志通过 Facade 的可选 `app_logging` Feature 装配：先准备日志并 `install`，再安装 `log_plugin()` 返回的官方 LogPlugin 配置，持有 LoggingGuard 直到日志生产者结束并完成可观察 flush。文件保存必要诊断 DEBUG 与 INFO/ERROR，终端保持 INFO 及以上，普通 DEBUG/TRACE 被过滤；有界异步 writer 明确使用非丢弃背压策略。日志初始化失败在正式 Subscriber 不可用时由入口使用 stderr 补齐同一 ID 的原因、路径与原始栈。日志实现保留在独立的 app_logging crate，Gallery 负责目录、生命周期和宿主策略。
 
+Gallery 在构造 App 时安装一次宿主 Error Handler，供主 World 和未单独设置策略的 SubApp 继承。受管错误按原始 ID 逐项终结，同一诊断的重复上报只输出一次完整原栈，保留 ECS、附加传播和 Bevy context，不重放源头原因。非受管错误记录 Bevy 提供的 Display、Debug 和 ECS context，保留其 Severity 与 Panic payload 策略；第三方未捕获的原始栈不会被伪造。
+
+应用入口显式处理非 ECS 的启动失败和日志 finish 结果，以失败退出码结束。日志尚未就绪时由独立 stderr 补齐原因、上下文、原 ID、位置及原始栈；就绪后使用文件日志。配置读取/解析/校验失败保留原文件并采用默认值，保存失败保留已应用的界面设置，均以源头 ERROR 和实际降级 DEBUG 关联。Job 页面区分正常操作拒绝与真实失败，失败身份保留到失败状态提交完成。
+
+发行构建保留 line tables；使用 `pwsh -File gallery/install.ps1 -InstallRoot <目录>` 安装 EXE 和匹配 PDB。普通 cargo install 不负责安装 PDB，因此不能单凭 EXE 的存在声称具备文件/行号。部署时 EXE 与 PDB 应一同携带；优化和平台展开仍可能省略已内联或被优化掉的历史帧。
+
+可在独立进程设置 `GALLERY_DIAGNOSTIC_PROBE=lifecycle` 验证正式日志链路中的已处理、System、Observer、Command、Job、多失败去重及原生错误，`startup` 验证非 ECS 启动终结，`panic` 验证原生 Panic 策略。这些模式只执行诊断验证并退出，不创建 GUI。正常运行不设置此变量。
+
 Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Resource，后台结果通过合并的 Winit WakeUp 唤醒 Reactive 主循环。FileDialog全部后台业务和大快照生命周期、WaveformFile磁盘Reader及Gallery录制加载、Waveform大范围降采样和Canvas完整PNG导出使用该共享Manager。独立Job页面直接展示其公开提交、订阅、取消与移除能力；宿主统一接管退出意图并等待Manager完成全局收尾。
 
 整体采用**常驻应用框架与按需创建的页面内容**相结合的设计：

@@ -17,7 +17,7 @@ pub(super) struct SplashPreview {
 #[derive(Resource, Default)]
 pub(super) struct SplashAnimationClock {
     started: bool,
-    visibility_error: Option<String>,
+    visibility_error: Option<super::visibility::VisibilityError>,
     advancing: bool,
     pub(super) visible_delta_ms: f32,
 }
@@ -28,13 +28,19 @@ pub(super) fn install(app: &mut App) -> Result {
         "static" => Some(0.0),
         "" | "play" | "benchmark" => None,
         value => Some(value.parse::<f32>().map_err(|error| {
-            error!(mode = value, %error, "Splash 预览时间无效");
-            BevyError::error(error)
+            crate::diagnostics::at(
+                error,
+                bevy_widgetry::diagnostics::ErrorFrame::new("Splash 预览时间无效")
+                    .field("mode", value),
+            )
         })?),
     };
     if static_time.is_some_and(|time| !time.is_finite() || !(0.0..=5000.0).contains(&time)) {
-        error!(mode, "Splash 预览时间必须位于 0–5000ms");
-        return Err(BevyError::error("Splash 预览时间必须位于 0–5000ms"));
+        return Err(crate::diagnostics::at(
+            "Splash 预览时间必须位于 0–5000ms",
+            bevy_widgetry::diagnostics::ErrorFrame::new("Splash 预览时间必须位于 0–5000ms")
+                .field("mode", mode),
+        ));
     }
     app.insert_resource(SplashPreview {
         time_ms: static_time.unwrap_or_default(),
@@ -79,8 +85,16 @@ pub(super) fn animate(
             }
             Err(error) => {
                 if clock.visibility_error.as_ref() != Some(&error) {
-                    warn!(%error, "Splash 遮挡检测失败，按可见窗口继续播放");
+                    let failure = crate::diagnostics::failure(
+                        crate::diagnostics::GalleryError::Operation(error.clone().into()),
+                        bevy_widgetry::diagnostics::ErrorFrame::new("gallery.splash.visibility")
+                            .field("window", format_args!("{:?}", presentation.window)),
+                    );
                     clock.visibility_error = Some(error);
+                    failure.record_handled(
+                        "降级为可见窗口继续播放 Splash",
+                        "保持动画并等待可见性查询恢复",
+                    );
                 }
                 true
             }

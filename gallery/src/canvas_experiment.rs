@@ -126,7 +126,7 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
         return Err(invalid_params("Dimensions must be in 1..=16777216"));
     }
     let root = exports_root();
-    std::fs::create_dir_all(&root).map_err(BrpError::resource_error)?;
+    std::fs::create_dir_all(&root).map_err(crate::diagnostics::response_error)?;
     let timestamp = time::OffsetDateTime::now_utc().unix_timestamp_nanos();
     let (id, directory) = (0u64..)
         .find_map(|suffix| {
@@ -138,8 +138,8 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
                 Err(error) => Some(Err(error)),
             }
         })
-        .ok_or_else(|| BrpError::resource_error("No free session directory"))?
-        .map_err(BrpError::resource_error)?;
+        .ok_or_else(|| crate::diagnostics::response_error("No free session directory"))?
+        .map_err(crate::diagnostics::response_error)?;
     let document = world
         .spawn((CanvasDocument, Name::new(format!("PaintingDocument-{id}"))))
         .id();
@@ -156,9 +156,14 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     if let Err(error) = open_window(world, &id, &mut session) {
         world.despawn(document);
         if let Err(cleanup) = std::fs::remove_dir(&session.directory) {
-            warn!(%cleanup, path = %session.directory.display(), "绘画会话创建失败后目录清理失败");
+            let failure = crate::diagnostics::failure(
+                crate::diagnostics::GalleryError::Operation(cleanup.into()),
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.cleanup")
+                    .field("path", session.directory.display()),
+            );
+            failure.record_handled("放弃清理绘画会话目录", "保留原始创建失败并返回错误");
         }
-        return Err(BrpError::resource_error(error));
+        return Err(crate::diagnostics::bevy_response_error(error));
     }
     storage::persist(world, &id, &mut session);
     let response = describe(world, &id, &session)?;
@@ -173,7 +178,7 @@ fn open(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
             let mut session = storage::load(world, &request.session)?;
             if let Err(error) = open_window(world, &request.session, &mut session) {
                 world.despawn(session.document);
-                return Err(BrpError::resource_error(error));
+                return Err(crate::diagnostics::bevy_response_error(error));
             }
             sessions.0.insert(request.session.clone(), session);
         }
@@ -181,7 +186,8 @@ fn open(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
             .0
             .get_mut(&request.session)
             .ok_or_else(|| invalid_params("Unknown session"))?;
-        open_window(world, &request.session, session).map_err(BrpError::resource_error)?;
+        open_window(world, &request.session, session)
+            .map_err(crate::diagnostics::bevy_response_error)?;
         describe(world, &request.session, session)
     })
 }
@@ -217,7 +223,7 @@ fn restore(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     };
     if let Err(error) = opened {
         world.despawn(loaded.document);
-        return Err(BrpError::resource_error(error));
+        return Err(crate::diagnostics::bevy_response_error(error));
     }
     let response = describe(world, &request.session, &loaded)?;
     let next_native = loaded.window.map(|window| window.native);
@@ -256,11 +262,11 @@ fn describe(world: &mut World, id: &str, session: &Session) -> BrpResult {
     let zoom = view
         .map(|view| CanvasView::zoom(world, view))
         .transpose()
-        .map_err(BrpError::resource_error)?;
+        .map_err(crate::diagnostics::managed_response_error)?;
     let center = view
         .map(|view| CanvasView::center(world, view))
         .transpose()
-        .map_err(BrpError::resource_error)?;
+        .map_err(crate::diagnostics::managed_response_error)?;
     Ok(json!({
         "session": id, "width": session.size.x, "height": session.size.y,
         "region": [0, 0, session.size.x, session.size.y],
@@ -270,7 +276,7 @@ fn describe(world: &mut World, id: &str, session: &Session) -> BrpResult {
         "window_root": window.map(|window| window.root.to_bits()),
         "view": view.map(Entity::to_bits), "zoom": zoom,
         "center": center.map(|center| [center.x, center.y]),
-        "shape_count": CanvasDocument::shape_order(world, session.document).map_err(BrpError::resource_error)?.len(),
+        "shape_count": CanvasDocument::shape_order(world, session.document).map_err(crate::diagnostics::managed_response_error)?.len(),
         "fit_limited": zoom.is_some_and(|zoom| zoom == 0.1 || zoom == 10.0),
         "persistence": {"saved": !session.dirty, "error": session.save_error},
         "next_stage": session.next_stage,
@@ -330,7 +336,9 @@ fn open_window(world: &mut World, id: &str, session: &mut Session) -> Result {
         world.despawn(root);
         world.despawn(camera);
         world.despawn(native);
-        return Err(BevyError::error("Painting window has no CanvasView"));
+        return Err(crate::diagnostics::error(
+            "Painting window has no CanvasView",
+        ));
     };
     session.window = Some(SessionWindow {
         root,
@@ -399,12 +407,12 @@ fn shell_insets(world: &World, shell: Option<Entity>) -> Result<Vec2> {
     };
     let root = world
         .get::<Node>(shell)
-        .ok_or_else(|| BevyError::error("Painting window root missing"))?;
+        .ok_or_else(|| crate::diagnostics::error("Painting window root missing"))?;
     let bar = world
         .get::<Children>(shell)
         .and_then(|children| children.first())
         .and_then(|entity| world.get::<Node>(*entity))
-        .ok_or_else(|| BevyError::error("Painting window title bar missing"))?;
+        .ok_or_else(|| crate::diagnostics::error("Painting window title bar missing"))?;
     let UiRect {
         left: Val::Px(left),
         right: Val::Px(right),
@@ -412,12 +420,12 @@ fn shell_insets(world: &World, shell: Option<Entity>) -> Result<Vec2> {
         bottom: Val::Px(bottom),
     } = root.border
     else {
-        return Err(BevyError::error(
+        return Err(crate::diagnostics::error(
             "Painting window borders must use logical pixels",
         ));
     };
     let Val::Px(height) = bar.height else {
-        return Err(BevyError::error(
+        return Err(crate::diagnostics::error(
             "Painting window title bar must use logical pixels",
         ));
     };

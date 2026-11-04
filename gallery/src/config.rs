@@ -1,5 +1,9 @@
-use crate::i18n::Language;
+use crate::{
+    diagnostics::{self, GalleryError},
+    i18n::Language,
+};
 use bevy::prelude::*;
+use bevy_widgetry::diagnostics::ErrorFrame;
 use bevy_widgetry::theme::WidgetryThemeMode;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
@@ -76,7 +80,7 @@ impl AppConfig {
             fs::write(&file.path, content)
         })();
         if let Err(error) = result {
-            warn!(path = %file.path.display(), %error, "保存 Gallery 配置失败，保留已应用的 UI 修改");
+            handled("save", &file.path, error, "保留已应用的 UI 修改");
         }
     }
 }
@@ -105,78 +109,129 @@ impl ConfigFile {
     }
 }
 
-enum LoadDiagnostic {
-    Missing,
-    Read(io::Error),
-    Parse(ron::error::SpannedError),
-    Validate(io::Error),
-    Create(io::Error),
-}
-
 pub(crate) struct LoadedConfig {
     pub(crate) config: AppConfig,
     pub(crate) file: ConfigFile,
-    diagnostics: Vec<LoadDiagnostic>,
 }
 
-impl LoadedConfig {
-    pub(crate) fn report(&self) {
-        let path = self.file.path.display();
-        for diagnostic in &self.diagnostics {
-            match diagnostic {
-                LoadDiagnostic::Missing => {
-                    info!(%path, "Gallery 配置文件不存在，使用默认配置并尝试创建");
-                }
-                LoadDiagnostic::Read(error) => {
-                    warn!(%path, %error, "读取 Gallery 配置失败，整体使用默认配置并保留原文件");
-                }
-                LoadDiagnostic::Parse(error) => {
-                    error!(%path, %error, "解析 Gallery 配置失败，整体使用默认配置并保留原文件");
-                }
-                LoadDiagnostic::Validate(error) => {
-                    warn!(%path, %error, "校验 Gallery 配置失败，整体使用默认配置并保留原文件");
-                }
-                LoadDiagnostic::Create(error) => {
-                    warn!(%path, %error, "创建 Gallery 默认配置失败，继续使用内存默认配置");
-                }
-            }
-        }
-    }
+#[track_caller]
+fn handled(
+    action: &'static str,
+    path: &std::path::Path,
+    source: impl Into<Box<dyn std::error::Error + Send + Sync>>,
+    outcome: &str,
+) {
+    let failure = diagnostics::failure(
+        GalleryError::Configuration {
+            action,
+            path: path.to_owned(),
+            source: source.into(),
+        },
+        ErrorFrame::new("gallery.config")
+            .field("action", action)
+            .field("path", path.display()),
+    );
+    failure.record_handled("采用 Gallery 配置降级策略", outcome);
 }
 
 pub(crate) fn load(path: PathBuf) -> LoadedConfig {
     let file = ConfigFile { path };
-    let mut diagnostics = Vec::new();
     let config = match fs::read_to_string(&file.path) {
         Ok(content) => match ron::from_str::<AppConfig>(&content) {
             Ok(config) => match config.validate() {
                 Ok(()) => config,
                 Err(error) => {
-                    diagnostics.push(LoadDiagnostic::Validate(error));
+                    handled("validate", &file.path, error, "使用默认配置并保留原文件");
                     AppConfig::default()
                 }
             },
             Err(error) => {
-                diagnostics.push(LoadDiagnostic::Parse(error));
+                handled("parse", &file.path, error, "使用默认配置并保留原文件");
                 AppConfig::default()
             }
         },
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            diagnostics.push(LoadDiagnostic::Missing);
+            info!(path = %file.path.display(), "Gallery 配置文件不存在，使用默认配置并尝试创建");
             let config = AppConfig::default();
             if let Err(error) = file.create_default(&config) {
-                diagnostics.push(LoadDiagnostic::Create(error));
+                handled("create", &file.path, error, "继续使用内存默认配置");
             }
             config
         }
         Err(error) => {
-            diagnostics.push(LoadDiagnostic::Read(error));
+            handled("read", &file.path, error, "使用默认配置并保留原文件");
             AppConfig::default()
         }
     };
-    LoadedConfig {
-        config,
-        file,
-        diagnostics,
+    LoadedConfig { config, file }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+
+    #[test]
+    fn malformed_configuration_is_preserved_and_fallback_is_explicitly_handled() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.ron");
+        fs::write(&path, "malformed").unwrap();
+        let logs = LogCapture::with_targets(["widget_gallery", "bevy_widgetry"]);
+        let loaded = logs.run(|| load(path.clone()));
+        assert_eq!(
+            loaded.config.scale_factor,
+            AppConfig::default().scale_factor
+        );
+        assert_eq!(fs::read_to_string(path).unwrap(), "malformed");
+        let records = logs.records();
+        assert_eq!(
+            records
+                .iter()
+                .filter(|event| event.phase() == Some(DiagnosticPhase::Source))
+                .count(),
+            1
+        );
+        assert_eq!(
+            records
+                .iter()
+                .filter(|event| event.phase() == Some(DiagnosticPhase::Handled))
+                .count(),
+            1
+        );
+        assert!(
+            records
+                .iter()
+                .all(|event| !event.fields.contains_key("backtrace"))
+        );
+    }
+
+    #[test]
+    fn save_failure_preserves_the_applied_configuration_and_reports_its_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let occupied = directory.path().join("occupied");
+        fs::write(&occupied, "keep").unwrap();
+        let file = ConfigFile {
+            path: occupied.join("config.ron"),
+        };
+        let config = AppConfig {
+            scale_factor: 2.0,
+            ..default()
+        };
+        let logs = LogCapture::with_targets(["widget_gallery", "bevy_widgetry"]);
+        logs.run(|| config.save(&file));
+        assert_eq!(config.scale_factor, 2.0);
+        assert_eq!(fs::read_to_string(occupied).unwrap(), "keep");
+        let source = logs
+            .records()
+            .into_iter()
+            .find(|event| event.phase() == Some(DiagnosticPhase::Source))
+            .unwrap();
+        assert!(source.fields["error"].contains(&file.path.display().to_string()));
+        assert!(
+            logs.records()
+                .iter()
+                .any(|event| event.phase() == Some(DiagnosticPhase::Handled))
+        );
     }
 }

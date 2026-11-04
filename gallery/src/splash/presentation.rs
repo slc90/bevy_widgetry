@@ -66,8 +66,10 @@ struct PendingSplash {
 
 pub(super) fn install(app: &mut App) -> Result {
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
-        error!("Splash 首帧检查需要 RenderApp");
-        return Err(BevyError::error("Splash 首帧检查需要 RenderApp"));
+        return Err(crate::diagnostics::at(
+            "Splash 首帧检查需要 RenderApp",
+            bevy_widgetry::diagnostics::ErrorFrame::new("Splash 首帧检查需要 RenderApp"),
+        ));
     };
     render_app
         .init_resource::<PendingSplash>()
@@ -149,15 +151,19 @@ fn presented(
     if window_presented && target_presented && (image_ready || source.terminal) {
         if !source.presented.load(Ordering::Acquire) {
             winsafe::DwmFlush().map_err(|error| {
-                error!(error = %error, "等待 Splash 首帧呈现失败");
-                BevyError::error(error)
+                crate::diagnostics::at(
+                    error,
+                    bevy_widgetry::diagnostics::ErrorFrame::new("等待 Splash 首帧呈现失败"),
+                )
             })?;
             source.presented.store(true, Ordering::Release);
         }
         if source.terminal && !source.terminal_presented.load(Ordering::Acquire) {
             winsafe::DwmFlush().map_err(|error| {
-                error!(error = %error, "等待 Splash 透明末帧呈现失败");
-                BevyError::error(error)
+                crate::diagnostics::at(
+                    error,
+                    bevy_widgetry::diagnostics::ErrorFrame::new("等待 Splash 透明末帧呈现失败"),
+                )
             })?;
             source.terminal_presented.store(true, Ordering::Release);
         }

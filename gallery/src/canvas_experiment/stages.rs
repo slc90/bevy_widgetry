@@ -114,14 +114,14 @@ pub(super) fn export(In(value): In<Option<Value>>, world: &mut World) -> BrpResu
     }
     world.resource_scope(|world, mut sessions: Mut<Sessions>| {
         let session = sessions.0.get_mut(&request.session).ok_or_else(|| invalid_params("Unknown session"))?;
-        if CanvasDocument::shape_order(world, session.document).map_err(BrpError::resource_error)?.is_empty() {
+        if CanvasDocument::shape_order(world, session.document).map_err(crate::diagnostics::managed_response_error)?.is_empty() {
             return Err(BrpError::resource_error(CanvasExportError::EmptyDocument));
         }
-        let number = reserve(&session.directory, &mut session.next_stage).map_err(BrpError::resource_error)?;
+        let number = reserve(&session.directory, &mut session.next_stage).map_err(crate::diagnostics::response_error)?;
         storage::persist(world, &request.session, session);
         let directory = session.directory.join("stages");
         let region = Rect::from_corners(Vec2::ZERO, session.size.as_vec2());
-        let document = freeze(world, session.document).map_err(BrpError::resource_error)?;
+        let document = freeze(world, session.document).map_err(crate::diagnostics::bevy_response_error)?;
         let mut files = Vec::with_capacity(4);
         for scale in [None, Some(1), Some(2), Some(4)] {
             let name = match scale {
@@ -156,15 +156,15 @@ fn freeze(world: &mut World, source: Entity) -> Result<Entity> {
         let geometry = world
             .get::<CanvasGeometry>(shape)
             .cloned()
-            .ok_or_else(|| BevyError::error("Stage shape geometry missing"))?;
+            .ok_or_else(|| crate::diagnostics::error("Stage shape geometry missing"))?;
         let paint = world
             .get::<CanvasPaint>(shape)
             .copied()
-            .ok_or_else(|| BevyError::error("Stage shape paint missing"))?;
+            .ok_or_else(|| crate::diagnostics::error("Stage shape paint missing"))?;
         let transform = world
             .get::<Transform>(shape)
             .copied()
-            .ok_or_else(|| BevyError::error("Stage shape transform missing"))?;
+            .ok_or_else(|| crate::diagnostics::error("Stage shape transform missing"))?;
         geometry
             .validate(&transform, &paint)
             .map_err(|error| error.into_bevy_error())?;
@@ -204,6 +204,18 @@ fn advance(world: &mut World, stage: &mut Stage, session: &str, number: u64) {
     }
 }
 
+#[track_caller]
+fn stage_io(source: io::Error, path: &Path) -> CanvasExportError {
+    CanvasExportError::Background(
+        crate::diagnostics::failure(
+            crate::diagnostics::GalleryError::Operation(source.into()),
+            bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.stage_io")
+                .field("path", path.display()),
+        )
+        .into(),
+    )
+}
+
 fn start(
     world: &mut World,
     document: Entity,
@@ -212,11 +224,11 @@ fn start(
     path: &Path,
 ) -> FileState {
     let result = (|| {
-        let temporary = temporary(path).map_err(CanvasExportError::Io)?;
+        let temporary = temporary(path).map_err(|source| stage_io(source, path))?;
         let result = match scale {
             None => CanvasDocument::export_svg(world, document, &temporary, Some(region))
                 .map_err(CanvasExportError::Background)
-                .and_then(|()| publish(&temporary, path).map_err(CanvasExportError::Io))
+                .and_then(|()| publish(&temporary, path).map_err(|source| stage_io(source, path)))
                 .map(|()| FileState::Succeeded),
             Some(scale) => CanvasDocument::export_png(
                 world,
@@ -256,9 +268,14 @@ fn start(
             if let CanvasExportError::Job(error) = &error {
                 error.record_handled("停止绘画阶段文件导出并保存失败状态", "导出请求被拒绝");
             } else if let CanvasExportError::Background(error) = &error {
-                error.record_handled("终止 SVG 导出并保存失败状态", "导出失败");
+                error.record_handled("终止阶段文件导出并保存失败状态", "导出失败");
             } else {
-                warn!(?path,%error,"绘画阶段文件导出请求失败");
+                let failure = crate::diagnostics::failure(
+                    crate::diagnostics::GalleryError::Operation(error.into()),
+                    bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.stage_export")
+                        .field("path", path.display()),
+                );
+                failure.record_handled("停止阶段文件导出并保存失败状态", "导出失败");
             }
             state
         }
@@ -351,27 +368,41 @@ fn completed(
             if *request != event.entity || *job != event.job_id || *temporary != event.path {
                 continue;
             }
-            let state = match &event.result {
+            let (state, local_failure) = match &event.result {
                 Ok(size) if *size == file.size => match publish(temporary, &file.path) {
-                    Ok(()) => FileState::Succeeded,
-                    Err(error) => FileState::Failed(error.to_string()),
+                    Ok(()) => (FileState::Succeeded, None),
+                    Err(error) => {
+                        let failure = crate::diagnostics::failure(
+                            crate::diagnostics::GalleryError::Operation(error.into()),
+                            bevy_widgetry::diagnostics::ErrorFrame::new(
+                                "gallery.painting.publish_png",
+                            )
+                            .field("path", file.path.display()),
+                        );
+                        (FileState::Failed(failure.to_string()), Some(failure))
+                    }
                 },
-                Ok(_) => FileState::Failed("PNG output dimensions do not match the stage".into()),
-                Err(bevy_widgetry::canvas::CanvasPngStop::Canceled) => FileState::Canceled,
+                Ok(size) => {
+                    let failure = crate::diagnostics::failure(
+                        crate::diagnostics::GalleryError::Operation(
+                            "PNG output dimensions do not match the stage".into(),
+                        ),
+                        bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.png_size")
+                            .field("expected", format_args!("{:?}", file.size))
+                            .field("actual", format_args!("{size:?}")),
+                    );
+                    (FileState::Failed(failure.to_string()), Some(failure))
+                }
+                Err(bevy_widgetry::canvas::CanvasPngStop::Canceled) => (FileState::Canceled, None),
                 Err(bevy_widgetry::canvas::CanvasPngStop::Failed(error)) => {
-                    FileState::Failed(error.to_string())
+                    (FileState::Failed(error.to_string()), None)
                 }
             };
             cleanup(temporary);
-            if let FileState::Failed(error) = &state
-                && !matches!(
-                    event.result,
-                    Err(bevy_widgetry::canvas::CanvasPngStop::Failed(_))
-                )
-            {
-                warn!(session, stage=number, path=%file.path.display(), %error,"绘画阶段 PNG 导出失败");
-            }
             file.state = state;
+            if let Some(failure) = local_failure {
+                failure.record_handled("终止阶段 PNG 发布并保存失败状态", "阶段结果可查询");
+            }
             if let Err(bevy_widgetry::canvas::CanvasPngStop::Failed(error)) = &event.result {
                 error.record_handled("终止阶段 PNG 导出并保存失败状态", "导出失败");
             }
@@ -463,7 +494,12 @@ fn cleanup(path: &Path) {
     if let Err(error) = std::fs::remove_file(path)
         && error.kind() != io::ErrorKind::NotFound
     {
-        warn!(%error, path=%path.display(),"绘画阶段临时文件清理失败");
+        let failure = crate::diagnostics::failure(
+            crate::diagnostics::GalleryError::Operation(error.into()),
+            bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.stage_cleanup")
+                .field("path", path.display()),
+        );
+        failure.record_handled("放弃阶段临时文件清理", "阶段结果保持");
     }
 }
 

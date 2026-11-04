@@ -212,8 +212,10 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
                 .query_filtered::<Entity, With<PrimaryWindow>>()
                 .single(world)
                 .map_err(|error| {
-                    error!(%error, "颜色展示缺少主窗口");
-                    BevyError::error(format!("颜色展示缺少主窗口：{error}"))
+                    crate::diagnostics::at(
+                        error,
+                        bevy_widgetry::diagnostics::ErrorFrame::new("颜色展示缺少主窗口"),
+                    )
                 })?;
             Box::new(
                 bsn! { @widgetry_message_box(parent, title, WidgetryMessageBoxButtons::Ok, default(), content) },
