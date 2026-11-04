@@ -2,6 +2,7 @@
 #![cfg(test)]
 
 use bevy::camera::visibility::VisibilitySystems;
+use bevy::ecs::schedule::common_conditions::{not, run_once};
 use bevy::ecs::world::CommandQueue;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
@@ -738,6 +739,11 @@ fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
 #[test]
 fn clearing_model_after_partial_renderer_failure_clears_field() {
     let mut app = app();
+    // A late SVG image must finish materializing before it becomes part of the cleanup baseline.
+    app.configure_sets(
+        PostUpdate,
+        bevy_widgetry_core::icon::WidgetryIconMaterialize.run_if(not(run_once)),
+    );
     app.set_error_handler(ErrorCapture::handler());
     app.edit_schedule(PostUpdate, |schedule| {
         schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
@@ -761,6 +767,27 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
         .id();
     let container = content(app.world(), root);
     app.update();
+    let icon = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryIcon>>()
+        .single(app.world())
+        .unwrap();
+    assert!(app.world().get::<Children>(icon).is_none());
+    advance_until(
+        &mut app,
+        Duration::from_secs(5),
+        "ComboBox indicator image before cleanup baseline",
+        |world| {
+            world.get::<Children>(icon).is_some_and(|children| {
+                children.iter().any(|child| {
+                    world
+                        .get::<ImageNode>(child)
+                        .is_some_and(|node| world.resource::<Assets<Image>>().contains(&node.image))
+                })
+            })
+        },
+    )
+    .unwrap();
     let old_placeholder = app.world().get::<Children>(container).unwrap()[0];
     let before = app
         .world_mut()

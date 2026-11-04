@@ -42,7 +42,7 @@
 
 - `data_contract.rs`：泛型 Source、Model ID、共享 Source 与构造诊断；失效 Source 经组合层保留 ListView 领域分类、实际 Source、原始诊断 ID 及单次源头日志。
 - `diagnostics.rs`：独立无效请求的 Root / 类型和新 ID；同轮多个 Field 结构故障及重复观察共享 origin；Model / Popup / 内部 List 映射、失效 ID 与执行时 index 拒绝；List 注册冲突的原类型和单次源头日志；多个 Field Scene 失败的原始 origin、原生 cause / Severity / payload 与自有内容清理和独立业务 Entity 归属；颜色拒绝的原值及底层类型。
-- `selection_field.rs`：Selection Authority 到 Field / Placeholder 的投影、公开本体查询、执行时原始索引、隐藏选择保留、通知顺序及 Model Revision。
+- `selection_field.rs`：Selection Authority 到 Field / Placeholder 的投影、公开本体查询、执行时原始索引、隐藏选择保留、通知顺序及 Model Revision。失败 Renderer 的清理回归显式覆盖下拉箭头延后生成 Image 的初始化时序，在具体 Icon 的 Image 与资产就绪后记录全局实体基线，再验证失败内容及预约 Entity 全部清理，避免将合法异步实体误判为泄漏。
 - `popup_composition.rs`：真实 Pointer / Keyboard、Focus、弹层关闭、动态内容与 Layout；组合 Override 在局部 Row 输入、滚动复用、Model Edit / Move 及 Field 内容替换后的当帧 Text Foreground，保留 Popup / Focus / Stable Selection 和通知。
 - `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
 - `search.rs`：可选搜索的每实例 Projection 隔离、真实文本键入与结果导航的分流、光标编辑、IME 确认隔离、携带换行正文的 Enter、关闭后同批确认阻断、无结果展示及 Model 自动刷新、隐藏选择与真实删除、重新打开重置查询、有效 Disabled、外部编辑器焦点配色、同周期变化合并和稳定帧不重复匹配，以及 10,000 项结果的有界行数及 Reveal。
