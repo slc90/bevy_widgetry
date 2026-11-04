@@ -10,7 +10,34 @@ use bevy::{
     window::ExitCondition,
 };
 use bevy_widgetry_canvas::*;
-use std::time::{Duration, Instant};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{Mutex, MutexGuard},
+    time::{Duration, Instant},
+};
+
+static GPU_APP_LOCK: Mutex<()> = Mutex::new(());
+
+struct GpuApp {
+    // App must drop before releasing the lease.
+    // Concurrent DX12 descriptor heap creation and release can invalidate live handles on the tested NVIDIA runtime.
+    app: App,
+    _lease: MutexGuard<'static, ()>,
+}
+
+impl Deref for GpuApp {
+    type Target = App;
+
+    fn deref(&self) -> &Self::Target {
+        &self.app
+    }
+}
+
+impl DerefMut for GpuApp {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.app
+    }
+}
 
 #[derive(Resource, Default)]
 struct Completed(Vec<(Entity, std::result::Result<UVec2, String>)>);
@@ -957,7 +984,10 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
     );
 }
 
-fn gpu_app() -> App {
+fn gpu_app() -> GpuApp {
+    let lease = GPU_APP_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -1021,7 +1051,7 @@ fn gpu_app() -> App {
     for _ in 0..4 {
         frame(&mut app);
     }
-    app
+    GpuApp { app, _lease: lease }
 }
 
 #[derive(Resource, Default)]
