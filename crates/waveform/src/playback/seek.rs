@@ -1,4 +1,5 @@
 use super::{WaveformPlayback, WaveformPlaybackAction, WaveformPlaybackRequested};
+use crate::view_error::ViewResult;
 use crate::{Waveform, WaveformRuntime};
 use bevy::{prelude::*, ui_widgets::ValueChange};
 use bevy_widgetry_slider::{
@@ -36,20 +37,23 @@ pub(super) fn install(app: &mut App) {
         .add_observer(ended);
 }
 
-fn duration(world: &World, root: Entity) -> Result<Duration, BevyError> {
+fn duration(world: &World, root: Entity) -> ViewResult<Duration> {
     world
         .get::<WaveformRuntime>(root)
         .and_then(WaveformRuntime::metadata)
-        .ok_or_else(|| BevyError::error("Replay metadata missing"))?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Metadata).at(root))?
         .total_duration()
-        .map_err(crate::WaveformFailure::into_bevy_error)?
-        .ok_or_else(|| BevyError::error("Replay duration missing"))
+        .map_err(bevy_widgetry_job::JobFailure::from)?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Duration))
 }
 
-pub(super) fn project(world: &mut World, slider: Entity, playback: WaveformPlayback) -> Result {
+pub(super) fn project(world: &mut World, slider: Entity, playback: WaveformPlayback) -> ViewResult {
+    if world.get::<WidgetrySlider>(slider).is_none() {
+        return Err(crate::view_error::missing(crate::WaveformPart::ProgressSlider).at(slider));
+    }
     let owner = world
         .get::<ProgressOwner>(slider)
-        .ok_or_else(|| BevyError::error("Replay progress owner missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ProgressOwner).at(slider))?;
     if owner.dragging || owner.generation != playback.session_generation {
         return Ok(());
     }
@@ -57,20 +61,22 @@ pub(super) fn project(world: &mut World, slider: Entity, playback: WaveformPlayb
     let value = (playback.position.as_secs_f64() / total.as_secs_f64()).clamp(0.0, 1.0) as f32;
     world
         .get_mut::<ProgressOwner>(slider)
-        .ok_or_else(|| BevyError::error("Replay progress owner missing"))?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ProgressOwner).at(slider))?
         .projecting = true;
     let result = WidgetrySlider::set_value_in_world(world, slider, value);
     if let Some(mut owner) = world.get_mut::<ProgressOwner>(slider) {
         owner.projecting = false;
     }
-    result.map(|_| ()).map_err(|error| {
-        error
-            .with_context(
-                bevy_widgetry_diagnostics::ErrorFrame::new("waveform.project_progress")
-                    .field("slider", slider),
-            )
-            .into_bevy_error()
-    })
+    result
+        .map(|_| ())
+        .map_err(|error| -> crate::view_error::ViewFailure {
+            error
+                .with_context(
+                    bevy_widgetry_diagnostics::ErrorFrame::new("waveform.project_progress")
+                        .field("slider", slider),
+                )
+                .into()
+        })
 }
 
 fn request(commands: &mut Commands, root: Entity, generation: u64, action: WaveformPlaybackAction) {
@@ -78,7 +84,8 @@ fn request(commands: &mut Commands, root: Entity, generation: u64, action: Wavef
         if world.get::<Waveform>(root).is_none() {
             return Ok(());
         }
-        if Waveform::playback(world, root)?
+        if Waveform::playback(world, root)
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?
             .is_some_and(|state| state.session_generation == generation)
         {
             world.trigger(WaveformPlaybackRequested {
@@ -116,7 +123,7 @@ fn started(
     );
 }
 
-fn position(total: Duration, value: f32) -> Result<Duration, BevyError> {
+fn position(total: Duration, value: f32) -> Result<Duration, bevy_widgetry_job::JobFailure> {
     if value <= 0.0 {
         return Ok(Duration::ZERO);
     }
@@ -125,7 +132,17 @@ fn position(total: Duration, value: f32) -> Result<Duration, BevyError> {
     }
     Duration::try_from_secs_f64(total.as_secs_f64() * f64::from(value))
         .map(|position| position.min(total))
-        .map_err(BevyError::error)
+        .map_err(|source| {
+            crate::error::request(
+                crate::WaveformError::SeekPosition {
+                    total,
+                    value,
+                    source,
+                },
+                None,
+                "waveform.playback.seek",
+            )
+        })
 }
 
 fn changed(
@@ -148,11 +165,18 @@ fn changed(
     }
     let total = runtime
         .metadata()
-        .ok_or_else(|| BevyError::error("Replay metadata missing"))?
+        .ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::Metadata)
+                .into_bevy_error(None, "waveform.request")
+        })?
         .total_duration()
         .map_err(crate::WaveformFailure::into_bevy_error)?
-        .ok_or_else(|| BevyError::error("Replay duration missing"))?;
-    let position = position(total, event.value)?;
+        .ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::Duration)
+                .into_bevy_error(None, "waveform.request")
+        })?;
+    let position =
+        position(total, event.value).map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
     if owner.dragging {
         owner.gesture_position = Some(position);
     }

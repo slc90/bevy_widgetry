@@ -119,7 +119,8 @@ fn press(
     commands.queue(move |world: &mut World| -> Result {
         if !available(world, event.entity)
             || !focused(world, &event.pointer.target)
-            || !Waveform::measurement_enabled(world, root)?
+            || !Waveform::measurement_enabled(world, root)
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?
             || world
                 .get::<MeasurementState>(root)
                 .is_none_or(|state| state.drag.is_some())
@@ -144,9 +145,11 @@ fn press(
         if anchor.cmplt(Vec2::ZERO).any() || anchor.cmpgt(size).any() {
             return Ok(());
         }
-        let mut state = world
-            .get_mut::<MeasurementState>(root)
-            .ok_or_else(|| BevyError::error("Waveform measurement state missing"))?;
+        let mut state = world.get_mut::<MeasurementState>(root).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::MeasurementState)
+                .at(root)
+                .into_bevy_error(None, "waveform.request")
+        })?;
         let edit = gesture::hit(state.rectangle, anchor);
         let original = if edit == Edit::Draw {
             Rect::from_corners(anchor, anchor)
@@ -171,6 +174,7 @@ fn press(
             .resource_mut::<bevy::input_focus::InputFocus>()
             .set(event.entity, bevy::input_focus::FocusCause::Pressed);
         super::publish(world, root)
+            .map_err(|error| error.into_bevy_error(Some(root), "waveform.measurement.input"))
     });
 }
 fn moved(event: On<PointerMove>, owners: Query<&MeasurementOwner>, mut commands: Commands) {
@@ -194,7 +198,8 @@ fn moved(event: On<PointerMove>, owners: Query<&MeasurementOwner>, mut commands:
         }
         if !available(world, event.entity)
             || !focused(world, &drag.target)
-            || !Waveform::measurement_enabled(world, root)?
+            || !Waveform::measurement_enabled(world, root)
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?
         {
             end(world, root);
             return Ok(());
@@ -210,9 +215,14 @@ fn moved(event: On<PointerMove>, owners: Query<&MeasurementOwner>, mut commands:
         let rectangle = gesture::advance(drag.edit, drag.original, drag.anchor, point, size);
         world
             .get_mut::<MeasurementState>(root)
-            .ok_or_else(|| BevyError::error("Waveform measurement state missing"))?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::MeasurementState)
+                    .at(root)
+                    .into_bevy_error(None, "waveform.request")
+            })?
             .rectangle = Some(rectangle);
         super::publish(world, root)
+            .map_err(|error| error.into_bevy_error(Some(root), "waveform.measurement.input"))
     });
 }
 pub(super) fn end(world: &mut World, root: Entity) {
@@ -342,7 +352,8 @@ fn cancel_unavailable(world: &mut World) -> Result {
             || !captured
             || !available(world, drag.surface)
             || !focused(world, &drag.target)
-            || !Waveform::measurement_enabled(world, root)?
+            || !Waveform::measurement_enabled(world, root)
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?
         {
             end(world, root);
         }

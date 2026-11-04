@@ -165,8 +165,18 @@ fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
                 WidgetryWaveformColorOverrides::set_in_world(app.world_mut(), root, invalid_colors)
             })
             .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-        assert!(error.to_string().contains("Waveform palette"));
+        assert_eq!(error.diagnostics().count(), 1);
+        let diagnostic = error.diagnostics().next().unwrap();
+        let mut source = diagnostic.source();
+        let mut palette = false;
+        while let Some(error) = source {
+            palette |= matches!(
+                error.downcast_ref::<WaveformError>(),
+                Some(WaveformError::Palette { .. })
+            );
+            source = error.source();
+        }
+        assert!(palette);
         assert_eq!(
             logs.records()
                 .iter()
@@ -494,11 +504,69 @@ fn runtime_style_failure_is_reported_once_until_recovery() {
             app.update();
         })
     });
-    assert_eq!(errors.take().len(), 2);
+    let captured = errors.take_records();
+    assert_eq!(captured.len(), 2);
+    let first = captured[0]
+        .managed()
+        .expect("managed style diagnostic")
+        .diagnostics()
+        .next()
+        .unwrap();
+    let second = captured[1].managed().unwrap().diagnostics().next().unwrap();
+    assert!(Arc::ptr_eq(first.origin(), second.origin()));
+    assert!(first.contexts().iter().any(|c| {
+        c.fields()
+            .iter()
+            .any(|(k, v)| k == "root" && v == &root.to_string())
+    }));
     assert_eq!(
         logs.records()
             .iter()
             .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+    let origin = first.origin().clone();
+    app.world_mut()
+        .get_mut::<Visibility>(root)
+        .unwrap()
+        .set_if_neq(Visibility::Hidden);
+    logs.run(|| errors.run(|| app.update()));
+    assert!(errors.take_records().is_empty());
+    assert!(
+        !logs
+            .records()
+            .iter()
+            .any(|r| r.matches_field("error_id", &origin.id().to_string())
+                && r.matches_field("phase", "recovered"))
+    );
+    app.world_mut()
+        .get_mut::<Visibility>(root)
+        .unwrap()
+        .set_if_neq(Visibility::Inherited);
+    logs.run(|| errors.run(|| app.update()));
+    let visible = errors.take_records();
+    assert!(Arc::ptr_eq(
+        visible[0]
+            .managed()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap()
+            .origin(),
+        &origin
+    ));
+    app.world_mut()
+        .get_mut::<WaveformStyle>(root)
+        .unwrap()
+        .line_width = 1.0;
+    logs.run(|| errors.run(|| app.update()));
+    assert!(errors.take_records().is_empty());
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.matches_field("error_id", &origin.id().to_string())
+                && r.matches_field("phase", "recovered"))
             .count(),
         1
     );
@@ -876,5 +944,87 @@ fn offscreen_failures_from_all_views_preserve_core_diagnostics_at_system_boundar
             .filter(|record| record.matches_field("phase", "recovered"))
             .count(),
         2
+    );
+}
+
+#[test]
+fn multiple_view_style_failures_keep_each_origin_and_recover_independently() {
+    use bevy_widgetry_test_utils::DiagnosticPhase;
+    let (mut app, first, _) = fixture(1000, 200.0);
+    let camera = app.world().get::<UiTargetCamera>(first).unwrap().0;
+    let second = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @Waveform
+            template(move |_| Ok(UiTargetCamera(camera)))
+            Node { width: px(332), height: px(164) }
+        })
+        .unwrap()
+        .id();
+    app.update();
+    app.update();
+    let logs = LogCapture::default();
+    let errors = ErrorCapture::default();
+    for root in [first, second] {
+        app.world_mut()
+            .get_mut::<WaveformStyle>(root)
+            .unwrap()
+            .line_width = 0.0;
+    }
+    logs.run(|| {
+        errors.run(|| {
+            app.update();
+            app.update();
+        })
+    });
+    let reports = errors.take_records();
+    assert_eq!(reports.len(), 2);
+    let origins: Vec<_> = reports[0]
+        .managed()
+        .unwrap()
+        .diagnostics()
+        .map(|d| d.origin().clone())
+        .collect();
+    assert_eq!(origins.len(), 2);
+    assert_ne!(origins[0].id(), origins[1].id());
+    for origin in &origins {
+        assert!(
+            reports[1]
+                .managed()
+                .unwrap()
+                .diagnostics()
+                .any(|d| Arc::ptr_eq(d.origin(), origin))
+        );
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+    }
+    app.world_mut()
+        .get_mut::<WaveformStyle>(first)
+        .unwrap()
+        .line_width = 1.0;
+    logs.run(|| errors.run(|| app.update()));
+    let remaining = errors.take_records();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].managed().unwrap().diagnostics().count(), 1);
+    app.world_mut()
+        .get_mut::<WaveformStyle>(first)
+        .unwrap()
+        .line_width = 0.0;
+    logs.run(|| errors.run(|| app.update()));
+    let again = errors.take_records();
+    assert_eq!(again[0].managed().unwrap().diagnostics().count(), 2);
+    assert!(
+        again[0]
+            .managed()
+            .unwrap()
+            .diagnostics()
+            .any(|d| !origins.iter().any(|o| Arc::ptr_eq(o, d.origin())))
     );
 }

@@ -217,3 +217,43 @@ fn runtime_system_reports_every_root_with_entity_context() {
         }));
     }
 }
+
+#[test]
+fn invalid_public_values_keep_the_target_root_context() {
+    use bevy::prelude::*;
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    bevy_widgetry_test_utils::add_ui_plugins(&mut app);
+    app.add_plugins((TransformPlugin, WaveformRenderPlugin));
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @Waveform })
+        .unwrap()
+        .id();
+    let errors = [
+        Waveform::set_channels_per_screen_in_world(
+            app.world_mut(),
+            root,
+            WaveformChannelCount::Count(0),
+        )
+        .unwrap_err(),
+        Waveform::set_amplitude_in_world(
+            app.world_mut(),
+            root,
+            WaveformAmplitude {
+                value: f32::NAN,
+                unit: WaveformUnit::Volts,
+            },
+        )
+        .unwrap_err(),
+        Waveform::set_running_in_world(app.world_mut(), root, true).unwrap_err(),
+    ];
+    for error in errors {
+        assert!(
+            error.diagnostics().all(|d| d.contexts().iter().any(|c| c
+                .fields()
+                .iter()
+                .any(|(k, v)| (k == "root" || k == "entity") && v == &root.to_string()))),
+            "missing root context: {error}"
+        );
+    }
+}

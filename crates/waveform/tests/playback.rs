@@ -169,7 +169,7 @@ fn invalid_and_stale_playback_updates_leave_committed_state_unchanged() {
         },
     ] {
         let error = Waveform::set_playback_in_world(app.world_mut(), root, state).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert_eq!(error.diagnostics().count(), 1);
         assert_eq!(
             Waveform::playback(app.world(), root).unwrap(),
             Some(original)

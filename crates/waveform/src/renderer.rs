@@ -1,4 +1,6 @@
 use crate::geometry::{empty_mesh, recolor_mesh, update_mesh};
+use crate::view_error::ViewResult;
+use crate::view_error::{ViewErrors, ViewFailureState};
 use crate::{Waveform, WaveformOutputLength, WaveformRuntime, WaveformStyle};
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::{
@@ -9,20 +11,16 @@ use bevy::camera::{
 use bevy::ecs::change_detection::Tick;
 use bevy::prelude::*;
 use bevy::ui::UiSystems;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::offscreen::{
     OffscreenTarget, OffscreenUpdate, OffscreenViewport, WidgetryOffscreenPlugin,
 };
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_diagnostics::{
-    ErrorFrame,
-    bevy::{DiagnosticBatch, WidgetryEcsError},
-};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::ErrorFrame;
+use bevy_widgetry_internal_log::widgetry_info;
 
 #[derive(Component, Default)]
-pub(crate) struct InitializationFailure(UnmigratedFailureState);
+pub(crate) struct InitializationFailure(ViewFailureState);
 
 #[derive(Component)]
 pub(crate) struct Renderer {
@@ -40,7 +38,7 @@ pub(crate) struct Renderer {
     lanes: Vec2,
     style_tick: Option<Tick>,
     color_tick: Option<Tick>,
-    failure: UnmigratedFailureState,
+    failure: ViewFailureState,
 }
 
 #[derive(Component, FromTemplate)]
@@ -56,45 +54,40 @@ pub(crate) fn initialize(world: &mut World) -> Result {
         .query_filtered::<Entity, (With<Waveform>, Without<Renderer>)>()
         .iter(world)
         .collect();
-    let mut failure = None;
-    let mut diagnostics = DiagnosticBatch::default();
+    let mut failure = ViewErrors::default();
     for root in roots {
         let result = initialize_root(world, root);
-        let result = if result
-            .as_ref()
-            .is_err_and(|error| error.is::<WidgetryEcsError>())
-        {
-            result
-        } else if let Some(mut state) = world.get_mut::<InitializationFailure>(root) {
-            state.0.observe(
-                result,
-                |error| widgetry_error!(?root, %error, "Waveform renderer 初始化失败"),
-                || widgetry_info!(?root, "Waveform renderer 初始化恢复正常"),
-            )
+        let result = if let Some(mut state) = world.get_mut::<InitializationFailure>(root) {
+            state
+                .0
+                .observe(result, root, "waveform.renderer.initialize")
         } else {
-            result
+            result.map_err(|error| error.into_bevy_error(Some(root), "waveform.renderer"))
         };
         if let Err(error) = result {
-            collect_error(error, &mut failure, &mut diagnostics);
+            failure.push(error);
         }
     }
-    finish_errors(world, failure, diagnostics)
+    failure.finish(world.commands())
 }
 
-fn initialize_root(world: &mut World, root: Entity) -> Result {
+fn initialize_root(world: &mut World, root: Entity) -> ViewResult {
     let viewport = world
         .get::<crate::view::ChannelParts>(root)
         .map(|parts| parts.plot)
-        .ok_or_else(|| BevyError::error("Waveform viewport missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Viewport).at(root))?;
     let background = world
         .get::<crate::colors::ResolvedColors>(root)
-        .ok_or_else(|| BevyError::error("Waveform colors missing"))?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Colors).at(root))?
         .background;
-    let target = OffscreenTarget::allocate(world, root).map_err(|error| {
-        error
-            .with_context(ErrorFrame::new("waveform.allocate").field("root", root))
-            .into_bevy_error()
-    })?;
+    let target = OffscreenTarget::allocate(world, root).map_err(
+        |error| -> crate::view_error::ViewFailure {
+            error
+                .with_context(ErrorFrame::new("waveform.allocate").field("root", root))
+                .into_bevy_error()
+                .into()
+        },
+    )?;
     let layer = target.layer();
     let mesh = world.resource_mut::<Assets<Mesh>>().add(empty_mesh());
     let grid = world.resource_mut::<Assets<Mesh>>().add(
@@ -167,12 +160,12 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
             world
                 .resource_mut::<Assets<ColorMaterial>>()
                 .remove(grid_material.id());
-            return Err(error.into_bevy_error());
+            return Err(error.into_bevy_error().into());
         }
     };
     let members = world
         .get::<RenderScene>(scene)
-        .ok_or_else(|| BevyError::error("Waveform RenderScene missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::RenderScene).at(scene))?;
     let camera = members.camera;
     let mesh_entity = members.mesh;
     let offscreen = match target.bind(world, viewport, camera, scene) {
@@ -188,7 +181,8 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
                 .remove(grid_material.id());
             return Err(error
                 .with_context(ErrorFrame::new("waveform.bind").field("root", root))
-                .into_bevy_error());
+                .into_bevy_error()
+                .into());
         }
     };
     world.entity_mut(root).insert(offscreen);
@@ -207,7 +201,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         lanes: Vec2::ZERO,
         style_tick: None,
         color_tick: None,
-        failure: UnmigratedFailureState::default(),
+        failure: ViewFailureState::default(),
     });
     Ok(())
 }
@@ -217,35 +211,35 @@ pub(crate) fn render(world: &mut World) -> Result {
         .query_filtered::<Entity, With<Renderer>>()
         .iter(world)
         .collect();
-    let mut failure = None;
-    let mut diagnostics = DiagnosticBatch::default();
+    let mut failure = ViewErrors::default();
     for root in roots {
         let result = render_root(world, root);
-        let result = if result
-            .as_ref()
-            .is_err_and(|error| error.is::<WidgetryEcsError>())
-        {
-            result
-        } else if let Some(mut renderer) = world.get_mut::<Renderer>(root) {
-            renderer.failure.observe(
-                result,
-                |error| widgetry_error!(?root, %error, "Waveform renderer 更新失败"),
-                || widgetry_info!(?root, "Waveform renderer 恢复正常"),
-            )
-        } else {
-            result
+        let result = match result {
+            Ok(None) => Ok(()),
+            result => {
+                if let Some(mut renderer) = world.get_mut::<Renderer>(root) {
+                    renderer
+                        .failure
+                        .observe(result, root, "waveform.renderer.render")
+                        .map(|_| ())
+                } else {
+                    result
+                        .map(|_| ())
+                        .map_err(|error| error.into_bevy_error(Some(root), "waveform.renderer"))
+                }
+            }
         };
         if let Err(error) = result {
-            collect_error(error, &mut failure, &mut diagnostics);
+            failure.push(error);
         }
     }
-    finish_errors(world, failure, diagnostics)
+    failure.finish(world.commands())
 }
 
-fn render_root(world: &mut World, root: Entity) -> Result {
+fn render_root(world: &mut World, root: Entity) -> ViewResult<Option<()>> {
     let renderer = world
         .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Waveform renderer missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Renderer).at(root))?;
     let (viewport, camera, mesh_entity, mesh_handle, old_size, old_revision) = (
         renderer.viewport,
         renderer.camera,
@@ -255,40 +249,44 @@ fn render_root(world: &mut World, root: Entity) -> Result {
         renderer.revision,
     );
     if world.get::<Mesh2d>(mesh_entity).is_none() || world.get::<ViewportNode>(viewport).is_none() {
-        return Err(BevyError::error("Waveform renderer hierarchy broken"));
+        return Err(crate::view_error::missing(
+            crate::WaveformPart::RendererHierarchyBroken,
+        ));
     }
-    let Some(size) = OffscreenViewport::update(world, root).map_err(|error| {
-        error
-            .with_context(ErrorFrame::new("waveform.update").field("root", root))
-            .into_bevy_error()
-    })?
+    let Some(size) = OffscreenViewport::update(world, root).map_err(
+        |error| -> crate::view_error::ViewFailure {
+            error
+                .with_context(ErrorFrame::new("waveform.update").field("root", root))
+                .into_bevy_error()
+                .into()
+        },
+    )?
     else {
-        return Ok(());
+        return Ok(None);
     };
     update_grid(world, root, size)?;
     let width_changed = world
         .get::<WaveformOutputLength>(root)
-        .ok_or_else(|| BevyError::error("Waveform output length missing"))?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::OutputLength).at(root))?
         .0
         != size.x as usize;
     if width_changed {
         world
             .get_mut::<WaveformOutputLength>(root)
-            .ok_or_else(|| BevyError::error("Waveform output length missing"))?
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::OutputLength).at(root))?
             .0 = size.x as usize;
         world
             .get_mut::<WaveformRuntime>(root)
-            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .resize_reduction(size.x as usize)
-            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Runtime).at(root))?
+            .resize_reduction(size.x as usize)?;
     }
     let runtime = world
         .get::<WaveformRuntime>(root)
-        .ok_or_else(|| BevyError::error("Waveform runtime missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Runtime).at(root))?;
     let style = world
         .entity(root)
         .get_ref::<WaveformStyle>()
-        .ok_or_else(|| BevyError::error("WaveformStyle missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::WaveformStyle))?;
     let style_tick = style.last_changed();
     let changed_style = world
         .get::<Renderer>(root)
@@ -296,16 +294,16 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     let colors = world
         .entity(root)
         .get_ref::<crate::colors::ResolvedColors>()
-        .ok_or_else(|| BevyError::error("Waveform colors missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Colors))?;
     let color_tick = colors.last_changed();
     let changed_colors = world
         .get::<Renderer>(root)
         .is_none_or(|renderer| renderer.color_tick != Some(color_tick));
     let amplitude = runtime.config().amplitude_range;
-    let channel_layout = Waveform::channel_layout(world, root)?;
+    let channel_layout = crate::channels::layout(world, root)?;
     let plot_node = world
         .get::<ComputedNode>(viewport)
-        .ok_or_else(|| BevyError::error("Waveform plot layout missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::PlotLayout).at(viewport))?;
     let texture_scale = size.y as f32 / (plot_node.size().y * plot_node.inverse_scale_factor());
     let lanes = Vec2::new(channel_layout.row_height, channel_layout.scroll_offset) * texture_scale;
     let changed_lanes = world
@@ -319,26 +317,26 @@ fn render_root(world: &mut World, root: Entity) -> Result {
             .get::<Renderer>(root)
             .is_none_or(|renderer| renderer.amplitude != Some(amplitude));
     if !geometry_changed && !changed_colors {
-        return Ok(());
+        return Ok(Some(()));
     }
     style.validate()?;
     let background = colors.background;
     let revision = runtime.revision();
     // Mesh updates need mutable access to both a resource and a Component.
     // Use resource_scope to separate the borrows without copying the Mesh or violating World borrowing rules.
-    world.resource_scope(|world, mut meshes: Mut<Assets<Mesh>>| -> Result {
+    world.resource_scope(|world, mut meshes: Mut<Assets<Mesh>>| -> ViewResult {
         let mut mesh = meshes
             .get_mut(&mesh_handle)
-            .ok_or_else(|| BevyError::error("Waveform Mesh asset missing"))?;
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::MeshAsset))?;
         let runtime = world
             .get::<WaveformRuntime>(root)
-            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?;
-        let style = world
-            .get::<WaveformStyle>(root)
-            .ok_or_else(|| BevyError::error("WaveformStyle missing"))?;
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Runtime).at(root))?;
+        let style = world.get::<WaveformStyle>(root).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::WaveformStyle).at(root)
+        })?;
         let colors = world
             .get::<crate::colors::ResolvedColors>(root)
-            .ok_or_else(|| BevyError::error("Waveform colors missing"))?;
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Colors).at(root))?;
         if geometry_changed {
             update_mesh(
                 &mut mesh,
@@ -355,22 +353,22 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     if changed_colors {
         world
             .get_mut::<Camera>(camera)
-            .ok_or_else(|| BevyError::error("Waveform camera missing"))?
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Camera).at(camera))?
             .clear_color = ClearColorConfig::Custom(background);
     }
     let mut renderer = world
         .get_mut::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Waveform renderer missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Renderer).at(root))?;
     renderer.size = size;
     renderer.revision = revision;
     renderer.amplitude = Some(amplitude);
     renderer.lanes = lanes;
     renderer.style_tick = Some(style_tick);
     renderer.color_tick = Some(color_tick);
-    Ok(())
+    Ok(Some(()))
 }
 
-fn update_grid(world: &mut World, root: Entity, size: UVec2) -> Result {
+fn update_grid(world: &mut World, root: Entity, size: UVec2) -> ViewResult {
     let (revision, positions) = crate::time_axis::grid_snapshot(world, root)?;
     let visible = crate::Waveform::grid_visible(world, root)?;
     let theme = world.resource::<bevy_widgetry_theme::WidgetryThemeMode>();
@@ -384,7 +382,7 @@ fn update_grid(world: &mut World, root: Entity, size: UVec2) -> Result {
     let key = (revision, size, color, visible);
     let renderer = world
         .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Waveform renderer missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Renderer).at(root))?;
     if renderer.grid_key == Some(key) {
         return Ok(());
     }
@@ -418,14 +416,14 @@ fn update_grid(world: &mut World, root: Entity, size: UVec2) -> Result {
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
         let mut mesh = meshes
             .get_mut(&handle)
-            .ok_or_else(|| BevyError::error("Waveform grid asset missing"))?;
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::GridAsset))?;
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
         mesh.insert_indices(bevy::mesh::Indices::U32(indices));
     }
     world
         .get_mut::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Waveform renderer missing"))?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Renderer).at(root))?
         .grid_key = Some(key);
     Ok(())
 }
@@ -494,39 +492,5 @@ impl Plugin for WaveformRenderPlugin {
             )
             .add_systems(PostUpdate, render.in_set(OffscreenUpdate));
         widgetry_info!("WaveformRenderPlugin 注册完成");
-    }
-}
-
-fn collect_error(
-    error: BevyError,
-    native: &mut Option<BevyError>,
-    diagnostics: &mut DiagnosticBatch,
-) {
-    if error.severity() == bevy::ecs::error::Severity::Error
-        && let Some(managed) = error.downcast_ref::<WidgetryEcsError>()
-    {
-        for diagnostic in managed.shared_diagnostics() {
-            diagnostics.push_shared(diagnostic);
-        }
-    } else if native.is_none() {
-        *native = Some(error);
-    }
-}
-
-fn finish_errors(
-    world: &mut World,
-    native: Option<BevyError>,
-    diagnostics: DiagnosticBatch,
-) -> Result {
-    let managed = diagnostics.into_bevy_error();
-    if let Some(native) = native {
-        if let Some(managed) = managed {
-            world
-                .commands()
-                .queue(move |_: &mut World| -> Result { Err(managed) });
-        }
-        Err(native)
-    } else {
-        managed.map_or(Ok(()), Err)
     }
 }

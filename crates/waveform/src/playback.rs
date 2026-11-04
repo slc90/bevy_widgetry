@@ -1,14 +1,11 @@
 use crate::{Waveform, WaveformRuntime, WaveformSessionKind};
 use bevy::prelude::*;
+use bevy_widgetry_job::JobFailure;
 use std::time::Duration;
 mod seek;
 mod ui;
 pub(crate) use ui::PlaybackUi;
 pub(crate) use ui::install;
-
-fn missing(entity: Entity, reason: &str) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(reason; ?entity, reason, "Waveform 回放内部状态缺失")
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaveformPlayback {
@@ -60,15 +57,17 @@ impl Default for Playback {
 }
 
 impl Playback {
-    pub(crate) fn new(speeds: Vec<f64>) -> Result<Self, BevyError> {
+    pub(crate) fn new(speeds: Vec<f64>) -> Result<Self, JobFailure> {
         if !speeds.contains(&1.0)
             || speeds.iter().enumerate().any(|(index, speed)| {
                 !speed.is_finite() || *speed <= 0.0 || speeds[..index].contains(speed)
             })
         {
-            return Err(
-                bevy_widgetry_core::scene_source_error!("Invalid replay speed choices"; ?speeds, "Waveform 回放倍率候选无效"),
-            );
+            return Err(crate::error::request(
+                crate::WaveformError::PlaybackSpeeds { speeds },
+                None,
+                "waveform.playback.speeds",
+            ));
         }
         Ok(Self {
             speeds,
@@ -78,52 +77,46 @@ impl Playback {
 }
 
 impl Waveform {
-    pub fn playback(world: &World, entity: Entity) -> Result<Option<WaveformPlayback>, BevyError> {
+    pub fn playback(world: &World, entity: Entity) -> Result<Option<WaveformPlayback>, JobFailure> {
         Self::validate_target(world, entity)?;
-        let runtime = world
-            .get::<WaveformRuntime>(entity)
-            .ok_or_else(|| missing(entity, "Waveform runtime missing"))?;
-        if !runtime
-            .metadata()
-            .is_some_and(|metadata| matches!(metadata.kind, WaveformSessionKind::Replay { .. }))
-        {
-            return Ok(None);
-        }
-        let playback = world
-            .get::<Playback>(entity)
-            .ok_or_else(|| missing(entity, "Waveform playback missing"))?;
-        Ok(Some(WaveformPlayback {
-            session_generation: runtime.session_generation(),
-            position: world
-                .get::<crate::WaveformCursor>(entity)
-                .ok_or_else(|| missing(entity, "Waveform cursor missing"))?
-                .position,
-            playing: runtime.is_running(),
-            speed: playback.speed,
-            preview: runtime.is_preview(),
-        }))
+        snapshot(world, entity)
+            .map_err(|error| error.into_failure(Some(entity), "waveform.playback"))
     }
 
     pub fn set_playback_in_world(
         world: &mut World,
         entity: Entity,
         playback: WaveformPlayback,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, JobFailure> {
         let previous = Self::playback(world, entity)?.ok_or_else(|| {
-            bevy_widgetry_core::scene_source_error!("Waveform does not have a Replay session"; ?entity, "Waveform 当前不是回放会话")
+            crate::error::request(
+                crate::WaveformError::ReplaySession { entity },
+                Some(entity),
+                "waveform.playback.set",
+            )
         })?;
-        let runtime = world
-            .get::<WaveformRuntime>(entity)
-            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?;
+        let runtime = world.get::<WaveformRuntime>(entity).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::Runtime)
+                .at(entity)
+                .into_failure(Some(entity), "waveform.request")
+        })?;
         let total = runtime
             .metadata()
-            .ok_or_else(|| BevyError::error("Waveform metadata missing"))?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::Metadata)
+                    .into_failure(Some(entity), "waveform.request")
+            })?
             .total_duration()
-            .map_err(crate::WaveformFailure::into_bevy_error)?
-            .ok_or_else(|| BevyError::error("Replay duration missing"))?;
-        let state = world
-            .get::<Playback>(entity)
-            .ok_or_else(|| BevyError::error("Waveform playback missing"))?;
+            .map_err(JobFailure::from)?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::Duration)
+                    .into_failure(Some(entity), "waveform.request")
+            })?;
+        let state = world.get::<Playback>(entity).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::Playback)
+                .at(entity)
+                .into_failure(Some(entity), "waveform.request")
+        })?;
         if playback.session_generation != previous.session_generation
             || !playback.speed.is_finite()
             || !state.speeds.contains(&playback.speed)
@@ -131,45 +124,71 @@ impl Waveform {
             || playback.playing && playback.position == total
             || playback.preview && playback.playing
         {
-            return Err(
-                bevy_widgetry_core::scene_source_error!("Invalid or stale Waveform playback state"; ?entity, ?playback, "Waveform 回放状态提交无效或会话已过期"),
-            );
+            return Err(crate::error::request(
+                crate::WaveformError::PlaybackState {
+                    entity,
+                    proposed: Box::new(playback),
+                    previous: Box::new(previous),
+                    total,
+                },
+                Some(entity),
+                "waveform.playback.set",
+            ));
         }
         if playback == previous {
             return Ok(false);
         }
         world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .set_preview(playback.preview)
-            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::Runtime)
+                    .at(entity)
+                    .into_failure(Some(entity), "waveform.request")
+            })?
+            .set_preview(playback.preview)?;
         let running_changed = world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .set_running(playback.playing)
-            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::Runtime)
+                    .at(entity)
+                    .into_failure(Some(entity), "waveform.request")
+            })?
+            .set_running(playback.playing)?;
         let explicit_position = playback.preview != previous.preview
             || !playback.playing && (playback.position != previous.position || previous.playing)
             || playback.position < previous.position;
         if explicit_position {
             world
                 .get_mut::<WaveformRuntime>(entity)
-                .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-                .request_position(playback.position)
-                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
+                .ok_or_else(|| {
+                    crate::view_error::missing(crate::WaveformPart::Runtime)
+                        .at(entity)
+                        .into_failure(Some(entity), "waveform.request")
+                })?
+                .request_position(playback.position)?;
             world
                 .get_mut::<crate::WaveformCursor>(entity)
-                .ok_or_else(|| BevyError::error("Waveform cursor missing"))?
+                .ok_or_else(|| {
+                    crate::view_error::missing(crate::WaveformPart::Cursor)
+                        .at(entity)
+                        .into_failure(Some(entity), "waveform.request")
+                })?
                 .seek(playback.position);
         } else {
             world
                 .get_mut::<crate::WaveformCursor>(entity)
-                .ok_or_else(|| BevyError::error("Waveform cursor missing"))?
+                .ok_or_else(|| {
+                    crate::view_error::missing(crate::WaveformPart::Cursor)
+                        .at(entity)
+                        .into_failure(Some(entity), "waveform.request")
+                })?
                 .position = playback.position;
         }
-        let mut state = world
-            .get_mut::<Playback>(entity)
-            .ok_or_else(|| BevyError::error("Waveform playback missing"))?;
+        let mut state = world.get_mut::<Playback>(entity).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::Playback)
+                .at(entity)
+                .into_failure(Some(entity), "waveform.request")
+        })?;
         state.speed = playback.speed;
         if running_changed {
             world.trigger(crate::WaveformRunningChanged {
@@ -183,7 +202,37 @@ impl Waveform {
 
     pub fn set_playback(commands: &mut Commands, entity: Entity, playback: WaveformPlayback) {
         commands.queue(move |world: &mut World| {
-            Self::set_playback_in_world(world, entity, playback).map(|_| ())
+            Self::set_playback_in_world(world, entity, playback)
+                .map(|_| ())
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)
         });
     }
+}
+
+pub(crate) fn snapshot(
+    world: &World,
+    entity: Entity,
+) -> crate::view_error::ViewResult<Option<WaveformPlayback>> {
+    let runtime = world
+        .get::<WaveformRuntime>(entity)
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Runtime).at(entity))?;
+    if !runtime
+        .metadata()
+        .is_some_and(|metadata| matches!(metadata.kind, WaveformSessionKind::Replay { .. }))
+    {
+        return Ok(None);
+    }
+    let playback = world
+        .get::<Playback>(entity)
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Playback).at(entity))?;
+    Ok(Some(WaveformPlayback {
+        session_generation: runtime.session_generation(),
+        position: world
+            .get::<crate::WaveformCursor>(entity)
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Cursor).at(entity))?
+            .position,
+        playing: runtime.is_running(),
+        speed: playback.speed,
+        preview: runtime.is_preview(),
+    }))
 }

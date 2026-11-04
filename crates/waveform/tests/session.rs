@@ -139,7 +139,7 @@ fn invalid_metadata_cannot_replace_a_committed_session() {
         let error =
             Waveform::set_session_in_world(app.world_mut(), root, Arc::new(Source(metadata)))
                 .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert_eq!(error.diagnostics().count(), 1);
         let runtime = app.world().get::<WaveformRuntime>(root).unwrap();
         assert_eq!(runtime.session_generation(), generation);
         assert_eq!(runtime.metadata().unwrap().channel_count, 2);

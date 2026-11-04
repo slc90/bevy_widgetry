@@ -433,7 +433,8 @@ fn grid_can_be_initialized_without_a_session_and_survives_replacement() {
     assert_eq!(
         Waveform::set_grid_visible_in_world(app.world_mut(), root, true)
             .unwrap_err()
-            .severity(),
-        bevy::ecs::error::Severity::Error
+            .diagnostics()
+            .count(),
+        1
     );
 }

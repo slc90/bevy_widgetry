@@ -1,5 +1,6 @@
 use crate::{LttbReducer, MinMaxReducer, Waveform, WaveformReducer, WaveformRuntime};
 use bevy::prelude::*;
+use bevy_widgetry_job::JobFailure;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WaveformAlgorithm {
@@ -28,13 +29,16 @@ impl Waveform {
         world: &mut World,
         entity: Entity,
         algorithm: WaveformAlgorithm,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, JobFailure> {
         Self::validate_target(world, entity)?;
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .set_algorithm(algorithm)
-            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::Runtime)
+                    .at(entity)
+                    .into_failure(Some(entity), "waveform.request")
+            })?
+            .set_algorithm(algorithm)?;
         if changed {
             world.trigger(WaveformAlgorithmChanged { entity, algorithm });
         }
@@ -43,7 +47,9 @@ impl Waveform {
 
     pub fn set_algorithm(commands: &mut Commands, entity: Entity, algorithm: WaveformAlgorithm) {
         commands.queue(move |world: &mut World| {
-            Self::set_algorithm_in_world(world, entity, algorithm).map(|_| ())
+            Self::set_algorithm_in_world(world, entity, algorithm)
+                .map(|_| ())
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)
         });
     }
 }

@@ -73,9 +73,11 @@ fn main() -> Result {
                             .ok_or_else(|| missing("style"))?
                             .line_width = if index.is_multiple_of(2) { 1.0 } else { 1.1 };
                     } else if action == "scroll" {
-                        let layout = Waveform::channel_layout(fixture.app.world(), fixture.root)?;
+                        let layout = Waveform::channel_layout(fixture.app.world(), fixture.root)
+                            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
                         let viewport =
-                            Waveform::channel_scroll_viewport(fixture.app.world(), fixture.root)?;
+                            Waveform::channel_scroll_viewport(fixture.app.world(), fixture.root)
+                                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
                         fixture
                             .app
                             .world_mut()
@@ -92,7 +94,8 @@ fn main() -> Result {
                             } else {
                                 16
                             }),
-                        )?;
+                        )
+                        .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
                     } else if action == "amplitude" {
                         Waveform::set_amplitude_in_world(
                             fixture.app.world_mut(),
@@ -101,7 +104,8 @@ fn main() -> Result {
                                 value: if index.is_multiple_of(2) { 0.25 } else { 0.5 },
                                 unit: WaveformUnit::Volts,
                             },
-                        )?;
+                        )
+                        .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
                     } else if action == "palette" {
                         let mut colors = WidgetryWaveformColorOverrides::default();
                         colors.normal.palette = Some(if index.is_multiple_of(2) {

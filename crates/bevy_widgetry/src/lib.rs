@@ -200,7 +200,7 @@ pub mod waveform {
         WaveformChannelCountChanged, WaveformChannelLayout, WaveformConfig, WaveformCursor,
         WaveformDurationChanged, WaveformError, WaveformFailure, WaveformGridChanged,
         WaveformMeasurement, WaveformMeasurementChanged, WaveformMetadata, WaveformOutputLength,
-        WaveformPlayback, WaveformPlaybackAction, WaveformPlaybackChanged,
+        WaveformPart, WaveformPlayback, WaveformPlaybackAction, WaveformPlaybackChanged,
         WaveformPlaybackRequested, WaveformPlugin, WaveformPoint, WaveformProps, WaveformReadError,
         WaveformReadRequest, WaveformReadStatus, WaveformReducedReadStatus, WaveformReducer,
         WaveformRenderPlugin, WaveformRunningChanged, WaveformRuntime, WaveformSessionChanged,

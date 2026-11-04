@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_job::JobFailure;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryWaveformStateColorOverrides {
@@ -28,16 +28,16 @@ impl Default for ResolvedColors {
     }
 }
 impl WidgetryWaveformStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), JobFailure> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| -> JobFailure {
                 error
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "waveform")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .into()
             })?;
         }
         if let Some(palette) = &self.palette {
@@ -47,36 +47,40 @@ impl WidgetryWaveformStateColorOverrides {
                     .zip(palette.iter().cycle().skip(1))
                     .any(|(a, b)| a.to_linear() == b.to_linear())
             {
-                widgetry_error!(
-                    count = palette.len(),
-                    "Waveform palette 至少两色且循环相邻颜色不能相同"
-                );
-                return Err(BevyError::error(
-                    "Waveform palette 至少两色且循环相邻颜色不能相同",
+                return Err(crate::error::request(
+                    crate::WaveformError::Palette {
+                        palette: palette.clone(),
+                    },
+                    None,
+                    "waveform.colors.palette",
                 ));
             }
             for (index, &color) in palette.iter().enumerate() {
-                bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                    error
-                        .with_context(
-                            bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                bevy_widgetry_core::color::validate_color(color).map_err(
+                    |error| -> JobFailure {
+                        error
+                            .with_context(
+                                bevy_widgetry_core::scene::ErrorFrame::new(
+                                    "validate widget colors",
+                                )
                                 .field("consumer", "waveform")
                                 .field("field", "palette")
                                 .field("index", index),
-                        )
-                        .into_bevy_error()
-                })?;
+                            )
+                            .into()
+                    },
+                )?;
             }
         }
         Ok(())
     }
 }
 impl WidgetryWaveformColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), JobFailure> {
         self.normal.validate()?;
         self.disabled.validate()
     }
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, JobFailure> {
         if world.get::<crate::Waveform>(entity).is_none() {
             return Err(invalid(entity));
         }
@@ -89,10 +93,13 @@ impl WidgetryWaveformColorOverrides {
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, JobFailure> {
         Self::get(world, entity)?;
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("waveform.colors.set")
+                    .field("root", entity),
+            )
         })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
@@ -104,23 +111,26 @@ impl WidgetryWaveformColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, JobFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
+    pub(crate) fn initial(self) -> Result<ColorState, JobFailure> {
         self.validate()?;
         Ok(ColorState(self))
     }
 }
-fn invalid(entity: Entity) -> BevyError {
-    widgetry_error!(?entity, "Waveform 颜色目标不存在或类型不匹配");
-    BevyError::error("Waveform 颜色目标不存在或类型不匹配")
+fn invalid(entity: Entity) -> JobFailure {
+    crate::view_error::missing(crate::WaveformPart::Colors)
+        .into_failure(Some(entity), "waveform.colors.target")
 }
 
 fn apply_colors(world: &mut World, roots: Vec<Entity>) {
@@ -195,7 +205,7 @@ mod diagnostic_tests {
             ..default()
         };
         let record = bevy_widgetry_test_utils::CapturedError {
-            error: colors.validate().unwrap_err(),
+            error: colors.validate().unwrap_err().into_bevy_error(),
             context: bevy::ecs::error::ErrorContext::Command {
                 name: "color validation".into(),
             },

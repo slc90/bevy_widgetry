@@ -198,7 +198,7 @@ fn amplitude_commits_before_notification_and_validates_without_a_session() {
                     WaveformAmplitude { value, ..uv },
                 )
                 .unwrap_err();
-                assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+                assert_eq!(error.diagnostics().count(), 1);
                 assert_eq!(
                     app.world()
                         .get::<WaveformRuntime>(root)

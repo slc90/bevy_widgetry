@@ -1,12 +1,13 @@
 use crate::view::ChannelParts;
+use crate::view_error::ViewResult;
+use crate::view_error::{ViewErrors, ViewFailureState};
 use crate::{Waveform, WaveformRuntime};
 use bevy::prelude::*;
 use bevy::ui::UiSystems;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::text::WidgetryText;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_job::JobFailure;
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 
 pub(crate) const GUTTER: f32 = 12.0;
@@ -19,11 +20,13 @@ pub enum WaveformChannelCount {
 }
 
 impl WaveformChannelCount {
-    pub(crate) fn validate(self) -> Result {
+    pub(crate) fn validate(self) -> Result<(), JobFailure> {
         if self == Self::Count(0) {
-            return Err(
-                bevy_widgetry_core::scene_source_error!("Waveform channel count must be positive"; "Waveform 每屏通道数必须大于零"),
-            );
+            return Err(crate::error::request(
+                crate::WaveformError::ChannelCount { count: self },
+                None,
+                "waveform.channels.validate",
+            ));
         }
         Ok(())
     }
@@ -60,8 +63,8 @@ pub(crate) struct ChannelState {
     prepared_count: Option<WaveformChannelCount>,
     anchor: f32,
     estimated_row_height: f32,
-    failure: UnmigratedFailureState,
-    layout_failure: UnmigratedFailureState,
+    failure: ViewFailureState,
+    layout_failure: ViewFailureState,
 }
 
 #[derive(Component)]
@@ -79,7 +82,7 @@ impl ChannelState {
         choices: Vec<WaveformChannelCount>,
         min_height: f32,
         label_width: f32,
-    ) -> Result<Self, BevyError> {
+    ) -> Result<Self, JobFailure> {
         count.validate()?;
         for &value in &choices {
             value.validate()?;
@@ -95,14 +98,15 @@ impl ChannelState {
                         .enumerate()
                         .any(|(index, value)| choices[..index].contains(value)))
         {
-            return Err(bevy_widgetry_core::scene_source_error!(
-                "Invalid Waveform channel layout configuration",
-            ;
-                ?count,
-                ?choices,
-                min_height,
-                label_width,
-                "Waveform 通道显示配置无效"
+            return Err(crate::error::request(
+                crate::WaveformError::ChannelConfiguration {
+                    count,
+                    choices,
+                    min_height,
+                    label_width,
+                },
+                None,
+                "waveform.channels.config",
             ));
         }
         Ok(Self {
@@ -121,44 +125,53 @@ impl ChannelState {
 }
 
 impl Waveform {
-    pub fn channel_scroll_viewport(world: &World, entity: Entity) -> Result<Entity, BevyError> {
+    pub fn channel_scroll_viewport(world: &World, entity: Entity) -> Result<Entity, JobFailure> {
         Self::channels_per_screen(world, entity)?;
-        scroll_parts(world, entity).map(|(viewport, _, _)| viewport)
+        scroll_parts(world, entity)
+            .map(|(viewport, _, _)| viewport)
+            .map_err(|error| error.into_failure(Some(entity), "waveform.channel.viewport"))
     }
     pub fn channels_per_screen(
         world: &World,
         entity: Entity,
-    ) -> Result<WaveformChannelCount, BevyError> {
+    ) -> Result<WaveformChannelCount, JobFailure> {
         Self::validate_target(world, entity)?;
-        world
-            .get::<ChannelState>(entity)
-            .map(|state| state.count)
-            .ok_or_else(|| BevyError::error("Waveform channel state missing"))
+        channels_per_screen(world, entity)
+            .map_err(|error| error.into_failure(Some(entity), "waveform.channels_per_screen"))
     }
     pub fn channel_layout(
         world: &World,
         entity: Entity,
-    ) -> Result<WaveformChannelLayout, BevyError> {
-        Self::channels_per_screen(world, entity)?;
-        world
-            .get::<WaveformChannelLayout>(entity)
-            .copied()
-            .ok_or_else(|| BevyError::error("Waveform channel state missing"))
+    ) -> Result<WaveformChannelLayout, JobFailure> {
+        Self::validate_target(world, entity)?;
+        layout(world, entity)
+            .map_err(|error| error.into_failure(Some(entity), "waveform.channel_layout"))
     }
     pub fn set_channels_per_screen_in_world(
         world: &mut World,
         entity: Entity,
         count: WaveformChannelCount,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, JobFailure> {
         Self::channels_per_screen(world, entity)?;
-        count.validate()?;
-        let mut state = world
-            .get_mut::<ChannelState>(entity)
-            .ok_or_else(|| BevyError::error("Waveform channel state missing"))?;
+        count.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("waveform.channels.set")
+                    .field("root", entity),
+            )
+        })?;
+        let mut state = world.get_mut::<ChannelState>(entity).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::ChannelState)
+                .into_failure(Some(entity), "waveform.set_channels_per_screen_in_world")
+        })?;
         if !state.choices.is_empty() && !state.choices.contains(&count) {
-            return Err(bevy_widgetry_core::scene_source_error!(
-                "Waveform channel count is not a configured choice",
-            ; ?entity, ?count, "Waveform 每屏通道数不在候选项中"));
+            return Err(crate::error::request(
+                crate::WaveformError::ChannelChoice {
+                    count,
+                    choices: state.choices.clone(),
+                },
+                Some(entity),
+                "waveform.channels.set",
+            ));
         }
         if state.count == count {
             return Ok(false);
@@ -173,9 +186,29 @@ impl Waveform {
         count: WaveformChannelCount,
     ) {
         commands.queue(move |world: &mut World| {
-            Self::set_channels_per_screen_in_world(world, entity, count).map(|_| ())
+            Self::set_channels_per_screen_in_world(world, entity, count)
+                .map(|_| ())
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)
         });
     }
+}
+
+pub(crate) fn channels_per_screen(
+    world: &World,
+    entity: Entity,
+) -> ViewResult<WaveformChannelCount> {
+    world
+        .get::<ChannelState>(entity)
+        .map(|state| state.count)
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ChannelState).at(entity))
+}
+
+pub(crate) fn layout(world: &World, entity: Entity) -> ViewResult<WaveformChannelLayout> {
+    channels_per_screen(world, entity)?;
+    world
+        .get::<WaveformChannelLayout>(entity)
+        .copied()
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ChannelLayout).at(entity))
 }
 
 pub(crate) fn install(app: &mut App) {
@@ -191,10 +224,10 @@ pub(crate) fn install(app: &mut App) {
         );
 }
 
-fn scroll_parts(world: &World, root: Entity) -> Result<(Entity, Entity, Entity), BevyError> {
+fn scroll_parts(world: &World, root: Entity) -> ViewResult<(Entity, Entity, Entity)> {
     let parts = world
         .get::<ChannelParts>(root)
-        .ok_or_else(|| BevyError::error("Waveform channel parts missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ChannelParts).at(root))?;
     let viewport = world
         .get::<Children>(parts.scroll)
         .and_then(|children| {
@@ -202,7 +235,7 @@ fn scroll_parts(world: &World, root: Entity) -> Result<(Entity, Entity, Entity),
                 .iter()
                 .find(|&child| world.get::<WidgetryScrollAreaViewport>(child).is_some())
         })
-        .ok_or_else(|| BevyError::error("Waveform scroll viewport missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ScrollViewport).at(root))?;
     let content = world
         .get::<Children>(viewport)
         .and_then(|children| {
@@ -210,7 +243,7 @@ fn scroll_parts(world: &World, root: Entity) -> Result<(Entity, Entity, Entity),
                 .iter()
                 .find(|&child| world.get::<WidgetryScrollAreaContent>(child).is_some())
         })
-        .ok_or_else(|| BevyError::error("Waveform scroll content missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ScrollContent).at(root))?;
     Ok((viewport, content, parts.plot))
 }
 
@@ -219,37 +252,34 @@ fn prepare(world: &mut World) -> Result {
         .query_filtered::<Entity, With<ChannelParts>>()
         .iter(world)
         .collect();
-    let mut failure = None;
+    let mut failure = ViewErrors::default();
     for root in roots {
         let result = prepare_one(world, root);
         let result = world
             .get_mut::<ChannelState>(root)
-            .ok_or_else(|| BevyError::error("Waveform channel state missing"))?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::ChannelState)
+                    .into_bevy_error(None, "waveform.prepare")
+            })?
             .failure
-            .observe(
-                result,
-                |error| widgetry_error!(?root, %error, "Waveform 通道布局更新失败"),
-                || widgetry_info!(?root, "Waveform 通道布局恢复正常"),
-            );
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+            .observe(result, root, "waveform.channels.prepare");
+        if let Err(error) = result {
+            failure.push(error);
         }
     }
-    failure.map_or(Ok(()), Err)
+    failure.finish(world.commands())
 }
 
-fn prepare_one(world: &mut World, root: Entity) -> Result {
+fn prepare_one(world: &mut World, root: Entity) -> ViewResult {
     let (viewport, content, _) = scroll_parts(world, root)?;
     let runtime = world
         .get::<WaveformRuntime>(root)
-        .ok_or_else(|| BevyError::error("Waveform runtime missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Runtime).at(root))?;
     let generation = runtime.session_generation();
     let channels = runtime.channel_count();
     let state = world
         .get::<ChannelState>(root)
-        .ok_or_else(|| BevyError::error("Waveform channel state missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ChannelState).at(root))?;
     let target = state.count.target(channels);
     let (min_height, label_width, changed_session) = (
         state.min_height,
@@ -260,17 +290,19 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
     let changed_density = state.prepared_count != Some(count);
     let scroll = world
         .get::<ScrollPosition>(viewport)
-        .ok_or_else(|| BevyError::error("Waveform scroll position missing"))?
+        .ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::ScrollPosition).at(viewport)
+        })?
         .y;
-    let layout = Waveform::channel_layout(world, root)?;
+    let layout = layout(world, root)?;
     let anchor = if layout.row_height > 0.0 {
         scroll / layout.row_height
     } else {
         0.0
     };
-    let viewport_node = world
-        .get::<ComputedNode>(viewport)
-        .ok_or_else(|| BevyError::error("Waveform scroll viewport layout missing"))?;
+    let viewport_node = world.get::<ComputedNode>(viewport).ok_or_else(|| {
+        crate::view_error::missing(crate::WaveformPart::ScrollViewportLayout).at(viewport)
+    })?;
     let height = viewport_node.size().y * viewport_node.inverse_scale_factor();
     let estimated_row_height = if target == 0 {
         0.0
@@ -289,9 +321,9 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
     } else {
         Vec::new()
     };
-    let mut position = world
-        .get_mut::<ScrollPosition>(viewport)
-        .ok_or_else(|| BevyError::error("Waveform scroll position missing"))?;
+    let mut position = world.get_mut::<ScrollPosition>(viewport).ok_or_else(|| {
+        crate::view_error::missing(crate::WaveformPart::ScrollPosition).at(viewport)
+    })?;
     if position.y != offset {
         position.y = offset;
     }
@@ -317,13 +349,13 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
         }
         world
             .get_mut::<ChannelState>(root)
-            .ok_or_else(|| BevyError::error("Waveform channel state missing"))?
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ChannelState).at(root))?
             .generation = Some(generation);
     }
     if changed_session || changed_density {
-        let mut node = world
-            .get_mut::<Node>(content)
-            .ok_or_else(|| BevyError::error("Waveform channel content Node missing"))?;
+        let mut node = world.get_mut::<Node>(content).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::ChannelContentNode).at(content)
+        })?;
         node.display = Display::Grid;
         node.grid_template_columns = vec![
             RepeatedGridTrack::px(1, label_width),
@@ -344,7 +376,7 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
     }
     let mut state = world
         .get_mut::<ChannelState>(root)
-        .ok_or_else(|| BevyError::error("Waveform channel state missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ChannelState).at(root))?;
     state.prepared_count = Some(count);
     state.anchor = anchor;
     state.estimated_row_height = estimated_row_height;
@@ -356,39 +388,36 @@ pub(crate) fn finish(world: &mut World) -> Result {
         .query_filtered::<Entity, With<ChannelParts>>()
         .iter(world)
         .collect();
-    let mut failure = None;
+    let mut failure = ViewErrors::default();
     for root in roots {
         let result = finish_one(world, root);
         let result = world
             .get_mut::<ChannelState>(root)
-            .ok_or_else(|| BevyError::error("Waveform channel state missing"))?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::ChannelState)
+                    .into_bevy_error(None, "waveform.finish")
+            })?
             .layout_failure
-            .observe(
-                result,
-                |error| widgetry_error!(?root, %error, "Waveform 通道布局测量失败"),
-                || widgetry_info!(?root, "Waveform 通道布局测量恢复正常"),
-            );
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+            .observe(result, root, "waveform.channels.layout");
+        if let Err(error) = result {
+            failure.push(error);
         }
     }
-    failure.map_or(Ok(()), Err)
+    failure.finish(world.commands())
 }
 
-fn finish_one(world: &mut World, root: Entity) -> Result {
+fn finish_one(world: &mut World, root: Entity) -> ViewResult {
     let (viewport, content, _) = scroll_parts(world, root)?;
     let channels = world
         .get::<WaveformRuntime>(root)
-        .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Runtime).at(root))?
         .channel_count();
-    let viewport_node = world
-        .get::<ComputedNode>(viewport)
-        .ok_or_else(|| BevyError::error("Waveform viewport layout missing"))?;
-    let content_node = world
-        .get::<ComputedNode>(content)
-        .ok_or_else(|| BevyError::error("Waveform content layout missing"))?;
+    let viewport_node = world.get::<ComputedNode>(viewport).ok_or_else(|| {
+        crate::view_error::missing(crate::WaveformPart::ViewportLayout).at(viewport)
+    })?;
+    let content_node = world.get::<ComputedNode>(content).ok_or_else(|| {
+        crate::view_error::missing(crate::WaveformPart::ContentLayout).at(content)
+    })?;
     let scale = viewport_node.inverse_scale_factor();
     let layout = WaveformChannelLayout {
         row_height: if channels == 0 {
@@ -402,7 +431,7 @@ fn finish_one(world: &mut World, root: Entity) -> Result {
     };
     let state = world
         .get::<ChannelState>(root)
-        .ok_or_else(|| BevyError::error("Waveform channel state missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ChannelState).at(root))?;
     if layout.row_height != state.estimated_row_height {
         let offset = (state.anchor * layout.row_height).clamp(
             0.0,
@@ -410,7 +439,9 @@ fn finish_one(world: &mut World, root: Entity) -> Result {
         );
         world
             .get_mut::<ScrollPosition>(viewport)
-            .ok_or_else(|| BevyError::error("Waveform scroll position missing"))?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::ScrollPosition).at(viewport)
+            })?
             .y = offset;
         world.write_message(bevy::window::RequestRedraw);
     }
@@ -424,6 +455,77 @@ fn finish_one(world: &mut World, root: Entity) -> Result {
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
     use super::*;
+    #[test]
+    fn missing_layout_uses_one_diagnostic_until_the_layout_is_restored() {
+        use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+        use bevy_widgetry_test_utils::{LogCapture, add_ui_plugins, scene_app, spawn_ui_camera};
+        let mut app = scene_app();
+        add_ui_plugins(&mut app);
+        app.add_plugins((TransformPlugin, crate::WaveformRenderPlugin));
+        let camera = spawn_ui_camera(&mut app, UVec2::new(800, 600), 1.0);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @Waveform
+                template(move |_| Ok(UiTargetCamera(camera)))
+                Node { width: px(600), height: px(300) }
+            })
+            .unwrap()
+            .id();
+        app.update();
+        app.update();
+        let old = *app.world().get::<WaveformChannelLayout>(root).unwrap();
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<WaveformChannelLayout>();
+        let logs = LogCapture::default();
+        let first = logs.run(|| prepare(app.world_mut())).unwrap_err();
+        let second = logs.run(|| prepare(app.world_mut())).unwrap_err();
+        let origin = first
+            .downcast_ref::<WidgetryEcsError>()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap()
+            .origin()
+            .clone();
+        assert!(std::sync::Arc::ptr_eq(
+            &origin,
+            second
+                .downcast_ref::<WidgetryEcsError>()
+                .unwrap()
+                .diagnostics()
+                .next()
+                .unwrap()
+                .origin()
+        ));
+        assert_eq!(
+            logs.diagnostic_records(
+                origin.id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
+        );
+        app.world_mut().entity_mut(root).insert(old);
+        logs.run(|| prepare(app.world_mut())).unwrap();
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<WaveformChannelLayout>();
+        let again = logs.run(|| prepare(app.world_mut())).unwrap_err();
+        assert_ne!(
+            again
+                .downcast_ref::<WidgetryEcsError>()
+                .unwrap()
+                .diagnostics()
+                .next()
+                .unwrap()
+                .origin()
+                .id(),
+            origin.id()
+        );
+    }
+
     #[test]
     fn density_notification_observes_the_committed_selection() {
         let mut app = bevy_widgetry_test_utils::scene_app();

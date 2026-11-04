@@ -118,3 +118,12 @@ Runtime 销毁时请求取消已有归约，并将其接收器移交给已有后
 Runtime 的构造与更新返回共享 `JobFailure` 诊断，调用层在 ECS/Scene 边界显式转换为 `Severity::Error`。后台降采样结果带原始 reader、session/target/reduction generation、算法、range/viewport、通道数、输出密度与 job_id；Job 失败与清理失败同时存在时都保留。所有 Waveform 同帧更新失败汇总上报，单个实例失败不阻止其他实例继续更新。`last_error()` 仅用于界面展示，不能替代待传播诊断；不同请求不按文案合并。
 
 取消和目标替换仍等待真实 `Finished` 并返还 reducer。退休任务已经产生的失败在确认放弃时记录一次处理 DEBUG，不中止新会话或算法；当前任务仍需上报的失败只传播。正常 Pending 与取消不创建错误。
+
+
+视图、控制栏、幅值/通道/时间与播放状态 API 返回共享 `JobFailure`，包含可匹配的 `WaveformError` 领域分类，公开结构部件用 `WaveformPart` 标识。Root、部件实体、实际样式值、候选集合和播放状态均保留；依赖 Core/Scene、ComboBox/ListView、Slider、ToggleButton 的失败只补充 Waveform 语境，保持下层 origin 与原因链。排队入口及各 System/Observer 显式使用 Error Severity。
+
+Renderer、通道布局、时间轴、测量和控制栏 Owner 使用业务键保存持续结构或样式故障，重复更新不重建 origin；实际恢复后才能报告恢复，新故障有独立 ID。各选择器的投影故障独立保存，健康兄弟选择器不代表另一个选择器已经恢复。各视图工作循环汇总全部受管失败，原生外来失败也逐项交付宿主。正常隐藏、未布局、空会话、Pending 与不适用输入保持正常控制流。
+
+Mesh 更新在移交 buffer 所有权前检查完整布局；非法属性不会破坏剩余有效几何或改变后续故障类别。
+
+周期同步直接检查内部布局、播放和测量快照，由各 Owner 对结构 fault 去重；公开查询在独立请求边界建立诊断。故障中的实体指向实际缺失部件，根实体另存于上下文，不以根实体代替 Model 或 readout 身份。

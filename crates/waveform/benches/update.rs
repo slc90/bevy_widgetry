@@ -121,6 +121,7 @@ fn benchmark_session(harness: &mut Harness) -> Result {
         },
         |(app, root, source), _| {
             Waveform::set_session_in_world(app.world_mut(), *root, source.clone())
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)
         },
         |(app, root, _)| {
             let runtime = app
@@ -153,7 +154,8 @@ fn benchmark_duration(harness: &mut Harness, algorithm: WaveformAlgorithm) -> Re
                 .world_mut()
                 .spawn_scene(bsn! { @Waveform { @source: {Some(source)} } })?
                 .id();
-            Waveform::set_algorithm_in_world(app.world_mut(), root, algorithm)?;
+            Waveform::set_algorithm_in_world(app.world_mut(), root, algorithm)
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
             app.world_mut()
                 .get_mut::<WaveformCursor>(root)
                 .ok_or_else(|| missing("cursor"))?
@@ -176,7 +178,8 @@ fn benchmark_duration(harness: &mut Harness, algorithm: WaveformAlgorithm) -> Re
                 app.world_mut(),
                 *root,
                 if current == 1000 { 10000 } else { 1000 },
-            )?;
+            )
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
             update_until_settled(app, *root)?;
             Ok(())
         },

@@ -236,7 +236,7 @@ fn count_api_validates_choices_commits_before_notifying_and_preserves_other_sett
     ] {
         let error =
             Waveform::set_channels_per_screen_in_world(app.world_mut(), root, count).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert_eq!(error.diagnostics().count(), 1);
         assert_eq!(
             Waveform::channels_per_screen(app.world(), root).unwrap(),
             WaveformChannelCount::Count(16)

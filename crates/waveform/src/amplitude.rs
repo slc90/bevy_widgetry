@@ -1,5 +1,6 @@
 use crate::{Waveform, WaveformRuntime, WaveformUnit};
 use bevy::prelude::*;
+use bevy_widgetry_job::JobFailure;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaveformAmplitude {
@@ -57,24 +58,34 @@ impl AmplitudeChoices {
     pub(crate) fn new(
         choices: Vec<WaveformAmplitude>,
         initial: WaveformAmplitude,
-    ) -> Result<Self, BevyError> {
+    ) -> Result<Self, JobFailure> {
         for (index, &choice) in choices.iter().enumerate() {
-            choice
-                .validate()
-                .map_err(crate::WaveformFailure::into_bevy_error)?;
+            choice.validate().map_err(JobFailure::from)?;
             if choices[..index]
                 .iter()
                 .any(|&other| choice.equivalent(other))
             {
-                return Err(
-                    bevy_widgetry_core::scene_source_error!("Duplicate Waveform amplitude choices"; ?choices, "Waveform 幅值候选项物理值重复"),
-                );
+                return Err(crate::error::request(
+                    crate::WaveformError::AmplitudeChoices {
+                        choices,
+                        amplitude: initial,
+                        duplicate: true,
+                    },
+                    None,
+                    "waveform.amplitude.choices",
+                ));
             }
         }
         if !choices.is_empty() && !choices.contains(&initial) {
-            return Err(
-                bevy_widgetry_core::scene_source_error!("Initial amplitude missing from choices"; ?initial, "Waveform 初始幅值不在候选项中"),
-            );
+            return Err(crate::error::request(
+                crate::WaveformError::AmplitudeChoices {
+                    choices,
+                    amplitude: initial,
+                    duplicate: false,
+                },
+                None,
+                "waveform.amplitude.choices",
+            ));
         }
         Ok(Self(choices))
     }
@@ -91,22 +102,35 @@ impl Waveform {
         world: &mut World,
         entity: Entity,
         amplitude: WaveformAmplitude,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, JobFailure> {
         Self::validate_target(world, entity)?;
-        amplitude
-            .validate()
-            .map_err(crate::WaveformFailure::into_bevy_error)?;
+        amplitude.validate().map_err(|error| {
+            JobFailure::from(error).with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("waveform.amplitude.set")
+                    .field("root", entity),
+            )
+        })?;
         if let Some(choices) = world.get::<AmplitudeChoices>(entity)
             && !choices.0.is_empty()
             && !choices.0.contains(&amplitude)
         {
-            return Err(bevy_widgetry_core::scene_source_error!(
-                "Waveform amplitude is not a configured choice",
-            ; ?entity, ?amplitude, "Waveform 幅值不在候选项中"));
+            return Err(crate::error::request(
+                crate::WaveformError::AmplitudeChoices {
+                    choices: choices.0.clone(),
+                    amplitude,
+                    duplicate: false,
+                },
+                Some(entity),
+                "waveform.amplitude.set",
+            ));
         }
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::Runtime)
+                    .at(entity)
+                    .into_failure(Some(entity), "waveform.request")
+            })?
             .set_amplitude(amplitude);
         if changed {
             world.trigger(WaveformAmplitudeChanged { entity, amplitude });
@@ -116,7 +140,9 @@ impl Waveform {
 
     pub fn set_amplitude(commands: &mut Commands, entity: Entity, amplitude: WaveformAmplitude) {
         commands.queue(move |world: &mut World| {
-            Self::set_amplitude_in_world(world, entity, amplitude).map(|_| ())
+            Self::set_amplitude_in_world(world, entity, amplitude)
+                .map(|_| ())
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)
         });
     }
 }

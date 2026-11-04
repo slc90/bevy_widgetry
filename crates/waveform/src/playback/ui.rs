@@ -1,4 +1,6 @@
 use super::{Playback, WaveformPlaybackAction, WaveformPlaybackRequested};
+use crate::view_error::ViewResult;
+use crate::view_error::{ViewErrors, ViewFailureState};
 use crate::{Waveform, WaveformRuntime};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
@@ -7,13 +9,11 @@ use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::{
-    diagnostics::UnmigratedFailureState,
     icon::{WidgetryIcon, WidgetryIconPlugin},
     scene::{apply_scene, spawn_scene},
     text::WidgetryText,
     ui::WidgetryUiSystems,
 };
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 
 #[derive(Component, Default)]
@@ -21,8 +21,8 @@ pub(crate) struct PlaybackUi {
     bar: Option<Entity>,
     generation: Option<u64>,
     icon_playing: Option<bool>,
-    init_failure: UnmigratedFailureState,
-    project_failure: UnmigratedFailureState,
+    init_failure: ViewFailureState,
+    project_failure: ViewFailureState,
 }
 
 #[derive(Clone, Copy)]
@@ -72,10 +72,11 @@ pub(crate) fn install(app: &mut App) {
         .add_observer(speed_changed);
 }
 
-fn observe(world: &mut World, root: Entity, result: Result, initializing: bool) -> Result {
-    let mut ui = world
-        .get_mut::<PlaybackUi>(root)
-        .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?;
+fn observe(world: &mut World, root: Entity, result: ViewResult, initializing: bool) -> Result {
+    let mut ui = world.get_mut::<PlaybackUi>(root).ok_or_else(|| {
+        crate::view_error::missing(crate::WaveformPart::PlaybackUIState)
+            .into_bevy_error(Some(root), "waveform.observe")
+    })?;
     let failure = if initializing {
         &mut ui.init_failure
     } else {
@@ -83,8 +84,12 @@ fn observe(world: &mut World, root: Entity, result: Result, initializing: bool) 
     };
     failure.observe(
         result,
-        |error| widgetry_error!(?root, %error, "Waveform 回放控制栏同步失败"),
-        || widgetry_info!(?root, "Waveform 回放控制栏恢复正常"),
+        root,
+        if initializing {
+            "waveform.playback.initialize"
+        } else {
+            "waveform.playback.project"
+        },
     )
 }
 
@@ -93,23 +98,21 @@ fn initialize(world: &mut World) -> Result {
         .query_filtered::<Entity, With<Waveform>>()
         .iter(world)
         .collect();
-    let mut failed = None;
+    let mut failed = ViewErrors::default();
     for root in roots {
         let result = initialize_one(world, root);
-        if let Err(error) = observe(world, root, result, true)
-            && failed.is_none()
-        {
-            failed = Some(error);
+        if let Err(error) = observe(world, root, result, true) {
+            failed.push(error);
         }
     }
-    failed.map_or(Ok(()), Err)
+    failed.finish(world.commands())
 }
 
-fn initialize_one(world: &mut World, root: Entity) -> Result {
-    let generation = Waveform::playback(world, root)?.map(|state| state.session_generation);
+fn initialize_one(world: &mut World, root: Entity) -> ViewResult {
+    let generation = super::snapshot(world, root)?.map(|state| state.session_generation);
     let ui = world
         .get::<PlaybackUi>(root)
-        .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::PlaybackUIState).at(root))?;
     if generation.is_some() && ui.generation == generation && ui.bar.is_some() {
         return Ok(());
     }
@@ -118,7 +121,7 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
     }
     let mut ui = world
         .get_mut::<PlaybackUi>(root)
-        .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::PlaybackUIState).at(root))?;
     ui.bar = None;
     ui.generation = None;
     ui.icon_playing = None;
@@ -127,7 +130,7 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
     };
     let speeds = world
         .get::<Playback>(root)
-        .ok_or_else(|| BevyError::error("Waveform playback missing"))?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Playback).at(root))?
         .speeds
         .clone();
     let bar = spawn_scene(world, bsn! {
@@ -156,20 +159,20 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
     }).map_err(|error| error.into_bevy_error())?;
     let parts = world
         .get::<Parts>(bar)
-        .ok_or_else(|| BevyError::error("Waveform playback parts missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::PlaybackParts).at(bar))?;
     let (model, combo) = (parts.model, parts.combo);
     let result = apply_scene(&mut world.entity_mut(combo), bsn! {
         @WidgetryComboBox::<Speed> { @source: model, @renderer: {WidgetryListViewRenderer::new(|speed: &Speed| { let label = format!("{}×", speed.0); bsn_list! { Text(label) WidgetryText } })} }
         template(move |_| Ok(SpeedOwner { root, generation, projected: None }))
         Node { width: px(88), flex_shrink: 0.0 }
-    }).map_err(|error| error.into_bevy_error());
+    }).map_err(|error| error.into_bevy_error().into());
     if let Err(error) = result {
         world.despawn(bar);
         return Err(error);
     }
     let mut ui = world
         .get_mut::<PlaybackUi>(root)
-        .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::PlaybackUIState).at(root))?;
     ui.bar = Some(bar);
     ui.generation = Some(generation);
     Ok(())
@@ -181,25 +184,23 @@ fn project(world: &mut World) -> Result {
         .iter(world)
         .filter_map(|(root, ui)| ui.bar.map(|bar| (root, bar)))
         .collect();
-    let mut failed = None;
+    let mut failed = ViewErrors::default();
     for (root, bar) in roots {
         let result = project_one(world, root, bar);
-        if let Err(error) = observe(world, root, result, false)
-            && failed.is_none()
-        {
-            failed = Some(error);
+        if let Err(error) = observe(world, root, result, false) {
+            failed.push(error);
         }
     }
-    failed.map_or(Ok(()), Err)
+    failed.finish(world.commands())
 }
 
-fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
-    let Some(playback) = Waveform::playback(world, root)? else {
+fn project_one(world: &mut World, root: Entity, bar: Entity) -> ViewResult {
+    let Some(playback) = super::snapshot(world, root)? else {
         return Ok(());
     };
     let parts = world
         .get::<Parts>(bar)
-        .ok_or_else(|| BevyError::error("Waveform playback parts missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::PlaybackParts).at(bar))?;
     let (model, combo, icon, time, slider) = (
         parts.model,
         parts.combo,
@@ -207,6 +208,12 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
         parts.time,
         parts.slider,
     );
+    if world.get::<WidgetryIcon>(icon).is_none() {
+        return Err(crate::view_error::missing(crate::WaveformPart::PlaybackIcon).at(icon));
+    }
+    if world.get::<WidgetryComboBox<Speed>>(combo).is_none() {
+        return Err(crate::view_error::missing(crate::WaveformPart::SpeedCombo).at(combo));
+    }
     super::seek::project(world, slider, playback)?;
     if world
         .get::<PlaybackUi>(root)
@@ -221,20 +228,20 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
                 BuiltinIcon::PlaybackPlay
             }
             .path(),
-        )
-        .map_err(|error| error.into_bevy_error())?;
+        )?;
         world
             .get_mut::<PlaybackUi>(root)
-            .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::PlaybackUIState).at(root)
+            })?
             .icon_playing = Some(playback.playing);
     }
     let total = world
         .get::<WaveformRuntime>(root)
         .and_then(WaveformRuntime::metadata)
-        .ok_or_else(|| BevyError::error("Waveform metadata missing"))?
-        .total_duration()
-        .map_err(crate::WaveformFailure::into_bevy_error)?
-        .ok_or_else(|| BevyError::error("Replay duration missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Metadata).at(root))?
+        .total_duration()?
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Duration))?;
     let label = format!(
         "{} / {}",
         format_time(playback.position),
@@ -242,27 +249,24 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
     );
     let mut text = world
         .get_mut::<Text>(time)
-        .ok_or_else(|| BevyError::error("Replay time Text missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::TimeText).at(time))?;
     if text.0 != label {
         text.0 = label;
     }
     let model = world
         .get::<WidgetryListModel<Speed>>(model)
-        .ok_or_else(|| BevyError::error("Replay speed model missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::SpeedModel).at(model))?;
     let id = (0..model.len())
         .find_map(|index| {
             (model.get(index)?.0 == playback.speed)
                 .then(|| model.id(index))
                 .flatten()
         })
-        .ok_or_else(|| BevyError::error("Replay speed not in choices"))?;
-    if WidgetryComboBox::<Speed>::selected_id(world, combo)
-        .map_err(bevy_widgetry_combo_box::ComboFailure::into_bevy_error)?
-        != Some(id)
-    {
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::SpeedNotInChoices))?;
+    if WidgetryComboBox::<Speed>::selected_id(world, combo)? != Some(id) {
         world
             .get_mut::<SpeedOwner>(combo)
-            .ok_or_else(|| BevyError::error("Replay speed owner missing"))?
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::SpeedOwner).at(combo))?
             .projected = Some(id);
         WidgetryComboBox::<Speed>::select_id(&mut world.commands(), combo, id);
     }
@@ -307,7 +311,8 @@ fn activate(
         if world.get::<Waveform>(root).is_none() {
             return Ok(());
         }
-        if let Some(state) = Waveform::playback(world, root)?
+        if let Some(state) = Waveform::playback(world, root)
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?
             && state.session_generation == generation
         {
             world.trigger(WaveformPlaybackRequested {
@@ -347,7 +352,10 @@ fn speed_changed(
     let speed = models
         .get(combo.source())?
         .get_by_id(id)
-        .ok_or_else(|| BevyError::error("Replay speed choice missing"))?
+        .ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::SpeedChoice)
+                .into_bevy_error(None, "waveform.speed_changed")
+        })?
         .0;
     let root = owner.root;
     let generation = owner.generation;
@@ -440,7 +448,9 @@ mod tests {
                 move |event: On<WaveformPlaybackRequested>, mut commands: Commands| {
                     let event = *event.event();
                     commands.queue(move |world: &mut World| -> Result {
-                        let mut state = Waveform::playback(world, root)?.unwrap();
+                        let mut state = Waveform::playback(world, root)
+                            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?
+                            .unwrap();
                         match event.action {
                             WaveformPlaybackAction::SeekStarted => {
                                 state.preview = true;
@@ -453,7 +463,8 @@ mod tests {
                             }
                             _ => {}
                         }
-                        Waveform::set_playback_in_world(world, root, state)?;
+                        Waveform::set_playback_in_world(world, root, state)
+                            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
                         Ok(())
                     });
                 },

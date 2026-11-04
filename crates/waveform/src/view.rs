@@ -88,13 +88,13 @@ impl Waveform {
             ChannelParts { scroll: #ChannelScroll, plot: #Plot }
             bevy::ui::LayoutConfig { use_rounding: false }
             template(move |_| Ok(crate::time_axis::GridState(props.show_grid)))
-            template(move |_| props.colors.clone().initial())
-            template(move |_| crate::controls::TimeChoices::new(props.time_ranges_ms.clone(), duration))
-            template(move |_| crate::amplitude::AmplitudeChoices::new(props.amplitude_ranges.clone(), amplitude))
-            template(move |_| crate::channels::ChannelState::new(props.channels_per_screen, props.channel_counts.clone(), props.min_channel_height, label_width))
-            template(move |_| crate::playback::Playback::new(props.replay_speeds.clone()))
+            template(move |_| props.colors.clone().initial().map_err(bevy_widgetry_job::JobFailure::into_bevy_error))
+            template(move |_| crate::controls::TimeChoices::new(props.time_ranges_ms.clone(), duration).map_err(bevy_widgetry_job::JobFailure::into_bevy_error))
+            template(move |_| crate::amplitude::AmplitudeChoices::new(props.amplitude_ranges.clone(), amplitude).map_err(bevy_widgetry_job::JobFailure::into_bevy_error))
+            template(move |_| crate::channels::ChannelState::new(props.channels_per_screen, props.channel_counts.clone(), props.min_channel_height, label_width).map_err(bevy_widgetry_job::JobFailure::into_bevy_error))
+            template(move |_| crate::playback::Playback::new(props.replay_speeds.clone()).map_err(bevy_widgetry_job::JobFailure::into_bevy_error))
             template(move |context| {
-                validation_style.validate()?;
+                validation_style.validate().map_err(|error| error.into_bevy_error(None, "waveform.scene.style"))?;
                 let manager = context.entity.world_scope(|world| {
                     world.init_resource::<bevy_widgetry_job::JobManager>();
                     world.resource::<bevy_widgetry_job::JobManager>().clone()

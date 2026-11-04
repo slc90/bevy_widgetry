@@ -34,7 +34,8 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         view(),
         |world, entity, apply| {
             if !apply {
-                return WidgetryWaveformColorOverrides::clear_in_world(world, entity);
+                return WidgetryWaveformColorOverrides::clear_in_world(world, entity)
+                    .map_err(bevy_widgetry::job::JobFailure::into_bevy_error);
             }
             let mut colors = WidgetryWaveformColorOverrides::default();
             colors.normal.palette = Some(vec![
@@ -44,6 +45,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
                 Color::srgb_u8(190, 24, 93),
             ]);
             WidgetryWaveformColorOverrides::set_in_world(world, entity, colors)
+                .map_err(bevy_widgetry::job::JobFailure::into_bevy_error)
         },
     )
 }
@@ -295,11 +297,14 @@ fn change_mode(
             .map(|(root, _)| root)
             .collect();
         for root in roots {
-            if let Some(mut playback) = Waveform::playback(world, root)? {
+            if let Some(mut playback) = Waveform::playback(world, root)
+                .map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?
+            {
                 world.resource_mut::<DemoSources>().gestures.remove(&root);
                 playback.playing = false;
                 playback.preview = false;
-                Waveform::set_playback_in_world(world, root, playback)?;
+                Waveform::set_playback_in_world(world, root, playback)
+                    .map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?;
             }
         }
         for (pane, mut node) in world.query::<(&ModePane, &mut Node)>().iter_mut(world) {
@@ -400,7 +405,8 @@ fn drive(world: &mut World) -> Result {
             for (root, kind) in &roots {
                 if matches!(kind, DemoKind::Disk) {
                     sources.gestures.remove(root);
-                    Waveform::set_session_in_world(world, *root, source.clone())?;
+                    Waveform::set_session_in_world(world, *root, source.clone())
+                        .map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?;
                 }
             }
         }
@@ -438,9 +444,12 @@ fn drive(world: &mut World) -> Result {
                         sources.replay.clone()
                     }
                 {
-                    Waveform::set_session_in_world(world, root, source.clone())?;
+                    Waveform::set_session_in_world(world, root, source.clone())
+                        .map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?;
                 }
-                if let Some(mut playback) = Waveform::playback(world, root)? {
+                if let Some(mut playback) = Waveform::playback(world, root)
+                    .map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?
+                {
                     if playback.playing && visible(world, root) {
                         let total = world
                             .get::<WaveformRuntime>(root)
@@ -454,7 +463,8 @@ fn drive(world: &mut World) -> Result {
                                 .map_err(|error| BevyError::error(error.to_string()))?;
                         playback.position = playback.position.saturating_add(advance).min(total);
                         playback.playing = playback.position < total;
-                        Waveform::set_playback_in_world(world, root, playback)?;
+                        Waveform::set_playback_in_world(world, root, playback)
+                            .map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?;
                     }
                     let rate = world
                         .get::<WaveformRuntime>(root)
@@ -669,7 +679,7 @@ fn playback_requested(
     let event = *event.event();
     commands.queue(move |world: &mut World| -> Result {
         if world.get::<Waveform>(event.entity).is_none() { return Ok(()); }
-        let Some(mut playback) = Waveform::playback(world, event.entity)? else { return Ok(()); };
+        let Some(mut playback) = Waveform::playback(world, event.entity).map_err(bevy_widgetry::job::JobFailure::into_bevy_error)? else { return Ok(()); };
         if playback.session_generation != event.session_generation { return Ok(()); }
         match event.action {
             WaveformPlaybackAction::Playing(playing) => {
@@ -703,7 +713,7 @@ fn playback_requested(
             let mut sources = world.resource_mut::<DemoSources>();
             sources.last_seek = Some((Instant::now(), event.entity, sample_boundary(playback.position, rate).map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?));
         }
-        Waveform::set_playback_in_world(world, event.entity, playback)?;
+        Waveform::set_playback_in_world(world, event.entity, playback).map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?;
         if matches!(event.action, WaveformPlaybackAction::Seek(_)) && playback.playing {
             world.get_mut::<WaveformCursor>(event.entity).ok_or_else(|| BevyError::error("Replay cursor missing"))?.seek(playback.position);
         }

@@ -1,3 +1,4 @@
+use crate::view_error::ViewResult;
 use crate::{ReducedChannel, WaveformRuntime, WaveformStyle};
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, MeshVertexAttribute, PrimitiveTopology, VertexAttributeValues};
@@ -108,24 +109,63 @@ pub(crate) fn update_mesh(
     size: Vec2,
     lanes: Vec2,
     palette: &[Color],
-) -> Result<(), BevyError> {
+) -> ViewResult<()> {
+    // Validate the complete layout before taking ownership of any buffers.
+    // A rejected attribute must not remove otherwise valid geometry from the live mesh.
+    for (valid, part) in [
+        (
+            matches!(
+                mesh.attribute(Mesh::ATTRIBUTE_POSITION),
+                Some(VertexAttributeValues::Float32x3(_))
+            ),
+            crate::WaveformPart::MeshPositions,
+        ),
+        (
+            matches!(
+                mesh.attribute(Mesh::ATTRIBUTE_COLOR),
+                Some(VertexAttributeValues::Float32x4(_))
+            ),
+            crate::WaveformPart::MeshColors,
+        ),
+        (
+            matches!(mesh.indices(), Some(Indices::U32(_))),
+            crate::WaveformPart::MeshU32Indices,
+        ),
+        (
+            matches!(
+                mesh.attribute(CHANNEL_ATTRIBUTE),
+                Some(VertexAttributeValues::Uint32(_))
+            ),
+            crate::WaveformPart::MeshChannelMetadata,
+        ),
+    ] {
+        if !valid {
+            return Err(crate::view_error::missing(part));
+        }
+    }
     let Some(VertexAttributeValues::Float32x3(mut positions)) =
         mesh.remove_attribute(Mesh::ATTRIBUTE_POSITION)
     else {
-        return Err(BevyError::error("Waveform Mesh requires positions"));
+        return Err(crate::view_error::missing(
+            crate::WaveformPart::MeshPositions,
+        ));
     };
     let Some(VertexAttributeValues::Float32x4(mut colors)) =
         mesh.remove_attribute(Mesh::ATTRIBUTE_COLOR)
     else {
-        return Err(BevyError::error("Waveform Mesh requires colors"));
+        return Err(crate::view_error::missing(crate::WaveformPart::MeshColors));
     };
     let Some(Indices::U32(mut indices)) = mesh.remove_indices() else {
-        return Err(BevyError::error("Waveform Mesh requires u32 indices"));
+        return Err(crate::view_error::missing(
+            crate::WaveformPart::MeshU32Indices,
+        ));
     };
     let Some(VertexAttributeValues::Uint32(mut vertex_channels)) =
         mesh.remove_attribute(CHANNEL_ATTRIBUTE)
     else {
-        return Err(BevyError::error("Waveform Mesh requires channel metadata"));
+        return Err(crate::view_error::missing(
+            crate::WaveformPart::MeshChannelMetadata,
+        ));
     };
     vertex_channels.clear();
     positions.clear();
@@ -241,9 +281,11 @@ pub(crate) fn update_mesh(
     Ok(())
 }
 
-pub(crate) fn recolor_mesh(mesh: &mut Mesh, palette: &[Color]) -> Result<(), BevyError> {
+pub(crate) fn recolor_mesh(mesh: &mut Mesh, palette: &[Color]) -> ViewResult<()> {
     let Some(VertexAttributeValues::Uint32(channels)) = mesh.attribute(CHANNEL_ATTRIBUTE) else {
-        return Err(BevyError::error("Waveform Mesh requires channel metadata"));
+        return Err(crate::view_error::missing(
+            crate::WaveformPart::MeshChannelMetadata,
+        ));
     };
     let colors = channels
         .iter()
@@ -261,6 +303,37 @@ pub(crate) fn recolor_mesh(mesh: &mut Mesh, palette: &[Color]) -> Result<(), Bev
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejected_mesh_layout_keeps_the_remaining_geometry_for_repeated_validation() {
+        let runtime = WaveformRuntime::empty(
+            Default::default(),
+            &bevy_widgetry_job::JobManager::default(),
+        )
+        .unwrap();
+        let mut mesh = empty_mesh();
+        assert!(mesh.remove_attribute(Mesh::ATTRIBUTE_COLOR).is_some());
+        let positions = mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap().clone();
+        for _ in 0..2 {
+            let error = update_mesh(
+                &mut mesh,
+                &runtime,
+                &Default::default(),
+                Vec2::splat(10.0),
+                Vec2::new(10.0, 0.0),
+                &[Color::WHITE, Color::BLACK],
+            )
+            .unwrap_err();
+            assert!(matches!(
+                error,
+                crate::view_error::ViewFailure::Structure {
+                    part: crate::WaveformPart::MeshColors,
+                    ..
+                }
+            ));
+            assert_eq!(mesh.attribute(Mesh::ATTRIBUTE_POSITION), Some(&positions));
+        }
+    }
 
     #[test]
     fn sparse_points_from_custom_reducer_remain_connected() {

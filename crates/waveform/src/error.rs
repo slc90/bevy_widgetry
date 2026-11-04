@@ -4,8 +4,145 @@ use std::{collections::TryReserveError, error::Error, fmt, ops::Range, time::Dur
 
 pub type WaveformFailure = WidgetryFailure<WaveformError>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WaveformPart {
+    MeasurementToggle,
+    ProgressSlider,
+    PlaybackIcon,
+    RangeCombo,
+    SpeedCombo,
+    AmplitudeChoices,
+    Axis,
+    AxisLayout,
+    AxisRuntime,
+    AxisState,
+    Camera,
+    ChannelChoices,
+    ChannelContentNode,
+    ChannelLayout,
+    ChannelParts,
+    ChannelState,
+    Children,
+    Colors,
+    ContentLayout,
+    ControlBar,
+    ControlBarNode,
+    Cursor,
+    Duration,
+    GridAsset,
+    GridState,
+    MeasurementBackground,
+    MeasurementBorder,
+    MeasurementPickable,
+    MeasurementReadoutBackground,
+    MeasurementReadoutNode,
+    MeasurementReadoutText,
+    MeasurementRectangleNode,
+    MeasurementParts,
+    MeasurementState,
+    MeshAsset,
+    MeshChannelMetadata,
+    MeshColors,
+    MeshPositions,
+    MeshU32Indices,
+    Metadata,
+    OutputLength,
+    Playback,
+    PlaybackParts,
+    PlaybackUIState,
+    PlotLayout,
+    ProgressOwner,
+    RangeChoiceNoLongerExists,
+    RangeChoices,
+    RangeControls,
+    RangeMissingFromChoices,
+    RangeModel,
+    RangeOwner,
+    RangeRuntime,
+    RenderScene,
+    Renderer,
+    RendererHierarchyBroken,
+    Runtime,
+    ScrollContent,
+    ScrollPosition,
+    ScrollViewport,
+    ScrollViewportLayout,
+    SpeedChoice,
+    SpeedModel,
+    SpeedNotInChoices,
+    SpeedOwner,
+    TickLabel,
+    TickMark,
+    TickParts,
+    TickText,
+    TimeText,
+    Viewport,
+    ViewportLayout,
+    WaveformStyle,
+}
+
 #[derive(Debug)]
 pub enum WaveformError {
+    Target {
+        entity: bevy::prelude::Entity,
+        widget: bool,
+        runtime: bool,
+        cursor: bool,
+    },
+    TimeChoices {
+        choices: Vec<u32>,
+        duration: u32,
+    },
+    AmplitudeChoices {
+        choices: Vec<crate::WaveformAmplitude>,
+        amplitude: crate::WaveformAmplitude,
+        duplicate: bool,
+    },
+    ChannelCount {
+        count: crate::WaveformChannelCount,
+    },
+    ChannelConfiguration {
+        count: crate::WaveformChannelCount,
+        choices: Vec<crate::WaveformChannelCount>,
+        min_height: f32,
+        label_width: f32,
+    },
+    ChannelChoice {
+        count: crate::WaveformChannelCount,
+        choices: Vec<crate::WaveformChannelCount>,
+    },
+    PlaybackSpeeds {
+        speeds: Vec<f64>,
+    },
+    ReplaySession {
+        entity: bevy::prelude::Entity,
+    },
+    PlaybackState {
+        entity: bevy::prelude::Entity,
+        proposed: Box<crate::WaveformPlayback>,
+        previous: Box<crate::WaveformPlayback>,
+        total: Duration,
+    },
+    Palette {
+        palette: Vec<bevy::prelude::Color>,
+    },
+    SeekPosition {
+        total: Duration,
+        value: f32,
+        source: std::time::TryFromFloatSecsError,
+    },
+    Structure {
+        entity: Option<bevy::prelude::Entity>,
+        part: WaveformPart,
+    },
+    Style {
+        line_width: f32,
+    },
+    Query {
+        entity: bevy::prelude::Entity,
+        part: WaveformPart,
+        source: bevy::ecs::query::QueryEntityError,
+    },
     NoSession,
     RingBorrowed,
     ReductionActive,
@@ -110,6 +247,8 @@ impl Error for WaveformError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Allocation { source, .. } => Some(source),
+            Self::SeekPosition { source, .. } => Some(source),
+            Self::Query { source, .. } => Some(source),
             _ => None,
         }
     }
@@ -135,4 +274,17 @@ pub(crate) fn read_frame(
         .field("channels", format_args!("{:?}", 0..channels))
         .field("output_len", request.output_len)
         .field("algorithm", format_args!("{:?}", request.algorithm))
+}
+
+#[track_caller]
+pub(crate) fn request(
+    error: WaveformError,
+    entity: Option<bevy::prelude::Entity>,
+    operation: &'static str,
+) -> bevy_widgetry_job::JobFailure {
+    WaveformFailure::new(
+        error,
+        ErrorFrame::new(operation).field("root", format_args!("{entity:?}")),
+    )
+    .into()
 }

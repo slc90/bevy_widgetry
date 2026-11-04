@@ -1,8 +1,8 @@
+use crate::view_error::ViewResult;
+use crate::view_error::{ViewErrors, ViewFailureState};
 use bevy::prelude::*;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::text::WidgetryText;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 #[derive(Component, Default)]
 pub(crate) struct AxisState {
@@ -10,8 +10,8 @@ pub(crate) struct AxisState {
     parts: Vec<TickParts>,
     label_spacing: f32,
     revision: u64,
-    failure: UnmigratedFailureState,
-    layout_failure: UnmigratedFailureState,
+    failure: ViewFailureState,
+    layout_failure: ViewFailureState,
 }
 
 #[derive(Component, FromTemplate, Clone, Copy)]
@@ -26,40 +26,37 @@ pub(crate) fn prepare(world: &mut World) -> Result {
         .iter(world)
         .map(|(axis, parent)| (axis, parent.parent()))
         .collect();
-    let mut failure = None;
+    let mut failure = ViewErrors::default();
     for (axis, root) in axes {
         let result = prepare_one(world, axis, root);
         let result = world
             .get_mut::<AxisState>(axis)
-            .ok_or_else(|| BevyError::error("Waveform axis state missing"))?
+            .ok_or_else(|| {
+                crate::view_error::missing(crate::WaveformPart::AxisState)
+                    .into_bevy_error(None, "waveform.prepare")
+            })?
             .failure
-            .observe(
-                result,
-                |error| widgetry_error!(?root, %error, "Waveform 时间标尺更新失败"),
-                || widgetry_info!(?root, "Waveform 时间标尺恢复正常"),
-            );
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+            .observe(result, root, "waveform.time_axis.prepare");
+        if let Err(error) = result {
+            failure.push(error);
         }
     }
-    failure.map_or(Ok(()), Err)
+    failure.finish(world.commands())
 }
 
-fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
+fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> ViewResult {
     let runtime = world
         .get::<crate::WaveformRuntime>(root)
-        .ok_or_else(|| BevyError::error("Waveform axis runtime missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::AxisRuntime).at(root))?;
     let range = runtime.viewport_range();
     let rate = runtime.metadata().map(|metadata| metadata.sample_rate);
     let node = world
         .get::<ComputedNode>(axis)
-        .ok_or_else(|| BevyError::error("Waveform axis layout missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::AxisLayout).at(axis))?;
     let width = node.size().x * node.inverse_scale_factor();
     let state = world
         .get::<AxisState>(axis)
-        .ok_or_else(|| BevyError::error("Waveform axis state missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::AxisState).at(axis))?;
     let values = rate.map_or_else(Vec::new, |rate| {
         let start = u128::from(range.start) * 1_000_000_000 / u128::from(rate);
         let span = u128::from(range.end - range.start) * 1_000_000_000 / u128::from(rate);
@@ -102,14 +99,12 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
                 Pickable::IGNORE
             ]
         }).map_err(|error| error.into_bevy_error())?;
-        parts.push(
-            *world
-                .get::<TickParts>(entity)
-                .ok_or_else(|| BevyError::error("Waveform tick parts missing"))?,
-        );
+        parts.push(*world.get::<TickParts>(entity).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::TickParts).at(entity)
+        })?);
         world
             .get_mut::<AxisState>(axis)
-            .ok_or_else(|| BevyError::error("Waveform axis state missing"))?
+            .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::AxisState).at(axis))?
             .parts = parts.clone();
     }
     for (index, part) in parts.iter().enumerate() {
@@ -117,9 +112,9 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
         let label_width = world
             .get::<ComputedNode>(part.label)
             .map_or(0.0, |node| node.size().x * node.inverse_scale_factor());
-        let mut mark = world
-            .get_mut::<Node>(part.mark)
-            .ok_or_else(|| BevyError::error("Waveform tick mark missing"))?;
+        let mut mark = world.get_mut::<Node>(part.mark).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::TickMark).at(part.mark)
+        })?;
         mark.display = if tick.is_some() {
             Display::Flex
         } else {
@@ -129,9 +124,9 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
             mark.left = percent(tick.fraction * 100.0);
             mark.height = px(if tick.major { 6 } else { 3 });
         }
-        let mut label = world
-            .get_mut::<Node>(part.label)
-            .ok_or_else(|| BevyError::error("Waveform tick label missing"))?;
+        let mut label = world.get_mut::<Node>(part.label).ok_or_else(|| {
+            crate::view_error::missing(crate::WaveformPart::TickLabel).at(part.label)
+        })?;
         label.display = if tick.is_some_and(|tick| tick.major) {
             Display::Flex
         } else {
@@ -142,13 +137,15 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
             label.left = percent(tick.fraction.clamp(edge, 1.0 - edge) * 100.0);
             world
                 .get_mut::<Text>(part.label)
-                .ok_or_else(|| BevyError::error("Waveform tick text missing"))?
+                .ok_or_else(|| {
+                    crate::view_error::missing(crate::WaveformPart::TickText).at(part.label)
+                })?
                 .set_if_neq(Text(tick.label.clone()));
         }
     }
     let mut state = world
         .get_mut::<AxisState>(axis)
-        .ok_or_else(|| BevyError::error("Waveform axis state missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::AxisState).at(axis))?;
     if state.ticks != values {
         state.ticks = values;
         state.revision = state.revision.wrapping_add(1);
@@ -161,17 +158,23 @@ pub(crate) fn finish(
     mut labels: Query<(&ComputedNode, &UiGlobalTransform, &mut Visibility), Without<AxisState>>,
     mut marks: Query<&mut BackgroundColor>,
     theme: Res<bevy_widgetry_theme::WidgetryThemeMode>,
+    commands: Commands,
 ) -> Result {
-    let mut failure = None;
+    let mut failure = ViewErrors::default();
     for (axis, mut state, node, transform) in &mut axes {
-        let result = (|| -> Result<f32, BevyError> {
+        let result = (|| -> ViewResult<f32> {
             let mut last_right = f32::NEG_INFINITY;
             let mut measured = 0.0_f32;
             let width = node.size().x;
             let left = transform.translation.x - width * 0.5;
             for (index, part) in state.parts.iter().enumerate() {
-                let (label_node, label_transform, mut visibility) =
-                    labels.get_mut(part.label).map_err(BevyError::error)?;
+                let (label_node, label_transform, mut visibility) = labels
+                    .get_mut(part.label)
+                    .map_err(|source| crate::view_error::ViewFailure::Query {
+                        entity: part.label,
+                        part: crate::WaveformPart::TickLabel,
+                        source,
+                    })?;
                 // NoWrap node sizes already include this frame's font measurement.
                 // TextLayoutInfo is refreshed later in PostLayout, which must follow visibility and menu focus.
                 let label_width = label_node.size().x;
@@ -194,33 +197,36 @@ pub(crate) fn finish(
                 if visible {
                     last_right = label_right;
                 }
-                marks.get_mut(part.mark).map_err(BevyError::error)?.0 =
-                    theme.colors().text.normal.foreground.with_alpha(0.4);
+                marks
+                    .get_mut(part.mark)
+                    .map_err(|source| crate::view_error::ViewFailure::Query {
+                        entity: part.mark,
+                        part: crate::WaveformPart::TickMark,
+                        source,
+                    })?
+                    .0 = theme.colors().text.normal.foreground.with_alpha(0.4);
             }
             Ok(measured.max(90.0))
         })();
-        let result = state.layout_failure.observe(
-            result,
-            |error| widgetry_error!(?axis, %error, "Waveform 时间标尺布局检查失败"),
-            || widgetry_info!(?axis, "Waveform 时间标尺布局检查恢复正常"),
-        );
+        let result = state
+            .layout_failure
+            .observe(result, axis, "waveform.time_axis.layout");
         match result {
             Ok(spacing) => state.label_spacing = spacing,
-            Err(error) if failure.is_none() => failure = Some(error),
-            Err(_) => {}
+            Err(error) => failure.push(error),
         }
     }
-    failure.map_or(Ok(()), Err)
+    failure.finish(commands)
 }
 
-pub(crate) fn grid_snapshot(world: &World, root: Entity) -> Result<(u64, Vec<f32>), BevyError> {
+pub(crate) fn grid_snapshot(world: &World, root: Entity) -> ViewResult<(u64, Vec<f32>)> {
     let children = world
         .get::<Children>(root)
-        .ok_or_else(|| BevyError::error("Waveform children missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Children).at(root))?;
     let axis = children
         .iter()
         .find_map(|child| world.get::<AxisState>(child))
-        .ok_or_else(|| BevyError::error("Waveform axis missing"))?;
+        .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::Axis).at(root))?;
     Ok((
         axis.revision,
         axis.ticks

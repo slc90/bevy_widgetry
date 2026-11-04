@@ -17,7 +17,7 @@ mod channels;
 pub use channels::{WaveformChannelCount, WaveformChannelCountChanged, WaveformChannelLayout};
 mod config;
 mod error;
-pub use error::{WaveformError, WaveformFailure};
+pub use error::{WaveformError, WaveformFailure, WaveformPart};
 mod controls;
 mod geometry;
 mod reducer;
@@ -28,6 +28,7 @@ mod source;
 mod style;
 mod time_axis;
 mod view;
+mod view_error;
 
 pub use config::{WaveformConfig, WaveformCursor, duration_from_frames, sample_boundary};
 pub use reducer::{

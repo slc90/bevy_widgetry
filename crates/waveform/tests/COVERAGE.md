@@ -79,3 +79,13 @@
 - Source 源码回归覆盖通道表/完整帧长度/重叠缺口/NaN 的结构化分类与实际位置，分配回归验证样本和超大通道表返回原 TryReserveError 及请求规模，避免容量溢出 panic。既有 gap、两种 reducer 数值及工作量回归继续保护正常计算。
 
 - Runtime 多实例同帧失败在 `diagnostics.rs` 验证全部 origin 与实体语境进入同次 System 报告；Runtime 单元测试验证 Reducer panic 跨 Job 保留 origin、任务现场、已提交快照及 reducer 生命周期，目标退休后的晚到失败由实际 Owner 消费，再提交新算法结果。
+
+- 视图/组合错误：renderer 集成测试验证样式故障的受管 origin、Root 语境、多实例同帧聚合、持续状态去重与独立恢复；controls 单元测试验证某一 Model 失效时兄弟选择器成功投影不会误报恢复。保留配置/颜色/播放状态与先提交后通知回归，并在真实 Commands/Observer/System 边界检查 Severity。
+
+- Geometry 单元回归验证非法 Mesh 属性在拒绝更新前不会移走健康 buffer，重复验证保持原故障类别。
+
+- 公开非法通道数、NaN 幅值与空会话启动错误保留调用目标 root；数值/Runtime 层原始诊断只增加已知目标语境，不重新捕获 origin。
+
+- 周期布局同步使用未创建诊断的结构 fault，持续缺失布局只保留同一 origin，恢复后再缺失才生成新 ID；选择器 Model 缺失时校验实际 Model Entity，避免被根实体替代。公开查询仍按独立调用创建请求诊断。
+
+- Renderer 样式故障在隐藏/零 viewport 等未验证阶段保持 origin；恢复可见且实际校验通过后才记录恢复 INFO，显示恢复前不因等待重新创建源头。
