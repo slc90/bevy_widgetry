@@ -185,6 +185,7 @@ pub(crate) fn install(app: &mut App) {
         .add_observer(removed::<Text>)
         .add_observer(invalidate::<WindowRoot>)
         .add_observer(removed::<WindowRoot>)
+        .add_observer(removed::<Window>)
         .add_observer(invalidate::<TitleBarContent>)
         .add_observer(removed::<TitleBarContent>)
         .add_systems(
@@ -193,4 +194,69 @@ pub(crate) fn install(app: &mut App) {
                 .in_set(WidgetryUiSystems::Build)
                 .after(crate::window_root::initialize_windows),
         );
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+    use crate::{WindowError, prepare_native_window};
+    use bevy::ecs::{error::Severity, schedule::SingleThreadedExecutor};
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+
+    #[test]
+    fn native_removal_invalidates_settled_title_projection() {
+        for despawn in [false, true] {
+            let mut app = App::new();
+            install(&mut app);
+            app.init_resource::<runtime_error::WindowDiagnostics>();
+            app.set_error_handler(ErrorCapture::handler());
+            app.edit_schedule(PostUpdate, |schedule| {
+                schedule.set_executor(SingleThreadedExecutor::new());
+            });
+            let native = app
+                .world_mut()
+                .spawn(prepare_native_window(Window::default()))
+                .id();
+            let camera = app.world_mut().spawn(Camera2d).id();
+            let root = app
+                .world_mut()
+                .spawn((
+                    WindowRoot {
+                        target_window: native,
+                        maximized: false,
+                    },
+                    UiTargetCamera(camera),
+                ))
+                .id();
+            app.update();
+            assert!(!app.world().resource::<PendingTitles>().0);
+
+            if despawn {
+                app.world_mut().despawn(native);
+            } else {
+                app.world_mut().entity_mut(native).remove::<Window>();
+            }
+            let errors = ErrorCapture::default();
+            let logs = LogCapture::default();
+            logs.run(|| errors.run(|| app.update()));
+            let records = errors.take_records();
+            assert_eq!(records.len(), 1);
+            assert_eq!(records[0].error.severity(), Severity::Error);
+            let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+            assert!(matches!(
+                diagnostic.source().unwrap().downcast_ref::<WindowError>(),
+                Some(WindowError::Structure {
+                    fault: WindowFault::MissingPart { entity, component: "Window" }
+                }) if *entity == native
+            ));
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert!(app.world().entities().contains(root));
+            assert!(app.world().entities().contains(camera));
+        }
+    }
 }
