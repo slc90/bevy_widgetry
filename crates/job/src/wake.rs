@@ -1,6 +1,6 @@
 use crate::JobFailure;
 use crate::manager::lock;
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -52,7 +52,7 @@ impl WakeState {
                 state.faulted = Some(failure);
             }
             Ok(()) if state.faulted.is_some() => {
-                widgetry_info!("Job 主循环唤醒已恢复");
+                widgetry_debug!("Job 主循环唤醒已恢复");
                 if let Some(error) = state.faulted.take() {
                     state.error = None;
                     error.record_handled("重试并成功通知宿主主循环", "主循环唤醒已恢复");

@@ -9,7 +9,7 @@ use std::{
 
 use bevy::tasks::{AsyncComputeTaskPool, IoTaskPool, Task, TaskPool};
 use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
-use bevy_widgetry_internal_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_debug;
 use event_listener::Event;
 use futures_util::FutureExt;
 use tracing::Instrument;
@@ -136,6 +136,12 @@ impl JobManager {
         };
         let shared = Arc::new(Mutex::new(ShutdownData::new(timeout)));
         registry.shutdown = Some(shared.clone());
+        widgetry_debug!(
+            stage = "shutdown_started",
+            remaining = remaining.len(),
+            timeout_ms = timeout.as_millis(),
+            "Job 关闭协调已开始"
+        );
         for record in registry.records.values_mut() {
             if lock(&record.shared.lifecycle).cancel() == CancelResult::CancelRequested {
                 record.shared.cancel.notify(usize::MAX);
@@ -581,6 +587,7 @@ impl Registry {
             task: Arc::default(),
             channel: data,
         });
+        lock(&record.shared.lifecycle).record("registered", "Job 已登记等待执行");
         Ok((record, context, receiver))
     }
 
@@ -676,8 +683,9 @@ async fn collect_thread_with_wait(
         Ok(outcome) => outcome,
         Err(payload) => job_outcome(Err(payload), id),
     };
+    widgetry_debug!(job_id = id.get(), kind = ?JobKind::Thread, stage = "joined", "Job 线程已真实退出并完成回收");
     if let Some(error) = failure {
-        widgetry_info!(job_id = id.get(), "Job 线程退出查询已恢复并完成回收");
+        widgetry_debug!(job_id = id.get(), "Job 线程退出查询已恢复并完成回收");
         error.record_handled("保留线程句柄重试并完成真实 Join", "线程退出查询已恢复");
         JobOutcome::Failed(match outcome {
             JobOutcome::Failed(business) => business.combine(error),
@@ -1046,6 +1054,11 @@ mod tests {
             )
         });
         let failure = result.err().unwrap();
+        assert!(logs.records().iter().all(|record| {
+            !["running", "body_exited", "joined", "finished"]
+                .into_iter()
+                .any(|stage| record.matches_field("stage", stage))
+        }));
         assert_eq!(
             logs.diagnostic_records(
                 failure.origin().id(),

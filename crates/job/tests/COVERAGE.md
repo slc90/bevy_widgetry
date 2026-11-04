@@ -21,6 +21,7 @@
 - 初始关闭收割后才读取时钟；登记线程与关闭交错后，OS 启动拒绝不会成为永久未完成的跟踪或产生虚假超时。
 - Plugin：两个组合消费者幂等安装、宿主预插入 Resource 保持、后台线程同一 Handle、独立 App 隔离、Headless 无 Winit 代理轮询及逐帧消费预算。
 - 唤醒：高频通知合并、Headless 待处理通知在代理连接后补发、消费期间通知在清标记后重新投递、闲置订阅不连续刷新、错误持续状态去重及恢复后新故障。
+- lifecycle_logging.rs：独立子进程安装真实全局捕获器，覆盖 Io/Cpu/Thread 的登记→Running→执行体结束→真实收割顺序、JobId/种类/Label 关联、取消请求去重、确认取消/迟到完成/失败终态与重复观察静默；TLS 析构阻塞时无提前 Join/Finished 日志，空关闭与重复关闭各只记录一次开始和完成。Lifecycle 单测覆盖 Pending 取消无 Running，Shutdown 单测覆盖超时后完成及重复推进无日志风暴。
 
 - 控制诊断：零容量、缺失 CPU 池与请求现场、订阅类型名、严格未知 ID、原生 OS 线程创建 source；错误分类可匹配且不比较诊断载体。
 - 合法探测与接收生命周期：find_status/cancel_if_present/remove_if_present 的缺失记录无日志，Empty/Finished/Closed 与协作取消无 ERROR；完成后发送是真实 Closed 失败。

@@ -1,5 +1,6 @@
 use crate::manager::{ExecutionCompletion, Shared, lock};
 use crate::*;
+use bevy_widgetry_internal_log::widgetry_debug;
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex},
@@ -94,6 +95,11 @@ impl ShutdownData {
         }
         if self.status.remaining.is_empty() {
             self.status.phase = ShutdownPhase::Finished;
+            widgetry_debug!(
+                stage = "shutdown_finished",
+                remaining = 0,
+                "Job 关闭协调已完成，所有任务均已收割"
+            );
             self.notifications.push_back(ShutdownMessage::Completed);
             self.jobs.clear();
         }
@@ -140,6 +146,36 @@ mod tests {
             )),
         });
         data.track(shared);
+    }
+
+    #[test]
+    fn timeout_then_completion_logs_once_without_polling_noise() {
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        let mut data = ShutdownData::new(Duration::from_secs(1));
+        let active = JobStatus {
+            id: JobId(1),
+            kind: JobKind::Io,
+            state: JobState::Stopping,
+            outcome: None,
+            label: None,
+        };
+        track(&mut data, active.clone(), None);
+        logs.run(|| {
+            for offset in 1..4 {
+                data.advance(
+                    data.started + Duration::from_secs(offset),
+                    vec![active.clone()],
+                );
+            }
+            assert!(logs.records().is_empty());
+            data.advance(data.started + Duration::from_secs(4), Vec::new());
+            data.advance(data.started + Duration::from_secs(5), Vec::new());
+        });
+        let records = logs.records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].level, bevy::log::Level::DEBUG);
+        assert!(records[0].matches_field("stage", "shutdown_finished"));
+        assert_eq!(data.notifications.len(), 2);
     }
 
     #[test]

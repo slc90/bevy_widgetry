@@ -8,6 +8,8 @@
 
 Manager 持有执行 Task，查询或接收时收割已完成 Task 后提交不可逆终态，`status` 提供分类、状态及最终错误。接收 API 返回 `Result<JobRead<T>, ReceiveFailure>`，`try_recv` 的 Empty 与 Finished 后的 Closed 都是正常状态；`recv().await` 等待下一条 Item 或 Finished，`recv_blocking` 仅供普通同步线程使用，不能用于 ECS 主线程或池工作线程。每份 Receiver 按序排空自己的 Item 后，恰好交付一次 Finished，之后 Closed。内部意外 Overflowed 会记录错误并返回，不作为正常丢包处理。Receiver 保持 Manager 存活，移除记录不会破坏已获得的未读结果。
 
+Job 的实际生命周期通过 `bevy_widgetry` Target 的 DEBUG 记录，包含 `job_id`、`kind`、可用 `label`、`state` 和 `stage`。登记只表示 Pending 记录已建立并等待执行，不保证 OS 线程创建成功；创建失败仍返回原诊断并删除预留记录，不会虚构 Running 或终态。实际进入 Running、首次取消请求、执行体结束和真实收割后的 Completed/Canceled/Failed 各记录一次，重复查询、轮询和取消不会重复记录。工作体结束不代表专属线程回收；`joined` 事件只在 OS 线程退出及真实 Join 之后产生，随后收割才发布终态。失败终态 DEBUG 不重播源头错误或 Backtrace。
+
 提交与控制失败分别使用 `SubmitFailure`、`JobAccessFailure`，发送与接收的真实故障使用 `SendFailure`、`ReceiveFailure`；它们均是携带领域分类的 `WidgetryFailure`。调用方通过 `kind()` 匹配分类，不比较诊断本身。提交错误保留请求分类、label、容量及可用的 JobId，线程创建保留原始 `io::Error`；订阅类型不匹配保留预期与实际 Rust 类型名，阶段拒绝保留状态快照。源头只创建一次 ERROR，传播保留原诊断身份；实际停止操作、交付失败回复等处理后调用 `record_handled`，未处理错误显式 `into_bevy_error()` 进入宿主边界。
 
 `status`、`outcome`、`cancel`、`remove` 对未知 ID 报真实访问错误。合法查询使用 `find_status -> Option<JobStatus>`；允许记录已被移除的清理使用原子 `cancel_if_present` 或 `remove_if_present`，不存在时返回 None 且无诊断。`remove_if_present` 对仍活动的记录仍返回 NotFinished，不能用于忽略未完成任务。正常 Empty、Closed、取消和等待背压不创建诊断；Closed/Overflowed 发送及接收丢失才是错误。
@@ -30,9 +32,11 @@ Manager 持有执行 Task，查询或接收时收割已完成 Task 后提交不�
 
 `JobOutcome::Failed(JobFailure)` 共享统一诊断报告。受管 `WidgetryFailure<E>` 或 `WidgetryEcsError` 直接转换，保留原 source、origin 与首次回溯；外部错误通过 `JobFailure::external(error, frame)` 首次纳入诊断，不能只返回格式化文本。`combine` 保存多份独立原因，按错误身份避免同份诊断重复加入；快照相等性比较诊断身份，不比较消息或回溯。`diagnostics()` 可检查各份原始诊断。克隆、status、outcome、Finished 和多个订阅者只是共享观察，不记录 handled；真正恢复、放弃或交付失败状态的 Owner 才调用 `record_handled`，未处理报告通过 `into_bevy_error()` 保持 Error Severity 进入宿主。
 
-可捕获 panic 使用 `JobError::PanicObserved`，其回溯明确来自 catch 之后的观察点，不能代表展开前的 panic 源头栈；Job 不安装全局 panic hook。内部锁中毒沿既有恢复策略取得受保护状态，记录诊断、清除中毒标志并记录实际恢复。主循环 wake 保存原始错误，持续同一故障只建立一次诊断，恢复后记录 INFO 和实际恢复 DEBUG；之后的新故障具有新身份。
+可捕获 panic 使用 `JobError::PanicObserved`，其回溯明确来自 catch 之后的观察点，不能代表展开前的 panic 源头栈；Job 不安装全局 panic hook。内部锁中毒沿既有恢复策略取得受保护状态，记录诊断、清除中毒标志并记录实际恢复。主循环 wake 保存原始错误，持续同一故障只建立一次诊断，恢复后记录生命周期 DEBUG 和实际处理 DEBUG；之后的新故障具有新身份。线程退出查询失败后成功 Join 的恢复事件同样使用 DEBUG，仍保留此前失败的源头诊断及最终 Failed 结果。
 
 `begin_shutdown(timeout)` 可从任意线程非阻塞调用，返回 ShutdownHandle。在同一次注册表提交中停止接纳新任务并向所有活动 Job 请求取消。之后三个提交入口均返回 ShuttingDown。重复关闭返回同一个协调过程，不重置首次请求的全局截止时间。
+
+首次接受关闭时记录一次 DEBUG（`stage = shutdown_started`），带活跃任务数和 `timeout_ms`；所有执行体真实结束并完成收割后记录一次 `shutdown_finished`。空集合立即完成，超时后继续等待也只在最终完成时记录，不对协调轮询、结果项或进度逐次输出。
 
 ShutdownHandle 的 `status` 返回 ShuttingDown / TimedOut / Finished 及当前剩余 Job 身份和状态，`try_recv` 取走一次性 TimedOut（含超时发生时的剩余快照）或 Completed。所有克隆句柄共享这份通知队列，重复调用 begin_shutdown 不重复生成通知；队列最多保留两条，独立于业务数据容量。空集合立即 Completed；保留的终态记录、未读 Item 和未消费 Finished 都不阻碍关闭完成。
 

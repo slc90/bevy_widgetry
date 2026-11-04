@@ -78,7 +78,7 @@ fn missing_pool_preserves_the_requested_kind_label_and_capacity() {
 }
 
 #[test]
-fn cancellation_and_natural_end_are_quiet_but_sending_after_completion_is_a_real_failure() {
+fn cancellation_and_natural_end_have_no_error_but_sending_after_completion_is_a_real_failure() {
     use std::sync::{Arc, mpsc};
     use std::time::Duration;
     IoTaskPool::get_or_init(TaskPool::new);
@@ -103,7 +103,11 @@ fn cancellation_and_natural_end_are_quiet_but_sending_after_completion_is_a_real
             JobRead::Finished(JobOutcome::Canceled)
         ));
         assert!(matches!(receiver.try_recv().unwrap(), JobRead::Closed));
-        assert!(logs.records().is_empty());
+        assert!(
+            logs.records().iter().all(|record| {
+                record.level == bevy::log::Level::DEBUG && record.phase().is_none()
+            })
+        );
     });
     let (sender, ready) = mpsc::channel();
     let (id, mut receiver) = manager
