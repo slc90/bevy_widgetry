@@ -10,22 +10,59 @@
 
 ```pwsh
 uv run --python 3.13 --with pillow --with numpy python crates/asset/tools/build_kamuri_animations.py --samples --output target/animation/kamuri80-samples
+uv run --python 3.13 --with pillow --with numpy python crates/asset/tools/build_kamuri_animations.py
 uv run --python 3.13 --with pillow --with numpy python crates/asset/tools/build_kamuri_animations.py --install
 cargo fmt --all
-uv run --python 3.13 --with pillow --with numpy python skills/animated-cursor-authoring/scripts/cursor_tool.py target/animation/kamuri80/manifest.json --output target/animation/kamuri80/checked
 ```
 
-默认完整输出在`target/animation/kamuri80`，包括45个RGBA atlas、APNG、动作条、静态首帧图集、manifest和HTML。`checked/index.html`提供完整自动循环与浅/深底切换，`checked/qc.json`记录技术检查及需要人工观察的接缝候选。`--install`同步当前80px运行时PNG和Asset语义目录；Rust的时序/热点数据由同一组创作规格生成。普通应用只按实际语义加载图集；Gallery在Cursor页共享加载全部45种。
+默认完整输出在`target/animation/kamuri80`，包括45个RGBA atlas、APNG、动作条、静态首帧图集、`contact-sheet.png`、`manifest.json`和`index.html`。HTML提供持续循环及浅/深底切换；Manifest记录每种语义的帧数、时序、Hotspot、实际变化帧数量、固定热点区域变化数量和Atlas哈希。`--samples`只生成Default、Text、ZoomIn与Wait样本，不能与`--install`一起使用。
 
-技术检查包含尺寸、RGBA、透明边缘/隐藏RGB、实际变化帧、固定热点像素、首帧回退一致性与独立时序。接缝指标只辅助检查，美术品质仍需看持续播放与原生效果。
+`--install`在确认固定热点区域不变后同步当前80px运行时PNG和Asset语义目录，并从同一组创作规格生成Rust时序/热点数据。不安装时可用`--output`写入单独目录检查重建结果，不改变现有运行时资源。普通应用只按实际语义加载图集；Gallery在Cursor页共享加载全部45种。动画美术品质仍需观察持续播放与原生效果。
 
 ## 原生 Windows 验证
 
-[通用Skill](../../../skills/animated-cursor-authoring/SKILL.md)包含实际用过的检查与Windows观察脚本。`native_cursor_probe.py`是仓库入口，转发到Skill内的通用工具。样本模式打开临时原生窗口；现有应用模式需要真实可见窗口标题和物理client坐标，可比较OS位图与源图集。其结果与BRP Custom Pointer分开记录；标准GUI导航/截图仍通过BRP完成。
+仓库内的`native_cursor_probe.py`独立使用`GetCursorInfo`、`GetIconInfo`和`GetDIBits`捕获已有应用的真实OS光标，无需安装外部Skill。它只用于开发验证，不参与最终程序运行，也不创建样本播放器窗口。Python依赖仍为Pillow和NumPy。
+
+先启动Gallery，通过正常界面输入进入Cursor页并选择Kamuri主题。标准导航、滚动和截图使用BRP；完成后调用`brp_extras/pointer_control`的`release`并查询`status`，确认`phase`为`inactive`，再开始原生鼠标捕获。BRP Custom Pointer不会改变真实OS Cursor，不能替代以下验证。捕获期间保持目标区域可见，不再操作BRP指针或真实鼠标。
+
+从生成器的`manifest.json`复制需要验证的动画条目，组成UTF-8 JSON数组，并为每项添加`position: [x, y]`，表示该目标中心在当前窗口中的**物理Client像素**坐标。`atlas`相对于该Target JSON所在目录解析，保留原有`frame_size`、`columns`、`frames`、`hotspot`和`frame_duration_ms`（或逐帧`durations_ms`）字段。例如，在`target/animation/kamuri80/targets.json`写入：
+
+```json
+[
+  {
+    "name": "Pointer",
+    "atlas": "pointer_80.png",
+    "frame_size": [80, 80],
+    "columns": 8,
+    "frames": 28,
+    "frame_duration_ms": 70,
+    "hotspot": [20, 34],
+    "position": [600, 350]
+  }
+]
+```
+
+坐标仅为格式示例，必须根据当前窗口尺寸、DPI和实际滚动位置填写。只在同一批次中列出当前可见的目标；切换滚动位置后重新准备对应批次。窗口标题必须与实际原生标题完全一致，包括语言切换后的文案。
+
+```pwsh
+uv run --python 3.13 --with pillow --with numpy python crates/asset/tools/native_cursor_probe.py --title "Widget Gallery" --targets target/animation/kamuri80/targets.json --foreground --output target/animation/kamuri80/native
+```
+
+`--foreground`临时置前并聚焦目标窗口；成功、失败或中断退出时恢复原有置顶状态、先前前台窗口及鼠标位置。不加此参数时须自行保证窗口未被遮挡且能够播放动画。工具在目标位置小幅移动真实鼠标以恢复Mouse输入身份，然后按每项独立时序采样两个循环。
+
+每项结果位于`<output>/<序号>-<语义>/`，包含`native.json`、`native.apng`和`native-contact.png`动作条。JSON保留真实`elapsed`采样时间、尺寸、Hotspot、屏幕位置、可见状态、位图SHA256、`semantic`和`matches_source_frame`；APNG按实际采样间隔播放。位图匹配沿用原算法，接受直接BGRA和两种常见预乘取整结果。
+
+仅当全部采样可见、尺寸/Hotspot正确、至少出现两个不同位图且每张均匹配对应Atlas帧时退出0。窗口缺失、坐标越界/被遮挡、捕获期间鼠标移位、位图不匹配或动画不推进均返回明确错误和非零退出码。已经取得的捕获文件保留供排查；打开APNG和动作条观察实际运动。完整验收应覆盖45种语义，至少包括普通指针、文本和等待；输出证明原生位图身份与动画推进，不证明点击精度或逐帧显示延迟。
+
+独立工具的输入、匹配、输出和异常清理回归可执行：
+
+```pwsh
+uv run --python 3.13 --with pillow --with numpy python -B -m unittest discover -s crates/asset/tools -p test_native_cursor_probe.py
+```
 
 Gallery可设置`GALLERY_CURSOR_BENCH_OUTPUT`为一个尚不存在的CSV路径，记录真实页状态、CPU更新区间、预览身份/帧、布局与实体数量，不主动驱动帧循环。配合现有`GALLERY_SPLASH_BENCH_OUTPUT`和`GALLERY_SPLASH_BENCH_IDLE=1`可记录呈现调度/GPU区间并观察离页后的实际睡眠。CSV输出目录须预先存在，启动时输出文件创建失败会交给Gallery错误处理。
 
-本次验证覆盖全部45种真实OS动画，每种两个循环，核对80px、固定热点和源帧身份；Gallery记录确认所有45种各自的全部帧都在推进，另含两个禁用对照。原生鼠标和BRP指针应分段操作，完成BRP后先release并确认inactive。运行时证据输出在`target/animation/kamuri80`，不将请求成功、静态图或仅Headless测试当作原生通过。
+可将Benchmark CSV与原生捕获分开核对，确认各语义预览的实际帧推进、页面与禁用对照状态。不将请求成功、静态图或仅Headless测试当作原生通过。
 
 ## 独立动作与时序
 
