@@ -1,3 +1,4 @@
+use crate::error::CanvasResult as Result;
 use bevy::math::DVec2;
 use bevy::prelude::*;
 mod append;
@@ -36,58 +37,103 @@ pub enum CanvasPathCommand {
 }
 
 impl CanvasPath {
-    pub fn validate(&self, transform: &Transform, paint: &crate::CanvasPaint) -> Result {
-        self.bounds(transform, paint).map(|_| ())
+    pub fn validate(
+        &self,
+        transform: &Transform,
+        paint: &crate::CanvasPaint,
+    ) -> crate::error::PublicResult {
+        self._validate(transform, paint).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasPath.validate",
+            ))
+        })
     }
 
-    pub fn bounds(&self, transform: &Transform, paint: &crate::CanvasPaint) -> Result<Rect> {
-        crate::model::validate_transform_and_paint(transform, paint)?;
-        let (min, max) = self.local_bounds()?;
-        let margin = paint.stroke.map_or(0.0, |stroke| {
-            // Miter limit four; a rotated square cap can extend sqrt(2) radii along either axis.
-            let factor = if stroke.join == crate::CanvasLineJoin::Miter {
-                4.0
-            } else if stroke.cap == crate::CanvasLineCap::Square {
-                std::f64::consts::SQRT_2
-            } else {
-                1.0
+    pub(crate) fn _validate(&self, transform: &Transform, paint: &crate::CanvasPaint) -> Result {
+        self._bounds(transform, paint).map(|_| ()).map_err(|error| {
+            error
+                .input(crate::CanvasInput::Geometry(crate::CanvasGeometry::Path(
+                    self.clone(),
+                )))
+                .input(crate::CanvasInput::Transform(*transform))
+                .input(crate::CanvasInput::Paint(*paint))
+        })
+    }
+
+    pub fn bounds(
+        &self,
+        transform: &Transform,
+        paint: &crate::CanvasPaint,
+    ) -> crate::error::PublicResult<Rect> {
+        self._bounds(transform, paint).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasPath.bounds",
+            ))
+        })
+    }
+
+    pub(crate) fn _bounds(
+        &self,
+        transform: &Transform,
+        paint: &crate::CanvasPaint,
+    ) -> Result<Rect> {
+        (|| -> Result<Rect> {
+            crate::model::validate_transform_and_paint(transform, paint)?;
+            let (min, max) = self.local_bounds()?;
+            let margin = paint.stroke.map_or(0.0, |stroke| {
+                // Miter limit four; a rotated square cap can extend sqrt(2) radii along either axis.
+                let factor = if stroke.join == crate::CanvasLineJoin::Miter {
+                    4.0
+                } else if stroke.cap == crate::CanvasLineCap::Square {
+                    std::f64::consts::SQRT_2
+                } else {
+                    1.0
+                };
+                f64::from(stroke.width) * 0.5 * factor
+            });
+            let min = min - DVec2::splat(margin);
+            let max = max + DVec2::splat(margin);
+            let local = [min, DVec2::new(max.x, min.y), max, DVec2::new(min.x, max.y)];
+            let x = (transform.rotation * Vec3::X * transform.scale.x)
+                .truncate()
+                .as_dvec2();
+            let y = (transform.rotation * Vec3::Y * transform.scale.y)
+                .truncate()
+                .as_dvec2();
+            let center = transform.translation.truncate().as_dvec2();
+            let points = local.map(|p| (center + x * p.x + y * p.y).as_vec2());
+            let bounds = Rect {
+                min: points
+                    .into_iter()
+                    .fold(Vec2::splat(f32::INFINITY), Vec2::min),
+                max: points
+                    .into_iter()
+                    .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max),
             };
-            f64::from(stroke.width) * 0.5 * factor
-        });
-        let min = min - DVec2::splat(margin);
-        let max = max + DVec2::splat(margin);
-        let local = [min, DVec2::new(max.x, min.y), max, DVec2::new(min.x, max.y)];
-        let x = (transform.rotation * Vec3::X * transform.scale.x)
-            .truncate()
-            .as_dvec2();
-        let y = (transform.rotation * Vec3::Y * transform.scale.y)
-            .truncate()
-            .as_dvec2();
-        let center = transform.translation.truncate().as_dvec2();
-        let points = local.map(|p| (center + x * p.x + y * p.y).as_vec2());
-        let bounds = Rect {
-            min: points
-                .into_iter()
-                .fold(Vec2::splat(f32::INFINITY), Vec2::min),
-            max: points
-                .into_iter()
-                .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max),
-        };
-        if !min.as_vec2().is_finite()
-            || !max.as_vec2().is_finite()
-            || !(max - min).as_vec2().is_finite()
-            || points.iter().any(|p| !p.is_finite())
-            || !bounds.size().is_finite()
-        {
-            return Err(BevyError::error("Canvas Path bounds overflow"));
-        }
-        Ok(bounds)
+            if !min.as_vec2().is_finite()
+                || !max.as_vec2().is_finite()
+                || !(max - min).as_vec2().is_finite()
+                || points.iter().any(|p| !p.is_finite())
+                || !bounds.size().is_finite()
+            {
+                return Err(crate::error::invalid(crate::CanvasIssue::PathBounds));
+            }
+            Ok(bounds)
+        })()
+        .map_err(|error| {
+            error
+                .input(crate::CanvasInput::Geometry(crate::CanvasGeometry::Path(
+                    self.clone(),
+                )))
+                .input(crate::CanvasInput::Transform(*transform))
+                .input(crate::CanvasInput::Paint(*paint))
+        })
     }
 
     pub(crate) fn local_bounds(&self) -> Result<(DVec2, DVec2)> {
         let mut min = DVec2::splat(f64::INFINITY);
         let mut max = DVec2::splat(f64::NEG_INFINITY);
-        for segment in self.segments()? {
+        for (segment_index, segment) in self.segments()?.into_iter().enumerate() {
             let points: &[DVec2] = match &segment {
                 Segment::Move(p) | Segment::Line(p) => std::slice::from_ref(p),
                 Segment::Quad(points) => points,
@@ -96,7 +142,14 @@ impl CanvasPath {
             };
             for point in points {
                 if !point.is_finite() {
-                    return Err(BevyError::error("Canvas Path derived geometry overflow"));
+                    return Err(
+                        crate::error::invalid(crate::CanvasIssue::PathDerivedGeometry).input(
+                            crate::CanvasInput::Index {
+                                field: "derived_segment",
+                                value: segment_index,
+                            },
+                        ),
+                    );
                 }
                 min = min.min(*point);
                 max = max.max(*point);
@@ -108,20 +161,26 @@ impl CanvasPath {
     pub(crate) fn segments(&self) -> Result<Vec<Segment>> {
         use CanvasPathCommand::*;
         if self.commands.is_empty() {
-            return Err(BevyError::error("Canvas Path requires MoveTo"));
+            return Err(crate::error::invalid(crate::CanvasIssue::EmptyPath));
         }
         let mut segments = Vec::new();
         let mut current = None;
         let mut start = DVec2::ZERO;
         let mut open = false;
-        let point = |p: Vec2| -> Result<DVec2> {
-            if p.is_finite() {
-                Ok(p.as_dvec2())
-            } else {
-                Err(BevyError::error("Canvas Path points must be finite"))
-            }
-        };
-        for command in &self.commands {
+        for (index, command) in self.commands.iter().enumerate() {
+            let failure = |issue| {
+                crate::error::invalid(issue).input(crate::CanvasInput::Command {
+                    index,
+                    value: *command,
+                })
+            };
+            let point = |p: Vec2| -> Result<DVec2> {
+                if p.is_finite() {
+                    Ok(p.as_dvec2())
+                } else {
+                    Err(failure(crate::CanvasIssue::PathPoint))
+                }
+            };
             if let MoveTo(p) = *command {
                 let p = point(p)?;
                 segments.push(Segment::Move(p));
@@ -130,8 +189,7 @@ impl CanvasPath {
                 open = true;
                 continue;
             }
-            let from =
-                current.ok_or_else(|| BevyError::error("Canvas Path must begin with MoveTo"))?;
+            let from = current.ok_or_else(|| failure(crate::CanvasIssue::PathStart))?;
             if !open && !matches!(command, Close) {
                 // SVG drawing after Close starts a fresh subpath at the closed subpath's start.
                 segments.push(Segment::Move(from));
@@ -167,9 +225,7 @@ impl CanvasPath {
                     to,
                 } => {
                     if !radii.is_finite() || radii.min_element() < 0.0 || !rotation.is_finite() {
-                        return Err(BevyError::error(
-                            "Canvas SVG arc requires finite nonnegative radii and finite rotation",
-                        ));
+                        return Err(failure(crate::CanvasIssue::ArcParameters));
                     }
                     let to = point(to)?;
                     arc(
@@ -180,12 +236,18 @@ impl CanvasPath {
                         f64::from(rotation),
                         large_arc,
                         sweep,
-                    )?;
+                    )
+                    .map_err(|error| {
+                        error.input(crate::CanvasInput::Command {
+                            index,
+                            value: *command,
+                        })
+                    })?;
                     to
                 }
                 Close => {
                     if !open {
-                        return Err(BevyError::error("Canvas Path has no open subpath to close"));
+                        return Err(failure(crate::CanvasIssue::PathClose));
                     }
                     segments.push(Segment::Close);
                     open = false;
@@ -262,7 +324,7 @@ fn arc(
             if index + 1 == count { to } else { sample(b) },
         ];
         if points.iter().any(|p| !p.is_finite()) {
-            return Err(BevyError::error("Canvas SVG arc overflow"));
+            return Err(crate::error::invalid(crate::CanvasIssue::ArcOverflow));
         }
         output.push(Segment::Cubic(points));
     }

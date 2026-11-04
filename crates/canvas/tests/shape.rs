@@ -90,7 +90,14 @@ fn incomplete_shape_and_foreign_identity_are_rejected_without_partial_writes() {
                 )
             })
             .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            error
+                .diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
+        );
         assert_eq!(
             world.get::<CanvasGeometry>(shape),
             Some(&CanvasGeometry::Rectangle(rectangle))

@@ -166,9 +166,14 @@ fn rejected_edits_report_errors_without_partial_model_writes() {
             ),
             _ => CanvasDocument::remove_path_anchor(&mut world, document, Entity::PLACEHOLDER, 0),
         });
-        assert_eq!(
-            result.unwrap_err().severity(),
-            bevy::ecs::error::Severity::Error
+        assert!(
+            result
+                .unwrap_err()
+                .diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
         );
         assert_eq!(read(&world, shape), original);
         assert_eq!(

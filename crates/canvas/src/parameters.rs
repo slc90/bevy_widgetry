@@ -1,3 +1,4 @@
+use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasEllipse, CanvasGeometry, CanvasPaint, CanvasRectangle};
 use bevy::{math::DVec2, prelude::*};
 
@@ -34,40 +35,43 @@ pub(crate) fn controls(
     shape: Entity,
     zoom: f32,
 ) -> Result<Vec<(ParameterHandle, Vec2)>> {
-    let Some(geometry) = Geometry::get(world, shape) else {
-        return Ok(Vec::new());
-    };
-    let transform = *world
-        .get::<Transform>(shape)
-        .ok_or_else(|| BevyError::error("Canvas parameter transform missing"))?;
-    let half = geometry.size() * 0.5;
-    let center = transform.translation.truncate();
-    let project = |p: Vec2| transform.transform_point(p.extend(0.0)).truncate();
-    let corners = [
-        -half,
-        Vec2::new(half.x, -half.y),
-        half,
-        Vec2::new(-half.x, half.y),
-    ]
-    .map(project);
-    let inset = |p: Vec2, d: f32, limit: f32| {
-        let delta = center - p;
-        p + delta.normalize_or_zero() * (d / zoom).min(delta.length() * limit)
-    };
-    let mut handles = crate::scale::controls(corners)
-        .map(|(h, p)| (ParameterHandle::Size(h), inset(p, 14.0, 0.35)))
-        .to_vec();
-    if let Geometry::Rectangle(rectangle) = geometry {
-        handles.push((
-            ParameterHandle::CornerRadius,
-            inset(
-                project(-half + Vec2::splat(rectangle.corner_radius)),
-                26.0,
-                0.65,
-            ),
-        ));
-    }
-    Ok(handles)
+    (|| -> Result<Vec<(ParameterHandle, Vec2)>> {
+        let Some(geometry) = Geometry::get(world, shape) else {
+            return Ok(Vec::new());
+        };
+        let transform = *world
+            .get::<Transform>(shape)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ParameterTransform))?;
+        let half = geometry.size() * 0.5;
+        let center = transform.translation.truncate();
+        let project = |p: Vec2| transform.transform_point(p.extend(0.0)).truncate();
+        let corners = [
+            -half,
+            Vec2::new(half.x, -half.y),
+            half,
+            Vec2::new(-half.x, half.y),
+        ]
+        .map(project);
+        let inset = |p: Vec2, d: f32, limit: f32| {
+            let delta = center - p;
+            p + delta.normalize_or_zero() * (d / zoom).min(delta.length() * limit)
+        };
+        let mut handles = crate::scale::controls(corners)
+            .map(|(h, p)| (ParameterHandle::Size(h), inset(p, 14.0, 0.35)))
+            .to_vec();
+        if let Geometry::Rectangle(rectangle) = geometry {
+            handles.push((
+                ParameterHandle::CornerRadius,
+                inset(
+                    project(-half + Vec2::splat(rectangle.corner_radius)),
+                    26.0,
+                    0.65,
+                ),
+            ));
+        }
+        Ok(handles)
+    })()
+    .map_err(|error| error.at("shape", shape))
 }
 
 pub(crate) fn hit(
@@ -76,24 +80,27 @@ pub(crate) fn hit(
     point: Vec2,
     zoom: f32,
 ) -> Result<Option<(ParameterHandle, f32)>> {
-    Ok(controls(world, shape, zoom)?
-        .into_iter()
-        .filter_map(|(h, p)| {
-            let distance = (point - p).length_squared() * zoom * zoom;
-            (distance <= 25.0).then_some((h, distance))
-        })
-        .min_by(|(_, a), (_, b)| a.total_cmp(b)))
+    (|| -> Result<Option<(ParameterHandle, f32)>> {
+        Ok(controls(world, shape, zoom)?
+            .into_iter()
+            .filter_map(|(h, p)| {
+                let distance = (point - p).length_squared() * zoom * zoom;
+                (distance <= 25.0).then_some((h, distance))
+            })
+            .min_by(|(_, a), (_, b)| a.total_cmp(b)))
+    })()
+    .map_err(|error| error.at("shape", shape))
 }
 
 pub(crate) fn decorate(mesh: Mesh, handles: &[(ParameterHandle, Vec2)], zoom: f32) -> Result<Mesh> {
     let mut positions = mesh
         .attribute(Mesh::ATTRIBUTE_POSITION)
         .and_then(|v| v.as_float3())
-        .ok_or_else(|| BevyError::error("Canvas outline positions missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::OutlinePositions))?
         .to_vec();
     let mut indices = mesh
         .indices()
-        .ok_or_else(|| BevyError::error("Canvas outline indices missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::OutlineIndices))?
         .iter()
         .map(|i| i as u32)
         .collect::<Vec<_>>();
@@ -136,19 +143,22 @@ impl Edit {
         point: Vec2,
         handle: ParameterHandle,
     ) -> Result<Self> {
-        let geometry = Geometry::get(world, shape)
-            .ok_or_else(|| BevyError::error("Canvas parameter geometry missing"))?;
-        let transform = *world
-            .get::<Transform>(shape)
-            .ok_or_else(|| BevyError::error("Canvas parameter transform missing"))?;
-        Ok(Self {
-            document,
-            shape,
-            geometry,
-            transform,
-            start: crate::scale::local_point(transform, point),
-            handle,
-        })
+        (|| -> Result<Self> {
+            let geometry = Geometry::get(world, shape)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::ParameterGeometry))?;
+            let transform = *world
+                .get::<Transform>(shape)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::ParameterTransform))?;
+            Ok(Self {
+                document,
+                shape,
+                geometry,
+                transform,
+                start: crate::scale::local_point(transform, point),
+                handle,
+            })
+        })()
+        .map_err(|error| error.at("document", document).at("shape", shape))
     }
     pub(crate) fn apply(self, world: &mut World, point: Vec2) -> Result {
         let delta = crate::scale::local_point(self.transform, point) - self.start;
@@ -199,9 +209,9 @@ impl Edit {
         }
         let paint = *world
             .get::<CanvasPaint>(self.shape)
-            .ok_or_else(|| BevyError::error("Canvas parameter paint missing"))?;
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ParameterPaint))?;
         match geometry {
-            Geometry::Rectangle(r) => CanvasDocument::update_rectangle(
+            Geometry::Rectangle(r) => CanvasDocument::_update_rectangle(
                 world,
                 self.document,
                 self.shape,
@@ -209,7 +219,7 @@ impl Edit {
                 transform,
                 paint,
             ),
-            Geometry::Ellipse(e) => CanvasDocument::update_ellipse(
+            Geometry::Ellipse(e) => CanvasDocument::_update_ellipse(
                 world,
                 self.document,
                 self.shape,

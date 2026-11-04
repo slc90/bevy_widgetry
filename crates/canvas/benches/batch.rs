@@ -56,7 +56,8 @@ fn fixture(count: usize) -> Result<Fixture> {
                 },
                 transform,
                 CanvasPaint::default(),
-            )?,
+            )
+            .map_err(|error| error.into_bevy_error())?,
             1 => CanvasDocument::create_ellipse(
                 app.world_mut(),
                 document,
@@ -65,7 +66,8 @@ fn fixture(count: usize) -> Result<Fixture> {
                 },
                 transform,
                 CanvasPaint::default(),
-            )?,
+            )
+            .map_err(|error| error.into_bevy_error())?,
             _ => CanvasDocument::create_path(
                 app.world_mut(),
                 document,
@@ -79,14 +81,17 @@ fn fixture(count: usize) -> Result<Fixture> {
                 },
                 transform,
                 CanvasPaint::default(),
-            )?,
+            )
+            .map_err(|error| error.into_bevy_error())?,
         };
         shapes.push(shape);
     }
     let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(40),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?.id();
     let other=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(300),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?.id();
-    CanvasView::set_selection_in_world(app.world_mut(), view, shapes.clone())?;
-    CanvasView::set_selection_in_world(app.world_mut(), other, [shapes[0]])?;
+    CanvasView::set_selection_in_world(app.world_mut(), view, shapes.clone())
+        .map_err(|error| error.into_bevy_error())?;
+    CanvasView::set_selection_in_world(app.world_mut(), other, [shapes[0]])
+        .map_err(|error| error.into_bevy_error())?;
     let pointer = pointer_ids()[1];
     app.world_mut().spawn(pointer);
     frame(&mut app)?;
@@ -172,9 +177,16 @@ fn main() -> Result {
                         ));
                     }
                 }
-                if CanvasView::selection(f.app.world(), f.view)?.len() != count
-                    || CanvasView::selection(f.app.world(), f.other)? != [f.shapes[0]]
-                    || CanvasDocument::shape_order(f.app.world_mut(), f.document)? != f.shapes
+                if CanvasView::selection(f.app.world(), f.view)
+                    .map_err(|error| error.into_bevy_error())?
+                    .len()
+                    != count
+                    || CanvasView::selection(f.app.world(), f.other)
+                        .map_err(|error| error.into_bevy_error())?
+                        != [f.shapes[0]]
+                    || CanvasDocument::shape_order(f.app.world_mut(), f.document)
+                        .map_err(|error| error.into_bevy_error())?
+                        != f.shapes
                     || f.app.world().resource::<Assets<Mesh>>().len() != 2 * count + 2
                 {
                     return Err(error(

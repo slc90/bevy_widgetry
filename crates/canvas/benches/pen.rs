@@ -62,7 +62,8 @@ fn fixture(count: usize) -> Result<Fixture> {
             }),
             ..default()
         }),
-    )?;
+    )
+    .map_err(|error| error.into_bevy_error())?;
     let center = app
         .world()
         .get::<UiGlobalTransform>(view)
@@ -146,10 +147,13 @@ fn main() -> Result {
                     },
                 );
                 frame(&mut f.app)?;
-                let draft = CanvasView::pen_draft(f.app.world(), f.view)?
+                let draft = CanvasView::pen_draft(f.app.world(), f.view)
+                    .map_err(|error| error.into_bevy_error())?
                     .ok_or_else(|| error("Pen benchmark draft missing"))?;
                 if draft.path.commands.len() != f.count
-                    || !CanvasDocument::shape_order(f.app.world_mut(), f.document)?.is_empty()
+                    || !CanvasDocument::shape_order(f.app.world_mut(), f.document)
+                        .map_err(|error| error.into_bevy_error())?
+                        .is_empty()
                     || f.app.world().resource::<Assets<Mesh>>().len() != 3
                 {
                     return Err(error("Pen samples must keep a private bounded draft"));

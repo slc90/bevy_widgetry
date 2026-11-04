@@ -61,6 +61,78 @@ fn positions(world: &World, entity: Entity) -> Vec<[f32; 3]> {
 }
 
 #[test]
+fn independent_shape_failures_are_all_reported_and_keep_origins_until_recovery() {
+    let (mut app, document, healthy, _) = fixture(1.0);
+    app.set_error_handler(ErrorCapture::handler());
+    let mut broken = Vec::new();
+    for _ in 0..2 {
+        let shape = CanvasDocument::create_rectangle(
+            app.world_mut(),
+            document,
+            CanvasRectangle {
+                size: Vec2::splat(4.0),
+                corner_radius: 0.0,
+            },
+            Transform::default(),
+            CanvasPaint::default(),
+        )
+        .unwrap();
+        app.world_mut()
+            .entity_mut(shape)
+            .insert(CanvasGeometry::Rectangle(CanvasRectangle {
+                size: Vec2::new(f32::NAN, 4.0),
+                corner_radius: 0.0,
+            }));
+        broken.push(shape);
+    }
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    let origins = |records: &[bevy_widgetry_test_utils::CapturedError]| {
+        records
+            .iter()
+            .flat_map(|r| r.managed().unwrap().diagnostics())
+            .map(|d| d.origin().id().to_string())
+            .collect::<std::collections::HashSet<_>>()
+    };
+    logs.run(|| errors.run(|| app.update()));
+    let first = origins(&errors.take_records());
+    assert_eq!(first.len(), 2);
+    logs.run(|| errors.run(|| app.update()));
+    assert_eq!(origins(&errors.take_records()), first);
+    assert!(app.world().get::<CanvasGeometry>(healthy).is_some());
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.phase() == Some(bevy_widgetry_test_utils::DiagnosticPhase::Source))
+            .count(),
+        2
+    );
+    for record in logs
+        .records()
+        .iter()
+        .filter(|record| record.phase() == Some(bevy_widgetry_test_utils::DiagnosticPhase::Source))
+    {
+        let reason = record.fields.get("error").unwrap();
+        assert!(reason.contains("document") && reason.contains(&document.to_string()));
+    }
+    app.world_mut()
+        .entity_mut(broken[0])
+        .insert(CanvasGeometry::Rectangle(CanvasRectangle {
+            size: Vec2::splat(4.0),
+            corner_radius: 0.0,
+        }));
+    logs.run(|| errors.run(|| app.update()));
+    assert_eq!(origins(&errors.take_records()).len(), 1);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.phase() == Some(bevy_widgetry_test_utils::DiagnosticPhase::Source))
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn empty_path_paints_stay_on_cpu_and_hide_without_replacing_shared_handles() {
     use CanvasPathCommand::*;
     use bevy::asset::RenderAssetUsages;
@@ -1343,4 +1415,61 @@ fn offscreen_failures_from_all_views_preserve_core_diagnostics_at_system_boundar
             .count(),
         2
     );
+}
+
+#[test]
+fn selected_invalid_ellipse_never_enters_unbounded_outline_tessellation() {
+    const CHILD: &str = "WIDGETRY_INVALID_ELLIPSE_REGRESSION";
+    if std::env::var_os(CHILD).is_some() {
+        for radii in [Vec2::ZERO, Vec2::splat(f32::NAN)] {
+            let (mut app, document, _, view) = fixture(1.0);
+            app.set_error_handler(ErrorCapture::handler());
+            let ellipse = CanvasDocument::create_ellipse(
+                app.world_mut(),
+                document,
+                CanvasEllipse {
+                    radii: Vec2::splat(10.0),
+                },
+                Transform::default(),
+                CanvasPaint {
+                    stroke: Some(CanvasStroke::default()),
+                    ..default()
+                },
+            )
+            .unwrap();
+            CanvasView::set_selection_in_world(app.world_mut(), view, [ellipse]).unwrap();
+            app.update();
+            app.world_mut()
+                .entity_mut(ellipse)
+                .insert(CanvasGeometry::Ellipse(CanvasEllipse { radii }));
+            let errors = ErrorCapture::default();
+            errors.run(|| app.update());
+            assert!(!errors.take_records().is_empty());
+        }
+        return;
+    }
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "selected_invalid_ellipse_never_enters_unbounded_outline_tessellation",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "invalid ellipse frame failed");
+            return;
+        }
+        if std::time::Instant::now() >= deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("invalid ellipse frame did not finish before the deadline");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }

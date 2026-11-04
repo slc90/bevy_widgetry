@@ -69,11 +69,14 @@ fn fixture(count: usize) -> Result<Fixture> {
             }),
             ..default()
         },
-    )?;
+    )
+    .map_err(|error| error.into_bevy_error())?;
     let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(40),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?.id();
     app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(300),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?;
-    CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape))?;
-    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::PathNodeEdit)?;
+    CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape))
+        .map_err(|error| error.into_bevy_error())?;
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::PathNodeEdit)
+        .map_err(|error| error.into_bevy_error())?;
     let pointer = pointer_ids()[1];
     app.world_mut().spawn(pointer);
     frame(&mut app)?;
@@ -150,8 +153,12 @@ fn main() -> Result {
                 if path.commands[0] != CanvasPathCommand::MoveTo(point)
                     || path.commands.len() != count
                     || f.app.world().resource::<Assets<Mesh>>().len() != 3
-                    || CanvasView::single_selection(f.app.world(), f.view)? != Some(f.shape)
-                    || CanvasDocument::shape_order(f.app.world_mut(), f.document)? != [f.shape]
+                    || CanvasView::single_selection(f.app.world(), f.view)
+                        .map_err(|error| error.into_bevy_error())?
+                        != Some(f.shape)
+                    || CanvasDocument::shape_order(f.app.world_mut(), f.document)
+                        .map_err(|error| error.into_bevy_error())?
+                        != [f.shape]
                 {
                     return Err(error(
                         "Node samples must update the anchor and keep bounded shared assets",
@@ -192,7 +199,9 @@ fn main() -> Result {
                     f.shape,
                     index,
                     segment,
-                )? {
+                )
+                .map_err(|error| error.into_bevy_error())?
+                {
                     return Err(error("Topology benchmark must perform a real conversion"));
                 }
                 frame(&mut f.app)?;

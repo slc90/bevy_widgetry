@@ -432,7 +432,13 @@ fn pen_business_apis_notify_after_commit_and_reject_invalid_views_or_modes() {
     let e = logs
         .run(|| CanvasView::finish_pen_in_world(app.world_mut(), a))
         .unwrap_err();
-    assert_eq!(e.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        e.diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
     let errors = ErrorCapture::default();
     CanvasView::set_pen_segment(
         &mut app.world_mut().commands(),

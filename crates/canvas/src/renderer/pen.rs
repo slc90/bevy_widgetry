@@ -1,3 +1,4 @@
+use crate::error::CanvasResult as Result;
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
     prelude::*,
@@ -70,17 +71,18 @@ pub(super) fn sync(
     layer: usize,
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
+    (|| -> Result<Option<Entity>> {
     let Some(data) = crate::pen::preview(world, view) else {
         if let Some(e) = current {
             world.despawn(e);
         }
         return Ok(None);
     };
-    let zoom = crate::CanvasView::zoom(world, view)?;
+    let zoom = crate::CanvasView::_zoom(world, view)?;
     if let Some(e) = current {
         let p = world
             .get::<Preview>(e)
-            .ok_or_else(|| BevyError::error("Canvas Pen preview missing"))?;
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenPreview))?;
         if p.data == data && p.zoom == zoom {
             return Ok(Some(e));
         }
@@ -90,7 +92,7 @@ pub(super) fn sync(
             *world
                 .resource_mut::<Assets<Mesh>>()
                 .get_mut(&handles[i])
-                .ok_or_else(|| BevyError::error("Canvas Pen preview mesh missing"))? = mesh;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenPreviewMesh))? = mesh;
             world.entity_mut(nodes[i]).insert(if visible {
                 Visibility::Inherited
             } else {
@@ -101,12 +103,12 @@ pub(super) fn sync(
             *world
                 .resource_mut::<Assets<ColorMaterial>>()
                 .get_mut(h)
-                .ok_or_else(|| BevyError::error("Canvas Pen preview material missing"))? =
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenPreviewMaterial))? =
                 ColorMaterial::from(color);
         }
         let mut p = world
             .get_mut::<Preview>(e)
-            .ok_or_else(|| BevyError::error("Canvas Pen preview missing"))?;
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenPreview))?;
         p.data = data;
         p.zoom = zoom;
         return Ok(Some(e));
@@ -147,7 +149,7 @@ pub(super) fn sync(
             let Some(parts) = world.get::<Parts>(e) else {
                 world.despawn(e);
                 release_assets(world, &meshes, &materials);
-                return Err(BevyError::error("Canvas Pen preview parts missing"));
+                return Err(crate::error::missing(crate::CanvasPart::PenPreviewParts));
             };
             let nodes = [parts.fill, parts.stroke, parts.handles];
             world.entity_mut(e).insert(Preview {
@@ -161,9 +163,10 @@ pub(super) fn sync(
         }
         Err(e) => {
             release_assets(world, &meshes, &materials);
-            Err(e.into_bevy_error())
+            Err(e.into_bevy_error().into())
         }
     }
+})().map_err(|error| error.at("view", view).at("content", content))
 }
 
 fn release(

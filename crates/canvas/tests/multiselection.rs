@@ -72,7 +72,14 @@ fn selection_api_canonicalizes_full_sets_notifies_after_commit_and_repairs_only_
             CanvasView::set_selection_in_world(app.world_mut(), a, [first, Entity::PLACEHOLDER])
         })
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        error
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
     assert_eq!(log.records().len(), 1);
     assert_eq!(
         CanvasView::selection(app.world(), a).unwrap(),

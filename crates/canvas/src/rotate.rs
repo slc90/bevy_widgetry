@@ -1,4 +1,5 @@
 use crate::CanvasDocument;
+use crate::error::CanvasResult as Result;
 use bevy::{math::DVec2, prelude::*};
 
 pub(crate) const OFFSET: f32 = 24.0;
@@ -17,12 +18,15 @@ pub(crate) fn control(points: [Vec2; 4], zoom: f32) -> Vec2 {
 }
 
 pub(crate) fn hit(world: &mut World, shape: Entity, point: Vec2, zoom: f32) -> Result<bool> {
-    Ok(
-        (control(crate::selection::frame(world, shape)?, zoom) - point).length_squared()
-            * zoom
-            * zoom
-            <= (HANDLE_SIZE * 0.5 + 2.0).powi(2),
-    )
+    (|| -> Result<bool> {
+        Ok(
+            (control(crate::selection::frame(world, shape)?, zoom) - point).length_squared()
+                * zoom
+                * zoom
+                <= (HANDLE_SIZE * 0.5 + 2.0).powi(2),
+        )
+    })()
+    .map_err(|error| error.at("shape", shape))
 }
 
 #[derive(Clone, Copy)]
@@ -42,23 +46,26 @@ impl Rotate {
         shape: Entity,
         point: Vec2,
     ) -> Result<Option<Self>> {
-        let bounds = crate::selection::local_bounds(world, shape)?;
-        let transform = *world
-            .get::<Transform>(shape)
-            .ok_or_else(|| BevyError::error("Canvas rotation transform missing"))?;
-        let anchor = (bounds.min.as_dvec2() + bounds.max.as_dvec2()) * 0.5;
-        let pivot = project(transform, anchor);
-        let Some(direction) = (point.as_dvec2() - pivot).try_normalize() else {
-            return Ok(None);
-        };
-        Ok(Some(Self {
-            document,
-            shape,
-            transform,
-            anchor,
-            pivot,
-            direction,
-        }))
+        (|| -> Result<Option<Self>> {
+            let bounds = crate::selection::local_bounds(world, shape)?;
+            let transform = *world
+                .get::<Transform>(shape)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::RotationTransform))?;
+            let anchor = (bounds.min.as_dvec2() + bounds.max.as_dvec2()) * 0.5;
+            let pivot = project(transform, anchor);
+            let Some(direction) = (point.as_dvec2() - pivot).try_normalize() else {
+                return Ok(None);
+            };
+            Ok(Some(Self {
+                document,
+                shape,
+                transform,
+                anchor,
+                pivot,
+                direction,
+            }))
+        })()
+        .map_err(|error| error.at("document", document).at("shape", shape))
     }
 
     pub(crate) fn apply(self, world: &mut World, point: Vec2, snap: bool) -> Result {
@@ -88,7 +95,7 @@ impl Rotate {
         let translation = self.pivot - center;
         transform.translation.x = translation.x as f32;
         transform.translation.y = translation.y as f32;
-        CanvasDocument::update_transform(world, self.document, self.shape, transform)
+        CanvasDocument::_update_transform(world, self.document, self.shape, transform)
     }
 }
 

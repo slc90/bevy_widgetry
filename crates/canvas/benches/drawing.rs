@@ -59,7 +59,8 @@ fn fixture(count: usize, mode: &str) -> Result<Fixture> {
                 },
                 transform,
                 CanvasPaint::default(),
-            )?
+            )
+            .map_err(|error| error.into_bevy_error())?
         } else {
             CanvasDocument::create_rectangle(
                 app.world_mut(),
@@ -74,7 +75,8 @@ fn fixture(count: usize, mode: &str) -> Result<Fixture> {
                 },
                 transform,
                 CanvasPaint::default(),
-            )?
+            )
+            .map_err(|error| error.into_bevy_error())?
         };
         if editing {
             selected = Some(shape);
@@ -95,10 +97,13 @@ fn fixture(count: usize, mode: &str) -> Result<Fixture> {
                 }),
                 ..default()
             }),
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
     } else {
-        CanvasView::set_selection_in_world(app.world_mut(), view, selected)?;
-        CanvasView::set_selection_in_world(app.world_mut(), other, selected)?;
+        CanvasView::set_selection_in_world(app.world_mut(), view, selected)
+            .map_err(|error| error.into_bevy_error())?;
+        CanvasView::set_selection_in_world(app.world_mut(), other, selected)
+            .map_err(|error| error.into_bevy_error())?;
         frame(&mut app)?;
     }
     let position = app

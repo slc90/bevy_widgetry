@@ -203,13 +203,15 @@ fn restore(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
                 && world.get::<ClosingWindow>(window.native).is_none()
         });
     let opened = if let Some(window) = existing {
-        CanvasView::set_document_in_world(world, window.view, Some(loaded.document)).map(|_| {
-            loaded.window = Some(window);
-            if let Some(mut view) = world.get_mut::<ExperimentView>(window.view) {
-                view.size = loaded.size;
-                view.available = Vec2::ZERO;
-            }
-        })
+        CanvasView::set_document_in_world(world, window.view, Some(loaded.document))
+            .map_err(|error| error.into_bevy_error())
+            .map(|_| {
+                loaded.window = Some(window);
+                if let Some(mut view) = world.get_mut::<ExperimentView>(window.view) {
+                    view.size = loaded.size;
+                    view.available = Vec2::ZERO;
+                }
+            })
     } else {
         open_window(world, &request.session, &mut loaded)
     };
@@ -441,8 +443,10 @@ fn fit_views(world: &mut World) -> Result {
     for (view, available, size, previous) in changed {
         if available != previous && available.min_element() > 0.0 {
             let zoom = (available / size.as_vec2()).min_element().clamp(0.1, 10.0);
-            CanvasView::set_zoom_in_world(world, view, zoom)?;
-            CanvasView::set_center_in_world(world, view, size.as_vec2() * 0.5)?;
+            CanvasView::set_zoom_in_world(world, view, zoom)
+                .map_err(|error| error.into_bevy_error())?;
+            CanvasView::set_center_in_world(world, view, size.as_vec2() * 0.5)
+                .map_err(|error| error.into_bevy_error())?;
             if let Some(mut state) = world.get_mut::<ExperimentView>(view) {
                 state.available = available;
             }

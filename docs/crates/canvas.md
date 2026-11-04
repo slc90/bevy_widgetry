@@ -12,7 +12,7 @@ Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模
 
 `CanvasStroke { color, width, cap, join }` 的宽度为正有限的局部 Document 单位，沿边界居中；默认黑色、宽度1、Butt端点与Miter连接。`CanvasLineCap` 支持 Butt / Round / Square；`CanvasLineJoin` 支持 Miter / Round / Bevel，Miter limit固定为4，超过时回退Bevel。开放端点按所选cap延伸，闭合轮廓使用join；零长度线段/闭合子路径在Round/Square下形成圆/方点，只有MoveTo的子路径不描边。Round连接只补外侧圆扇形，不向短线段内侧添加圆盘。Transform 的 Scale 同时作用于填充和描边，颜色转换后的通道必须有限。矩形绘制预览与提交、已有矩形SVG/PNG导出均使用对应样式。
 
-`CanvasDocument::create_rectangle`、`update_rectangle` 和通用 `remove_shape` 提供同步 World CRUD；创建/更新先校验完整数据，更新和删除还校验完整的 Shape 身份及所属 Document，矩形更新核对几何类型。非法请求记录错误并返回 `Severity::Error`，保留原有数据。图形 Entity 即稳定身份，Document 私有顺序序列保存从底至顶的唯一顺序，不复制几何或变换。
+`CanvasDocument::create_rectangle`、`update_rectangle` 和通用 `remove_shape` 提供同步 World CRUD；创建/更新先校验完整数据，更新和删除还校验完整的 Shape 身份及所属 Document，矩形更新核对几何类型。非法请求返回共享诊断 `JobFailure`，保留原有数据。图形 Entity 即稳定身份，Document 私有顺序序列保存从底至顶的唯一顺序，不复制几何或变换。
 
 模型组件可通过原生 ECS 查询；公开业务写入统一通过 Document API，外部直接修改 Shape、Geometry、Paint 或 Transform 不属于保证一致性的业务接口。BRP 的直接字段修改仅用于调试。`CanvasRectangle::validate` 与 `bounds` 返回校验错误，供数据消费者处理；`corners` 对有效数据给出变换后的四角，`bounds` 计算包含居中描边和整体变换的最小 AABB，均不依赖 GPU。提交后现有消费者从同一几何组件同步显示、选择、手势和导出，不维护另一份可编辑矩形数据。
 
@@ -132,7 +132,7 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 
 `CanvasDocument::export_svg(world, document, path, region)` 同步生成并写入透明背景 SVG，合法导出直接覆盖目标文件。`region: Option<Rect>` 为 Document 坐标裁剪区域；None 自动合并所有已提交图形包含描边及整体旋转/非均匀Scale的边界（Path使用保守曲线/描边边界），负坐标保留为viewBox原点。显式区域必须有限且正宽高；图形与区域不相交时合法输出透明区域。
 
-SVG以rect（含rx/ry）、ellipse及原始path命令M/L/Q/C/A/Z保留参数几何、开放/闭合多子路径和弧标志，弧轴旋转由弧度转换为角度；二维matrix保留平移、旋转、镜像与非均匀Scale，保留无填充、填充/描边Alpha、NonZero/EvenOdd、Butt/Round/Square、Miter/Round/Bevel及miterlimit=4；图形按Document顺序输出，每个图形的填充及描边连续，与View相同；SVG根显式声明color-interpolation="linearRGB"，按Canvas的线性Alpha合成语义输出。部分SVG消费者（包括当前resvg）忽略该属性，其重叠半透明颜色可能不同；导出保留标准声明，不将这类渲染器结果当作Canvas颜色真值。输出不依赖任何View，不包含背景、选择控制点或未提交预览。`CanvasExportError` 区分EmptyDocument、InvalidDocument、InvalidGeometry、InvalidRegion、UnsupportedColor和Io；SVG仅接受转换后sRGB及Alpha通道均在[0,1]的颜色，模型允许但SVG无法等价表达的HDR/负通道/越界Alpha在写文件前拒绝，不预先钳制源色。Document为空时即使指定区域仍报EmptyDocument。快照严格检查Document顺序内各成员的身份、所属与必需组件，不自动修复或静默跳过非法成员。完整几何/区域校验先于打开目标文件，因此校验失败不创建或截断文件；I/O失败返回错误。宿主将该类型错误交给Bevy时应显式使用`BevyError::error`。
+SVG以rect（含rx/ry）、ellipse及原始path命令M/L/Q/C/A/Z保留参数几何、开放/闭合多子路径和弧标志，弧轴旋转由弧度转换为角度；二维matrix保留平移、旋转、镜像与非均匀Scale，保留无填充、填充/描边Alpha、NonZero/EvenOdd、Butt/Round/Square、Miter/Round/Bevel及miterlimit=4；图形按Document顺序输出，每个图形的填充及描边连续，与View相同；SVG根显式声明color-interpolation="linearRGB"，按Canvas的线性Alpha合成语义输出。部分SVG消费者（包括当前resvg）忽略该属性，其重叠半透明颜色可能不同；导出保留标准声明，不将这类渲染器结果当作Canvas颜色真值。输出不依赖任何View，不包含背景、选择控制点或未提交预览。`CanvasExportError` 区分EmptyDocument、InvalidDocument、InvalidGeometry、Model、InvalidRegion、UnsupportedColor和Io，Model 保留原始模型诊断；SVG仅接受转换后sRGB及Alpha通道均在[0,1]的颜色，模型允许但SVG无法等价表达的HDR/负通道/越界Alpha在写文件前拒绝，不预先钳制源色。Document为空时即使指定区域仍报EmptyDocument。快照严格检查Document顺序内各成员的身份、所属与必需组件，不自动修复或静默跳过非法成员。完整几何/区域校验先于打开目标文件，因此校验失败不创建或截断文件；I/O失败返回错误。宿主将该类型错误交给Bevy时应显式使用`BevyError::error`。
 
 ## PNG 离屏导出
 
@@ -210,3 +210,9 @@ Delete在精确有效CanvasView根焦点及有焦点Window下删除该View全部
 Canvas Renderer 传播 Core Offscreen 原始诊断并补充 View Owner，多 View 的失败在同次 ECS 边界全部保留。PNG 导出中的 Offscreen 分配/释放失败以 `CanvasExportError::Offscreen` 保留；Scene 构造失败保留 `SceneFailure`。`Cleanup` 同时保存原失败与 Offscreen 清理诊断，异步完成事件在清理结束后给出两者，后到的编码结果不会覆盖清理失败。终止该请求时按原 ID 记录实际处理。
 
 PNG 后台工作失败通过 CanvasExportError::Background 共享 JobFailure 报告，保留原IO/编码对象及已有Offscreen/Scene诊断。主失败和清理失败合并保留各自origin；Bridge、任务终态和完成事件共享原诊断，完成资源收尾并终止导出后记录实际处理。
+
+## 模型与编辑诊断
+
+普通模型、几何、编辑与 View API 返回 `JobFailure`，原因链中的 `CanvasError` 提供可匹配的 `CanvasErrorKind`，并通过 `CanvasInput` 保留 document/shape/view、实际参数、原始 Path 命令及派生段位置。几何细分保留 lyon 的真实错误类型。独立请求各自建立诊断；输入、Commands 和 Renderer 执行边界显式转换为 `Severity::Error`，外来 Bevy 错误保留原生策略。
+
+Renderer 按 View 阶段与 shape 分别持有持续故障，同一业务输入持续失败复用原 origin；同帧多个失败完整上报，健康图形继续更新。正常隐藏与零尺寸等待不代表恢复；非法网格更新先检查共享资源，拒绝后保留健康 fill。合法空选择、取消、未完成 Pen draft 与原有通知顺序保持。SVG 与 PNG 的导出诊断见各自接口。

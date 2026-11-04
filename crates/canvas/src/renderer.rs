@@ -1,10 +1,11 @@
+use crate::error::CanvasFailureState;
+use crate::error::CanvasResult as RawResult;
 use crate::view::ViewState;
 use crate::{
     CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape, CanvasView,
 };
 use bevy::camera::{CameraProjection, ScalingMode, primitives::Aabb, visibility::RenderLayers};
 use bevy::prelude::*;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::offscreen::{
     OffscreenTarget, OffscreenUpdate, OffscreenViewport, WidgetryOffscreenPlugin,
 };
@@ -14,7 +15,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, WidgetryEcsError},
 };
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::widgetry_info;
 use std::collections::HashMap;
 mod nodes;
 mod outline;
@@ -25,16 +26,25 @@ pub struct CanvasPlugin;
 
 #[derive(Component, Default)]
 pub(crate) struct RenderFailure {
-    initialize: UnmigratedFailureState,
-    geometry: UnmigratedFailureState,
-    view: UnmigratedFailureState,
+    initialize: CanvasFailureState,
+    geometry: CanvasFailureState,
+    view: CanvasFailureState,
+    outline: CanvasFailureState,
+    preview: CanvasFailureState,
+    pen: CanvasFailureState,
+    nodes: CanvasFailureState,
+    shapes: HashMap<Entity, CanvasFailureState>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Stage {
     Initialize,
     Geometry,
     View,
+    Outline,
+    Preview,
+    Pen,
+    Nodes,
 }
 
 #[derive(Component)]
@@ -68,12 +78,12 @@ struct ShapeRender {
     stroke_material: Handle<ColorMaterial>,
 }
 
-fn initialize(world: &mut World) -> Result {
+fn initialize(world: &mut World) -> bevy::prelude::Result {
     let roots = world
         .query_filtered::<Entity, (With<CanvasView>, Without<Renderer>)>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut failure = None;
+    let mut failure = Vec::new();
     let mut diagnostics = DiagnosticBatch::default();
     for root in roots {
         let result = initialize_root(world, root);
@@ -84,30 +94,32 @@ fn initialize(world: &mut World) -> Result {
     finish_errors(world, failure, diagnostics)
 }
 
-fn observe(world: &mut World, root: Entity, stage: Stage, result: Result) -> Result {
-    if result
-        .as_ref()
-        .is_err_and(|error| error.is::<WidgetryEcsError>())
-    {
-        return result;
-    }
+fn observe<T>(
+    world: &mut World,
+    root: Entity,
+    stage: Stage,
+    result: RawResult<T>,
+) -> std::result::Result<T, BevyError> {
+    let frame = ErrorFrame::new("canvas.renderer")
+        .field("view", root)
+        .field("stage", format_args!("{stage:?}"));
     if let Some(mut failure) = world.get_mut::<RenderFailure>(root) {
         let state = match stage {
             Stage::Initialize => &mut failure.initialize,
             Stage::Geometry => &mut failure.geometry,
             Stage::View => &mut failure.view,
+            Stage::Outline => &mut failure.outline,
+            Stage::Preview => &mut failure.preview,
+            Stage::Pen => &mut failure.pen,
+            Stage::Nodes => &mut failure.nodes,
         };
-        state.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "Canvas 渲染失败"),
-            || widgetry_info!(?root, "Canvas 渲染恢复正常"),
-        )
+        state.observe(result.map_err(|error| error.at("view", root)), frame)
     } else {
-        result
+        result.map_err(|error| error.into_bevy_error(frame))
     }
 }
 
-fn initialize_root(world: &mut World, root: Entity) -> Result {
+fn initialize_root(world: &mut World, root: Entity) -> RawResult {
     let target = OffscreenTarget::allocate(world, root).map_err(|error| {
         error
             .with_context(ErrorFrame::new("canvas.allocate").field("root", root))
@@ -140,19 +152,23 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
             if let Err(cleanup) = target.release(world) {
                 world
                     .commands()
-                    .queue(move |_: &mut World| -> Result { Err(cleanup.into_bevy_error()) });
+                    .queue(move |_: &mut World| -> bevy::prelude::Result {
+                        Err(cleanup.into_bevy_error())
+                    });
             }
-            return Err(error.into_bevy_error());
+            return Err(error.into_bevy_error().into());
         }
     };
     let Some(parts) = world.get::<SceneParts>(scene) else {
         if let Err(cleanup) = target.release(world) {
             world
                 .commands()
-                .queue(move |_: &mut World| -> Result { Err(cleanup.into_bevy_error()) });
+                .queue(move |_: &mut World| -> bevy::prelude::Result {
+                    Err(cleanup.into_bevy_error())
+                });
         }
         world.despawn(scene);
-        return Err(BevyError::error("Canvas scene parts missing"));
+        return Err(crate::error::missing(crate::CanvasPart::SceneParts));
     };
     let (camera, content) = (parts.camera, parts.content);
     let viewport = target.bind(world, root, camera, scene).map_err(|error| {
@@ -176,42 +192,45 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
     Ok(())
 }
 
-fn render(world: &mut World) -> Result {
+fn render(world: &mut World) -> bevy::prelude::Result {
     let roots = world
         .query_filtered::<Entity, With<Renderer>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut failure = None;
+    let mut failure = Vec::new();
     let mut diagnostics = DiagnosticBatch::default();
     for root in roots {
         let result = render_root(world, root);
-        if let Err(error) = observe(world, root, Stage::View, result) {
+        if matches!(result, Ok(None)) {
+            continue;
+        }
+        if let Err(error) = observe(world, root, Stage::View, result.map(|_| ())) {
             collect_error(error, &mut failure, &mut diagnostics);
         }
     }
     finish_errors(world, failure, diagnostics)
 }
 
-fn render_root(world: &mut World, root: Entity) -> Result {
+fn render_root(world: &mut World, root: Entity) -> RawResult<Option<()>> {
     let Some(size) = OffscreenViewport::update(world, root).map_err(|error| {
         error
             .with_context(ErrorFrame::new("canvas.update").field("root", root))
             .into_bevy_error()
     })?
     else {
-        return Ok(());
+        return Ok(None);
     };
     let renderer = world
         .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?;
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?;
     let camera = renderer.camera;
     let node = world
         .get::<ComputedNode>(root)
-        .ok_or_else(|| BevyError::error("Canvas layout missing"))?;
-    let logical_size = node.size() * node.inverse_scale_factor() / CanvasView::zoom(world, root)?;
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Layout))?;
+    let logical_size = node.size() * node.inverse_scale_factor() / CanvasView::_zoom(world, root)?;
     let mut projection = world
         .get_mut::<Projection>(camera)
-        .ok_or_else(|| BevyError::error("Canvas projection missing"))?;
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Projection))?;
     if let Projection::Orthographic(projection) = &mut *projection {
         let mode = ScalingMode::Fixed {
             width: logical_size.x,
@@ -227,18 +246,18 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     let clip_from_view = projection.get_clip_from_view();
     world
         .get_mut::<Camera>(camera)
-        .ok_or_else(|| BevyError::error("Canvas camera missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Camera))?
         .computed
         .clip_from_view = clip_from_view;
-    Ok(())
+    Ok(Some(()))
 }
 
-fn prepare(world: &mut World) -> Result {
+fn prepare(world: &mut World) -> bevy::prelude::Result {
     let roots = world
         .query_filtered::<Entity, With<Renderer>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut failure = None;
+    let mut failure = Vec::new();
     let mut diagnostics = DiagnosticBatch::default();
     for root in roots {
         if world.get::<Renderer>(root).is_none() {
@@ -258,16 +277,16 @@ fn prepare(world: &mut World) -> Result {
     finish_errors(world, failure, diagnostics)
 }
 
-fn prepare_root(world: &mut World, root: Entity) -> Result {
+fn prepare_root(world: &mut World, root: Entity) -> RawResult {
     if crate::selection::repair(world, root)? {
         world.flush();
         if world.get::<Renderer>(root).is_none() {
             return Ok(());
         }
     }
-    let document = CanvasView::document(world, root)?;
+    let document = CanvasView::_document(world, root)?;
     if document.is_some_and(|document| world.get::<CanvasDocument>(document).is_none()) {
-        CanvasView::set_document_in_world(world, root, None)?;
+        CanvasView::_set_document_in_world(world, root, None)?;
         world.flush();
         if world.get::<Renderer>(root).is_none() {
             return Ok(());
@@ -275,42 +294,42 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
     }
     let renderer = world
         .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?;
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?;
     let (content, layer) = (renderer.content, renderer.layer);
     let camera = renderer.camera;
-    let center = CanvasView::center(world, root)?;
+    let center = CanvasView::_center(world, root)?;
     let mut transform = world
         .get_mut::<Transform>(camera)
-        .ok_or_else(|| BevyError::error("Canvas camera transform missing"))?;
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::CameraTransform))?;
     let translation = Vec3::new(center.x, -center.y, transform.translation.z);
     if transform.translation != translation {
         transform.translation = translation;
     }
-    let document = CanvasView::document(world, root)?;
+    let document = CanvasView::_document(world, root)?;
     let shapes = if let Some(document) =
         document.filter(|document| world.get::<CanvasDocument>(*document).is_some())
     {
-        CanvasDocument::shape_order(world, document)?
+        CanvasDocument::_shape_order(world, document)?
             .into_iter()
             .map(|entity| {
                 let geometry = world
                     .get::<CanvasGeometry>(entity)
-                    .ok_or_else(|| BevyError::error("Canvas geometry missing"))?;
+                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::Geometry))?;
                 let transform = world
                     .get::<Transform>(entity)
-                    .ok_or_else(|| BevyError::error("Canvas transform missing"))?;
+                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::Transform))?;
                 let paint = world
                     .get::<CanvasPaint>(entity)
-                    .ok_or_else(|| BevyError::error("Canvas paint missing"))?;
+                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
                 Ok((entity, geometry.clone(), *transform, *paint))
             })
-            .collect::<Result<Vec<_>>>()?
+            .collect::<RawResult<Vec<_>>>()?
     } else {
         Vec::new()
     };
     let stale = world
         .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
         .proxies
         .iter()
         .filter(|(shape, _)| !shapes.iter().any(|(entity, ..)| entity == *shape))
@@ -320,80 +339,147 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
         world.despawn(proxy);
         world
             .get_mut::<Renderer>(root)
-            .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
             .proxies
             .remove(&shape);
     }
     let spacing = 100.0 / shapes.len().max(1) as f32;
+    observe(world, root, Stage::Geometry, Ok(()))?;
+    let active = shapes
+        .iter()
+        .map(|(shape, ..)| *shape)
+        .collect::<std::collections::HashSet<_>>();
+    if let Some(mut failure) = world.get_mut::<RenderFailure>(root) {
+        failure.shapes.retain(|shape, _| active.contains(shape));
+    }
+    let mut failure = Vec::new();
+    let mut diagnostics = DiagnosticBatch::default();
     for (index, (shape, geometry, transform, paint)) in shapes.into_iter().enumerate() {
-        geometry.validate(&transform, &paint)?;
-        let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint)?;
-        let proxy = world
-            .get::<Renderer>(root)
-            .and_then(|renderer| renderer.proxies.get(&shape))
-            .copied();
-        let proxy = if let Some(proxy) = proxy {
-            proxy
+        let result = prepare_shape(
+            world, root, content, layer, index, spacing, shape, geometry, transform, paint,
+        )
+        .map_err(|error| {
+            let error = error.at("view", root).at("shape", shape);
+            match document {
+                Some(document) => error.at("document", document),
+                None => error,
+            }
+        });
+        let frame = ErrorFrame::new("canvas.renderer.shape")
+            .field("view", root)
+            .field("shape", shape);
+        let result = if let Some(mut states) = world.get_mut::<RenderFailure>(root) {
+            states
+                .shapes
+                .entry(shape)
+                .or_default()
+                .observe(result, frame)
         } else {
-            let proxy = create_proxy(world, content, layer, shape, paint, &handles)?;
-            world
-                .get_mut::<Renderer>(root)
-                .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
-                .proxies
-                .insert(shape, proxy);
-            proxy
+            result.map_err(|error| error.into_bevy_error(frame))
         };
-        let mut projected = transform;
-        projected.translation.z = index as f32 * spacing;
-        update_proxy(world, proxy, projected, paint, &handles)?;
-        let stroke = world
-            .get::<ProxyParts>(proxy)
-            .ok_or_else(|| BevyError::error("Canvas proxy parts missing"))?
-            .stroke;
-        world
-            .get_mut::<Transform>(stroke)
-            .ok_or_else(|| BevyError::error("Canvas stroke transform missing"))?
-            .set_if_neq(Transform::from_xyz(0.0, 0.0, spacing * 0.5));
+        if let Err(error) = result {
+            collect_error(error, &mut failure, &mut diagnostics);
+        }
+    }
+
+    let current = world
+        .get::<Renderer>(root)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
+        .outline;
+    let result = outline::sync(world, root, content, layer, current);
+    match observe(world, root, Stage::Outline, result) {
+        Ok(value) => {
+            if let Some(mut renderer) = world.get_mut::<Renderer>(root) {
+                renderer.outline = value;
+            }
+        }
+        Err(error) => collect_error(error, &mut failure, &mut diagnostics),
     }
     let current = world
         .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
-        .outline;
-    let outline = outline::sync(world, root, content, layer, current)?;
-    world
-        .get_mut::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
-        .outline = outline;
-    let current = world
-        .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
         .preview;
-    let preview = preview::sync(world, root, content, layer, current)?;
-    world
-        .get_mut::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
-        .preview = preview;
+    let result = preview::sync(world, root, content, layer, current);
+    match observe(world, root, Stage::Preview, result) {
+        Ok(value) => {
+            if let Some(mut renderer) = world.get_mut::<Renderer>(root) {
+                renderer.preview = value;
+            }
+        }
+        Err(error) => collect_error(error, &mut failure, &mut diagnostics),
+    }
     let current = world
         .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
         .pen;
-    let pen = pen::sync(world, root, content, layer, current)?;
-    world
-        .get_mut::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
-        .pen = pen;
+    let result = pen::sync(world, root, content, layer, current);
+    match observe(world, root, Stage::Pen, result) {
+        Ok(value) => {
+            if let Some(mut renderer) = world.get_mut::<Renderer>(root) {
+                renderer.pen = value;
+            }
+        }
+        Err(error) => collect_error(error, &mut failure, &mut diagnostics),
+    }
     let current = world
         .get::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
         .nodes;
-    let nodes = nodes::sync(world, root, content, layer, current)?;
-    world
-        .get_mut::<Renderer>(root)
-        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
-        .nodes = nodes;
-    Ok(())
+    let result = nodes::sync(world, root, content, layer, current);
+    match observe(world, root, Stage::Nodes, result) {
+        Ok(value) => {
+            if let Some(mut renderer) = world.get_mut::<Renderer>(root) {
+                renderer.nodes = value;
+            }
+        }
+        Err(error) => collect_error(error, &mut failure, &mut diagnostics),
+    }
+    finish_errors(world, failure, diagnostics).map_err(crate::error::CanvasFault::from)
 }
 
+fn prepare_shape(
+    world: &mut World,
+    root: Entity,
+    content: Entity,
+    layer: usize,
+    index: usize,
+    spacing: f32,
+    shape: Entity,
+    geometry: CanvasGeometry,
+    transform: Transform,
+    paint: CanvasPaint,
+) -> RawResult {
+    geometry._validate(&transform, &paint)?;
+    let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint)?;
+    let proxy = world
+        .get::<Renderer>(root)
+        .and_then(|renderer| renderer.proxies.get(&shape))
+        .copied();
+    let proxy = if let Some(proxy) = proxy {
+        proxy
+    } else {
+        let proxy = create_proxy(world, content, layer, shape, paint, &handles)?;
+        world
+            .get_mut::<Renderer>(root)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
+            .proxies
+            .insert(shape, proxy);
+        proxy
+    };
+    let mut projected = transform;
+    projected.translation.z = index as f32 * spacing;
+    update_proxy(world, proxy, projected, paint, &handles)?;
+    let stroke = world
+        .get::<ProxyParts>(proxy)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyParts))?
+        .stroke;
+    world
+        .get_mut::<Transform>(stroke)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::StrokeTransform))?
+        .set_if_neq(Transform::from_xyz(0.0, 0.0, spacing * 0.5));
+
+    Ok(())
+}
 fn create_proxy(
     world: &mut World,
     content: Entity,
@@ -401,7 +487,7 @@ fn create_proxy(
     shape: Entity,
     paint: CanvasPaint,
     handles: &crate::mesh_cache::ShapeMeshes,
-) -> Result<Entity> {
+) -> RawResult<Entity> {
     let assets = ShapeRender {
         shape,
         fill_material: world
@@ -449,7 +535,7 @@ fn create_proxy(
             ) {
                 let parts = world
                     .get::<ProxyParts>(proxy)
-                    .ok_or_else(|| BevyError::error("Canvas proxy parts missing"))?;
+                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyParts))?;
                 let parts = [parts.fill, parts.stroke];
                 // A distant subpath can round the shared AABB away from a nearby visible contour.
                 // Path meshes rely on GPU clipping within the dedicated View render layer.
@@ -464,7 +550,7 @@ fn create_proxy(
         }
         Err(error) => {
             release_assets(world, &assets);
-            Err(error.into_bevy_error())
+            Err(error.into_bevy_error().into())
         }
     }
 }
@@ -475,14 +561,14 @@ fn update_proxy(
     transform: Transform,
     paint: CanvasPaint,
     handles: &crate::mesh_cache::ShapeMeshes,
-) -> Result {
+) -> RawResult {
     let old = world
         .get::<ShapeRender>(proxy)
-        .ok_or_else(|| BevyError::error("Canvas proxy assets missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyAssets))?
         .clone();
     let parts = world
         .get::<ProxyParts>(proxy)
-        .ok_or_else(|| BevyError::error("Canvas proxy parts missing"))?;
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyParts))?;
     let (fill, stroke) = (parts.fill, parts.stroke);
     for (entity, color, handle, bounds, region) in [
         (
@@ -504,7 +590,7 @@ fn update_proxy(
             let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
             let mut material = materials
                 .get_mut(handle)
-                .ok_or_else(|| BevyError::error("Canvas material missing"))?;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Material))?;
             if material.color != color.unwrap_or(Color::NONE) {
                 material.color = color.unwrap_or(Color::NONE);
             }
@@ -521,15 +607,15 @@ fn update_proxy(
     projected_transform.scale.z = 1.0;
     world
         .get_mut::<Transform>(proxy)
-        .ok_or_else(|| BevyError::error("Canvas proxy transform missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyTransform))?
         .set_if_neq(projected_transform);
     Ok(())
 }
 
-fn set_mesh_visibility(world: &mut World, entity: Entity, visible: bool) -> Result {
+fn set_mesh_visibility(world: &mut World, entity: Entity, visible: bool) -> RawResult {
     world
         .get_mut::<Visibility>(entity)
-        .ok_or_else(|| BevyError::error("Canvas mesh visibility missing"))?
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::MeshVisibility))?
         .set_if_neq(if visible {
             Visibility::Inherited
         } else {
@@ -621,36 +707,28 @@ impl Plugin for CanvasPlugin {
     }
 }
 
-fn collect_error(
-    error: BevyError,
-    native: &mut Option<BevyError>,
-    diagnostics: &mut DiagnosticBatch,
-) {
+fn collect_error(error: BevyError, native: &mut Vec<BevyError>, diagnostics: &mut DiagnosticBatch) {
     if error.severity() == bevy::ecs::error::Severity::Error
         && let Some(managed) = error.downcast_ref::<WidgetryEcsError>()
     {
         for diagnostic in managed.shared_diagnostics() {
             diagnostics.push_shared(diagnostic);
         }
-    } else if native.is_none() {
-        *native = Some(error);
+    } else {
+        native.push(error);
     }
 }
 
 fn finish_errors(
     world: &mut World,
-    native: Option<BevyError>,
+    mut native: Vec<BevyError>,
     diagnostics: DiagnosticBatch,
-) -> Result {
-    let managed = diagnostics.into_bevy_error();
-    if let Some(native) = native {
-        if let Some(managed) = managed {
-            world
-                .commands()
-                .queue(move |_: &mut World| -> Result { Err(managed) });
-        }
-        Err(native)
-    } else {
-        managed.map_or(Ok(()), Err)
+) -> bevy::prelude::Result {
+    let error = diagnostics.into_bevy_error().or_else(|| native.pop());
+    for error in native {
+        world
+            .commands()
+            .queue(move |_: &mut World| -> bevy::prelude::Result { Err(error) });
     }
+    error.map_or(Ok(()), Err)
 }

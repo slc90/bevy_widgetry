@@ -1,3 +1,4 @@
+use crate::error::CanvasResult as Result;
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
     prelude::*,
@@ -31,6 +32,7 @@ pub(super) fn sync(
     layer: usize,
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
+    (|| -> Result<Option<Entity>> {
     let Some((kind, start, end, paint)) = crate::input::preview(world, view) else {
         if let Some(entity) = current {
             world.despawn(entity);
@@ -40,7 +42,7 @@ pub(super) fn sync(
     let size = (end - start).abs();
     let center = start + (end - start) * 0.5;
     if !size.is_finite() || !center.is_finite() {
-        return Err(BevyError::error("Canvas preview bounds overflow"));
+        return Err(crate::error::invalid(crate::CanvasIssue::PreviewBounds));
     }
     // Degenerate ellipse radii have no normal for the centered stroke tessellator.
     // Wait for a committable extent rather than passing zero radii into geometry generation.
@@ -58,7 +60,7 @@ pub(super) fn sync(
     if let Some(entity) = current {
         let assets = world
             .get::<Preview>(entity)
-            .ok_or_else(|| BevyError::error("Canvas preview assets missing"))?;
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewAssets))?;
         let (fill_material, stroke_material) =
             (assets.fill_material.clone(), assets.stroke_material.clone());
         let paint_changed = assets.paint != paint;
@@ -72,7 +74,7 @@ pub(super) fn sync(
             let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&kind.geometry(size), paint)?;
             let parts = world
                 .get::<Parts>(entity)
-                .ok_or_else(|| BevyError::error("Canvas preview parts missing"))?;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewParts))?;
             let visibility = [
                 (parts.fill, fill_mesh.count_vertices() > 0),
                 (parts.stroke, stroke_mesh.count_vertices() > 0),
@@ -80,16 +82,17 @@ pub(super) fn sync(
             let mut meshes = world.resource_mut::<Assets<Mesh>>();
             *meshes
                 .get_mut(&fill)
-                .ok_or_else(|| BevyError::error("Canvas preview fill missing"))? = fill_mesh;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewFill))? = fill_mesh;
             *meshes
                 .get_mut(&stroke)
-                .ok_or_else(|| BevyError::error("Canvas preview stroke missing"))? = stroke_mesh;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewStroke))? =
+                stroke_mesh;
             for (part, visible) in visibility {
                 super::set_mesh_visibility(world, part, visible)?;
             }
             let mut assets = world
                 .get_mut::<Preview>(entity)
-                .ok_or_else(|| BevyError::error("Canvas preview assets missing"))?;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewAssets))?;
             assets.size = size;
             assets.kind = kind;
         }
@@ -104,17 +107,17 @@ pub(super) fn sync(
                 let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
                 let mut material = materials
                     .get_mut(material)
-                    .ok_or_else(|| BevyError::error("Canvas preview material missing"))?;
+                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewMaterial))?;
                 *material = ColorMaterial::from(color);
             }
             world
                 .get_mut::<Preview>(entity)
-                .ok_or_else(|| BevyError::error("Canvas preview assets missing"))?
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewAssets))?
                 .paint = paint;
         }
         world
             .get_mut::<Transform>(entity)
-            .ok_or_else(|| BevyError::error("Canvas preview transform missing"))?
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewTransform))?
             .set_if_neq(transform);
         if kind_changed {
             world.entity_mut(entity).insert(Name::new(name));
@@ -184,9 +187,10 @@ pub(super) fn sync(
             let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
             materials.remove(assets.fill_material.id());
             materials.remove(assets.stroke_material.id());
-            Err(error.into_bevy_error())
+            Err(error.into_bevy_error().into())
         }
     }
+})().map_err(|error| error.at("view", view).at("content", content))
 }
 
 fn release(

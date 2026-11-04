@@ -108,7 +108,8 @@ fn fixture() -> Result<Fixture> {
                 },
                 transform,
                 paint,
-            )?,
+            )
+            .map_err(|error| error.into_bevy_error())?,
             1 => CanvasDocument::create_ellipse(
                 app.world_mut(),
                 document,
@@ -117,7 +118,8 @@ fn fixture() -> Result<Fixture> {
                 },
                 transform,
                 paint,
-            )?,
+            )
+            .map_err(|error| error.into_bevy_error())?,
             _ => {
                 use CanvasPathCommand::*;
                 CanvasDocument::create_path(
@@ -148,7 +150,8 @@ fn fixture() -> Result<Fixture> {
                     },
                     transform,
                     paint,
-                )?
+                )
+                .map_err(|error| error.into_bevy_error())?
             }
         };
     }

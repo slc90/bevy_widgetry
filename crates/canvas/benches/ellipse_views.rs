@@ -38,22 +38,25 @@ fn fixture(count: usize, contour: &str) -> Result<Fixture> {
     };
     let mut shape = None;
     for index in 0..count {
-        shape = Some(CanvasDocument::create_ellipse(
-            app.world_mut(),
-            document,
-            CanvasEllipse { radii },
-            Transform::from_xyz((index % 20) as f32 * 50.0, (index / 20) as f32 * 30.0, 0.0)
-                .with_scale(scale),
-            CanvasPaint {
-                fill: Some(Color::WHITE),
-                stroke: Some(CanvasStroke {
-                    color: Color::BLACK,
-                    width: stroke_width,
+        shape = Some(
+            CanvasDocument::create_ellipse(
+                app.world_mut(),
+                document,
+                CanvasEllipse { radii },
+                Transform::from_xyz((index % 20) as f32 * 50.0, (index / 20) as f32 * 30.0, 0.0)
+                    .with_scale(scale),
+                CanvasPaint {
+                    fill: Some(Color::WHITE),
+                    stroke: Some(CanvasStroke {
+                        color: Color::BLACK,
+                        width: stroke_width,
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            },
-        )?);
+                },
+            )
+            .map_err(|error| error.into_bevy_error())?,
+        );
     }
     for _ in 0..2 {
         app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } template(move |_|Ok(UiTargetCamera(camera))) Node {width:px(350),height:px(250)} }).map_err(BevyError::error)?;
@@ -107,7 +110,8 @@ fn main() -> Result {
                                 }),
                                 ..Default::default()
                             },
-                        )?;
+                        )
+                        .map_err(|error| error.into_bevy_error())?;
                         frame(&mut fixture.app)?;
                         if fixture.app.world().resource::<Assets<Mesh>>().len() != fixture.count * 2
                         {

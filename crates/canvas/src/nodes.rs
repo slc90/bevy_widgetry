@@ -1,3 +1,4 @@
+use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasGeometry, CanvasPathCommand};
 use bevy::{math::DVec2, prelude::*};
 
@@ -103,22 +104,25 @@ pub(crate) fn overlay(world: &World, shape: Entity) -> Option<Overlay> {
 }
 
 pub(crate) fn hit(world: &World, shape: Entity, point: Vec2, zoom: f32) -> Result<Option<Point>> {
-    if world
-        .get::<Transform>(shape)
-        .is_none_or(|t| t.scale.x == 0.0 || t.scale.y == 0.0)
-    {
-        return Ok(None);
-    }
-    Ok(overlay(world, shape).and_then(|data| {
-        data.handles
-            .into_iter()
-            .filter_map(|(h, p)| {
-                let d = point.distance_squared(p) * zoom * zoom;
-                (d <= 36.0).then_some((h, d))
-            })
-            .min_by(|(_, a), (_, b)| a.total_cmp(b))
-            .map(|(h, _)| h)
-    }))
+    (|| -> Result<Option<Point>> {
+        if world
+            .get::<Transform>(shape)
+            .is_none_or(|t| t.scale.x == 0.0 || t.scale.y == 0.0)
+        {
+            return Ok(None);
+        }
+        Ok(overlay(world, shape).and_then(|data| {
+            data.handles
+                .into_iter()
+                .filter_map(|(h, p)| {
+                    let d = point.distance_squared(p) * zoom * zoom;
+                    (d <= 36.0).then_some((h, d))
+                })
+                .min_by(|(_, a), (_, b)| a.total_cmp(b))
+                .map(|(h, _)| h)
+        }))
+    })()
+    .map_err(|error| error.at("shape", shape))
 }
 
 pub(crate) fn mesh(data: &Overlay, zoom: f32) -> Mesh {
@@ -169,26 +173,29 @@ impl Edit {
         point: Point,
         at: Vec2,
     ) -> Result<Self> {
-        let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
-            return Err(BevyError::error("Canvas node Path missing"));
-        };
-        let origin = path
-            .commands
-            .get(point.command)
-            .and_then(|c| point.read(*c))
-            .ok_or_else(|| BevyError::error("Canvas node point missing"))?;
-        let transform = *world
-            .get::<Transform>(shape)
-            .ok_or_else(|| BevyError::error("Canvas node transform missing"))?;
-        Ok(Self {
-            document,
-            shape,
-            point,
-            commands: path.commands.len(),
-            transform,
-            start: crate::scale::local_point(transform, at),
-            origin,
-        })
+        (|| -> Result<Self> {
+            let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
+                return Err(crate::error::missing(crate::CanvasPart::NodePath));
+            };
+            let origin = path
+                .commands
+                .get(point.command)
+                .and_then(|c| point.read(*c))
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodePoint))?;
+            let transform = *world
+                .get::<Transform>(shape)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodeTransform))?;
+            Ok(Self {
+                document,
+                shape,
+                point,
+                commands: path.commands.len(),
+                transform,
+                start: crate::scale::local_point(transform, at),
+                origin,
+            })
+        })()
+        .map_err(|error| error.at("document", document).at("shape", shape))
     }
     pub(crate) fn valid(self, world: &World) -> bool {
         world.get::<Transform>(self.shape) == Some(&self.transform)
@@ -215,8 +222,8 @@ impl Edit {
         *p = point;
         let paint = *world
             .get::<crate::CanvasPaint>(self.shape)
-            .ok_or_else(|| BevyError::error("Canvas node paint missing"))?;
-        CanvasDocument::update_path(
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodePaint))?;
+        CanvasDocument::_update_path(
             world,
             self.document,
             self.shape,

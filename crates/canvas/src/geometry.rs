@@ -1,94 +1,105 @@
+use crate::error::CanvasResult as Result;
 use crate::{CanvasGeometry, CanvasPaint};
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
 pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(Mesh, Mesh)> {
-    let width = paint.stroke.map_or(0.0, |stroke| stroke.width);
-    match geometry {
-        CanvasGeometry::Rectangle(rectangle) => {
-            if rectangle.corner_radius > 0.0 {
-                return crate::path::meshes(&rounded_rectangle(*rectangle), paint);
+    (|| -> Result<(Mesh, Mesh)> {
+        let width = paint.stroke.map_or(0.0, |stroke| stroke.width);
+        match geometry {
+            CanvasGeometry::Rectangle(rectangle) => {
+                if rectangle.corner_radius > 0.0 {
+                    return crate::path::meshes(&rounded_rectangle(*rectangle), paint);
+                }
+                if paint
+                    .stroke
+                    .is_some_and(|s| s.join != crate::CanvasLineJoin::Miter)
+                {
+                    use crate::CanvasPathCommand::*;
+                    let half = rectangle.size * 0.5;
+                    crate::path::meshes(
+                        &crate::CanvasPath {
+                            commands: vec![
+                                MoveTo(-half),
+                                LineTo(Vec2::new(half.x, -half.y)),
+                                LineTo(half),
+                                LineTo(Vec2::new(-half.x, half.y)),
+                                Close,
+                            ],
+                        },
+                        paint,
+                    )
+                } else {
+                    Ok((fill(rectangle.size), stroke(rectangle.size, width)))
+                }
             }
-            if paint
-                .stroke
-                .is_some_and(|s| s.join != crate::CanvasLineJoin::Miter)
-            {
-                use crate::CanvasPathCommand::*;
-                let half = rectangle.size * 0.5;
-                crate::path::meshes(
-                    &crate::CanvasPath {
-                        commands: vec![
-                            MoveTo(-half),
-                            LineTo(Vec2::new(half.x, -half.y)),
-                            LineTo(half),
-                            LineTo(Vec2::new(-half.x, half.y)),
-                            Close,
-                        ],
-                    },
-                    paint,
-                )
-            } else {
-                Ok((fill(rectangle.size), stroke(rectangle.size, width)))
-            }
-        }
-        CanvasGeometry::Path(path) => crate::path::meshes(path, paint),
-        CanvasGeometry::Ellipse(ellipse) => {
-            use lyon::tessellation::*;
-            // Tessellate in a bounded coordinate range: lyon merges very small points and squares lengths.
-            // Keeping tolerance relative also makes uniform local/model scaling preserve the same geometry.
-            let tolerance = 1.0 / 4096.0;
-            let mut filled: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
-            FillTessellator::new()
-                .tessellate_path(
-                    &ellipse_path(Vec2::ONE),
-                    &FillOptions::default()
-                        .with_fill_rule(match paint.fill_rule {
-                            crate::CanvasFillRule::NonZero => FillRule::NonZero,
-                            crate::CanvasFillRule::EvenOdd => FillRule::EvenOdd,
-                        })
-                        .with_tolerance(tolerance),
-                    &mut BuffersBuilder::new(&mut filled, |vertex: FillVertex| {
-                        vertex.position().to_array()
-                    }),
-                )
-                .map_err(BevyError::error)?;
-            let mut stroked: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
-            let stroke_scale = ellipse.radii + Vec2::splat(width * 0.5);
-            if width > 0.0 {
-                let path = ellipse_stroke_path(ellipse.radii, width, stroke_scale, tolerance);
+            CanvasGeometry::Path(path) => crate::path::meshes(path, paint),
+            CanvasGeometry::Ellipse(ellipse) => {
+                use lyon::tessellation::*;
+                // Tessellate in a bounded coordinate range: lyon merges very small points and squares lengths.
+                // Keeping tolerance relative also makes uniform local/model scaling preserve the same geometry.
+                let tolerance = 1.0 / 4096.0;
+                let mut filled: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
                 FillTessellator::new()
                     .tessellate_path(
-                        &path,
+                        &ellipse_path(Vec2::ONE),
                         &FillOptions::default()
-                            .with_fill_rule(FillRule::NonZero)
+                            .with_fill_rule(match paint.fill_rule {
+                                crate::CanvasFillRule::NonZero => FillRule::NonZero,
+                                crate::CanvasFillRule::EvenOdd => FillRule::EvenOdd,
+                            })
                             .with_tolerance(tolerance),
-                        &mut BuffersBuilder::new(&mut stroked, |vertex: FillVertex| {
+                        &mut BuffersBuilder::new(&mut filled, |vertex: FillVertex| {
                             vertex.position().to_array()
                         }),
                     )
-                    .map_err(BevyError::error)?;
+                    .map_err(crate::error::CanvasFault::from)?;
+                let mut stroked: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
+                let stroke_scale = ellipse.radii + Vec2::splat(width * 0.5);
+                if width > 0.0 {
+                    let path = ellipse_stroke_path(ellipse.radii, width, stroke_scale, tolerance);
+                    FillTessellator::new()
+                        .tessellate_path(
+                            &path,
+                            &FillOptions::default()
+                                .with_fill_rule(FillRule::NonZero)
+                                .with_tolerance(tolerance),
+                            &mut BuffersBuilder::new(&mut stroked, |vertex: FillVertex| {
+                                vertex.position().to_array()
+                            }),
+                        )
+                        .map_err(crate::error::CanvasFault::from)?;
+                }
+                let convert = |vertices: Vec<[f32; 2]>, scale: Vec2| -> Result<Vec<[f32; 3]>> {
+                    vertices
+                        .into_iter()
+                        .map(|p| {
+                            let position = Vec2::from_array(p) * scale;
+                            if !position.is_finite() {
+                                return Err(crate::error::invalid(
+                                    crate::CanvasIssue::EllipseMeshOverflow,
+                                ));
+                            }
+                            Ok([position.x, position.y, 0.0])
+                        })
+                        .collect()
+                };
+                Ok((
+                    mesh(convert(filled.vertices, ellipse.radii)?, filled.indices),
+                    mesh(convert(stroked.vertices, stroke_scale)?, stroked.indices),
+                ))
             }
-            let convert = |vertices: Vec<[f32; 2]>, scale: Vec2| -> Result<Vec<[f32; 3]>> {
-                vertices
-                    .into_iter()
-                    .map(|p| {
-                        let position = Vec2::from_array(p) * scale;
-                        if !position.is_finite() {
-                            return Err(BevyError::error(
-                                "Canvas tessellated ellipse bounds overflow",
-                            ));
-                        }
-                        Ok([position.x, position.y, 0.0])
-                    })
-                    .collect()
-            };
-            Ok((
-                mesh(convert(filled.vertices, ellipse.radii)?, filled.indices),
-                mesh(convert(stroked.vertices, stroke_scale)?, stroked.indices),
-            ))
         }
-    }
+    })()
+    .map_err(|error| {
+        error
+            .input(crate::CanvasInput::Geometry(geometry.clone()))
+            .input(crate::CanvasInput::Paint(paint))
+            .context(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.geometry.meshes",
+            ))
+    })
 }
 
 fn rounded_rectangle(rectangle: crate::CanvasRectangle) -> crate::CanvasPath {

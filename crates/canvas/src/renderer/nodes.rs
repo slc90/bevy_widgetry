@@ -1,3 +1,4 @@
+use crate::error::CanvasResult as Result;
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
     prelude::*,
@@ -18,8 +19,9 @@ pub(super) fn sync(
     layer: usize,
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
-    let data = if crate::CanvasView::mode(world, view)? == crate::CanvasMode::PathNodeEdit {
-        crate::CanvasView::single_selection(world, view)?
+    (|| -> Result<Option<Entity>> {
+    let data = if crate::CanvasView::_mode(world, view)? == crate::CanvasMode::PathNodeEdit {
+        crate::CanvasView::_single_selection(world, view)?
             .and_then(|shape| crate::nodes::overlay(world, shape))
     } else {
         None
@@ -30,11 +32,11 @@ pub(super) fn sync(
         }
         return Ok(None);
     };
-    let zoom = crate::CanvasView::zoom(world, view)?;
+    let zoom = crate::CanvasView::_zoom(world, view)?;
     if let Some(e) = current {
         let previous = world
             .get::<Overlay>(e)
-            .ok_or_else(|| BevyError::error("Canvas node overlay missing"))?;
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodeOverlay))?;
         if previous.data == data && previous.zoom == zoom {
             return Ok(Some(e));
         }
@@ -42,11 +44,11 @@ pub(super) fn sync(
         *world
             .resource_mut::<Assets<Mesh>>()
             .get_mut(&handle)
-            .ok_or_else(|| BevyError::error("Canvas node overlay mesh missing"))? =
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodeOverlayMesh))? =
             crate::nodes::mesh(&data, zoom);
         let mut previous = world
             .get_mut::<Overlay>(e)
-            .ok_or_else(|| BevyError::error("Canvas node overlay missing"))?;
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodeOverlay))?;
         previous.data = data;
         previous.zoom = zoom;
         return Ok(Some(e));
@@ -80,9 +82,10 @@ pub(super) fn sync(
             world
                 .resource_mut::<Assets<ColorMaterial>>()
                 .remove(material.id());
-            Err(e.into_bevy_error())
+            Err(e.into_bevy_error().into())
         }
     }
+})().map_err(|error| error.at("view", view).at("content", content))
 }
 
 pub(super) fn install(app: &mut App) {

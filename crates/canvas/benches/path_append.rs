@@ -24,7 +24,8 @@ fn fixture(count: usize) -> Result<Fixture> {
         original.clone(),
         Transform::default(),
         CanvasPaint::default(),
-    )?;
+    )
+    .map_err(|error| error.into_bevy_error())?;
     Ok(Fixture {
         world,
         document,
@@ -47,7 +48,8 @@ fn main() -> Result {
                     f.document,
                     f.shape,
                     Rect::new(-20.0, -10.0, 20.0, 10.0),
-                )?;
+                )
+                .map_err(|error| error.into_bevy_error())?;
                 if !matches!(f.world.get::<CanvasGeometry>(f.shape), Some(CanvasGeometry::Path(path)) if path.commands.len() == count + 5)
                 {
                     return Err(error("contour append must preserve the original commands"));
@@ -61,6 +63,7 @@ fn main() -> Result {
                     Transform::default(),
                     CanvasPaint::default(),
                 )
+                .map_err(|error| error.into_bevy_error())
             },
             |f| Ok(f.world.entities().count_spawned()),
         )?;

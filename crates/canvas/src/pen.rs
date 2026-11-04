@@ -1,3 +1,4 @@
+use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasMode, CanvasPaint, CanvasPath, CanvasPathCommand, CanvasView};
 use bevy::{
     camera::NormalizedRenderTarget,
@@ -7,7 +8,6 @@ use bevy::{
     prelude::*,
     ui::UiSystems,
 };
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum CanvasPenSegment {
@@ -46,25 +46,27 @@ pub struct CanvasPenChanged {
 }
 
 fn state(world: &World, view: Entity) -> Result<&State> {
-    world.get::<State>(view).ok_or_else(|| {
-        widgetry_error!(?view, "Canvas Pen 目标无效");
-        BevyError::error("CanvasView missing")
-    })
+    world
+        .get::<State>(view)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::View))
+        .map_err(|error| error.at("view", view))
 }
 
 fn context(world: &World, view: Entity) -> Result<(Entity, CanvasPaint)> {
-    let Some(view_state) = world.get::<crate::view::ViewState>(view) else {
-        widgetry_error!(?view, "Canvas Pen 目标无效");
-        return Err(BevyError::error("CanvasView missing"));
-    };
-    if let CanvasMode::Pen(paint) = view_state.mode
-        && let Some(document) = view_state.document
-        && world.get::<CanvasDocument>(document).is_some()
-    {
-        return Ok((document, paint));
-    }
-    widgetry_error!(?view, "Canvas Pen 操作需要绑定有效 Document 的 Pen View");
-    Err(BevyError::error("Canvas Pen mode or document missing"))
+    (|| -> Result<(Entity, CanvasPaint)> {
+        let Some(view_state) = world.get::<crate::view::ViewState>(view) else {
+            return Err(crate::error::missing(crate::CanvasPart::View));
+        };
+        if let CanvasMode::Pen(paint) = view_state.mode
+            && let Some(document) = view_state.document
+            && world.get::<CanvasDocument>(document).is_some()
+        {
+            return Ok((document, paint));
+        }
+
+        Err(crate::error::invalid(crate::CanvasIssue::PenContext))
+    })()
+    .map_err(|error| error.at("view", view))
 }
 
 fn notify(world: &mut World, view: Entity) {
@@ -174,44 +176,43 @@ pub(crate) fn append_point(
     target: NormalizedRenderTarget,
     point: Vec2,
 ) -> Result {
-    if world
-        .get::<crate::view::ViewState>(view)
-        .is_none_or(|s| s.document != Some(document) || s.mode != CanvasMode::Pen(paint))
-        || !crate::input::available(world, view)
-        || !crate::input::focused(world, &target)
-        || world.resource::<InputFocus>().get() != Some(view)
-        || world.get::<CanvasDocument>(document).is_none()
-    {
-        return Ok(());
-    }
-    if !accepts(world, view, pointer, &target) {
-        return Ok(());
-    }
-    let mut draft = state(world, view)?.draft.clone().unwrap_or(Draft {
-        data: CanvasPenDraft {
-            path: CanvasPath {
-                commands: Vec::new(),
+    (|| -> Result {
+        if world
+            .get::<crate::view::ViewState>(view)
+            .is_none_or(|s| s.document != Some(document) || s.mode != CanvasMode::Pen(paint))
+            || !crate::input::available(world, view)
+            || !crate::input::focused(world, &target)
+            || world.resource::<InputFocus>().get() != Some(view)
+            || world.get::<CanvasDocument>(document).is_none()
+        {
+            return Ok(());
+        }
+        if !accepts(world, view, pointer, &target) {
+            return Ok(());
+        }
+        let mut draft = state(world, view)?.draft.clone().unwrap_or(Draft {
+            data: CanvasPenDraft {
+                path: CanvasPath {
+                    commands: Vec::new(),
+                },
+                pending: Vec::new(),
+                active_subpath: None,
             },
-            pending: Vec::new(),
-            active_subpath: None,
-        },
-        document,
-        pointer,
-        target,
-        paint,
-    });
-    advance(&mut draft.data, state(world, view)?.segment, point);
-    draft
-        .data
-        .path
-        .validate(&Transform::default(), &paint)
-        .inspect_err(|e| widgetry_error!(?view,%e,"Canvas Pen 草稿更新失败"))?;
-    world
-        .get_mut::<State>(view)
-        .ok_or_else(|| BevyError::error("Canvas Pen state missing"))?
-        .draft = Some(draft);
-    notify(world, view);
-    Ok(())
+            document,
+            pointer,
+            target,
+            paint,
+        });
+        advance(&mut draft.data, state(world, view)?.segment, point);
+        draft.data.path._validate(&Transform::default(), &paint)?;
+        world
+            .get_mut::<State>(view)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenState))?
+            .draft = Some(draft);
+        notify(world, view);
+        Ok(())
+    })()
+    .map_err(|error| error.at("view", view).at("document", document))
 }
 
 fn drawable(path: &CanvasPath) -> bool {
@@ -221,124 +222,289 @@ fn drawable(path: &CanvasPath) -> bool {
 }
 
 impl CanvasView {
-    pub fn pen_segment(world: &World, view: Entity) -> Result<CanvasPenSegment> {
-        Ok(state(world, view)?.segment)
+    pub fn pen_segment(
+        world: &World,
+        view: Entity,
+    ) -> crate::error::PublicResult<CanvasPenSegment> {
+        Self::_pen_segment(world, view).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.pen_segment",
+            ))
+        })
     }
-    pub fn pen_draft(world: &World, view: Entity) -> Result<Option<CanvasPenDraft>> {
-        Ok(state(world, view)?.draft.as_ref().map(|d| d.data.clone()))
+
+    pub(crate) fn _pen_segment(world: &World, view: Entity) -> Result<CanvasPenSegment> {
+        (|| -> Result<CanvasPenSegment> { Ok(state(world, view)?.segment) })().map_err(|error| {
+            error.input(crate::CanvasInput::Entity {
+                field: "view",
+                value: view,
+            })
+        })
+    }
+    pub fn pen_draft(
+        world: &World,
+        view: Entity,
+    ) -> crate::error::PublicResult<Option<CanvasPenDraft>> {
+        Self::_pen_draft(world, view).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.pen_draft",
+            ))
+        })
+    }
+
+    pub(crate) fn _pen_draft(world: &World, view: Entity) -> Result<Option<CanvasPenDraft>> {
+        (|| -> Result<Option<CanvasPenDraft>> {
+            Ok(state(world, view)?.draft.as_ref().map(|d| d.data.clone()))
+        })()
+        .map_err(|error| {
+            error.input(crate::CanvasInput::Entity {
+                field: "view",
+                value: view,
+            })
+        })
     }
     pub fn set_pen_segment_in_world(
         world: &mut World,
         view: Entity,
         segment: CanvasPenSegment,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_set_pen_segment_in_world(world, view, segment).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.set_pen_segment_in_world",
+            ))
+        })
+    }
+
+    pub(crate) fn _set_pen_segment_in_world(
+        world: &mut World,
+        view: Entity,
+        segment: CanvasPenSegment,
     ) -> Result<bool> {
-        if state(world, view)?.segment == segment {
-            return Ok(false);
-        }
-        if world
-            .get::<crate::view::ViewState>(view)
-            .is_some_and(|s| matches!(s.mode, CanvasMode::Pen(_)))
-        {
-            crate::input::release_gesture(world, view);
-        }
-        let mut s = world
-            .get_mut::<State>(view)
-            .ok_or_else(|| BevyError::error("Canvas Pen state missing"))?;
-        s.segment = segment;
-        if let Some(d) = &mut s.draft {
-            d.data.pending.clear();
-        }
-        notify(world, view);
-        Ok(true)
+        (|| -> Result<bool> {
+            if state(world, view)?.segment == segment {
+                return Ok(false);
+            }
+            if world
+                .get::<crate::view::ViewState>(view)
+                .is_some_and(|s| matches!(s.mode, CanvasMode::Pen(_)))
+            {
+                crate::input::release_gesture(world, view);
+            }
+            let mut s = world
+                .get_mut::<State>(view)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenState))?;
+            s.segment = segment;
+            if let Some(d) = &mut s.draft {
+                d.data.pending.clear();
+            }
+            notify(world, view);
+            Ok(true)
+        })()
+        .map_err(|error| {
+            error.input(crate::CanvasInput::Entity {
+                field: "view",
+                value: view,
+            })
+        })
     }
     pub fn set_pen_segment(commands: &mut Commands, view: Entity, segment: CanvasPenSegment) {
         commands.queue(move |world: &mut World| {
-            Self::set_pen_segment_in_world(world, view, segment).map(|_| ())
+            Self::_set_pen_segment_in_world(world, view, segment)
+                .map(|_| ())
+                .map_err(|error| {
+                    error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new(
+                        "canvas.command",
+                    ))
+                })
         });
     }
-    pub fn close_pen_subpath_in_world(world: &mut World, view: Entity) -> Result<bool> {
-        context(world, view)?;
-        let Some(mut draft) = state(world, view)?.draft.clone() else {
-            return Ok(false);
-        };
-        if draft.data.active_subpath.is_none() {
-            return Ok(false);
-        }
-        crate::input::release_gesture(world, view);
-        draft.data.path.commands.push(CanvasPathCommand::Close);
-        draft.data.pending.clear();
-        draft.data.active_subpath = None;
-        world
-            .get_mut::<State>(view)
-            .ok_or_else(|| BevyError::error("Canvas Pen state missing"))?
-            .draft = Some(draft);
-        notify(world, view);
-        Ok(true)
+    pub fn close_pen_subpath_in_world(
+        world: &mut World,
+        view: Entity,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_close_pen_subpath_in_world(world, view).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.close_pen_subpath_in_world",
+            ))
+        })
     }
-    pub fn new_pen_subpath_in_world(world: &mut World, view: Entity) -> Result<bool> {
-        context(world, view)?;
-        let Some(mut draft) = state(world, view)?.draft.clone() else {
-            return Ok(false);
-        };
-        if draft.data.active_subpath.is_none() && draft.data.pending.is_empty() {
-            return Ok(false);
-        }
-        crate::input::release_gesture(world, view);
-        draft.data.active_subpath = None;
-        draft.data.pending.clear();
-        world
-            .get_mut::<State>(view)
-            .ok_or_else(|| BevyError::error("Canvas Pen state missing"))?
-            .draft = Some(draft);
-        notify(world, view);
-        Ok(true)
+
+    pub(crate) fn _close_pen_subpath_in_world(world: &mut World, view: Entity) -> Result<bool> {
+        (|| -> Result<bool> {
+            context(world, view)?;
+            let Some(mut draft) = state(world, view)?.draft.clone() else {
+                return Ok(false);
+            };
+            if draft.data.active_subpath.is_none() {
+                return Ok(false);
+            }
+            crate::input::release_gesture(world, view);
+            draft.data.path.commands.push(CanvasPathCommand::Close);
+            draft.data.pending.clear();
+            draft.data.active_subpath = None;
+            world
+                .get_mut::<State>(view)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenState))?
+                .draft = Some(draft);
+            notify(world, view);
+            Ok(true)
+        })()
+        .map_err(|error| {
+            error.input(crate::CanvasInput::Entity {
+                field: "view",
+                value: view,
+            })
+        })
     }
-    pub fn finish_pen_in_world(world: &mut World, view: Entity) -> Result<Option<Entity>> {
-        let (document, paint) = context(world, view)?;
-        let Some(draft) = state(world, view)?.draft.clone() else {
-            return Ok(None);
-        };
-        if !drawable(&draft.data.path) || !draft.data.pending.is_empty() {
+    pub fn new_pen_subpath_in_world(
+        world: &mut World,
+        view: Entity,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_new_pen_subpath_in_world(world, view).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.new_pen_subpath_in_world",
+            ))
+        })
+    }
+
+    pub(crate) fn _new_pen_subpath_in_world(world: &mut World, view: Entity) -> Result<bool> {
+        (|| -> Result<bool> {
+            context(world, view)?;
+            let Some(mut draft) = state(world, view)?.draft.clone() else {
+                return Ok(false);
+            };
+            if draft.data.active_subpath.is_none() && draft.data.pending.is_empty() {
+                return Ok(false);
+            }
+            crate::input::release_gesture(world, view);
+            draft.data.active_subpath = None;
+            draft.data.pending.clear();
+            world
+                .get_mut::<State>(view)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenState))?
+                .draft = Some(draft);
+            notify(world, view);
+            Ok(true)
+        })()
+        .map_err(|error| {
+            error.input(crate::CanvasInput::Entity {
+                field: "view",
+                value: view,
+            })
+        })
+    }
+    pub fn finish_pen_in_world(
+        world: &mut World,
+        view: Entity,
+    ) -> crate::error::PublicResult<Option<Entity>> {
+        Self::_finish_pen_in_world(world, view).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.finish_pen_in_world",
+            ))
+        })
+    }
+
+    pub(crate) fn _finish_pen_in_world(world: &mut World, view: Entity) -> Result<Option<Entity>> {
+        (|| -> Result<Option<Entity>> {
+            let (document, paint) = context(world, view)?;
+            let Some(draft) = state(world, view)?.draft.clone() else {
+                return Ok(None);
+            };
+            if !drawable(&draft.data.path) || !draft.data.pending.is_empty() {
+                crate::input::end(world, view);
+                return Ok(None);
+            }
+            let shape = CanvasDocument::_create_path(
+                world,
+                document,
+                draft.data.path,
+                Transform::default(),
+                paint,
+            )?;
             crate::input::end(world, view);
-            return Ok(None);
-        }
-        let shape = CanvasDocument::create_path(
-            world,
-            document,
-            draft.data.path,
-            Transform::default(),
-            paint,
-        )?;
-        crate::input::end(world, view);
-        if world
-            .get::<crate::view::ViewState>(view)
-            .is_some_and(|s| s.document == Some(document) && s.mode == CanvasMode::Pen(paint))
-            && world.get::<crate::CanvasShape>(shape).is_some()
-        {
-            Self::set_selection_in_world(world, view, Some(shape))?;
-        }
-        Ok(Some(shape))
+            if world
+                .get::<crate::view::ViewState>(view)
+                .is_some_and(|s| s.document == Some(document) && s.mode == CanvasMode::Pen(paint))
+                && world.get::<crate::CanvasShape>(shape).is_some()
+            {
+                Self::set_selection_in_world(world, view, Some(shape))?;
+            }
+            Ok(Some(shape))
+        })()
+        .map_err(|error| {
+            error.input(crate::CanvasInput::Entity {
+                field: "view",
+                value: view,
+            })
+        })
     }
-    pub fn cancel_pen_in_world(world: &mut World, view: Entity) -> Result<bool> {
-        let changed = state(world, view)?.draft.is_some();
-        crate::input::end(world, view);
-        Ok(changed)
+    pub fn cancel_pen_in_world(
+        world: &mut World,
+        view: Entity,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_cancel_pen_in_world(world, view).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.cancel_pen_in_world",
+            ))
+        })
+    }
+
+    pub(crate) fn _cancel_pen_in_world(world: &mut World, view: Entity) -> Result<bool> {
+        (|| -> Result<bool> {
+            let changed = state(world, view)?.draft.is_some();
+            crate::input::end(world, view);
+            Ok(changed)
+        })()
+        .map_err(|error| {
+            error.input(crate::CanvasInput::Entity {
+                field: "view",
+                value: view,
+            })
+        })
     }
     pub fn close_pen_subpath(commands: &mut Commands, view: Entity) {
         commands.queue(move |world: &mut World| {
-            Self::close_pen_subpath_in_world(world, view).map(|_| ())
+            Self::_close_pen_subpath_in_world(world, view)
+                .map(|_| ())
+                .map_err(|error| {
+                    error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new(
+                        "canvas.command",
+                    ))
+                })
         });
     }
     pub fn new_pen_subpath(commands: &mut Commands, view: Entity) {
         commands.queue(move |world: &mut World| {
-            Self::new_pen_subpath_in_world(world, view).map(|_| ())
+            Self::_new_pen_subpath_in_world(world, view)
+                .map(|_| ())
+                .map_err(|error| {
+                    error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new(
+                        "canvas.command",
+                    ))
+                })
         });
     }
     pub fn finish_pen(commands: &mut Commands, view: Entity) {
-        commands.queue(move |world: &mut World| Self::finish_pen_in_world(world, view).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::_finish_pen_in_world(world, view)
+                .map(|_| ())
+                .map_err(|error| {
+                    error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new(
+                        "canvas.command",
+                    ))
+                })
+        });
     }
     pub fn cancel_pen(commands: &mut Commands, view: Entity) {
-        commands.queue(move |world: &mut World| Self::cancel_pen_in_world(world, view).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::_cancel_pen_in_world(world, view)
+                .map(|_| ())
+                .map_err(|error| {
+                    error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new(
+                        "canvas.command",
+                    ))
+                })
+        });
     }
 }
 
@@ -448,44 +614,53 @@ fn key(
     let view = event.focused_entity;
     let window = event.input.window;
     event.propagate(false);
-    commands.queue(move |world: &mut World| -> Result {
-        if world.resource::<InputFocus>().get() != Some(view)
-            || !crate::input::available(world, view)
-            || !world.get::<Window>(window).is_some_and(|w| w.focused)
-            || world
-                .get::<crate::view::ViewState>(view)
-                .is_none_or(|s| !matches!(s.mode, CanvasMode::Pen(_)))
-        {
-            return Ok(());
-        }
-        match code {
-            KeyCode::KeyL => {
-                CanvasView::set_pen_segment_in_world(world, view, CanvasPenSegment::Line)?;
+    commands.queue(move |world: &mut World| -> bevy::prelude::Result {
+        (|| -> Result {
+            if world.resource::<InputFocus>().get() != Some(view)
+                || !crate::input::available(world, view)
+                || !world.get::<Window>(window).is_some_and(|w| w.focused)
+                || world
+                    .get::<crate::view::ViewState>(view)
+                    .is_none_or(|s| !matches!(s.mode, CanvasMode::Pen(_)))
+            {
+                return Ok(());
             }
-            KeyCode::KeyQ => {
-                CanvasView::set_pen_segment_in_world(world, view, CanvasPenSegment::Quadratic)?;
+            match code {
+                KeyCode::KeyL => {
+                    CanvasView::_set_pen_segment_in_world(world, view, CanvasPenSegment::Line)?;
+                }
+                KeyCode::KeyQ => {
+                    CanvasView::_set_pen_segment_in_world(
+                        world,
+                        view,
+                        CanvasPenSegment::Quadratic,
+                    )?;
+                }
+                KeyCode::KeyB => {
+                    CanvasView::_set_pen_segment_in_world(world, view, CanvasPenSegment::Cubic)?;
+                }
+                KeyCode::KeyA => {
+                    CanvasView::_set_pen_segment_in_world(world, view, CanvasPenSegment::Arc)?;
+                }
+                KeyCode::KeyC => {
+                    CanvasView::_close_pen_subpath_in_world(world, view)?;
+                }
+                KeyCode::KeyN => {
+                    CanvasView::_new_pen_subpath_in_world(world, view)?;
+                }
+                KeyCode::Enter => {
+                    CanvasView::_finish_pen_in_world(world, view)?;
+                }
+                KeyCode::Escape => {
+                    CanvasView::_cancel_pen_in_world(world, view)?;
+                }
+                _ => {}
             }
-            KeyCode::KeyB => {
-                CanvasView::set_pen_segment_in_world(world, view, CanvasPenSegment::Cubic)?;
-            }
-            KeyCode::KeyA => {
-                CanvasView::set_pen_segment_in_world(world, view, CanvasPenSegment::Arc)?;
-            }
-            KeyCode::KeyC => {
-                CanvasView::close_pen_subpath_in_world(world, view)?;
-            }
-            KeyCode::KeyN => {
-                CanvasView::new_pen_subpath_in_world(world, view)?;
-            }
-            KeyCode::Enter => {
-                CanvasView::finish_pen_in_world(world, view)?;
-            }
-            KeyCode::Escape => {
-                CanvasView::cancel_pen_in_world(world, view)?;
-            }
-            _ => {}
-        }
-        Ok(())
+            Ok(())
+        })()
+        .map_err(|error| {
+            error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new("canvas.command"))
+        })
     });
 }
 

@@ -303,7 +303,7 @@ fn svg_rejects_missing_components_foreign_members_and_invalid_paths_without_repa
         let logs = LogCapture::default();
         assert!(matches!(
             logs.run(|| CanvasDocument::export_svg(&mut world, document, file.path(), None)),
-            Err(CanvasExportError::InvalidGeometry(_))
+            Err(CanvasExportError::Model(_))
         ));
         assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
     }
@@ -524,7 +524,7 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
         .unwrap();
     assert!(matches!(
         CanvasDocument::export_svg(&mut world, document, file.path(), None),
-        Err(CanvasExportError::InvalidGeometry(_))
+        Err(CanvasExportError::Model(_))
     ));
     assert_eq!(std::fs::read(file.path()).unwrap(), b"keep me");
     world

@@ -1,4 +1,5 @@
 use super::{CanvasPath, Segment};
+use crate::error::CanvasResult as Result;
 use crate::{CanvasFillRule, CanvasLineCap, CanvasLineJoin, CanvasPaint};
 use bevy::{math::DVec2, prelude::*};
 use lyon::{math::point, tessellation::*};
@@ -98,7 +99,7 @@ fn contour(segments: Vec<Segment>) -> Result<Contour> {
         .copied()
         .fold(DVec2::splat(f64::NEG_INFINITY), DVec2::max);
     if !min.is_finite() || !max.is_finite() {
-        return Err(BevyError::error("Canvas Path flattened bounds overflow"));
+        return Err(crate::error::invalid(crate::CanvasIssue::FlattenedBounds));
     }
     Ok(Contour {
         points,
@@ -180,8 +181,8 @@ fn append_convex(target: &mut VertexBuffers<[f32; 3], u32>, polygon: &[DVec2]) -
     for i in 1..polygon.len().saturating_sub(1) {
         vertices.indices.extend([
             0,
-            u32::try_from(i).map_err(BevyError::error)?,
-            u32::try_from(i + 1).map_err(BevyError::error)?,
+            u32::try_from(i).map_err(crate::error::CanvasFault::from)?,
+            u32::try_from(i + 1).map_err(crate::error::CanvasFault::from)?,
         ]);
     }
     append_mesh(target, vertices, DVec2::ZERO, DVec2::ONE)
@@ -599,18 +600,18 @@ fn append_mesh(
     origin: DVec2,
     scale: DVec2,
 ) -> Result {
-    let base = u32::try_from(target.vertices.len()).map_err(BevyError::error)?;
+    let base = u32::try_from(target.vertices.len()).map_err(crate::error::CanvasFault::from)?;
     for p in source.vertices {
         let p = (origin + DVec2::new(f64::from(p[0]), f64::from(p[1])) * scale).as_vec2();
         if !p.is_finite() {
-            return Err(BevyError::error("Canvas Path mesh overflow"));
+            return Err(crate::error::invalid(crate::CanvasIssue::PathMeshOverflow));
         }
         target.vertices.push([p.x, p.y, 0.0]);
     }
     for index in source.indices {
         target.indices.push(
             base.checked_add(index)
-                .ok_or_else(|| BevyError::error("Canvas Path mesh indices overflow"))?,
+                .ok_or_else(|| crate::error::invalid(crate::CanvasIssue::MeshIndexOverflow))?,
         );
     }
     Ok(())
@@ -633,7 +634,7 @@ fn tessellate(
                 .with_tolerance(tolerance),
             &mut BuffersBuilder::new(&mut vertices, |v: FillVertex| v.position().to_array()),
         )
-        .map_err(BevyError::error)?;
+        .map_err(crate::error::CanvasFault::from)?;
     Ok(vertices)
 }
 

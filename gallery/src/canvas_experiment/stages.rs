@@ -149,7 +149,8 @@ pub(super) fn export(In(value): In<Option<Value>>, world: &mut World) -> BrpResu
 }
 
 fn freeze(world: &mut World, source: Entity) -> Result<Entity> {
-    let order = CanvasDocument::shape_order(world, source)?;
+    let order =
+        CanvasDocument::shape_order(world, source).map_err(|error| error.into_bevy_error())?;
     let mut shapes = Vec::with_capacity(order.len());
     for shape in order {
         let geometry = world
@@ -164,7 +165,9 @@ fn freeze(world: &mut World, source: Entity) -> Result<Entity> {
             .get::<Transform>(shape)
             .copied()
             .ok_or_else(|| BevyError::error("Stage shape transform missing"))?;
-        geometry.validate(&transform, &paint)?;
+        geometry
+            .validate(&transform, &paint)
+            .map_err(|error| error.into_bevy_error())?;
         shapes.push((geometry, paint, transform));
     }
     let document = world
@@ -173,7 +176,7 @@ fn freeze(world: &mut World, source: Entity) -> Result<Entity> {
     for (geometry, paint, transform) in shapes {
         if let Err(error) = drawing::create_shape(world, document, geometry, paint, transform) {
             world.despawn(document);
-            return Err(error);
+            return Err(error.into_bevy_error());
         }
     }
     Ok(document)

@@ -100,7 +100,10 @@ impl CanvasDocument {
             begin(world, document, path.to_owned(), snapshot, tiles)
         })();
         result.inspect_err(|error| {
-            if !matches!(error, CanvasExportError::Job(_)) {
+            if !matches!(
+                error,
+                CanvasExportError::Job(_) | CanvasExportError::Model(_)
+            ) {
                 widgetry_error!(?document,?path,%error,"Canvas PNG 导出请求失败");
             }
         })
@@ -746,7 +749,11 @@ fn geometry(
     let mut paints = Vec::new();
     for shape in &snapshot.shapes {
         let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&shape.geometry, shape.paint)
-            .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
+            .map_err(|error| {
+                CanvasExportError::Model(error.at("shape", shape.entity).into_failure(
+                    bevy_widgetry_diagnostics::ErrorFrame::new("canvas.png.geometry"),
+                ))
+            })?;
         if let Some(color) = shape.paint.fill
             && fill_mesh.count_vertices() > 0
         {

@@ -1,4 +1,5 @@
 use crate::CanvasView;
+use crate::error::CanvasResult as Result;
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
     prelude::*,
@@ -52,17 +53,18 @@ pub(super) fn sync(
     layer: usize,
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
-    let selection = CanvasView::selection(world, view)?;
+    (|| -> Result<Option<Entity>> {
+    let selection = CanvasView::_selection(world, view)?;
     if selection.is_empty()
         || (selection.len() == 1
-            && CanvasView::mode(world, view)? == crate::CanvasMode::PathNodeEdit)
+            && CanvasView::_mode(world, view)? == crate::CanvasMode::PathNodeEdit)
     {
         if let Some(e) = current {
             world.despawn(e);
         }
         return Ok(None);
     }
-    let zoom = CanvasView::zoom(world, view)?;
+    let zoom = CanvasView::_zoom(world, view)?;
     let parameters = if let [shape] = selection.as_slice() {
         crate::parameters::controls(world, *shape, zoom)?
     } else {
@@ -75,17 +77,17 @@ pub(super) fn sync(
     if let Some(e) = current {
         let previous = world
             .get::<Outline>(e)
-            .ok_or_else(|| BevyError::error("Canvas outline assets missing"))?;
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::OutlineAssets))?;
         if previous.points != points || previous.zoom != zoom || previous.parameters != parameters {
             let handle = previous.mesh.clone();
             *world
                 .resource_mut::<Assets<Mesh>>()
                 .get_mut(&handle)
-                .ok_or_else(|| BevyError::error("Canvas outline mesh missing"))? =
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::OutlineMesh))? =
                 mesh(&points, zoom, &parameters)?;
             let mut previous = world
                 .get_mut::<Outline>(e)
-                .ok_or_else(|| BevyError::error("Canvas outline assets missing"))?;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::OutlineAssets))?;
             previous.points = points;
             previous.zoom = zoom;
             previous.parameters = parameters;
@@ -119,9 +121,10 @@ pub(super) fn sync(
         }
         Err(e) => {
             release_assets(world, &assets);
-            Err(e.into_bevy_error())
+            Err(e.into_bevy_error().into())
         }
     }
+})().map_err(|error| error.at("view", view).at("content", content))
 }
 fn release_assets(world: &mut World, assets: &Outline) {
     world

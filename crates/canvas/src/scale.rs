@@ -1,4 +1,5 @@
 use crate::CanvasDocument;
+use crate::error::CanvasResult as Result;
 use bevy::{math::DVec2, prelude::*};
 
 pub(crate) const HANDLE_SIZE: f32 = 8.0;
@@ -50,13 +51,16 @@ pub(crate) fn hit(
     point: Vec2,
     zoom: f32,
 ) -> Result<Option<(ScaleHandle, f32)>> {
-    Ok(controls(crate::selection::frame(world, shape)?)
-        .into_iter()
-        .filter_map(|(handle, center)| {
-            let distance = (center - point).length_squared() * zoom * zoom;
-            (distance <= (HANDLE_SIZE * 0.5 + 2.0).powi(2)).then_some((handle, distance))
-        })
-        .min_by(|(_, a), (_, b)| a.total_cmp(b)))
+    (|| -> Result<Option<(ScaleHandle, f32)>> {
+        Ok(controls(crate::selection::frame(world, shape)?)
+            .into_iter()
+            .filter_map(|(handle, center)| {
+                let distance = (center - point).length_squared() * zoom * zoom;
+                (distance <= (HANDLE_SIZE * 0.5 + 2.0).powi(2)).then_some((handle, distance))
+            })
+            .min_by(|(_, a), (_, b)| a.total_cmp(b)))
+    })()
+    .map_err(|error| error.at("shape", shape))
 }
 
 #[derive(Clone, Copy)]
@@ -77,18 +81,21 @@ impl Scale {
         start: Vec2,
         handle: ScaleHandle,
     ) -> Result<Self> {
-        let bounds = crate::selection::local_bounds(world, shape)?;
-        let transform = *world
-            .get::<Transform>(shape)
-            .ok_or_else(|| BevyError::error("Canvas scaling transform missing"))?;
-        Ok(Self {
-            document,
-            shape,
-            transform,
-            start: local_point(transform, start),
-            bounds,
-            handle,
-        })
+        (|| -> Result<Self> {
+            let bounds = crate::selection::local_bounds(world, shape)?;
+            let transform = *world
+                .get::<Transform>(shape)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::ScalingTransform))?;
+            Ok(Self {
+                document,
+                shape,
+                transform,
+                start: local_point(transform, start),
+                bounds,
+                handle,
+            })
+        })()
+        .map_err(|error| error.at("document", document).at("shape", shape))
     }
 
     pub(crate) fn apply(self, world: &mut World, point: Vec2) -> Result {
@@ -128,7 +135,7 @@ impl Scale {
             - project(transform);
         transform.translation.x = translation.x as f32;
         transform.translation.y = translation.y as f32;
-        CanvasDocument::update_transform(world, self.document, self.shape, transform)
+        CanvasDocument::_update_transform(world, self.document, self.shape, transform)
     }
 }
 

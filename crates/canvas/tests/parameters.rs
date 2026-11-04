@@ -332,7 +332,13 @@ fn rectangle_corner_radius_is_validated_transactionally_and_changes_actual_picki
                 )
             })
             .unwrap_err();
-        assert_eq!(e.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            e.diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
+        );
         assert_eq!(
             app.world().get::<CanvasGeometry>(shape),
             Some(&CanvasGeometry::Rectangle(rectangle))

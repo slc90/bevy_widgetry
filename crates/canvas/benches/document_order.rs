@@ -15,16 +15,19 @@ fn fixture(count: usize) -> Result<Fixture> {
     let document = world.spawn(CanvasDocument).id();
     let mut shape = None;
     for _ in 0..count {
-        shape = Some(CanvasDocument::create_rectangle(
-            &mut world,
-            document,
-            CanvasRectangle {
-                corner_radius: 0.0,
-                size: Vec2::splat(20.0),
-            },
-            Transform::default(),
-            CanvasPaint::default(),
-        )?);
+        shape = Some(
+            CanvasDocument::create_rectangle(
+                &mut world,
+                document,
+                CanvasRectangle {
+                    corner_radius: 0.0,
+                    size: Vec2::splat(20.0),
+                },
+                Transform::default(),
+                CanvasPaint::default(),
+            )
+            .map_err(|error| error.into_bevy_error())?,
+        );
     }
     Ok(Fixture {
         world,
@@ -54,11 +57,14 @@ fn main() -> Result {
                     fixture.document,
                     fixture.shape,
                     operation,
-                )? {
+                )
+                .map_err(|error| error.into_bevy_error())?
+                {
                     return Err(error("benchmark reorder unexpectedly did no work"));
                 }
                 fixture.front = !fixture.front;
-                let result = CanvasDocument::shape_order(&mut fixture.world, fixture.document)?;
+                let result = CanvasDocument::shape_order(&mut fixture.world, fixture.document)
+                    .map_err(|error| error.into_bevy_error())?;
                 if result.len() != fixture.count {
                     return Err(error("benchmark lost shapes"));
                 }

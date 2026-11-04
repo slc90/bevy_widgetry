@@ -232,7 +232,7 @@ pub(super) fn create_shape(
     geometry: CanvasGeometry,
     paint: CanvasPaint,
     transform: Transform,
-) -> Result<Entity> {
+) -> Result<Entity, bevy_widgetry::job::JobFailure> {
     match geometry {
         CanvasGeometry::Rectangle(rectangle) => {
             CanvasDocument::create_rectangle(world, document, rectangle, transform, paint)

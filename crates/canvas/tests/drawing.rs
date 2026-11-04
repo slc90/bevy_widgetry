@@ -578,11 +578,14 @@ fn space_pan_has_priority_over_drawing_tools_and_mode_api_commits_before_notice(
         });
         let logs = LogCapture::default();
         logs.run(|| {
-            assert_eq!(
+            assert!(
                 CanvasView::set_mode_in_world(app.world_mut(), a, invalid)
                     .unwrap_err()
-                    .severity(),
-                bevy::ecs::error::Severity::Error
+                    .diagnostics()
+                    .next()
+                    .unwrap()
+                    .source()
+                    .is_some_and(|cause| cause.is::<CanvasError>())
             );
         });
         let errors = ErrorCapture::default();

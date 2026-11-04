@@ -57,7 +57,14 @@ fn document_has_one_total_order_with_atomic_reordering_and_removal() {
                 CanvasDocument::reorder_shape(&mut world, document, invalid, CanvasOrder::Front)
             })
             .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            error
+                .diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
+        );
         assert_eq!(
             CanvasDocument::shape_order(&mut world, document).unwrap(),
             [a, c, b]

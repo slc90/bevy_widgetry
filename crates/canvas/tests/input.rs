@@ -795,7 +795,14 @@ fn center_api_commits_before_notice_and_rejects_invalid_values() {
     logs.run(|| {
         let error =
             CanvasView::set_center_in_world(app.world_mut(), a, Vec2::splat(f32::NAN)).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            error
+                .diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
+        );
     });
     assert!(!logs.records().is_empty());
     assert_eq!(
@@ -843,7 +850,14 @@ fn zoom_api_is_center_anchored_validated_and_notified_after_commit() {
             10.001,
         ] {
             let error = CanvasView::set_zoom_in_world(app.world_mut(), a, zoom).unwrap_err();
-            assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+            assert!(
+                error
+                    .diagnostics()
+                    .next()
+                    .unwrap()
+                    .source()
+                    .is_some_and(|cause| cause.is::<CanvasError>())
+            );
             assert_eq!(CanvasView::zoom(app.world(), a).unwrap(), 2.0);
         }
     });

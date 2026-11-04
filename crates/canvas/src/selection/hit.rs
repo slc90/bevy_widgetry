@@ -1,3 +1,4 @@
+use crate::error::CanvasResult as Result;
 use bevy::{
     math::{DMat2, DVec2},
     mesh::VertexAttributeValues,
@@ -13,27 +14,30 @@ pub(super) struct ScreenSpace {
 
 impl ScreenSpace {
     pub(super) fn new(world: &World, view: Entity, zoom: f32) -> Result<Self> {
-        let node = world
-            .get::<ComputedNode>(view)
-            .ok_or_else(|| BevyError::error("Canvas hit layout missing"))?;
-        let ui = world
-            .get::<UiGlobalTransform>(view)
-            .ok_or_else(|| BevyError::error("Canvas hit UI transform missing"))?;
-        let camera = world
-            .get::<ComputedUiTargetCamera>(view)
-            .and_then(ComputedUiTargetCamera::get)
-            .and_then(|camera| world.get::<Camera>(camera))
-            .ok_or_else(|| BevyError::error("Canvas hit UI camera missing"))?;
-        let scale = camera
-            .target_scaling_factor()
-            .ok_or_else(|| BevyError::error("Canvas hit target scale missing"))?;
-        Ok(Self {
-            linear: DMat2::from_cols(
-                ui.transform_vector2(Vec2::X).as_dvec2(),
-                ui.transform_vector2(Vec2::Y).as_dvec2(),
-            ) * (f64::from(zoom)
-                / (f64::from(node.inverse_scale_factor()) * f64::from(scale))),
-        })
+        (|| -> Result<Self> {
+            let node = world
+                .get::<ComputedNode>(view)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::HitLayout))?;
+            let ui = world
+                .get::<UiGlobalTransform>(view)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::HitUITransform))?;
+            let camera = world
+                .get::<ComputedUiTargetCamera>(view)
+                .and_then(ComputedUiTargetCamera::get)
+                .and_then(|camera| world.get::<Camera>(camera))
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::HitUICamera))?;
+            let scale = camera
+                .target_scaling_factor()
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::HitTargetScale))?;
+            Ok(Self {
+                linear: DMat2::from_cols(
+                    ui.transform_vector2(Vec2::X).as_dvec2(),
+                    ui.transform_vector2(Vec2::Y).as_dvec2(),
+                ) * (f64::from(zoom)
+                    / (f64::from(node.inverse_scale_factor()) * f64::from(scale))),
+            })
+        })()
+        .map_err(|error| error.at("view", view))
     }
 
     pub(super) fn near_bounds(&self, bounds: Rect, transform: &Transform, point: Vec2) -> bool {
@@ -71,11 +75,11 @@ impl ScreenSpace {
         let Some(VertexAttributeValues::Float32x3(positions)) =
             mesh.attribute(Mesh::ATTRIBUTE_POSITION)
         else {
-            return Err(BevyError::error("Canvas hit mesh positions missing"));
+            return Err(crate::error::missing(crate::CanvasPart::HitMeshPositions));
         };
         let indices = mesh
             .indices()
-            .ok_or_else(|| BevyError::error("Canvas hit mesh indices missing"))?;
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::HitMeshIndices))?;
         let mut indices = indices.iter();
         let model = DMat2::from_cols(
             (transform.rotation * Vec3::X * transform.scale.x)
@@ -91,16 +95,16 @@ impl ScreenSpace {
         let project = |index: usize| -> Result<DVec2> {
             let p = positions
                 .get(index)
-                .ok_or_else(|| BevyError::error("Canvas hit mesh index out of bounds"))?;
+                .ok_or_else(|| crate::error::invalid(crate::CanvasIssue::HitIndex))?;
             Ok(linear * DVec2::new(f64::from(p[0]), f64::from(p[1])) + offset)
         };
         while let Some(a) = indices.next() {
             let b = indices
                 .next()
-                .ok_or_else(|| BevyError::error("Canvas hit triangle incomplete"))?;
+                .ok_or_else(|| crate::error::invalid(crate::CanvasIssue::HitTriangle))?;
             let c = indices
                 .next()
-                .ok_or_else(|| BevyError::error("Canvas hit triangle incomplete"))?;
+                .ok_or_else(|| crate::error::invalid(crate::CanvasIssue::HitTriangle))?;
             let [a, b, c] = [project(a)?, project(b)?, project(c)?];
             if (b - a).perp_dot(c - a) == 0.0 {
                 continue;

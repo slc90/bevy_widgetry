@@ -49,26 +49,30 @@ fn fixture(count: usize) -> Result<Fixture> {
     let document = app.world_mut().spawn(CanvasDocument).id();
     let mut shape = None;
     for i in 0..count {
-        shape = Some(CanvasDocument::create_path(
-            app.world_mut(),
-            document,
-            path.clone(),
-            Transform::from_xyz((i % 20) as f32 * 50.0, (i / 20) as f32 * 50.0, 0.0),
-            CanvasPaint {
-                fill: Some(Color::WHITE),
-                stroke: Some(CanvasStroke {
-                    color: Color::BLACK,
-                    width: 3.0,
+        shape = Some(
+            CanvasDocument::create_path(
+                app.world_mut(),
+                document,
+                path.clone(),
+                Transform::from_xyz((i % 20) as f32 * 50.0, (i / 20) as f32 * 50.0, 0.0),
+                CanvasPaint {
+                    fill: Some(Color::WHITE),
+                    stroke: Some(CanvasStroke {
+                        color: Color::BLACK,
+                        width: 3.0,
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            },
-        )?);
+                },
+            )
+            .map_err(|error| error.into_bevy_error())?,
+        );
     }
     let shape = shape.ok_or_else(|| error("requires paths"))?;
     for _ in 0..2 {
         let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {width:px(350),height:px(250)}}).map_err(BevyError::error)?.id();
-        CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape))?;
+        CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape))
+            .map_err(|error| error.into_bevy_error())?;
     }
     frame(&mut app)?;
     frame(&mut app)?;
@@ -108,7 +112,8 @@ fn main() -> Result {
                                 } else {
                                     Vec3::new(0.9, 1.1, 0.0)
                                 }),
-                        )?;
+                        )
+                        .map_err(|error| error.into_bevy_error())?;
                     } else {
                         CanvasDocument::update_path(
                             f.app.world_mut(),
@@ -146,7 +151,8 @@ fn main() -> Result {
                                     },
                                 }),
                             },
-                        )?;
+                        )
+                        .map_err(|error| error.into_bevy_error())?;
                     }
                     frame(&mut f.app)?;
                     if f.app.world().resource::<Assets<Mesh>>().len() != f.count * 2 + 2 {

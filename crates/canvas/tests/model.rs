@@ -126,7 +126,14 @@ fn invalid_requests_preserve_existing_geometry_and_report_errors() {
                     }
                 })
                 .unwrap_err();
-            assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+            assert!(
+                error
+                    .diagnostics()
+                    .next()
+                    .unwrap()
+                    .source()
+                    .is_some_and(|cause| cause.is::<CanvasError>())
+            );
             assert_eq!(
                 *world
                     .get::<CanvasGeometry>(shape)
@@ -262,7 +269,14 @@ fn geometry_validation_rejects_degenerate_transforms_and_overflow() {
         Transform::from_scale(Vec3::splat(f32::MAX)),
     ] {
         let error = rectangle.bounds(&transform, &paint).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            error
+                .diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
+        );
     }
     for paint in [
         CanvasPaint {

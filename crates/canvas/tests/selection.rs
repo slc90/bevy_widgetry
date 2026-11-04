@@ -134,7 +134,14 @@ fn selection_api_is_view_owned_validated_and_committed_before_notifications() {
     logs.run(|| {
         let error =
             CanvasView::set_selection_in_world(app.world_mut(), a, Some(other)).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            error
+                .diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
+        );
     });
     assert_eq!(logs.records().len(), 1);
     assert_eq!(app.world().resource::<Seen>().0, [vec![shape]]);
@@ -415,6 +422,51 @@ fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together(
         assert_eq!(
             app.world().get::<Transform>(front).unwrap().translation.z,
             -9000.0
+        );
+    }
+}
+
+#[test]
+fn hit_validation_keeps_the_known_shape_and_document() {
+    let id = pointer_ids()[1];
+    let (mut app, view, _, shape, _, at) = fixture(id, 1.0, 1.0);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ONE });
+    app.world_mut()
+        .entity_mut(shape)
+        .insert(CanvasGeometry::Rectangle(CanvasRectangle {
+            size: Vec2::splat(f32::NAN),
+            corner_radius: 0.0,
+        }));
+    bevy_widgetry_test_utils::queue_pointer(
+        &mut app,
+        id,
+        at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    let errors = ErrorCapture::default();
+    errors.run(|| app.update());
+    let records = errors.take_records();
+    let input_failure = records
+        .iter()
+        .flat_map(|record| record.managed().unwrap().diagnostics())
+        .find(|diagnostic| {
+            diagnostic
+                .contexts()
+                .iter()
+                .any(|frame| frame.operation().starts_with("canvas.command"))
+        })
+        .unwrap();
+    let domain = input_failure
+        .source()
+        .unwrap()
+        .downcast_ref::<CanvasError>()
+        .unwrap();
+    for expected in [shape, document] {
+        assert!(
+            domain.inputs.iter().any(
+                |input| matches!(input, CanvasInput::Entity { value, .. } if *value == expected)
+            )
         );
     }
 }

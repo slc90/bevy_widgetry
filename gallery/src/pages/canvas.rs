@@ -129,7 +129,8 @@ fn add_rectangle(world: &mut World, document: Entity) -> Result {
         },
         Transform::default(),
         paint(),
-    )?;
+    )
+    .map_err(|error| error.into_bevy_error())?;
     Ok(())
 }
 
@@ -161,7 +162,8 @@ fn enter(world: &mut World) -> Result {
                 }),
                 ..Default::default()
             },
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         CanvasDocument::create_ellipse(
             world,
             document,
@@ -173,7 +175,8 @@ fn enter(world: &mut World) -> Result {
                 fill: Some(Color::srgb(1.0, 0.5, 0.1)),
                 ..default()
             },
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         let path = CanvasDocument::create_path(
             world,
             document,
@@ -211,28 +214,33 @@ fn enter(world: &mut World) -> Result {
                     join: CanvasLineJoin::Round,
                 }),
             },
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         CanvasDocument::append_rectangle(
             world,
             document,
             path,
             Rect::new(-16.0, -10.0, 10.0, 10.0),
-        )?;
-        CanvasDocument::append_circle(world, document, path, Vec2::new(-55.0, 75.0), 8.0)?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
+        CanvasDocument::append_circle(world, document, path, Vec2::new(-55.0, 75.0), 8.0)
+            .map_err(|error| error.into_bevy_error())?;
         CanvasDocument::append_ellipse(
             world,
             document,
             path,
             Vec2::new(-25.0, 75.0),
             Vec2::new(12.0, 6.0),
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         CanvasDocument::append_line(
             world,
             document,
             path,
             Vec2::new(0.0, 75.0),
             Vec2::new(15.0, 75.0),
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         CanvasDocument::append_polyline(
             world,
             document,
@@ -242,7 +250,8 @@ fn enter(world: &mut World) -> Result {
                 Vec2::new(33.0, 65.0),
                 Vec2::new(40.0, 80.0),
             ],
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         CanvasDocument::append_polygon(
             world,
             document,
@@ -252,7 +261,8 @@ fn enter(world: &mut World) -> Result {
                 Vec2::new(58.0, 65.0),
                 Vec2::new(66.0, 80.0),
             ],
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         mount_page(
             world,
             GalleryPage::Canvas,
@@ -350,7 +360,9 @@ struct Segment {
 }
 
 fn selected_path(world: &World, demo: &Demo) -> Result<Option<(Entity, CanvasPath, Vec<Segment>)>> {
-    let Some(shape) = CanvasView::single_selection(world, demo.main)? else {
+    let Some(shape) =
+        CanvasView::single_selection(world, demo.main).map_err(|error| error.into_bevy_error())?
+    else {
         return Ok(None);
     };
     let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
@@ -389,21 +401,24 @@ fn edit_path(world: &mut World, root: Entity, demo: &Demo, action: Action) -> Re
     };
     let index = demo.segment.min(segments.len().saturating_sub(1));
     if matches!(action, Action::Append) {
-        let bounds = path.bounds(
-            &Transform::default(),
-            &CanvasPaint {
-                fill: None,
-                stroke: None,
-                ..default()
-            },
-        )?;
+        let bounds = path
+            .bounds(
+                &Transform::default(),
+                &CanvasPaint {
+                    fill: None,
+                    stroke: None,
+                    ..default()
+                },
+            )
+            .map_err(|error| error.into_bevy_error())?;
         CanvasDocument::append_circle(
             world,
             demo.document,
             shape,
             bounds.max + Vec2::splat(20.0),
             12.0,
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         return Ok(());
     }
     let Some(segment) = segments.get(index) else {
@@ -436,10 +451,12 @@ fn edit_path(world: &mut World, root: Entity, demo: &Demo, action: Action) -> Re
                     LocalizedText::new(TextKey::Canvas(CanvasKey::ChooseLine)),
                 );
             }
-            CanvasDocument::insert_path_anchor(world, demo.document, shape, command, middle)?;
+            CanvasDocument::insert_path_anchor(world, demo.document, shape, command, middle)
+                .map_err(|error| error.into_bevy_error())?;
         }
         Action::Remove => {
-            CanvasDocument::remove_path_anchor(world, demo.document, shape, command)?;
+            CanvasDocument::remove_path_anchor(world, demo.document, shape, command)
+                .map_err(|error| error.into_bevy_error())?;
         }
         Action::Line | Action::Quadratic | Action::Cubic => {
             let replacement = match action {
@@ -452,14 +469,16 @@ fn edit_path(world: &mut World, root: Entity, demo: &Demo, action: Action) -> Re
                 },
                 _ => CanvasPathSegment::Line,
             };
-            CanvasDocument::set_path_segment(world, demo.document, shape, command, replacement)?;
+            CanvasDocument::set_path_segment(world, demo.document, shape, command, replacement)
+                .map_err(|error| error.into_bevy_error())?;
         }
         Action::Close => {
             let closed = path.commands[command..]
                 .iter()
                 .find(|c| matches!(c, CanvasPathCommand::MoveTo(_) | CanvasPathCommand::Close))
                 .is_some_and(|c| matches!(c, CanvasPathCommand::Close));
-            CanvasDocument::set_path_subpath_closed(world, demo.document, shape, command, !closed)?;
+            CanvasDocument::set_path_subpath_closed(world, demo.document, shape, command, !closed)
+                .map_err(|error| error.into_bevy_error())?;
         }
         _ => {}
     }
@@ -469,8 +488,9 @@ fn edit_path(world: &mut World, root: Entity, demo: &Demo, action: Action) -> Re
 fn refresh(world: &mut World) -> Result {
     let demos: Vec<_> = world.query::<&Demo>().iter(world).cloned().collect();
     for demo in demos {
-        let a = CanvasView::center(world, demo.main)?;
-        let b = CanvasView::center(world, demo.auxiliary)?;
+        let a = CanvasView::center(world, demo.main).map_err(|error| error.into_bevy_error())?;
+        let b =
+            CanvasView::center(world, demo.auxiliary).map_err(|error| error.into_bevy_error())?;
         let segment = selected_path(world, &demo)?
             .and_then(|(_, path, segments)| {
                 let index = demo.segment.min(segments.len().saturating_sub(1));
@@ -495,35 +515,49 @@ fn refresh(world: &mut World) -> Result {
                 })
             })
             .unwrap_or_else(|| "—".to_owned());
-        let draft = CanvasView::pen_draft(world, demo.main)?;
-        let mode = match CanvasView::mode(world, demo.main)? {
-            CanvasMode::Select => CanvasKey::Select,
-            CanvasMode::PathNodeEdit => CanvasKey::Nodes,
-            CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
-            CanvasMode::Ellipse(_) => CanvasKey::Ellipse,
-            CanvasMode::Pen(_) => CanvasKey::Pen,
-        };
+        let draft =
+            CanvasView::pen_draft(world, demo.main).map_err(|error| error.into_bevy_error())?;
+        let mode =
+            match CanvasView::mode(world, demo.main).map_err(|error| error.into_bevy_error())? {
+                CanvasMode::Select => CanvasKey::Select,
+                CanvasMode::PathNodeEdit => CanvasKey::Nodes,
+                CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
+                CanvasMode::Ellipse(_) => CanvasKey::Ellipse,
+                CanvasMode::Pen(_) => CanvasKey::Pen,
+            };
         let binding = LocalizedText::with_args(
             TextKey::Canvas(CanvasKey::Readout),
             vec![
                 (
                     "zoom_a",
-                    format!("{:.2}", CanvasView::zoom(world, demo.main)?),
+                    format!(
+                        "{:.2}",
+                        CanvasView::zoom(world, demo.main)
+                            .map_err(|error| error.into_bevy_error())?
+                    ),
                 ),
                 (
                     "zoom_b",
-                    format!("{:.2}", CanvasView::zoom(world, demo.auxiliary)?),
+                    format!(
+                        "{:.2}",
+                        CanvasView::zoom(world, demo.auxiliary)
+                            .map_err(|error| error.into_bevy_error())?
+                    ),
                 ),
                 ("center_a", format!("{:.1}, {:.1}", a.x, a.y)),
                 ("center_b", format!("{:.1}, {:.1}", b.x, b.y)),
                 ("scale", demo.scale.to_string()),
                 (
                     "selection_a",
-                    CanvasView::selection(world, demo.main)?.len().to_string(),
+                    CanvasView::selection(world, demo.main)
+                        .map_err(|error| error.into_bevy_error())?
+                        .len()
+                        .to_string(),
                 ),
                 (
                     "selection_b",
-                    CanvasView::selection(world, demo.auxiliary)?
+                    CanvasView::selection(world, demo.auxiliary)
+                        .map_err(|error| error.into_bevy_error())?
                         .len()
                         .to_string(),
                 ),
@@ -563,30 +597,38 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             .map_err(|_| invalid("expected one Canvas demo"))?;
         match action {
             Action::Select => {
-                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Select)?;
+                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Select)
+                    .map_err(|error| error.into_bevy_error())?;
             }
             Action::Rectangle => {
-                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Rectangle(paint()))?;
+                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Rectangle(paint()))
+                    .map_err(|error| error.into_bevy_error())?;
             }
             Action::Ellipse => {
-                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Ellipse(paint()))?;
+                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Ellipse(paint()))
+                    .map_err(|error| error.into_bevy_error())?;
             }
             Action::Pen => {
-                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Pen(paint()))?;
+                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Pen(paint()))
+                    .map_err(|error| error.into_bevy_error())?;
             }
             Action::Nodes => {
-                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::PathNodeEdit)?;
+                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::PathNodeEdit)
+                    .map_err(|error| error.into_bevy_error())?;
             }
             Action::Add => add_rectangle(world, demo.document)?,
             Action::Raise | Action::Lower | Action::Front | Action::Back => {
-                if let Some(shape) = CanvasView::single_selection(world, demo.main)? {
+                if let Some(shape) = CanvasView::single_selection(world, demo.main)
+                    .map_err(|error| error.into_bevy_error())?
+                {
                     let order = match action {
                         Action::Raise => CanvasOrder::Raise,
                         Action::Lower => CanvasOrder::Lower,
                         Action::Front => CanvasOrder::Front,
                         _ => CanvasOrder::Back,
                     };
-                    CanvasDocument::reorder_shape(world, demo.document, shape, order)?;
+                    CanvasDocument::reorder_shape(world, demo.document, shape, order)
+                        .map_err(|error| error.into_bevy_error())?;
                 } else {
                     bind(
                         world,
@@ -605,17 +647,21 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             | Action::Cubic
             | Action::Close => edit_path(world, root, &demo, action)?,
             Action::ZoomIn | Action::ZoomOut => {
-                let zoom = CanvasView::zoom(world, demo.main)?;
+                let zoom =
+                    CanvasView::zoom(world, demo.main).map_err(|error| error.into_bevy_error())?;
                 let factor = if matches!(action, Action::ZoomIn) {
                     1.25
                 } else {
                     0.8
                 };
-                CanvasView::set_zoom_in_world(world, demo.main, (zoom * factor).clamp(0.1, 10.0))?;
+                CanvasView::set_zoom_in_world(world, demo.main, (zoom * factor).clamp(0.1, 10.0))
+                    .map_err(|error| error.into_bevy_error())?;
             }
             Action::Reset => {
-                CanvasView::set_zoom_in_world(world, demo.main, 1.0)?;
-                CanvasView::set_center_in_world(world, demo.main, Vec2::ZERO)?;
+                CanvasView::set_zoom_in_world(world, demo.main, 1.0)
+                    .map_err(|error| error.into_bevy_error())?;
+                CanvasView::set_center_in_world(world, demo.main, Vec2::ZERO)
+                    .map_err(|error| error.into_bevy_error())?;
             }
             Action::ToggleAuxiliary => {
                 let mut node = world

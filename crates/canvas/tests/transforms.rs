@@ -152,7 +152,14 @@ fn transform_api_validates_all_shape_kinds_without_replacing_geometry_or_order()
             let error = logs
                 .run(|| CanvasDocument::update_transform(app.world_mut(), doc, shape, transform))
                 .unwrap_err();
-            assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+            assert!(
+                error
+                    .diagnostics()
+                    .next()
+                    .unwrap()
+                    .source()
+                    .is_some_and(|cause| cause.is::<CanvasError>())
+            );
             assert!(
                 logs.records()
                     .iter()

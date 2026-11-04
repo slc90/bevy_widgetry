@@ -89,7 +89,14 @@ fn typed_ellipse_crud_preserves_identity_and_rejects_partial_or_cross_kind_updat
             )
         })
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        error
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
     assert!(
         logs.run(|| CanvasDocument::update_rectangle(
             &mut world,

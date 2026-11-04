@@ -1,6 +1,6 @@
+use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasView};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Clone)]
 pub(crate) struct MoveSelection {
@@ -18,23 +18,25 @@ impl MoveSelection {
         hit: Entity,
         start: Vec2,
     ) -> Result<Self> {
-        let shapes = shapes
-            .into_iter()
-            .map(|shape| {
-                world
-                    .get::<Transform>(shape)
-                    .map(|t| (shape, t.translation.truncate()))
-                    .ok_or_else(|| BevyError::error("Canvas selection transform missing"))
+        (|| -> Result<Self> {
+            let shapes = shapes
+                .into_iter()
+                .map(|shape| {
+                    world
+                        .get::<Transform>(shape)
+                        .map(|t| (shape, t.translation.truncate()))
+                        .ok_or_else(|| crate::error::missing(crate::CanvasPart::SelectionTransform))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(Self {
+                document,
+                shapes,
+                hit,
+                moved: false,
+                start,
             })
-            .collect::<Result<Vec<_>>>()
-            .inspect_err(|error| widgetry_error!(?document,%error,"Canvas 批量移动初始化失败"))?;
-        Ok(Self {
-            document,
-            shapes,
-            hit,
-            moved: false,
-            start,
-        })
+        })()
+        .map_err(|error| error.at("document", document).at("hit", hit))
     }
     pub(crate) fn valid(&self, world: &World, view: Entity) -> bool {
         world.get::<crate::view::ViewState>(view).is_some_and(|s| {
@@ -63,18 +65,21 @@ impl MoveSelection {
             }
             let mut transform = *world
                 .get::<Transform>(*shape)
-                .ok_or_else(|| BevyError::error("Canvas selection transform missing"))?;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::SelectionTransform))?;
             transform.translation.x = position.x;
             transform.translation.y = position.y;
             updates.push((*shape, transform));
         }
-        CanvasDocument::update_transforms(world, self.document, &updates)?;
+        CanvasDocument::_update_transforms(world, self.document, &updates)?;
         Ok(delta != bevy::math::DVec2::ZERO)
     }
     pub(crate) fn finish(self, world: &mut World, view: Entity) -> Result {
-        if !self.moved && self.valid(world, view) {
-            CanvasView::set_selection_in_world(world, view, [self.hit])?;
-        }
-        Ok(())
+        (|| -> Result {
+            if !self.moved && self.valid(world, view) {
+                CanvasView::_set_selection_in_world(world, view, [self.hit])?;
+            }
+            Ok(())
+        })()
+        .map_err(|error| error.at("view", view))
     }
 }

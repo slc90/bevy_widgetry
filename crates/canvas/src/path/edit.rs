@@ -1,6 +1,6 @@
+use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasPath, CanvasPathCommand};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CanvasPathSegment {
@@ -16,18 +16,62 @@ impl CanvasDocument {
         shape: Entity,
         before: usize,
         point: Vec2,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_insert_path_anchor(world, document, shape, before, point).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.insert_path_anchor",
+            ))
+        })
+    }
+
+    pub(crate) fn _insert_path_anchor(
+        world: &mut World,
+        document: Entity,
+        shape: Entity,
+        before: usize,
+        point: Vec2,
     ) -> Result<bool> {
         edit(world, document, shape, before, |commands, index| {
             if !point.is_finite() || !matches!(commands[index], CanvasPathCommand::LineTo(_)) {
-                return Err(BevyError::error(
-                    "Canvas anchor insertion requires a LineTo and finite point",
-                ));
+                return Err(crate::error::invalid(crate::CanvasIssue::AnchorInsertion));
             }
             commands.insert(index, CanvasPathCommand::LineTo(point));
             Ok(true)
         })
+        .map_err(|error| {
+            error
+                .input(crate::CanvasInput::Entity {
+                    field: "document",
+                    value: document,
+                })
+                .input(crate::CanvasInput::Entity {
+                    field: "shape",
+                    value: shape,
+                })
+                .input(crate::CanvasInput::Index {
+                    field: "before",
+                    value: before,
+                })
+                .input(crate::CanvasInput::Point {
+                    field: "point",
+                    value: point,
+                })
+        })
     }
     pub fn remove_path_anchor(
+        world: &mut World,
+        document: Entity,
+        shape: Entity,
+        command: usize,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_remove_path_anchor(world, document, shape, command).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.remove_path_anchor",
+            ))
+        })
+    }
+
+    pub(crate) fn _remove_path_anchor(
         world: &mut World,
         document: Entity,
         shape: Entity,
@@ -36,7 +80,7 @@ impl CanvasDocument {
         edit(world, document, shape, command, |commands, index| {
             use CanvasPathCommand::*;
             if matches!(commands[index], Close) {
-                return Err(BevyError::error("Canvas Close has no independent anchor"));
+                return Err(crate::error::invalid(crate::CanvasIssue::CloseAnchor));
             }
             if matches!(commands[index], MoveTo(_)) {
                 let end = commands
@@ -56,8 +100,37 @@ impl CanvasDocument {
             }
             Ok(true)
         })
+        .map_err(|error| {
+            error
+                .input(crate::CanvasInput::Entity {
+                    field: "document",
+                    value: document,
+                })
+                .input(crate::CanvasInput::Entity {
+                    field: "shape",
+                    value: shape,
+                })
+                .input(crate::CanvasInput::Index {
+                    field: "command",
+                    value: command,
+                })
+        })
     }
     pub fn set_path_segment(
+        world: &mut World,
+        document: Entity,
+        shape: Entity,
+        command: usize,
+        segment: CanvasPathSegment,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_set_path_segment(world, document, shape, command, segment).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.set_path_segment",
+            ))
+        })
+    }
+
+    pub(crate) fn _set_path_segment(
         world: &mut World,
         document: Entity,
         shape: Entity,
@@ -67,12 +140,10 @@ impl CanvasDocument {
         edit(world, document, shape, command, |commands, index| {
             use CanvasPathCommand::*;
             if matches!(commands[index], MoveTo(_) | Close) {
-                return Err(BevyError::error(
-                    "Canvas segment conversion requires a drawing command",
-                ));
+                return Err(crate::error::invalid(crate::CanvasIssue::SegmentKind));
             }
             let to = endpoint(commands[index])
-                .ok_or_else(|| BevyError::error("Canvas segment endpoint missing"))?;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::SegmentEndpoint))?;
             let replacement = match segment {
                 CanvasPathSegment::Line => LineTo(to),
                 CanvasPathSegment::Quadratic { control } => QuadTo { control, to },
@@ -88,8 +159,37 @@ impl CanvasDocument {
             commands[index] = replacement;
             Ok(true)
         })
+        .map_err(|error| {
+            error
+                .input(crate::CanvasInput::Entity {
+                    field: "document",
+                    value: document,
+                })
+                .input(crate::CanvasInput::Entity {
+                    field: "shape",
+                    value: shape,
+                })
+                .input(crate::CanvasInput::Index {
+                    field: "command",
+                    value: command,
+                })
+        })
     }
     pub fn set_path_subpath_closed(
+        world: &mut World,
+        document: Entity,
+        shape: Entity,
+        command: usize,
+        closed: bool,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_set_path_subpath_closed(world, document, shape, command, closed).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.set_path_subpath_closed",
+            ))
+        })
+    }
+
+    pub(crate) fn _set_path_subpath_closed(
         world: &mut World,
         document: Entity,
         shape: Entity,
@@ -101,7 +201,7 @@ impl CanvasDocument {
             let start = commands[..=index]
                 .iter()
                 .rposition(|c| matches!(c, MoveTo(_)))
-                .ok_or_else(|| BevyError::error("Canvas subpath MoveTo missing"))?;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::SubpathMoveTo))?;
             let end = commands
                 .iter()
                 .enumerate()
@@ -123,6 +223,25 @@ impl CanvasDocument {
                 commands.splice(start..end, opened);
             }
             Ok(true)
+        })
+        .map_err(|error| {
+            error
+                .input(crate::CanvasInput::Entity {
+                    field: "document",
+                    value: document,
+                })
+                .input(crate::CanvasInput::Entity {
+                    field: "shape",
+                    value: shape,
+                })
+                .input(crate::CanvasInput::Index {
+                    field: "command",
+                    value: command,
+                })
+                .input(crate::CanvasInput::Flag {
+                    field: "closed",
+                    value: closed,
+                })
         })
     }
 }
@@ -172,36 +291,36 @@ fn edit(
     command: usize,
     operation: impl FnOnce(&mut Vec<CanvasPathCommand>, usize) -> Result<bool>,
 ) -> Result<bool> {
-    let candidate = (|| -> Result<Option<(CanvasPath, Transform, CanvasPaint)>> {
-        crate::model::validate_shape(world, document, shape)?;
-        let Some(CanvasGeometry::Path(original)) = world.get::<CanvasGeometry>(shape) else {
-            return Err(BevyError::error("Canvas topology target must be a Path"));
+    (|| -> Result<bool> {
+        let candidate = (|| -> Result<Option<(CanvasPath, Transform, CanvasPaint)>> {
+            crate::model::validate_shape(world, document, shape)?;
+            let Some(CanvasGeometry::Path(original)) = world.get::<CanvasGeometry>(shape) else {
+                return Err(crate::error::invalid(crate::CanvasIssue::TopologyKind));
+            };
+            let transform = *world
+                .get::<Transform>(shape)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::TopologyTransform))?;
+            let paint = *world
+                .get::<CanvasPaint>(shape)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::TopologyPaint))?;
+            original._validate(&transform, &paint)?;
+            let (mut commands, mapping) = explicit_subpaths(original);
+            let index = *mapping
+                .get(command)
+                .ok_or_else(|| crate::error::invalid(crate::CanvasIssue::CommandIndex))?;
+            if !operation(&mut commands, index)? {
+                return Ok(None);
+            }
+            let path = CanvasPath { commands };
+            path._validate(&transform, &paint)?;
+            Ok(Some((path, transform, paint)))
+        })()?;
+        let Some((path, transform, paint)) = candidate else {
+            return Ok(false);
         };
-        let transform = *world
-            .get::<Transform>(shape)
-            .ok_or_else(|| BevyError::error("Canvas topology transform missing"))?;
-        let paint = *world
-            .get::<CanvasPaint>(shape)
-            .ok_or_else(|| BevyError::error("Canvas topology paint missing"))?;
-        original.validate(&transform, &paint)?;
-        let (mut commands, mapping) = explicit_subpaths(original);
-        let index = *mapping
-            .get(command)
-            .ok_or_else(|| BevyError::error("Canvas path command index out of range"))?;
-        if !operation(&mut commands, index)? {
-            return Ok(None);
-        }
-        let path = CanvasPath { commands };
-        path.validate(&transform, &paint)?;
-        Ok(Some((path, transform, paint)))
+        CanvasDocument::_update_path(world, document, shape, path, transform, paint)?;
+        crate::input::cancel_node_edits(world, shape);
+        Ok(true)
     })()
-    .inspect_err(
-        |error| widgetry_error!(?document,?shape,command,%error,"Canvas Path 拓扑更新被拒绝"),
-    )?;
-    let Some((path, transform, paint)) = candidate else {
-        return Ok(false);
-    };
-    CanvasDocument::update_path(world, document, shape, path, transform, paint)?;
-    crate::input::cancel_node_edits(world, shape);
-    Ok(true)
+    .map_err(|error| error.at("document", document).at("shape", shape))
 }

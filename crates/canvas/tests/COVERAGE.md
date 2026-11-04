@@ -187,3 +187,13 @@ png_gpu.rs显式真实DX12测试混合Rectangle/Ellipse/含Line/Quad/Cubic/Arc�
 控制诊断：png_gpu.rs 在真实 DX12 App 通过公开 export_png 验证全局关闭后的提交拒绝，保持 ShuttingDown 分类且只记录一条源头 ERROR，不记录虚假 handled、不分配导出资源。
 
 后台主失败与清理失败在Background共享报告中并存，Bridge、JobOutcome和完成事件保留各origin。早到清理失败与迟到编码失败仍由export::png回归保护。
+
+## 模型与运行时诊断
+
+- `diagnostics.rs`：公开普通 API 的类型化几何、实际命令 index/value、归属 document/shape、独立请求 origin、源头 ERROR 与纯传播不伪处理。
+- `renderer.rs`：多个坏 shape 同帧完整上报、持续故障 origin 稳定、单项修复不影响兄弟失败和健康图形；多 View offscreen 故障保留 Core origin 并独立恢复。
+- 各模型/编辑/输入测试在普通 API 检查领域原因链；排队操作继续通过真实 ECS Handler 验证失败，合法中间态和原子拒绝沿用既有覆盖。
+
+Review 回归：`renderer.rs` 以有界子进程验证已选坏 Ellipse 不会进入无限轮廓细分；`selection.rs` 通过真实 Picking press 验证命中校验保留已知 Owner；`diagnostics.rs` 验证拒绝选择集合和追加矩形 min/max，以及 SVG/PNG 模型拒绝的 Owner 与源头一次 ERROR。
+
+Document 绑定拒绝分别从同步和 Commands 两种入口检查请求目标、真实 Handler 与 Severity；受管批次重新聚合后保留全部传播 frame，由 error Module 单测保护。

@@ -115,7 +115,7 @@ fn rejected(
     world: &mut World,
     document: Entity,
     shape: Entity,
-    operation: impl FnOnce(&mut World) -> Result,
+    operation: impl FnOnce(&mut World) -> Result<(), bevy_widgetry_job::JobFailure>,
 ) {
     let original = commands(world, shape);
     let transform = *world.get::<Transform>(shape).unwrap();
@@ -124,7 +124,14 @@ fn rejected(
     let order = CanvasDocument::shape_order(world, document).unwrap();
     let logs = LogCapture::default();
     let error = logs.run(|| operation(world)).unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        error
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
     assert!(
         logs.records()
             .iter()

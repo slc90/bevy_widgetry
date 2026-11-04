@@ -67,7 +67,14 @@ fn batch_transform_updates_validate_every_member_before_writing() {
     let error = logs
         .run(|| CanvasDocument::update_transforms(&mut world, document, &invalid))
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        error
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
     assert_eq!(logs.records().len(), 1);
     for (shape, t) in &before {
         assert_eq!(world.get::<Transform>(*shape), Some(t));
@@ -87,7 +94,14 @@ fn batch_deletion_rejects_foreign_members_then_removes_the_complete_valid_set_in
             CanvasDocument::remove_shapes(&mut world, document, &[shapes[0], Entity::PLACEHOLDER])
         })
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        error
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
     assert_eq!(
         CanvasDocument::shape_order(&mut world, document).unwrap(),
         shapes
@@ -118,7 +132,14 @@ fn batch_guards_reject_duplicate_updates_foreign_shapes_and_invalid_empty_target
         let error = logs
             .run(|| CanvasDocument::update_transforms(&mut world, target, &updates))
             .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            error
+                .diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
+        );
         assert_eq!(logs.records().len(), 1);
         for (shape, transform) in &before {
             assert_eq!(world.get::<Transform>(*shape), Some(transform));
@@ -128,7 +149,14 @@ fn batch_guards_reject_duplicate_updates_foreign_shapes_and_invalid_empty_target
     let error = logs
         .run(|| CanvasDocument::remove_shapes(&mut world, foreign_document, &shapes))
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        error
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
     assert_eq!(logs.records().len(), 1);
     CanvasDocument::update_transforms(&mut world, document, &[]).unwrap();
     CanvasDocument::remove_shapes(&mut world, document, &[]).unwrap();
@@ -146,8 +174,22 @@ fn batch_guards_reject_duplicate_updates_foreign_shapes_and_invalid_empty_target
     let remove_error = logs
         .run(|| CanvasDocument::remove_shapes(&mut world, Entity::PLACEHOLDER, &[]))
         .unwrap_err();
-    assert_eq!(update_error.severity(), bevy::ecs::error::Severity::Error);
-    assert_eq!(remove_error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        update_error
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
+    assert!(
+        remove_error
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .is_some_and(|cause| cause.is::<CanvasError>())
+    );
     assert_eq!(logs.records().len(), 2);
 }
 

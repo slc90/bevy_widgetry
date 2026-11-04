@@ -53,7 +53,8 @@ fn fixture(count: usize) -> Result<Fixture> {
         },
         Transform::default(),
         CanvasPaint::default(),
-    )?;
+    )
+    .map_err(|error| error.into_bevy_error())?;
     let path = CanvasPath {
         commands: vec![
             MoveTo(Vec2::splat(-40.0)),
@@ -79,7 +80,8 @@ fn fixture(count: usize) -> Result<Fixture> {
                 fill_rule: CanvasFillRule::EvenOdd,
                 ..default()
             },
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
     }
     let view=app.world_mut().spawn_scene(bsn! { @CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(40),top:px(40),width:px(200),height:px(160)} }).map_err(BevyError::error)?.id();
     let other_view=app.world_mut().spawn_scene(bsn! { @CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(300),top:px(40),width:px(200),height:px(160)} }).map_err(BevyError::error)?.id();
@@ -142,9 +144,12 @@ fn main() -> Result {
                     queue_pointer(&mut f.app, f.pointer, at.clone(), action);
                 }
                 frame(&mut f.app)?;
-                if CanvasView::single_selection(f.app.world(), f.view)?
+                if CanvasView::single_selection(f.app.world(), f.view)
+                    .map_err(|error| error.into_bevy_error())?
                     != Some(if hole { f.bottom } else { f.top })
-                    || CanvasView::single_selection(f.app.world(), f.other_view)?.is_some()
+                    || CanvasView::single_selection(f.app.world(), f.other_view)
+                        .map_err(|error| error.into_bevy_error())?
+                        .is_some()
                 {
                     return Err(error(
                         "Canvas click must select the actual hit and preserve the other view",
@@ -160,11 +165,15 @@ fn main() -> Result {
             false,
             || {
                 let mut f = fixture(count)?;
-                let document = CanvasView::document(f.app.world(), f.view)?
+                let document = CanvasView::document(f.app.world(), f.view)
+                    .map_err(|error| error.into_bevy_error())?
                     .ok_or_else(|| error("Multi selection document missing"))?;
-                let shapes = CanvasDocument::shape_order(f.app.world_mut(), document)?;
-                CanvasView::set_selection_in_world(f.app.world_mut(), f.view, shapes)?;
-                CanvasView::set_selection_in_world(f.app.world_mut(), f.other_view, [f.bottom])?;
+                let shapes = CanvasDocument::shape_order(f.app.world_mut(), document)
+                    .map_err(|error| error.into_bevy_error())?;
+                CanvasView::set_selection_in_world(f.app.world_mut(), f.view, shapes)
+                    .map_err(|error| error.into_bevy_error())?;
+                CanvasView::set_selection_in_world(f.app.world_mut(), f.other_view, [f.bottom])
+                    .map_err(|error| error.into_bevy_error())?;
                 f.app
                     .world_mut()
                     .resource_mut::<ButtonInput<KeyCode>>()
@@ -186,10 +195,13 @@ fn main() -> Result {
                 }
                 frame(&mut f.app)?;
                 let expected = count + usize::from(index % 2 == 1);
-                let selection = CanvasView::selection(f.app.world(), f.view)?;
+                let selection = CanvasView::selection(f.app.world(), f.view)
+                    .map_err(|error| error.into_bevy_error())?;
                 if selection.len() != expected
                     || selection.contains(&f.top) != (index % 2 == 1)
-                    || CanvasView::selection(f.app.world(), f.other_view)? != [f.bottom]
+                    || CanvasView::selection(f.app.world(), f.other_view)
+                        .map_err(|error| error.into_bevy_error())?
+                        != [f.bottom]
                     || f.app
                         .world()
                         .resource::<bevy::picking::hover::PointerCaptureMap>()

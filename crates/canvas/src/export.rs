@@ -13,6 +13,7 @@ pub enum CanvasExportError {
     EmptyDocument,
     InvalidDocument,
     InvalidGeometry(String),
+    Model(bevy_widgetry_job::JobFailure),
     InvalidRegion,
     UnsupportedColor,
     InvalidScale,
@@ -43,7 +44,7 @@ impl fmt::Display for CanvasExportError {
             }
             Self::Io(error) => write!(f, "Canvas export I/O failed: {error}"),
             Self::Job(error) => write!(f, "Canvas PNG Job submission failed: {error}"),
-            Self::Background(error) => fmt::Display::fmt(error, f),
+            Self::Background(error) | Self::Model(error) => fmt::Display::fmt(error, f),
             Self::Canceled => f.write_str("Canvas PNG export canceled"),
             Self::InvalidScale => f.write_str("PNG scale must be finite and positive"),
             Self::InvalidResolution => {
@@ -71,7 +72,7 @@ impl std::error::Error for CanvasExportError {
             Self::Io(error) => Some(error),
             Self::Encoding(error) => Some(error),
             Self::Job(error) => Some(error),
-            Self::Background(error) => Some(error),
+            Self::Background(error) | Self::Model(error) => Some(error),
             _ => None,
         }
     }
@@ -181,7 +182,11 @@ impl CanvasDocument {
             svg.push_str("</g></svg>\n");
             std::fs::write(path, svg).map_err(CanvasExportError::Io)
         })();
-        result.inspect_err(|error| widgetry_error!(?document,?path,%error,"Canvas SVG 导出失败"))
+        result.inspect_err(|error| {
+            if !matches!(error, CanvasExportError::Model(_)) {
+                widgetry_error!(?document,?path,%error,"Canvas SVG 导出失败");
+            }
+        })
     }
 }
 
@@ -241,6 +246,7 @@ fn color(attribute: &str, value: Color) -> String {
 }
 
 struct Shape {
+    entity: Entity,
     geometry: CanvasGeometry,
     transform: Transform,
     paint: CanvasPaint,
@@ -265,8 +271,16 @@ fn snapshot(
         .get::<crate::order::ShapeOrder>(document)
         .ok_or(CanvasExportError::InvalidDocument)?;
     for &entity in &order.0 {
-        crate::model::validate_shape(world, document, entity)
-            .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
+        crate::model::validate_shape(world, document, entity).map_err(|error| {
+            CanvasExportError::Model(
+                error
+                    .at("document", document)
+                    .at("shape", entity)
+                    .into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                        "canvas.export.model",
+                    )),
+            )
+        })?;
         let geometry = world.get::<CanvasGeometry>(entity);
         let transform = world.get::<Transform>(entity);
         let paint = world.get::<CanvasPaint>(entity);
@@ -275,14 +289,22 @@ fn snapshot(
                 "Shape requires CanvasGeometry, Transform and CanvasPaint".to_owned(),
             ));
         };
-        let b = geometry
-            .bounds(transform, paint)
-            .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
+        let b = geometry._bounds(transform, paint).map_err(|error| {
+            CanvasExportError::Model(
+                error
+                    .at("document", document)
+                    .at("shape", entity)
+                    .into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                        "canvas.export.bounds",
+                    )),
+            )
+        })?;
         bounds = Some(bounds.map_or(b, |old| Rect {
             min: old.min.min(b.min),
             max: old.max.max(b.max),
         }));
         shapes.push(Shape {
+            entity,
             geometry: geometry.clone(),
             transform: *transform,
             paint: *paint,
@@ -305,7 +327,7 @@ impl CanvasExportError {
         use bevy_widgetry_job::JobFailure;
         match self {
             Self::Job(error) => error.into(),
-            Self::Background(error) => error,
+            Self::Background(error) | Self::Model(error) => error,
             Self::Offscreen(error) => error.into_bevy_error().into(),
             Self::Scene(error) => error.into_bevy_error().into(),
             Self::Cleanup { primary, cleanup } => primary
@@ -332,7 +354,7 @@ impl CanvasExportError {
 
     fn record_managed_handled(&self) -> bool {
         match self {
-            Self::Background(error) => {
+            Self::Background(error) | Self::Model(error) => {
                 error.record_handled("终止 PNG 导出并完成资源清理", "导出失败");
                 true
             }

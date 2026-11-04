@@ -101,7 +101,14 @@ fn path_crud_retains_commands_identity_order_and_rejects_invalid_updates() {
                 )
             })
             .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            error
+                .diagnostics()
+                .next()
+                .unwrap()
+                .source()
+                .is_some_and(|cause| cause.is::<CanvasError>())
+        );
         assert_eq!(
             world.get::<CanvasGeometry>(shape),
             Some(&CanvasGeometry::Path(original.clone()))
