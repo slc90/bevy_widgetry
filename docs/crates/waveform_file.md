@@ -39,3 +39,7 @@ Reader 后台失败经 JobFailure 与 WaveformReadError::Job 共享原诊断，�
 Source 保留 Reader 的终态接收器；Drop 请求取消并通知工作线程后，由已有后台池继续等待真实退出。取消后才到达的失败由该 Owner 明确放弃并移除失败记录，避免诊断无人消费；正常取消的记录仍可通过 Manager 查询。该收尾在 Manager 全局关闭后继续可用，不提交新的受管 Job。
 
 Source 直接共享 `WaveformReadError` 诊断，录制辅助入口保留原 I/O / JSON 等 Error，而不是 Display 字符串。查询失败在移交时附加实际请求身份；取消、替换或关闭显式放弃已完成失败，迟到的过期失败在确认废弃后记录处理 DEBUG。正常 Pending 与取消未开始的工作不创建错误，也不影响其他 reader。
+
+记录构建、打开与同步查询返回共享 `JobFailure`（`WaveformReadError`），其中 `RecordingFailure = WidgetryFailure<RecordingError>` 提供可匹配的 I/O、JSON、截断、标识/尾部、元信息布局、MinMax/LTTB 索引、样本、查询范围和 producer 长度分类。真实 I/O、JSON、解码及整数转换保留原 source；错误包含目标 path、已知临时路径、操作阶段及实际 offset/length、channel、range、算法和输出密度。已知字段随发生位置记录，不编造未知偏移。
+
+producer 返回既有受管失败时，仅添加文件、通道与块范围语境，保留原 origin、ID 和回溯；Waveform Metadata 校验同样沿用其领域诊断。失败不会将临时文件发布为完整记录，已有目标仍通过 `persist_noclobber` 拒绝覆盖。该发布规则不额外承诺跨外部操作的事务或崩溃恢复保证。普通文件 API 不转换为 Bevy 错误，直接消费者在 ECS 或 benchmark 执行边界显式桥接为 Error Severity。

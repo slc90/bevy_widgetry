@@ -35,8 +35,9 @@ fn fixture(frames: u64) -> Result<Fixture> {
             Ok(())
         },
     )
-    .map_err(|e| BevyError::error(e.to_string()))?;
-    let recording = Recording::open(&path).map_err(|e| BevyError::error(e.to_string()))?;
+    .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
+    let recording =
+        Recording::open(&path).map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
     Ok(Fixture {
         directory: Arc::new(directory),
         recording,
@@ -59,7 +60,7 @@ fn main() -> Result {
                         recording: Recording::open(
                             &prepared.directory.path().join("benchmark.widx"),
                         )
-                        .map_err(|e| BevyError::error(e.to_string()))?,
+                        .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?,
                         frames,
                     })
                 },
@@ -68,7 +69,7 @@ fn main() -> Result {
                     let result = fixture
                         .recording
                         .query(start..start + 640_000, 1200, algorithm)
-                        .map_err(|e| BevyError::error(e.to_string()))?;
+                        .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
                     std::hint::black_box(result);
                     Ok(())
                 },

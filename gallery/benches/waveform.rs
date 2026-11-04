@@ -60,7 +60,8 @@ fn main() -> Result {
         let path = std::env::var_os("GALLERY_WAVEFORM_REPLAY")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| artifact.workspace.join("gallery/data/waveform/replay.widx"));
-        let recording = bevy_widgetry_waveform_file::Recording::open(&path).map_err(error)?;
+        let recording = bevy_widgetry_waveform_file::Recording::open(&path)
+            .map_err(bevy_widgetry::job::JobFailure::into_bevy_error)?;
         let metadata = recording.metadata();
         if let bevy_widgetry::waveform::WaveformSessionKind::Replay { total_frames } = metadata.kind
         {

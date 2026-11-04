@@ -1,13 +1,10 @@
-use crate::DiskReadStats;
-use crate::recording::{
-    Result, error, invalid, read_at, read_indexed_payload, u64_at, write_indexed_payload,
-};
+use crate::recording::{Result, read_at, read_indexed_payload, u64_at, write_indexed_payload};
+use crate::{DiskReadStats, RecordingError, io::FileAccess};
 use bevy_widgetry_waveform::{
     ChannelView, LttbReducer, ReducedChannel, ReductionInput, WaveformPoint, WaveformReducer,
 };
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::{Seek, SeekFrom};
+use std::io::SeekFrom;
 use std::ops::Range;
 
 const BLOCK: u64 = 65_536;
@@ -20,19 +17,40 @@ pub(super) struct LttbLevel {
 }
 
 pub(super) fn validate(
+    file: &mut FileAccess<'_>,
     index: &[Vec<LttbLevel>],
     channels: usize,
     frames: u64,
     raw_end: u64,
     payload_end: u64,
 ) -> Result<()> {
+    file.channel = None;
+    file.algorithm = Some(bevy_widgetry_waveform::WaveformAlgorithm::Lttb);
     if index.len() != channels {
-        return Err(invalid());
+        return Err(file.fail(
+            RecordingError::LevelCount {
+                algorithm: bevy_widgetry_waveform::WaveformAlgorithm::Lttb,
+                channel: None,
+                actual: index.len(),
+                expected: channels,
+            },
+            "waveform_file.lttb.validate",
+        ));
     }
     let count = frames.div_ceil(BLOCK);
-    for levels in index {
+    for (channel, levels) in index.iter().enumerate() {
+        file.channel = Some(channel);
+        file.algorithm = Some(bevy_widgetry_waveform::WaveformAlgorithm::Lttb);
         if levels.len() != STRIDES.len() {
-            return Err(invalid());
+            return Err(file.fail(
+                RecordingError::LevelCount {
+                    algorithm: bevy_widgetry_waveform::WaveformAlgorithm::Lttb,
+                    channel: Some(channel),
+                    actual: levels.len(),
+                    expected: STRIDES.len(),
+                },
+                "waveform_file.lttb.validate",
+            ));
         }
         for (level, stride) in levels.iter().zip(STRIDES) {
             if level.stride != stride
@@ -42,24 +60,49 @@ pub(super) fn validate(
                     .and_then(|n| level.table.checked_add(n))
                     .is_none_or(|end| end > payload_end)
             {
-                return Err(invalid());
+                return Err(file.fail(
+                    RecordingError::Level {
+                        algorithm: bevy_widgetry_waveform::WaveformAlgorithm::Lttb,
+                        channel,
+                        size: level.stride,
+                        count,
+                        table: level.table,
+                        expected_size: stride,
+                        expected_count: count,
+                        raw_end,
+                        payload_end,
+                    },
+                    "waveform_file.lttb.validate",
+                ));
             }
         }
     }
     Ok(())
 }
 
-pub(super) fn build(file: &mut File, frames: u64, channels: usize) -> Result<Vec<Vec<LttbLevel>>> {
+pub(super) fn build(
+    file: &mut FileAccess<'_>,
+    frames: u64,
+    channels: usize,
+) -> Result<Vec<Vec<LttbLevel>>> {
     let count = frames.div_ceil(BLOCK);
     let mut index = Vec::with_capacity(channels);
     for channel in 0..channels {
+        file.channel = Some(channel);
+        file.algorithm = Some(bevy_widgetry_waveform::WaveformAlgorithm::Lttb);
         let raw = 8 + channel as u64 * frames * 5;
         let mut levels = Vec::new();
         for stride in STRIDES {
-            let table = file.seek(SeekFrom::End(0)).map_err(error)?;
-            file.set_len(table.checked_add(count * 16).ok_or_else(invalid)?)
-                .map_err(error)?;
+            file.range = None;
+            let table = file.seek(SeekFrom::End(0))?;
+            file.set_len(
+                count
+                    .checked_mul(16)
+                    .and_then(|n| table.checked_add(n))
+                    .ok_or_else(|| file.overflow("lttb_table_length", table, count))?,
+            )?;
             for block in 0..count {
+                file.range = Some(block * BLOCK..((block + 1) * BLOCK).min(frames));
                 // Each resolution starts from the original channel samples.
                 // Reusing a previous LTTB level would change triangle candidates and means.
                 let points = reduce_raw(
@@ -85,7 +128,7 @@ pub(super) fn build(file: &mut File, frames: u64, channels: usize) -> Result<Vec
 }
 
 fn reduce_raw(
-    file: &mut File,
+    file: &mut FileAccess<'_>,
     raw: u64,
     range: Range<u64>,
     stride: u64,
@@ -104,7 +147,11 @@ fn reduce_raw(
     let mut first_valid = false;
     for (index, cell) in bytes.as_chunks::<5>().0.iter().skip(skip).enumerate() {
         let sample = range.start + index as u64;
-        let value = f32::from_le_bytes(cell[..4].try_into().map_err(error)?);
+        let value = f32::from_le_bytes(
+            cell[..4]
+                .try_into()
+                .map_err(|source| file.decode(source, 4))?,
+        );
         match cell[4] {
             0 => {
                 values.push(0.0);
@@ -120,7 +167,16 @@ fn reduce_raw(
                     first_valid = true;
                 }
             }
-            _ => return Err(invalid()),
+            _ => {
+                return Err(file.fail(
+                    RecordingError::Sample {
+                        frame: sample,
+                        value,
+                        validity: cell[4],
+                    },
+                    "waveform_file.lttb.raw",
+                ));
+            }
         }
     }
     let views = [ChannelView {
@@ -142,7 +198,10 @@ fn reduce_raw(
         &mut output,
     );
     let Some(ReducedChannel::Polyline(mut points)) = output.pop() else {
-        return Err(error(crate::recording::RecordingFault::ReducedOutput));
+        return Err(file.fail(
+            RecordingError::ReducedOutput { range, stride },
+            "waveform_file.lttb.reduce",
+        ));
     };
     if preceding_valid
         && first_valid
@@ -154,7 +213,7 @@ fn reduce_raw(
 }
 
 pub(super) fn query(
-    file: &mut File,
+    file: &mut FileAccess<'_>,
     levels: &[LttbLevel],
     raw: u64,
     frames: u64,
@@ -183,16 +242,33 @@ pub(super) fn query(
         )?;
         let mut previous = None;
         for cell in bytes.as_chunks::<16>().0 {
-            let sample = u64_at(&cell[..8])?;
-            let value = f32::from_le_bytes(cell[8..12].try_into().map_err(error)?);
-            let split = u32::from_le_bytes(cell[12..16].try_into().map_err(error)?);
+            let sample = u64_at(file, &cell[..8])?;
+            let value = f32::from_le_bytes(
+                cell[8..12]
+                    .try_into()
+                    .map_err(|source| file.decode(source, 4))?,
+            );
+            let split = u32::from_le_bytes(
+                cell[12..16]
+                    .try_into()
+                    .map_err(|source| file.decode(source, 4))?,
+            );
             if sample < blocks.start * BLOCK
                 || sample >= frames.min(blocks.end * BLOCK)
                 || previous.is_some_and(|p| p >= sample)
                 || !value.is_finite()
                 || split > 1
             {
-                return Err(invalid());
+                return Err(file.fail(
+                    RecordingError::Point {
+                        sample,
+                        value,
+                        split,
+                        previous,
+                        range: blocks.start * BLOCK..frames.min(blocks.end * BLOCK),
+                    },
+                    "waveform_file.lttb.query",
+                ));
             }
             previous = Some(sample);
             if range.contains(&sample) {
@@ -233,7 +309,7 @@ pub(super) fn query(
 }
 
 fn endpoint(
-    file: &mut File,
+    file: &mut FileAccess<'_>,
     raw: u64,
     sample: u64,
     break_before: bool,
@@ -241,7 +317,11 @@ fn endpoint(
 ) -> Result<Option<WaveformPoint>> {
     let mut cell = [0; 5];
     read_at(file, raw + sample * 5, &mut cell, stats)?;
-    let value = f32::from_le_bytes(cell[..4].try_into().map_err(error)?);
+    let value = f32::from_le_bytes(
+        cell[..4]
+            .try_into()
+            .map_err(|source| file.decode(source, 4))?,
+    );
     match cell[4] {
         0 => Ok(None),
         1 if value.is_finite() => Ok(Some(WaveformPoint {
@@ -249,6 +329,13 @@ fn endpoint(
             value,
             break_before,
         })),
-        _ => Err(invalid()),
+        _ => Err(file.fail(
+            RecordingError::Sample {
+                frame: sample,
+                value,
+                validity: cell[4],
+            },
+            "waveform_file.lttb.endpoint",
+        )),
     }
 }

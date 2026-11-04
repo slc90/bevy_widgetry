@@ -5,6 +5,7 @@
 - `source.rs` 还覆盖显式共享 Manager 的关闭拒收。Source 模块并发回归覆盖空闲全局取消、阻塞查询期间 Drop 返回且仍 Stopping、Timeout 后真实退出、过期失败不干扰其他 reader、线程 panic 后公开读取错误，以及 Source 销毁/关闭后迟到的 panic 诊断消费与失败记录释放。
 - `source.rs` 同时检查真实读取的有界统计快照：查询计数、实际读取字节、非零文件 I/O 计时，以及包含 I/O 的完整查询耗时。不将机器耗时作为性能断言。
 - `lttb.rs`：六个 LTTB 密度独立等价于直接原始样本降采样；跨块缺口、样本身份、时序、PolyLine 算法一致性及局部随机窗口。`source.rs` 还覆盖快速 MinMax/LTTB 交替后的最新算法结果。
+- `diagnostics.rs`：真实不存在/权限拒绝、截断及打开后文件截短、错误标识、JSON 原因、单位与层表布局、两算法索引 offset、原始/producer 非有限样本、错误帧/通道范围与零密度；检查可匹配分类、path、offset/length 与通道/范围/算法语境。producer 原 origin 与块现场保持，失败清理临时资源、拒绝覆盖保留已有目标；源头一次 ERROR、纯传播无 handled、实际 Command 经宿主保留 Error Severity 和原 origin。
 
 所有数据查询经正式文件格式执行，无模拟延迟。耗时由 Benchmark 测量，行为测试只断言确定性结果及工作量。
 
