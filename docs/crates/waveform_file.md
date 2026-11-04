@@ -32,9 +32,9 @@ Gallery 的 `gallery/examples/generate_recording.rs` 通过本 crate 的 `build_
 
 `DiskWaveformSource::stats()` 提供只读有界快照：实际 worker 查询次数、已失效/取消查询数、排队 reader 数，以及最近一次成功查询的完整请求身份、总耗时与 `DiskReadStats`。只保留一份观测，不累计请求历史或样本。`DiskReadStats::io_time` 测量 `seek` 与 `read_exact`，包含 OS 缓存命中；总查询减去该值还包括解码、校验、分配和索引计算，不能当作纯降采样时间或冷磁盘耗时。观测不改变 Pending、取消和旧结果丢弃契约。
 
-提交 Reader 被拒绝、访问已移除 Job 的控制错误通过 WaveformReadError::Job 保留统一诊断，并继续交给调用方。Source Drop 使用 cancel_if_present，合法移除后的清理不产生 NotFound 或重复 ERROR。
+提交 Reader 被拒绝、访问已移除 Job 的控制错误通过共享 WaveformReadError 保留统一诊断，并继续交给调用方。Source Drop 使用 cancel_if_present，合法移除后的清理不产生 NotFound 或重复 ERROR。
 
-Reader 后台失败经 JobFailure 与 WaveformReadError::Job 共享原诊断，不再将 JobOutcome 转为唯一错误字符串。队列锁失败在 Reader 工作边界纳入统一诊断，停止后的正常取消仍不制造失败。
+Reader 后台失败经 JobFailure 与 WaveformReadError 共享原诊断，不再将 JobOutcome 转为唯一错误字符串。队列锁失败在 Reader 工作边界纳入统一诊断，停止后的正常取消仍不制造失败。
 
 Source 保留 Reader 的终态接收器；Drop 请求取消并通知工作线程后，由已有后台池继续等待真实退出。取消后才到达的失败由该 Owner 明确放弃并移除失败记录，避免诊断无人消费；正常取消的记录仍可通过 Manager 查询。该收尾在 Manager 全局关闭后继续可用，不提交新的受管 Job。
 
@@ -43,3 +43,9 @@ Source 直接共享 `WaveformReadError` 诊断，录制辅助入口保留原 I/O
 记录构建、打开与同步查询返回共享 `JobFailure`（`WaveformReadError`），其中 `RecordingFailure = WidgetryFailure<RecordingError>` 提供可匹配的 I/O、JSON、截断、标识/尾部、元信息布局、MinMax/LTTB 索引、样本、查询范围和 producer 长度分类。真实 I/O、JSON、解码及整数转换保留原 source；错误包含目标 path、已知临时路径、操作阶段及实际 offset/length、channel、range、算法和输出密度。已知字段随发生位置记录，不编造未知偏移。
 
 producer 返回既有受管失败时，仅添加文件、通道与块范围语境，保留原 origin、ID 和回溯；Waveform Metadata 校验同样沿用其领域诊断。失败不会将临时文件发布为完整记录，已有目标仍通过 `persist_noclobber` 拒绝覆盖。该发布规则不额外承诺跨外部操作的事务或崩溃恢复保证。普通文件 API 不转换为 Bevy 错误，直接消费者在 ECS 或 benchmark 执行边界显式桥接为 Error Severity。
+
+Reader 的 `open`、`stats`、`read`、`read_reduced` 和工作线程传播携带 path、已知 job_id，以及实际 reader/request ID、session/target generation、range/viewport、算法和 output_len。提交前尚无 Job 时不编造 ID。Slot 查询错误与 Job 终态错误保持独立，原 Recording/Job 诊断经 Reader 和 WaveformRuntime 传播时不重新捕栈。
+
+`DiskReaderFailure = WidgetryFailure<DiskReaderError>` 区分队列锁中毒与 Reader 已停止，并用 `ReaderStopReason` 表达已知停止原因。队列中毒后取得原 guard、清除中毒标记并设置 shutdown，保存一份终止诊断；stats/读取/Job 结果共用 origin，Reader 清理队列后失败退出。中毒 guard 本身不能跨线程保存，不将其转换为字符串原因；恢复锁访问不等于业务错误已经处理。发布查询结果时若同时发现队列故障，终态同时保留查询失败与队列失败。
+
+Source 销毁会明确放弃已有 Slot 失败，并通过原 Condvar 协议唤醒 Reader；在途查询仍等待真实完成。后台终态 Owner 也消费销毁时才发现、尚未进入 Job 的队列故障，避免 Reader 已 panic 后留下无人处理的诊断。取消状态或正常 Pending 不新建错误；存活 Source 在服务已停止后收到的新读取请求仍返回可匹配的停止错误。

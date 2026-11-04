@@ -7,6 +7,8 @@ mod lttb_index;
 mod recording;
 mod source;
 
-pub use error::{RecordingError, RecordingFailure};
+pub use error::{
+    DiskReaderError, DiskReaderFailure, ReaderStopReason, RecordingError, RecordingFailure,
+};
 pub use recording::{DiskQuery, DiskReadStats, Recording, build_recording};
 pub use source::{DiskReadObservation, DiskSourceStats, DiskWaveformSource};

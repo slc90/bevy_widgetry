@@ -4,6 +4,17 @@ use bevy_widgetry_waveform::*;
 use bevy_widgetry_waveform_file::*;
 use std::time::{Duration, Instant};
 
+fn cause<'a, T: std::error::Error + 'static>(
+    mut error: &'a (dyn std::error::Error + 'static),
+) -> Option<&'a T> {
+    loop {
+        if let Some(value) = error.downcast_ref::<T>() {
+            return Some(value);
+        }
+        error = error.source()?;
+    }
+}
+
 fn request(id: u64, reader_id: u64) -> WaveformReadRequest {
     WaveformReadRequest {
         id,
@@ -117,7 +128,25 @@ fn latest_requests_readers_cancellation_and_disk_errors() {
         .set_len(16)
         .unwrap();
     let error = wait(&source, &request(30, 1)).unwrap_err();
-    assert!(!error.to_string().is_empty());
+    assert!(
+        matches!(cause::<RecordingError>(&error), Some(RecordingError::Io { source, .. }) if source.kind() == std::io::ErrorKind::UnexpectedEof)
+    );
+    let fields: Vec<_> = error
+        .diagnostics()
+        .flat_map(|d| d.contexts())
+        .flat_map(|c| c.fields())
+        .collect();
+    for (key, value) in [
+        ("path", path.display().to_string()),
+        ("job_id", source.job_id().get().to_string()),
+        ("reader_id", "1".into()),
+        ("request_id", "30".into()),
+    ] {
+        assert!(
+            fields.iter().any(|(k, v)| k == key && v == &value),
+            "missing {key}"
+        );
+    }
 }
 
 #[test]
@@ -148,10 +177,7 @@ fn reader_creation_respects_global_shutdown() {
         let report = error.into_report();
         let diagnostic = report.diagnostics().next().unwrap();
         assert!(matches!(
-            diagnostic
-                .source()
-                .unwrap()
-                .downcast_ref::<bevy_widgetry_job::SubmitError>(),
+            cause::<bevy_widgetry_job::SubmitError>(diagnostic),
             Some(bevy_widgetry_job::SubmitError::ShuttingDown { .. })
         ));
         assert_eq!(

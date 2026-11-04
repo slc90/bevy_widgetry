@@ -12,3 +12,4 @@
 - 控制诊断：关闭拒收保留 SubmitError::ShuttingDown、共享 origin、源头一次 ERROR、无虚假 handled，并经真实 Bevy Command 保持 Error Severity；已移除记录的 Source Drop 无错误，panic 结束后移除再读取保留 NotFound 诊断。
 
 - Source 并发回归同时检查已完成失败在取消、同 reader 替换、Source 销毁及阻塞查询迟到后被明确废弃时，只记录同源处理 DEBUG；错误构造于捕获作用域，真实执行线程显式携带测试 dispatcher。既有受管 Job 控制报告直接共享，不再匹配旧 enum 包装。
+- Reader 模块回归还覆盖：同一次队列中毒跨 stats/read/终态只保留一个 origin；工作线程真实 I/O 错误经过请求通道到 WaveformRuntime 保留 origin、原生原因和结构化现场；查询失败与队列中毒同时到达时全部保留；工作线程已持锁 panic 后 Source Drop 才发现的队列故障也在真实退出后消费。清理与传播不依赖错误链的固定包装深度。

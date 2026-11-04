@@ -2,19 +2,58 @@ use super::*;
 use crate::i18n::localized_binding;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::job::{
-    JobId, JobManager, JobOptions, JobOutcome, JobRead, JobReceiver, SendStatus,
+    JobContext, JobFailure, JobId, JobManager, JobOptions, JobOutcome, JobRead, JobReceiver,
+    SendStatus,
 };
 use bevy_widgetry::text::WidgetryText;
 use bevy_widgetry_waveform_file::DiskWaveformSource;
 
 #[derive(Debug)]
-struct SourceOwnerAlreadyInitialized;
-impl std::fmt::Display for SourceOwnerAlreadyInitialized {
+enum OpenError {
+    OwnerAlreadyInitialized,
+    ClosedBeforeFinished,
+    CompletedWithoutSource,
+}
+impl std::fmt::Display for OpenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("recording source owner already initialized")
+        write!(f, "recording open failed: {self:?}")
     }
 }
-impl std::error::Error for SourceOwnerAlreadyInitialized {}
+impl std::error::Error for OpenError {}
+
+fn open_frame(
+    path: &std::path::Path,
+    job: Option<JobId>,
+    revision: u64,
+) -> bevy_widgetry::diagnostics::ErrorFrame {
+    let frame = bevy_widgetry::diagnostics::ErrorFrame::new("gallery.waveform.open")
+        .field("path", path.display())
+        .field("revision", revision);
+    match job {
+        Some(job) => frame.field("job_id", job.get()),
+        None => frame,
+    }
+}
+
+fn open_failure(kind: OpenError, path: &std::path::Path, job: JobId, revision: u64) -> JobFailure {
+    bevy_widgetry::diagnostics::WidgetryFailure::new(kind, open_frame(path, Some(job), revision))
+        .into()
+}
+
+fn deliver_source(
+    context: &JobContext<Weak<DiskWaveformSource>>,
+    source: &Arc<DiskWaveformSource>,
+) -> std::result::Result<(), JobFailure> {
+    match context.send_blocking(Arc::downgrade(source)) {
+        Ok(SendStatus::Sent) => Ok(()),
+        Ok(SendStatus::Canceled) => {
+            context.acknowledge_cancel();
+            Ok(())
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
 use std::path::PathBuf;
 use std::sync::{OnceLock, Weak};
 
@@ -78,6 +117,7 @@ impl DiskReplay {
             return;
         }
         let path = self.path.clone();
+        let revision = self.revision;
         self.state = LoadState::Loading;
         let manager = self.manager.clone();
         let owner = Arc::new(OnceLock::new());
@@ -92,17 +132,19 @@ impl DiskReplay {
                     context.acknowledge_cancel();
                     return Ok(());
                 }
-                let source = Arc::new(DiskWaveformSource::open(&path, &manager)?);
+                let source =
+                    Arc::new(DiskWaveformSource::open(&path, &manager).map_err(|error| {
+                        error.with_context(open_frame(&path, Some(context.id()), revision))
+                    })?);
                 if thread_owner.set(source.clone()).is_err() {
-                    return Err(bevy_widgetry::job::JobFailure::external(
-                        SourceOwnerAlreadyInitialized,
-                        bevy_widgetry::diagnostics::ErrorFrame::new("gallery.waveform.open"),
+                    return Err(open_failure(
+                        OpenError::OwnerAlreadyInitialized,
+                        &path,
+                        context.id(),
+                        revision,
                     ));
                 }
-                match context.send_blocking(Arc::downgrade(&source)) {
-                    Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
-                    Err(error) => Err(error.into()),
-                }
+                deliver_source(&context, &source)
             },
         ) {
             Ok((id, receiver)) => {
@@ -115,8 +157,12 @@ impl DiskReplay {
                 })
             }
             Err(error) => {
-                self.failed(error.to_string());
-                error.record_handled("停止打开录制文件并保留当前回放会话", "提交失败");
+                let error = JobFailure::from(error).with_context(open_frame(
+                    &self.path,
+                    None,
+                    self.revision,
+                ));
+                self.reject(error, "提交失败");
             }
         }
     }
@@ -155,8 +201,11 @@ impl DiskReplay {
         }
     }
     fn failed(&mut self, error: String) {
-        warn!(path = %self.path.display(), %error, "本地 Waveform 回放记录加载失败，保留当前会话");
         self.state = LoadState::Failed(error);
+    }
+    fn reject(&mut self, error: JobFailure, outcome: &str) {
+        self.failed(error.to_string());
+        error.record_handled("停止打开录制文件并保留当前回放会话", outcome);
     }
     pub(super) fn loading(&self) -> bool {
         self.task.is_some()
@@ -171,15 +220,25 @@ impl DiskReplay {
             Ok(JobRead::Finished(outcome)) => outcome,
             Ok(JobRead::Empty) => return None,
             Ok(JobRead::Closed) => {
+                let error = open_failure(
+                    OpenError::ClosedBeforeFinished,
+                    &self.path,
+                    task.id,
+                    task.revision,
+                );
                 self.cancel_open();
-                self.failed("recording receiver closed before Finished".into());
+                self.reject(error, "结果通道提前关闭");
                 return None;
             }
             Err(error) => {
+                let error = JobFailure::from(error).with_context(open_frame(
+                    &self.path,
+                    Some(task.id),
+                    task.revision,
+                ));
                 self.cancel_open();
                 self.revision = self.revision.wrapping_add(1);
-                self.failed(error.to_string());
-                error.record_handled("停止打开录制文件并保留当前回放会话", "结果交付失败");
+                self.reject(error, "结果交付失败");
                 return None;
             }
         };
@@ -205,7 +264,15 @@ impl DiskReplay {
                                 .is_some_and(|owner| Arc::ptr_eq(owner, source))
                         })
                 else {
-                    self.failed("recording open completed without a delivered source".into());
+                    self.reject(
+                        open_failure(
+                            OpenError::CompletedWithoutSource,
+                            &self.path,
+                            task.id,
+                            task.revision,
+                        ),
+                        "后台完成但未交付数据源",
+                    );
                     return None;
                 };
                 let details = source.metadata().and_then(|metadata| {
@@ -236,8 +303,14 @@ impl DiskReplay {
                 let (rate, channels, seconds) = match details {
                     Ok(details) => details,
                     Err(error) => {
-                        warn!(%error, "本地 Waveform 回放元信息无效");
-                        self.state = LoadState::Failed(error.to_string());
+                        self.reject(
+                            error.with_context(open_frame(
+                                &self.path,
+                                Some(task.id),
+                                task.revision,
+                            )),
+                            "回放元信息无效",
+                        );
                         return None;
                     }
                 };
@@ -251,8 +324,10 @@ impl DiskReplay {
                 Some(source)
             }
             JobOutcome::Failed(error) => {
-                self.failed(error.to_string());
-                error.record_handled("停止打开录制文件并保留当前回放会话", "后台打开失败");
+                self.reject(
+                    error.with_context(open_frame(&self.path, Some(task.id), task.revision)),
+                    "后台打开失败",
+                );
                 None
             }
             JobOutcome::Canceled => {
@@ -421,6 +496,114 @@ mod tests {
             owner,
         });
         (id, reader, release)
+    }
+
+    #[test]
+    fn a_missing_completed_source_is_diagnosed_and_normal_cancellation_is_not() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        for cancel in [false, true] {
+            let mut disk = empty(PathBuf::from("completed-without-source.widx"));
+            let (release, gate) = std::sync::mpsc::channel();
+            let (id, receiver) = disk
+                .manager
+                .spawn_thread::<Weak<DiskWaveformSource>, _>(Default::default(), move |context| {
+                    gate.recv().unwrap();
+                    if context.is_cancelled() {
+                        context.acknowledge_cancel();
+                    }
+                    Ok(())
+                })
+                .unwrap();
+            disk.task = Some(OpenJob {
+                id,
+                revision: disk.revision,
+                receiver,
+                pending: None,
+                owner: Arc::new(OnceLock::new()),
+            });
+            if cancel {
+                disk.manager.cancel(id).unwrap();
+            }
+            release.send(()).unwrap();
+            wait(|| disk.manager.status(id).unwrap().state.is_finished());
+            let logs = LogCapture::default();
+            assert!(logs.run(|| disk.poll()).is_none());
+            assert!(matches!(disk.state, LoadState::Failed(_)));
+            let records = logs.records();
+            let sources: Vec<_> = records
+                .iter()
+                .filter(|r| r.phase() == Some(DiagnosticPhase::Source))
+                .collect();
+            if cancel {
+                assert!(sources.is_empty());
+            } else {
+                assert_eq!(sources.len(), 1);
+                let id = sources[0].fields.get("error_id").unwrap();
+                assert!(
+                    sources[0]
+                        .fields
+                        .get("context")
+                        .unwrap()
+                        .contains("completed-without-source.widx")
+                );
+                assert_eq!(
+                    records
+                        .iter()
+                        .filter(|r| r.phase() == Some(DiagnosticPhase::Handled)
+                            && r.matches_field("error_id", id))
+                        .count(),
+                    1
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn global_cancel_before_source_delivery_finishes_canceled_without_a_false_error() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("recording.widx");
+        recording(&path);
+        let mut disk = empty(path.clone());
+        let source = Arc::new(DiskWaveformSource::open(&path, &disk.manager).unwrap());
+        let owner = Arc::new(OnceLock::new());
+        assert!(owner.set(source.clone()).is_ok());
+        let (release, gate) = std::sync::mpsc::channel();
+        let (entered, ready) = std::sync::mpsc::channel();
+        let (id, receiver) = disk
+            .manager
+            .spawn_thread::<Weak<DiskWaveformSource>, _>(Default::default(), move |context| {
+                entered.send(()).unwrap();
+                gate.recv().unwrap();
+                deliver_source(&context, &source)
+            })
+            .unwrap();
+        disk.task = Some(OpenJob {
+            id,
+            revision: disk.revision,
+            receiver,
+            pending: None,
+            owner,
+        });
+        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        let shutdown = disk.manager.begin_shutdown(Duration::from_secs(5)).unwrap();
+        release.send(()).unwrap();
+        wait(|| disk.manager.status(id).unwrap().state.is_finished());
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        assert!(logs.run(|| disk.poll()).is_none());
+        assert!(
+            logs.records()
+                .iter()
+                .all(|r| r.phase() != Some(bevy_widgetry_test_utils::DiagnosticPhase::Source))
+        );
+        assert!(
+            matches!(disk.state, LoadState::Failed(ref message) if message == "recording open canceled")
+        );
+        wait(|| {
+            matches!(
+                shutdown.try_recv(),
+                Some(bevy_widgetry::job::ShutdownMessage::Completed)
+            )
+        });
     }
 
     #[test]

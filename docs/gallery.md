@@ -482,4 +482,8 @@ A每帧最多读取8条；B默认慢消费，每200ms最多读取一条，可切
 
 Waveform 录制打开任务在重载或离页时请求取消，并由后台终态 Owner 继续排空结果、等待真实 Finished 和移除原打开 Job。已进入的磁盘打开若在取消后失败，由该 Owner 记录放弃过期结果；保留强 Source Owner 至弱引用结果队列排空，避免销毁 Source 时重入通道锁。该路径在全局关闭后仍可收尾。
 
+录制打开和重载失败保留文件与 Reader 的原诊断，并补充 path、实际 job_id 和请求 revision。停止本次打开、保留当前会话时记录同源处理 DEBUG；状态栏保存展示文字。结果通道提前关闭、Job 完成但没有交付 Source 使用独立类型诊断；正常 Missing、Pending 和协作取消不创建 ERROR。
+
+交付 Source 时若实际发送被取消，打开 Job 确认取消后结束为 Canceled；不会将该关闭路径误判为“完成但未交付 Source”。
+
 `JobDemo`上的反射`JobDemoState`提供当前选择、slow_b与各任务的真实执行/消费读数；操作按钮使用`JobStartIo`、`JobStartCpu`、`JobStartThread`、`JobStartFailure`、`JobStartLateComplete`、`JobSubscribeB`、`JobDropA`、`JobDropB`、`JobToggleSlowB`、`JobCancel`和`JobRemove`等稳定Name，每行有JobId组成的选择按钮/状态/进度条Name。任务或接收器仍需推进时在Last请求重绘，执行终结且消费完成后静止；页面文案支持中英文和既有主题样式。

@@ -3,6 +3,30 @@ use bevy_widgetry_waveform::WaveformAlgorithm;
 use std::{error::Error, fmt, ops::Range};
 
 pub type RecordingFailure = WidgetryFailure<RecordingError>;
+pub type DiskReaderFailure = WidgetryFailure<DiskReaderError>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReaderStopReason {
+    Shutdown,
+    Completed,
+    Canceled,
+}
+
+#[derive(Debug)]
+pub enum DiskReaderError {
+    QueuePoisoned,
+    Stopped { reason: ReaderStopReason },
+}
+
+impl fmt::Display for DiskReaderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::QueuePoisoned => f.write_str("disk reader queue lock poisoned"),
+            Self::Stopped { reason } => write!(f, "disk reader stopped: {reason:?}"),
+        }
+    }
+}
+impl Error for DiskReaderError {}
 
 #[derive(Debug)]
 pub enum RecordingError {
