@@ -34,3 +34,5 @@ ID 由受短期 Mutex 保护的可增长无符号计数器分配；进位增加�
 
 
 Bevy桥接同时提供 `FailureState<K>`：显式业务键相同时惰性复用诊断，确认恢复后一次INFO，保持原origin/ID/source。单成员 `failure` 和非空集合 `failure_batch` 共用状态规则；`active()` 只借用首成员，`diagnostics()` 遍历全部成员。批量既有受管失败不重新捕获；恢复INFO与实际handled DEBUG仍按每个origin记录。Core重导出此状态，Cursor等Core下层消费者可直接复用，避免反向依赖。
+
+宿主日志后端可用 `WidgetryFailure::new_with_source_reporter` 在首次捕获时通过独立应急接收器报告源头，避免对失效日志后端递归记录；普通库错误仍使用默认 new 与统一内部日志。自定义接收不改变 origin、原始栈、source 或传播语义。

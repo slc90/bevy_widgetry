@@ -4,6 +4,29 @@ use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
 use std::{backtrace::BacktraceStatus, error::Error, io, sync::Arc};
 
 #[test]
+fn host_source_reporter_observes_the_captured_origin_before_propagation() {
+    let mut observed = None;
+    let line = line!() + 1;
+    let failure = WidgetryFailure::new_with_source_reporter(
+        io::Error::other("backend failed"),
+        ErrorFrame::new("host.backend"),
+        |failure| {
+            observed = Some(failure.origin().clone());
+            assert_eq!(
+                failure.origin().backtrace().status(),
+                BacktraceStatus::Captured
+            );
+            assert!(!format!("{failure:?}").contains("stack backtrace"));
+        },
+    );
+    assert_eq!(failure.origin().location().line(), line);
+    assert!(Arc::ptr_eq(&observed.unwrap(), failure.origin()));
+    let origin = failure.origin().clone();
+    let propagated = failure.with_context(ErrorFrame::new("host.finish"));
+    assert!(Arc::ptr_eq(&origin, propagated.origin()));
+}
+
+#[test]
 fn propagation_preserves_origin_source_and_owned_context() {
     let line = line!() + 1;
     let failure = WidgetryFailure::new(

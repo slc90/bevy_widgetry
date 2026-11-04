@@ -12,7 +12,7 @@ Gallery 不只是静态控件预览。多数页面提供可操作的演示场景
 
 Gallery 使用 Widgetry 自身提供的 Widget 和 Bevy BSN 构造界面，以实际使用场景展示库能力，而不是建立独立的模拟控件实现。
 
-宿主日志通过 Facade 的可选 `app_logging` Feature 装配：先准备日志并 `install`，再将 Terminal / File Layer 接入官方 LogPlugin，持有 WorkerGuard 直到应用退出。日志实现保留在独立的 app_logging crate，Gallery 负责日志目录和过滤策略。
+宿主日志通过 Facade 的可选 `app_logging` Feature 装配：先准备日志并 `install`，再安装 `log_plugin()` 返回的官方 LogPlugin 配置，持有 LoggingGuard 直到日志生产者结束并完成可观察 flush。文件保存必要诊断 DEBUG 与 INFO/ERROR，终端保持 INFO 及以上，普通 DEBUG/TRACE 被过滤；有界异步 writer 明确使用非丢弃背压策略。日志初始化失败在正式 Subscriber 不可用时由入口使用 stderr 补齐同一 ID 的原因、路径与原始栈。日志实现保留在独立的 app_logging crate，Gallery 负责目录、生命周期和宿主策略。
 
 Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Resource，后台结果通过合并的 Winit WakeUp 唤醒 Reactive 主循环。FileDialog全部后台业务和大快照生命周期、WaveformFile磁盘Reader及Gallery录制加载、Waveform大范围降采样和Canvas完整PNG导出使用该共享Manager。独立Job页面直接展示其公开提交、订阅、取消与移除能力；宿主统一接管退出意图并等待Manager完成全局收尾。
 

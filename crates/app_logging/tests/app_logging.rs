@@ -1,9 +1,9 @@
 #![allow(clippy::disallowed_macros)]
 
 use bevy::ecs::error::Severity;
-use bevy::log::{LogPlugin, info};
+use bevy::log::{debug, error, info};
 use bevy::prelude::*;
-use bevy_widgetry_app_logging::{AppLogging, file_layer, terminal_layer};
+use bevy_widgetry_app_logging::{AppLogging, LoggingStage, file_layer, log_plugin, terminal_layer};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -36,9 +36,28 @@ impl Drop for TestDirectory {
 
 #[test]
 fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
+    const CHILD: &str = "WIDGETRY_LOGGING_PLUGIN_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let output = std::process::Command::new(std::env::current_exe()?)
+            .args([
+                "--exact",
+                "official_log_plugin_writes_source_and_flushes_on_guard_drop",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .env_remove("RUST_LOG")
+            .output()?;
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return Ok(());
+    }
     let directory = TestDirectory::new()?;
     let logs = directory.0.join("nested/logs");
-    let logging = AppLogging::new(&logs)?;
+    let logging = AppLogging::new(&logs).map_err(|failure| failure.into_bevy_error())?;
     let files = fs::read_dir(&logs)?.collect::<std::io::Result<Vec<_>>>()?;
     assert_eq!(files.len(), 1);
     let path = files[0].path();
@@ -55,14 +74,13 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
 
     let mut app = App::new();
     let guard = logging.install(&mut app);
-    app.add_plugins(LogPlugin {
-        fmt_layer: terminal_layer,
-        custom_layer: file_layer,
-        ..default()
-    });
+    app.add_plugins(log_plugin());
     let line = line!() + 1;
     info!("应用日志输出验证");
     info!(target: "bevy_widgetry", "Widgetry target 输出验证");
+    debug!(target: "bevy_widgetry", error_id = "probe", phase = "handled", action = "fallback", "必要处理诊断");
+    debug!(target: "ordinary_module", "普通模块DEBUG过滤验证");
+    error!(target: "widget_gallery", error_id = "probe", phase = "unhandled", backtrace = %"frame1\nframe2", "最终报告验证");
     drop(app);
     info!("guard 释放前的最后一条日志");
     drop(guard);
@@ -72,6 +90,9 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     assert!(contents.contains("应用日志输出验证"));
     assert!(contents.contains("Widgetry target 输出验证"));
     assert!(contents.contains("guard 释放前的最后一条日志"));
+    assert!(contents.contains("必要处理诊断"));
+    assert!(contents.contains("frame1\nframe2"));
+    assert!(!contents.contains("普通模块DEBUG过滤验证"));
     assert!(!contents.contains('\u{1b}'));
     assert!(!contents.contains("bevy_widgetry"));
     let timestamp = contents.lines().next().ok_or("日志为空")?;
@@ -92,11 +113,12 @@ fn factories_without_install_return_none() {
 fn install_exposes_prepared_layers_and_returns_guard() -> Result {
     let directory = TestDirectory::new()?;
     let logs = directory.0.join("logs");
-    let logging = AppLogging::new(&logs)?;
+    let logging = AppLogging::new(&logs).map_err(|failure| failure.into_bevy_error())?;
     assert_eq!(fs::read_dir(&logs)?.count(), 1);
 
     let mut app = App::new();
     let guard = logging.install(&mut app);
+    assert!(app.get_error_handler().is_none());
     assert!(terminal_layer(&mut app).is_some());
     assert!(file_layer(&mut app).is_some());
     assert_eq!(fs::read_dir(&logs)?.count(), 1);
@@ -113,6 +135,9 @@ fn directory_failure_keeps_original_error_and_error_severity() -> Result {
     let path = occupied.join("logs");
     let original = fs::create_dir_all(&path).err().ok_or("目录创建应失败")?;
     let failure = AppLogging::new(&path).err().ok_or("日志准备应失败")?;
+    assert_eq!(failure.kind().stage, LoggingStage::Directory);
+    assert_eq!(failure.kind().path, path);
+    let failure = failure.into_bevy_error();
     assert_eq!(failure.severity(), Severity::Error);
     assert!(failure.to_string().contains(&original.to_string()));
     assert_eq!(fs::read_to_string(&occupied)?, "原有文件");

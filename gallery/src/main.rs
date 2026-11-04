@@ -28,7 +28,7 @@ use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolu
 use bevy::winit::WinitSettings;
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
 use bevy_brp_runtime::BrpRuntimePlugin;
-use bevy_widgetry::app_logging::{AppLogging, file_layer, terminal_layer};
+use bevy_widgetry::app_logging::{AppLogging, log_plugin};
 use bevy_widgetry::button::WidgetryButtonPlugin;
 use bevy_widgetry::check_box::WidgetryCheckBoxPlugin;
 use bevy_widgetry::combo_box::WidgetryComboBoxPlugin;
@@ -53,17 +53,21 @@ fn main() -> Result {
         Some(output) => PathBuf::from(output).join("logs"),
         None => executable.with_file_name("logs"),
     };
-    let logging = AppLogging::new(log_dir)?;
+    let logging = AppLogging::new(log_dir).map_err(|failure| {
+        eprintln!(
+            "Gallery 日志启动因未处理错误终止 phase=unhandled error_id={} error={} origin={} backtrace={}",
+            failure.origin().id(), failure,
+            failure.origin().location(),
+            failure.origin().backtrace()
+        );
+        failure.into_bevy_error()
+    })?;
     let mut app = App::new();
     app.insert_resource(loaded.config.language);
     app.insert_resource(loaded.config.theme);
     i18n::install(&mut app);
     let _log_guard = logging.install(&mut app);
-    app.add_plugins(LogPlugin {
-        fmt_layer: terminal_layer,
-        custom_layer: file_layer,
-        ..default()
-    });
+    app.add_plugins(log_plugin());
     app.insert_resource(WinitSettings::desktop_app());
     app.insert_resource(WidgetryCursorTheme::System);
     app.add_plugins(

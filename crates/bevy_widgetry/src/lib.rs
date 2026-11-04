@@ -22,7 +22,10 @@ pub mod power_inhibit {
 
 #[cfg(feature = "app_logging")]
 pub mod app_logging {
-    pub use bevy_widgetry_app_logging::{AppLogging, WorkerGuard, file_layer, terminal_layer};
+    pub use bevy_widgetry_app_logging::{
+        AppLogging, LoggingError, LoggingFailure, LoggingGuard, LoggingSource, LoggingStage,
+        file_layer, log_plugin, terminal_layer,
+    };
 }
 
 pub mod scene {

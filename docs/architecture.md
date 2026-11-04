@@ -186,3 +186,5 @@ Tree 直接依赖 diagnostics 的 Bevy 桥接，节点移动与拖放开关返�
 ComboBox 直接依赖 diagnostics 的 Bevy 桥接。注册、查询及颜色 API 返回领域失败；组合 ListView、TextField、Button 和 Icon 的失败保留原始原因与 origin。Field、搜索、图标和自有配色结构异常由实例保存持续诊断，多个实例的未处理失败全部传至宿主；实际 Scene 重试保留独立诊断及原生策略。
 
 构建期 app_icon_build 直接依赖默认无 Bevy 的 diagnostics 和 winresource；Gallery build.rs 独立使用 Tracing 接收与终结构建失败，不接入运行期日志或 ECS。
+
+app_logging 直接依赖 diagnostics 的 Bevy 桥接，用共享诊断保存初始化与输出故障；其 lossless 文件writer和LoggingGuard归宿主生命周期管理，库不替宿主安装Subscriber或ECS Handler。Facade仅重导出配置与类型。

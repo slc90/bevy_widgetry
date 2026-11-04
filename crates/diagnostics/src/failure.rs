@@ -38,18 +38,30 @@ pub struct WidgetryFailure<E> {
 impl<E: Error + 'static> WidgetryFailure<E> {
     #[track_caller]
     pub fn new(kind: E, context: ErrorFrame) -> Self {
+        Self::new_with_source_reporter(kind, context, |failure| {
+            widgetry_error!(
+                error_id = %failure.origin.id(),
+                phase = "source",
+                error = %Reasons(&failure.kind),
+                context = ?failure.contexts[0],
+                "操作失败"
+            );
+        })
+    }
+
+    // A host's failing log backend must report its own failure through an independent sink.
+    #[track_caller]
+    pub fn new_with_source_reporter(
+        kind: E,
+        context: ErrorFrame,
+        report: impl FnOnce(&Self),
+    ) -> Self {
         let failure = Self {
             kind,
             origin: Arc::new(ErrorOrigin::capture()),
             contexts: vec![context],
         };
-        widgetry_error!(
-            error_id = %failure.origin.id(),
-            phase = "source",
-            error = %Reasons(&failure.kind),
-            context = ?failure.contexts[0],
-            "操作失败"
-        );
+        report(&failure);
         failure
     }
 

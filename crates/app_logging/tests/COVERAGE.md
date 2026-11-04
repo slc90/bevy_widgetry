@@ -24,7 +24,7 @@
 ## Invariants
 
 - 文件输出保留日志来源位置、时间戳和结构化信息。
-- 准备失败保留 Error 原因及 Severity；退出前日志能够刷新。
+- 普通准备失败保留领域 stage/path/origin/source，ECS 显式转换保留 Error Severity；退出前日志能够刷新。
 
 ## Couplings
 
@@ -35,3 +35,5 @@
 
 - `app_logging.rs`：完整应用日志准备、集成输出、失败与清理生命周期。
 
+
+完整 LogPlugin 的全局 Subscriber 测试在无 RUST_LOG 的子进程执行，文件保留必要诊断 DEBUG、真实多行栈、最终日志与退出 flush，普通 DEBUG 不落盘。writer 模块单测使用容量1与慢writer、多生产者检验背压下200条完整事件不丢弃，覆盖写失败/零写/flush失败、队列断连与受控flush超时，不通过失效后端递归报告。初始化与 install 不配置 ECS Handler。

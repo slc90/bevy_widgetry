@@ -12,3 +12,5 @@
 同一 origin 的重复与八线程并发终结分发只调用一次 managed 报告；此报告状态与 handled 独立。带受管载体但采用原生 Panic 策略的错误仍完整交给 native 回调，每次保留 payload，且不占用后续 Error Severity 的 managed 报告资格。
 
 ID 计数器的跨字长进位由 `origin.rs` 的 Unit Test 覆盖。宿主最终日志/持久化及领域生产者迁移尚不属于此层。
+
+`lifecycle.rs` 另覆盖宿主自定义源头reporter：接收已捕获的同一origin，传播后身份不变；普通格式化无完整栈。

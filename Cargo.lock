@@ -1867,6 +1867,7 @@ name = "bevy_widgetry_app_logging"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_diagnostics",
  "time",
  "tracing-appender",
  "tracing-subscriber",
