@@ -141,11 +141,13 @@ impl Waveform {
         world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .set_preview(playback.preview)?;
+            .set_preview(playback.preview)
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
         let running_changed = world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .set_running(playback.playing)?;
+            .set_running(playback.playing)
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
         let explicit_position = playback.preview != previous.preview
             || !playback.playing && (playback.position != previous.position || previous.playing)
             || playback.position < previous.position;
@@ -153,7 +155,8 @@ impl Waveform {
             world
                 .get_mut::<WaveformRuntime>(entity)
                 .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-                .request_position(playback.position)?;
+                .request_position(playback.position)
+                .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
             world
                 .get_mut::<crate::WaveformCursor>(entity)
                 .ok_or_else(|| BevyError::error("Waveform cursor missing"))?

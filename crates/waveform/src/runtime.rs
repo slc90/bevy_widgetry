@@ -3,13 +3,13 @@ use crate::{
     ChannelView, MinMaxReducer, PlanarBuffer, ReducedChannel, ReductionInput, ReductionStats,
     WaveformConfig, WaveformCursor, WaveformReducer, WaveformSource, sample_boundary,
 };
-use bevy::ecs::error::ContextExt;
 use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, TaskPool};
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{ErrorFrame, bevy::DiagnosticBatch};
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_job::{
-    JobId, JobManager, JobManagerPlugin, JobOptions, JobOutcome, JobRead, JobReceiver, SendStatus,
+    JobFailure, JobId, JobManager, JobManagerPlugin, JobOptions, JobOutcome, JobRead, JobReceiver,
+    SendStatus,
 };
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,23 +17,16 @@ use std::sync::{Arc, Mutex};
 
 static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug)]
-enum ReductionError {
-    HandoffPoisoned,
-    HandoffEmpty,
-}
-impl std::fmt::Display for ReductionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Waveform reduction failed: {self:?}")
-    }
-}
-impl std::error::Error for ReductionError {}
+type RuntimeResult<T = ()> = std::result::Result<T, JobFailure>;
 
-fn reduction_error(kind: ReductionError) -> bevy_widgetry_job::JobFailure {
-    bevy_widgetry_job::JobFailure::external(
-        kind,
-        bevy_widgetry_diagnostics::ErrorFrame::new("waveform.reduction"),
-    )
+#[track_caller]
+fn runtime_error(kind: crate::WaveformError) -> JobFailure {
+    runtime_error_at(kind, ErrorFrame::new("waveform.runtime"))
+}
+
+#[track_caller]
+fn runtime_error_at(kind: crate::WaveformError, context: ErrorFrame) -> JobFailure {
+    crate::WaveformFailure::new(kind, context).into()
 }
 
 #[derive(Component)]
@@ -61,7 +54,7 @@ pub struct WaveformRuntime {
     output_len: usize,
     revision: u64,
     stats: WaveformUpdateStats,
-    failure: UnmigratedFailureState,
+    had_failure: bool,
     last_error: Option<String>,
     pending_request: Option<crate::WaveformReadRequest>,
     reader_id: u64,
@@ -107,6 +100,8 @@ struct PendingReduction {
     generation: u64,
     target_generation: u64,
     stats: WaveformUpdateStats,
+    context: ErrorFrame,
+    retired: bool,
 }
 
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -123,25 +118,26 @@ fn update_waveforms(
     )>,
     mut commands: Commands,
 ) -> Result {
-    let mut failure = None;
+    let mut failures = DiagnosticBatch::default();
     for (entity, mut runtime, cursor, output_len) in &mut roots {
         let was_running = runtime.is_running();
-        let result = runtime
-            .update_cursor(cursor, output_len.0)
-            .with_context(|| format!("Waveform {entity:?}"));
+        let result = runtime.update_cursor(cursor, output_len.0);
         if was_running && !runtime.is_running() {
             commands.trigger(crate::WaveformRunningChanged {
                 entity,
                 running: false,
             });
         }
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+        if let Err(error) = result {
+            let report = error
+                .with_context(ErrorFrame::new("waveform.update").field("entity", entity))
+                .into_report();
+            for diagnostic in report.shared_diagnostics() {
+                failures.push_shared(diagnostic);
+            }
         }
     }
-    failure.map_or(Ok(()), Err)
+    failures.into_bevy_error().map_or(Ok(()), Err)
 }
 
 fn classify(current: &Range<u64>, target: &Range<u64>) -> WaveformUpdateKind {
@@ -162,7 +158,7 @@ impl WaveformRuntime {
         config: WaveformConfig,
         source: Arc<dyn WaveformSource>,
         manager: &JobManager,
-    ) -> Result<Self, BevyError> {
+    ) -> RuntimeResult<Self> {
         Self::with_reducer(config, source, Box::<MinMaxReducer>::default(), manager)
     }
 
@@ -171,13 +167,13 @@ impl WaveformRuntime {
         source: Arc<dyn WaveformSource>,
         reducer: Box<dyn WaveformReducer>,
         manager: &JobManager,
-    ) -> Result<Self, BevyError> {
+    ) -> RuntimeResult<Self> {
         let mut runtime = Self::empty_with_reducer(config, reducer, manager)?;
         runtime.replace_session(source)?;
         Ok(runtime)
     }
 
-    pub fn empty(config: WaveformConfig, manager: &JobManager) -> Result<Self, BevyError> {
+    pub fn empty(config: WaveformConfig, manager: &JobManager) -> RuntimeResult<Self> {
         Self::empty_with_reducer(config, Box::<MinMaxReducer>::default(), manager)
     }
 
@@ -185,10 +181,8 @@ impl WaveformRuntime {
         config: WaveformConfig,
         reducer: Box<dyn WaveformReducer>,
         manager: &JobManager,
-    ) -> Result<Self, BevyError> {
-        config
-            .validate()
-            .map_err(crate::WaveformFailure::into_bevy_error)?;
+    ) -> RuntimeResult<Self> {
+        config.validate().map_err(JobFailure::from)?;
         Ok(Self {
             manager: manager.clone(),
             config,
@@ -204,7 +198,7 @@ impl WaveformRuntime {
             reducer,
             algorithm: default(),
             algorithm_refresh: false,
-            ring: Arc::new(PlanarRing::new(0, 0).map_err(crate::WaveformFailure::into_bevy_error)?),
+            ring: Arc::new(PlanarRing::new(0, 0).map_err(JobFailure::from)?),
             pending_reduction: None,
             reduction_generation: 0,
             staging: PlanarBuffer::default(),
@@ -213,7 +207,7 @@ impl WaveformRuntime {
             output_len: 0,
             revision: 0,
             stats: WaveformUpdateStats::default(),
-            failure: UnmigratedFailureState::default(),
+            had_failure: false,
             last_error: None,
             pending_request: None,
             reader_id: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
@@ -221,10 +215,7 @@ impl WaveformRuntime {
         })
     }
 
-    pub(crate) fn replace_session(
-        &mut self,
-        source: Arc<dyn WaveformSource>,
-    ) -> Result<(), BevyError> {
+    pub(crate) fn replace_session(&mut self, source: Arc<dyn WaveformSource>) -> RuntimeResult<()> {
         let context = || {
             bevy_widgetry_diagnostics::ErrorFrame::new("waveform.session.prepare")
                 .field("reader_id", self.reader_id)
@@ -234,21 +225,21 @@ impl WaveformRuntime {
         };
         let metadata = source
             .metadata()
-            .map_err(|error| error.with_context(context()).into_bevy_error())?;
+            .map_err(|error| error.with_context(context()))?;
         metadata
             .validate()
-            .map_err(|error| error.with_context(context()).into_bevy_error())?;
+            .map_err(|error| -> JobFailure { error.with_context(context()).into() })?;
         let capacity = self
             .config
             .capacity_frames(metadata.sample_rate, metadata.channel_count)
-            .map_err(|error| error.with_context(context()).into_bevy_error())?;
+            .map_err(|error| -> JobFailure { error.with_context(context()).into() })?;
         let source_reduced = source.provides_reduced();
         let ring = if source_reduced {
             PlanarRing::new(0, 0)
-                .map_err(|error| error.with_context(context()).into_bevy_error())?
+                .map_err(|error| -> JobFailure { error.with_context(context()).into() })?
         } else {
             PlanarRing::new(metadata.channel_count, capacity)
-                .map_err(|error| error.with_context(context()).into_bevy_error())?
+                .map_err(|error| -> JobFailure { error.with_context(context()).into() })?
         };
         self.cancel_reduction();
         if let Some(previous) = &self.source {
@@ -273,7 +264,7 @@ impl WaveformRuntime {
         self.requested_position = None;
         self.preview = false;
         self.stats = WaveformUpdateStats::default();
-        self.failure = UnmigratedFailureState::default();
+        self.had_failure = false;
         self.last_error = None;
         self.pending_request = None;
         self.target_generation = 0;
@@ -281,13 +272,12 @@ impl WaveformRuntime {
         self.generation = self.generation.wrapping_add(1);
     }
 
-    pub(crate) fn clear_session(&mut self) -> Result<bool, BevyError> {
+    pub(crate) fn clear_session(&mut self) -> RuntimeResult<bool> {
         if self.source.is_none() {
             return Ok(false);
         }
         self.cancel_reduction();
-        self.ring =
-            Arc::new(PlanarRing::new(0, 0).map_err(crate::WaveformFailure::into_bevy_error)?);
+        self.ring = Arc::new(PlanarRing::new(0, 0).map_err(JobFailure::from)?);
         if let Some(source) = &self.source {
             source.cancel_reads(self.reader_id);
         }
@@ -314,7 +304,7 @@ impl WaveformRuntime {
     pub(crate) fn is_preview(&self) -> bool {
         self.preview
     }
-    pub(crate) fn set_preview(&mut self, preview: bool) -> Result {
+    pub(crate) fn set_preview(&mut self, preview: bool) -> RuntimeResult {
         if self.preview != preview {
             self.cancel_reduction();
             self.preview = preview;
@@ -334,7 +324,10 @@ impl WaveformRuntime {
     pub fn algorithm(&self) -> crate::WaveformAlgorithm {
         self.algorithm
     }
-    pub(crate) fn set_algorithm(&mut self, algorithm: crate::WaveformAlgorithm) -> Result<bool> {
+    pub(crate) fn set_algorithm(
+        &mut self,
+        algorithm: crate::WaveformAlgorithm,
+    ) -> RuntimeResult<bool> {
         if self.algorithm == algorithm {
             return Ok(false);
         }
@@ -351,21 +344,16 @@ impl WaveformRuntime {
         self.last_error.as_deref()
     }
 
-    pub(crate) fn set_visible_duration(
-        &mut self,
-        visible_duration_ms: u32,
-    ) -> Result<bool, BevyError> {
+    pub(crate) fn set_visible_duration(&mut self, visible_duration_ms: u32) -> RuntimeResult<bool> {
         let config = WaveformConfig {
             visible_duration_ms,
             ..self.config.clone()
         };
-        config
-            .validate()
-            .map_err(crate::WaveformFailure::into_bevy_error)?;
+        config.validate().map_err(JobFailure::from)?;
         if let Some(metadata) = &self.metadata {
             config
                 .capacity_frames(metadata.sample_rate, metadata.channel_count)
-                .map_err(crate::WaveformFailure::into_bevy_error)?;
+                .map_err(JobFailure::from)?;
         }
         if self.config == config {
             return Ok(false);
@@ -387,10 +375,9 @@ impl WaveformRuntime {
         true
     }
 
-    pub(crate) fn set_running(&mut self, running: bool) -> Result<bool, BevyError> {
+    pub(crate) fn set_running(&mut self, running: bool) -> RuntimeResult<bool> {
         if self.metadata.is_none() {
-            widgetry_error!("Waveform 尚无数据源会话");
-            return Err(BevyError::error("Waveform has no session"));
+            return Err(runtime_error(crate::WaveformError::NoSession));
         }
         if self.running == running {
             return Ok(false);
@@ -407,7 +394,7 @@ impl WaveformRuntime {
         Ok(true)
     }
 
-    pub(crate) fn request_position(&mut self, position: std::time::Duration) -> Result {
+    pub(crate) fn request_position(&mut self, position: std::time::Duration) -> RuntimeResult {
         self.cancel_reduction();
         self.requested_position = Some(position);
         self.duration_refresh = true;
@@ -420,7 +407,7 @@ impl WaveformRuntime {
         &mut self,
         position: std::time::Duration,
         output_len: usize,
-    ) -> Result<WaveformUpdateStats, BevyError> {
+    ) -> RuntimeResult<WaveformUpdateStats> {
         self.update_at(position, output_len, false)
     }
 
@@ -428,7 +415,7 @@ impl WaveformRuntime {
         &mut self,
         cursor: &WaveformCursor,
         output_len: usize,
-    ) -> Result<WaveformUpdateStats, BevyError> {
+    ) -> RuntimeResult<WaveformUpdateStats> {
         if self.target_generation != cursor.seek_generation {
             self.cancel_reduction();
             self.pending_request = None;
@@ -442,7 +429,7 @@ impl WaveformRuntime {
         position: std::time::Duration,
         output_len: usize,
         following: bool,
-    ) -> Result<WaveformUpdateStats, BevyError> {
+    ) -> RuntimeResult<WaveformUpdateStats> {
         if (self.metadata.is_none()
             || !self.running && !self.duration_refresh && !self.algorithm_refresh)
             && self.pending_reduction.is_none()
@@ -469,11 +456,12 @@ impl WaveformRuntime {
             }
         }
         self.last_error = result.as_ref().err().map(ToString::to_string);
-        self.failure.observe(
-            result,
-            |error| widgetry_error!(%error, "Waveform 更新失败，保留已提交数据"),
-            || widgetry_info!("Waveform 数据读取恢复正常"),
-        )
+        if result.is_err() {
+            self.had_failure = true;
+        } else if std::mem::take(&mut self.had_failure) {
+            widgetry_info!("Waveform 数据读取恢复正常");
+        }
+        result
     }
 
     fn try_update(
@@ -481,7 +469,7 @@ impl WaveformRuntime {
         position: std::time::Duration,
         output_len: usize,
         following: bool,
-    ) -> Result<WaveformUpdateStats, BevyError> {
+    ) -> RuntimeResult<WaveformUpdateStats> {
         if let Some(stats) = self.poll_reduction(position, output_len, following)? {
             return Ok(stats);
         }
@@ -493,11 +481,9 @@ impl WaveformRuntime {
             return Ok(self.stats);
         };
         let mut end = if let Some(position) = self.requested_position {
-            sample_boundary(position, metadata.sample_rate)
-                .map_err(crate::WaveformFailure::into_bevy_error)?
+            sample_boundary(position, metadata.sample_rate).map_err(JobFailure::from)?
         } else if self.running {
-            sample_boundary(position, metadata.sample_rate)
-                .map_err(crate::WaveformFailure::into_bevy_error)?
+            sample_boundary(position, metadata.sample_rate).map_err(JobFailure::from)?
         } else {
             self.ring.range.end
         };
@@ -530,7 +516,7 @@ impl WaveformRuntime {
         let capacity = self
             .config
             .capacity_frames(metadata.sample_rate, metadata.channel_count)
-            .map_err(crate::WaveformFailure::into_bevy_error)?;
+            .map_err(JobFailure::from)?;
         let target = end.saturating_sub(capacity as u64)..end;
         let viewport = target.start..end.max(capacity as u64);
         let kind = if capacity != self.ring.capacity()
@@ -574,28 +560,30 @@ impl WaveformRuntime {
                 },
             };
             self.pending_request = Some(request.clone());
-            self.staging.prepare(channels, frames).map_err(|error| {
-                error
-                    .with_context(crate::error::read_frame(
-                        &request,
-                        channels,
-                        "waveform.buffer.prepare",
-                    ))
-                    .into_bevy_error()
-            })?;
+            self.staging
+                .prepare(channels, frames)
+                .map_err(|error| -> JobFailure {
+                    error
+                        .with_context(crate::error::read_frame(
+                            &request,
+                            channels,
+                            "waveform.buffer.prepare",
+                        ))
+                        .into()
+                })?;
             let source = self
                 .source
                 .as_ref()
-                .ok_or_else(|| BevyError::error("Waveform session source missing"))?;
-            match source.read(&request, &mut self.staging).map_err(|error| {
-                error
-                    .with_context(crate::error::read_frame(
+                .ok_or_else(|| runtime_error(crate::WaveformError::NoSession))?;
+            match source
+                .read(&request, &mut self.staging)
+                .map_err(|error| -> JobFailure {
+                    error.with_context(crate::error::read_frame(
                         &request,
                         channels,
                         "waveform.source.read",
                     ))
-                    .into_bevy_error()
-            })? {
+                })? {
                 crate::WaveformReadStatus::Ready(reply) if reply == request => {}
                 _ => {
                     self.stats = WaveformUpdateStats {
@@ -605,37 +593,36 @@ impl WaveformRuntime {
                     return Ok(self.stats);
                 }
             }
-            self.staging.validate(channels, frames).map_err(|error| {
-                error
-                    .with_context(crate::error::read_frame(
-                        &request,
-                        channels,
-                        "waveform.buffer.validate",
-                    ))
-                    .into_bevy_error()
-            })?;
+            self.staging
+                .validate(channels, frames)
+                .map_err(|error| -> JobFailure {
+                    error
+                        .with_context(crate::error::read_frame(
+                            &request,
+                            channels,
+                            "waveform.buffer.validate",
+                        ))
+                        .into()
+                })?;
             self.staging.convert_to_volts(unit);
             if kind == WaveformUpdateKind::FullRead
                 || self.ring.range.is_empty() && frames * channels >= 262_144
             {
                 replacement = Some(Arc::new(
                     PlanarRing::from_staging(std::mem::take(&mut self.staging), target, capacity)
-                        .map_err(|error| {
+                        .map_err(|error| -> JobFailure {
                         error
                             .with_context(crate::error::read_frame(
                                 &request,
                                 channels,
                                 "waveform.ring.prepare",
                             ))
-                            .into_bevy_error()
+                            .into()
                     })?,
                 ));
             } else {
                 Arc::get_mut(&mut self.ring)
-                    .ok_or_else(|| {
-                        widgetry_error!("Waveform 读取缓存仍被降采样任务占用");
-                        BevyError::error("Waveform ring still borrowed by reduction")
-                    })?
+                    .ok_or_else(|| runtime_error(crate::WaveformError::RingBorrowed))?
                     .append(target, &self.staging);
                 if frames > capacity / 4 {
                     self.staging = PlanarBuffer::default();
@@ -646,8 +633,7 @@ impl WaveformRuntime {
             self.pending_request = None;
             if kind == WaveformUpdateKind::FullRead {
                 replacement = Some(Arc::new(
-                    PlanarRing::new(channels, capacity)
-                        .map_err(crate::WaveformFailure::into_bevy_error)?,
+                    PlanarRing::new(channels, capacity).map_err(JobFailure::from)?,
                 ));
             }
         }
@@ -697,7 +683,7 @@ impl WaveformRuntime {
         Ok(self.stats)
     }
 
-    pub(crate) fn resize_reduction(&mut self, output_len: usize) -> Result {
+    pub(crate) fn resize_reduction(&mut self, output_len: usize) -> RuntimeResult {
         let output_len = self.density(output_len);
         if self.output_len == output_len {
             return Ok(());
@@ -720,15 +706,12 @@ impl WaveformRuntime {
                 output_len,
                 WaveformUpdateStats::default(),
             );
-            return match result {
-                Ok(()) => Ok(()),
-                Err(error) => self.failure.observe(
-                    Err(error),
-                    |error| widgetry_error!(%error, "Waveform 后台重建提交失败"),
-                    || widgetry_info!("Waveform 后台重建恢复正常"),
-                ),
-            };
+            if result.is_err() {
+                self.had_failure = true;
+            }
+            return result;
         }
+
         self.stats.reduction =
             self.reduce(output_len, self.ring.range.end..self.ring.range.end, true);
         self.output_len = output_len;
@@ -750,10 +733,21 @@ impl WaveformRuntime {
         viewport: Range<u64>,
         output_len: usize,
         stats: WaveformUpdateStats,
-    ) -> Result {
+    ) -> RuntimeResult {
         if self.pending_reduction.is_some() {
-            return Err(BevyError::error("Waveform already has an active reduction"));
+            return Err(runtime_error(crate::WaveformError::ReductionActive));
         }
+        let frame = ErrorFrame::new("waveform.reduction")
+            .field("reader_id", self.reader_id)
+            .field("session_generation", self.generation)
+            .field("target_generation", self.target_generation)
+            .field("reduction_generation", self.reduction_generation)
+            .field("algorithm", format_args!("{:?}", self.algorithm))
+            .field("range", format_args!("{:?}", ring.range))
+            .field("viewport", format_args!("{viewport:?}"))
+            .field("channels", ring.channel_count())
+            .field("output_len", output_len);
+        let worker_frame = frame.clone();
         let worker_ring = ring.clone();
         let worker_viewport = viewport.clone();
         let reducer = std::mem::replace(&mut self.reducer, self.algorithm.reducer());
@@ -776,11 +770,19 @@ impl WaveformRuntime {
                     context.acknowledge_cancel();
                     return Ok(());
                 }
+                let worker_frame = worker_frame.field("job_id", context.id().get());
                 let mut result = worker_handoff
                     .lock()
-                    .map_err(|_| reduction_error(ReductionError::HandoffPoisoned))?
+                    .map_err(|_| {
+                        runtime_error_at(
+                            crate::WaveformError::HandoffPoisoned,
+                            worker_frame.clone(),
+                        )
+                    })?
                     .take()
-                    .ok_or_else(|| reduction_error(ReductionError::HandoffEmpty))?;
+                    .ok_or_else(|| {
+                        runtime_error_at(crate::WaveformError::HandoffEmpty, worker_frame.clone())
+                    })?;
                 let views: Vec<_> = (0..worker_ring.channel_count())
                     .filter_map(|i| worker_ring.channel(i))
                     .collect();
@@ -795,9 +797,9 @@ impl WaveformRuntime {
                     },
                     &mut result.reduced,
                 );
-                *worker_handoff
-                    .lock()
-                    .map_err(|_| reduction_error(ReductionError::HandoffPoisoned))? = Some(result);
+                *worker_handoff.lock().map_err(|_| {
+                    runtime_error_at(crate::WaveformError::HandoffPoisoned, worker_frame.clone())
+                })? = Some(result);
                 // A completed calculation remains Completed after a late, unacknowledged cancellation.
                 match context.send(()).await {
                     Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
@@ -808,14 +810,21 @@ impl WaveformRuntime {
         let (job, receiver) = match submitted {
             Ok(submitted) => submitted,
             Err(error) => {
-                if let Some(result) = handoff
-                    .lock()
-                    .map_err(|error| BevyError::error(error.to_string()))?
-                    .take()
-                {
-                    self.reducer = result.reducer;
+                let mut failure = JobFailure::from(error).with_context(frame.clone());
+                match handoff.lock() {
+                    Ok(mut handoff) => {
+                        if let Some(result) = handoff.take() {
+                            self.reducer = result.reducer;
+                        }
+                    }
+                    Err(_) => {
+                        failure = failure.combine(runtime_error_at(
+                            crate::WaveformError::HandoffPoisoned,
+                            frame,
+                        ))
+                    }
                 }
-                return Err(error.into_bevy_error());
+                return Err(failure);
             }
         };
         self.pending_reduction = Some(PendingReduction {
@@ -829,6 +838,8 @@ impl WaveformRuntime {
             output_len,
             generation: self.reduction_generation,
             target_generation: self.target_generation,
+            context: frame.field("job_id", job.get()),
+            retired: false,
             stats,
         });
         Ok(())
@@ -839,7 +850,7 @@ impl WaveformRuntime {
         position: std::time::Duration,
         output_len: usize,
         following: bool,
-    ) -> Result<Option<WaveformUpdateStats>, BevyError> {
+    ) -> RuntimeResult<Option<WaveformUpdateStats>> {
         let Some(pending) = &mut self.pending_reduction else {
             return Ok(None);
         };
@@ -851,32 +862,34 @@ impl WaveformRuntime {
             Ok(JobRead::Finished(outcome)) => outcome,
             Ok(JobRead::Empty) => return Ok(Some(self.pending_stats())),
             Ok(JobRead::Closed) => {
-                return Err(BevyError::error(
-                    "Waveform reduction receiver closed before Finished",
+                return Err(runtime_error_at(
+                    crate::WaveformError::ReductionReceiverClosed,
+                    pending.context.clone(),
                 ));
             }
-            Err(error) => return Err(error.into_bevy_error()),
+            Err(error) => return Err(error.into()),
         };
         let pending = self
             .pending_reduction
             .take()
-            .ok_or_else(|| BevyError::error("Waveform reduction task missing"))?;
-        let _ = self
+            .ok_or_else(|| runtime_error(crate::WaveformError::ReductionMissing))?;
+        let mut failure = self
             .manager
             .remove_if_present(pending.job)
-            .map_err(|error| error.into_bevy_error())?;
+            .err()
+            .map(|error| JobFailure::from(error).with_context(pending.context.clone()));
         let result = match pending.handoff.lock() {
             Ok(mut handoff) => handoff.take(),
             Err(_) => {
-                self.rebuild = true;
-                let failure = match outcome {
-                    JobOutcome::Failed(error) => error.with_context(
-                        bevy_widgetry_diagnostics::ErrorFrame::new("waveform.reduction.restore")
-                            .field("handoff", "poisoned"),
-                    ),
-                    _ => reduction_error(ReductionError::HandoffPoisoned),
-                };
-                return Err(failure.into_bevy_error());
+                let error = runtime_error_at(
+                    crate::WaveformError::HandoffPoisoned,
+                    pending.context.clone(),
+                );
+                failure = Some(match failure {
+                    Some(previous) => previous.combine(error),
+                    None => error,
+                });
+                None
             }
         };
         // Returned reducer caches describe the worker's target, not the committed snapshot.
@@ -891,26 +904,39 @@ impl WaveformRuntime {
             }
             None => None,
         };
-        match outcome {
-            JobOutcome::Failed(error) => return Err(error.into_bevy_error()),
-            JobOutcome::Canceled => {
-                self.rebuild = true;
-                return Ok(None);
+        if let JobOutcome::Failed(error) = outcome {
+            let error = error.with_context(pending.context.clone());
+            if pending.retired {
+                error.record_handled(
+                    "放弃已取消或被新目标替换的后台归约失败",
+                    "保留已提交波形并结束过期操作",
+                );
+            } else {
+                failure = Some(match failure {
+                    Some(previous) => error.combine(previous),
+                    None => error,
+                });
             }
-            JobOutcome::Completed if !pending.received => {
-                self.rebuild = true;
-                return Ok(None);
-            }
-            JobOutcome::Completed => {}
+            return failure.map_or(Ok(None), Err);
         }
-        let (reduced, reduction_stats) = reduced
-            .ok_or_else(|| BevyError::error("Waveform completed without returning its reducer"))?;
+        if let Some(error) = failure {
+            return Err(error);
+        }
+        if outcome == JobOutcome::Canceled || !pending.received || pending.retired {
+            return Ok(None);
+        }
+        let (reduced, reduction_stats) = reduced.ok_or_else(|| {
+            runtime_error_at(
+                crate::WaveformError::ReducerMissing,
+                pending.context.clone(),
+            )
+        })?;
         let end = self
             .metadata
             .as_ref()
             .map(|meta| {
                 sample_boundary(position, meta.sample_rate)
-                    .map_err(crate::WaveformFailure::into_bevy_error)
+                    .map_err(JobFailure::from)
                     .map(|end| match meta.kind {
                         crate::WaveformSessionKind::Live => end,
                         crate::WaveformSessionKind::Replay { total_frames } => {
@@ -948,8 +974,9 @@ impl WaveformRuntime {
         self.pending_reduction.as_ref().map(|pending| pending.job)
     }
 
-    fn cancel_reduction(&self) {
-        if let Some(pending) = &self.pending_reduction {
+    fn cancel_reduction(&mut self) {
+        if let Some(pending) = &mut self.pending_reduction {
+            pending.retired = true;
             let _ = self.manager.cancel_if_present(pending.job);
         }
     }
@@ -1029,7 +1056,7 @@ impl WaveformRuntime {
         position: std::time::Duration,
         output_len: usize,
         following: bool,
-    ) -> Result<WaveformUpdateStats, BevyError> {
+    ) -> RuntimeResult<WaveformUpdateStats> {
         let Some(metadata) = &self.metadata else {
             return Ok(WaveformUpdateStats::default());
         };
@@ -1037,11 +1064,9 @@ impl WaveformRuntime {
             return Ok(self.pending_stats());
         }
         let mut end = if let Some(position) = self.requested_position {
-            sample_boundary(position, metadata.sample_rate)
-                .map_err(crate::WaveformFailure::into_bevy_error)?
+            sample_boundary(position, metadata.sample_rate).map_err(JobFailure::from)?
         } else if self.running {
-            sample_boundary(position, metadata.sample_rate)
-                .map_err(crate::WaveformFailure::into_bevy_error)?
+            sample_boundary(position, metadata.sample_rate).map_err(JobFailure::from)?
         } else {
             self.ring.range.end
         };
@@ -1058,7 +1083,7 @@ impl WaveformRuntime {
         let capacity = self
             .config
             .capacity_frames(metadata.sample_rate, metadata.channel_count)
-            .map_err(crate::WaveformFailure::into_bevy_error)? as u64;
+            .map_err(JobFailure::from)? as u64;
         let range = end.saturating_sub(capacity)..end;
         let viewport = range.start..end.max(capacity);
         if !self.rebuild && self.output_len == output_len && self.ring.range == range {
@@ -1092,21 +1117,21 @@ impl WaveformRuntime {
         let source = self
             .source
             .as_ref()
-            .ok_or_else(|| BevyError::error("Waveform source missing"))?;
+            .ok_or_else(|| runtime_error(crate::WaveformError::NoSession))?;
         let mut channels = if range.is_empty() {
             (0..metadata.channel_count)
                 .map(|_| ReducedChannel::Polyline(Vec::new()))
                 .collect()
         } else {
-            match source.read_reduced(&request).map_err(|error| {
-                error
-                    .with_context(crate::error::read_frame(
+            match source
+                .read_reduced(&request)
+                .map_err(|error| -> JobFailure {
+                    error.with_context(crate::error::read_frame(
                         &request,
                         metadata.channel_count,
                         "waveform.source.read_reduced",
                     ))
-                    .into_bevy_error()
-            })? {
+                })? {
                 crate::WaveformReducedReadStatus::Ready {
                     request: reply,
                     channels,
@@ -1114,9 +1139,8 @@ impl WaveformRuntime {
                 _ => return Ok(self.pending_stats()),
             }
         };
-        validate_reduced(&mut channels, &request, metadata)
-            .map_err(crate::WaveformFailure::into_bevy_error)?;
-        let mut ring = PlanarRing::new(0, 0).map_err(crate::WaveformFailure::into_bevy_error)?;
+        validate_reduced(&mut channels, &request, metadata).map_err(JobFailure::from)?;
+        let mut ring = PlanarRing::new(0, 0).map_err(JobFailure::from)?;
         ring.range = range;
         self.ring = Arc::new(ring);
         self.viewport = viewport;
@@ -1471,17 +1495,183 @@ mod tests {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
         }
-        assert!(matches!(
-            manager.outcome(id).unwrap(),
-            Some(JobOutcome::Failed(_))
-        ));
+        let Some(JobOutcome::Failed(original)) = manager.outcome(id).unwrap() else {
+            panic!("expected reducer failure")
+        };
+        let origin = original.diagnostics().next().unwrap().origin().clone();
         let error = runtime.update(Duration::from_secs(10), 1200).unwrap_err();
+        let diagnostic = error.diagnostics().next().unwrap();
+        assert!(Arc::ptr_eq(diagnostic.origin(), &origin));
+        for field in [
+            "job_id",
+            "reader_id",
+            "session_generation",
+            "target_generation",
+            "reduction_generation",
+            "algorithm",
+            "range",
+            "viewport",
+            "channels",
+            "output_len",
+        ] {
+            assert!(
+                diagnostic
+                    .contexts()
+                    .iter()
+                    .any(|c| c.fields().iter().any(|(k, _)| k == field)),
+                "missing {field}"
+            );
+        }
         assert!(error.to_string().contains("controlled reducer failure"));
         assert!(runtime.pending_reduction_job().is_none());
         assert_eq!(runtime.reduced_channels(), snapshot);
         assert_eq!(runtime.buffered_range(), range);
         assert_eq!(runtime.revision(), revision);
         assert_eq!(drops.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn failed_rebuild_and_poisoned_handoff_both_survive_collection() {
+        let manager = JobManager::default();
+        let mut runtime = WaveformRuntime::with_reducer(
+            WaveformConfig {
+                visible_duration_ms: 10_000,
+                ..default()
+            },
+            Arc::new(SessionSource(false)),
+            Box::new(ControlledReducer {
+                reducer: default(),
+                calls: Arc::default(),
+                drops: Arc::default(),
+                gate: None,
+                fail: true,
+            }),
+            &manager,
+        )
+        .unwrap();
+        runtime.update(Duration::from_secs(10), 600).unwrap();
+        let pending = runtime.pending_reduction.as_ref().unwrap();
+        let job = pending.job;
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !manager.status(job).unwrap().state.is_finished() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        let Some(JobOutcome::Failed(original)) = manager.outcome(job).unwrap() else {
+            panic!("expected reduction failure")
+        };
+        let origin = original.diagnostics().next().unwrap().origin().clone();
+        let handoff = pending.handoff.clone();
+        assert!(
+            std::thread::spawn(move || {
+                let _lock = handoff.lock().unwrap();
+                panic!("poison returned state");
+            })
+            .join()
+            .is_err()
+        );
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        let error = logs.run(|| {
+            loop {
+                match runtime.update(Duration::from_secs(10), 600) {
+                    Ok(stats) => assert_eq!(stats.kind, WaveformUpdateKind::Pending),
+                    Err(error) => break error,
+                }
+            }
+        });
+        assert_eq!(error.diagnostics().count(), 2);
+        let cleanup = error
+            .diagnostics()
+            .find(|d| !Arc::ptr_eq(d.origin(), &origin))
+            .unwrap();
+        let sources = logs.diagnostic_records(
+            cleanup.origin().id(),
+            bevy_widgetry_test_utils::DiagnosticPhase::Source,
+        );
+        assert_eq!(sources.len(), 1);
+        let context = sources[0].fields.get("context").unwrap();
+        for field in [
+            "job_id",
+            "reader_id",
+            "session_generation",
+            "target_generation",
+            "range",
+            "viewport",
+            "algorithm",
+            "channels",
+            "output_len",
+        ] {
+            assert!(context.contains(field), "missing {field} in {context}");
+        }
+        assert!(
+            error
+                .diagnostics()
+                .any(|d| Arc::ptr_eq(d.origin(), &origin))
+        );
+        assert!(error.diagnostics().any(|d| {
+            let mut source = d.source();
+            while let Some(error) = source {
+                if matches!(
+                    error.downcast_ref::<crate::WaveformError>(),
+                    Some(crate::WaveformError::HandoffPoisoned)
+                ) {
+                    return true;
+                }
+                source = error.source();
+            }
+            false
+        }));
+        assert!(manager.find_status(job).is_none());
+    }
+
+    #[test]
+    fn retired_failed_rebuild_is_consumed_before_the_new_algorithm_commits() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let logs = LogCapture::default();
+        let (entered, ready) = std::sync::mpsc::channel();
+        let (release, gate) = std::sync::mpsc::channel();
+        let manager = JobManager::default();
+        let mut runtime = WaveformRuntime::with_reducer(
+            WaveformConfig {
+                visible_duration_ms: 10_000,
+                ..default()
+            },
+            Arc::new(SessionSource(false)),
+            Box::new(ControlledReducer {
+                reducer: default(),
+                calls: Arc::default(),
+                drops: Arc::default(),
+                gate: Some((entered, Mutex::new(gate))),
+                fail: true,
+            }),
+            &manager,
+        )
+        .unwrap();
+        runtime.update(Duration::from_secs(1), 1200).unwrap();
+        runtime.update(Duration::from_secs(10), 600).unwrap();
+        let job = runtime.pending_reduction_job().unwrap();
+        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        runtime
+            .set_algorithm(crate::WaveformAlgorithm::Lttb)
+            .unwrap();
+        release.send(()).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !manager.status(job).unwrap().state.is_finished() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        let Some(JobOutcome::Failed(original)) = manager.outcome(job).unwrap() else {
+            panic!("expected late failure")
+        };
+        let id = original.diagnostics().next().unwrap().origin().id();
+        logs.run(|| settle(&mut runtime, Duration::from_secs(10), 1200));
+        assert_eq!(
+            logs.diagnostic_records(id, DiagnosticPhase::Handled).len(),
+            1
+        );
+        assert!(manager.find_status(job).is_none());
+        assert_eq!(runtime.algorithm(), crate::WaveformAlgorithm::Lttb);
+        assert_eq!(runtime.buffered_range(), 0..640_000);
     }
 
     #[test]
@@ -1662,6 +1852,8 @@ mod tests {
             generation: runtime.reduction_generation,
             target_generation: runtime.target_generation,
             stats: default(),
+            context: ErrorFrame::new("waveform.test.reduction").field("job_id", job.get()),
+            retired: false,
         });
         manager.cancel(job).unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(5);

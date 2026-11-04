@@ -161,7 +161,7 @@ fn malformed_missing_ranges_are_rejected_without_committing_data() {
     )
     .unwrap();
     let error = runtime.update(Duration::from_millis(10), 20).unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(error.diagnostics().count(), 1);
     assert_eq!(runtime.buffered_range(), 0..0);
     assert!(runtime.reduced_channels().is_empty());
 }

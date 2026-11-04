@@ -6,6 +6,14 @@ pub type WaveformFailure = WidgetryFailure<WaveformError>;
 
 #[derive(Debug)]
 pub enum WaveformError {
+    NoSession,
+    RingBorrowed,
+    ReductionActive,
+    ReductionReceiverClosed,
+    ReductionMissing,
+    ReducerMissing,
+    HandoffPoisoned,
+    HandoffEmpty,
     SampleRate {
         sample_rate: u32,
     },

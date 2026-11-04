@@ -308,7 +308,8 @@ fn benchmark(
                     action == "gaps",
                 )),
                 &bevy_widgetry_job::JobManager::default(),
-            )?;
+            )
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
             let capacity = u64::from(rate) * u64::from(duration) / 1000;
             let root = app
                 .world_mut()

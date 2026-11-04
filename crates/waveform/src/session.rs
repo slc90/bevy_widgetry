@@ -1,5 +1,4 @@
 use crate::{Waveform, WaveformCursor, WaveformRuntime, WaveformSource};
-use bevy::ecs::error::ContextExt;
 use bevy::prelude::*;
 use std::sync::Arc;
 
@@ -138,7 +137,8 @@ impl Waveform {
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .set_visible_duration(visible_duration_ms)?;
+            .set_visible_duration(visible_duration_ms)
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
         if changed {
             world.trigger(WaveformDurationChanged {
                 entity,
@@ -164,7 +164,14 @@ impl Waveform {
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
             .replace_session(source)
-            .with_context(|| format!("Waveform {entity:?}"))?;
+            .map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_diagnostics::ErrorFrame::new("waveform.session.replace")
+                            .field("entity", entity),
+                    )
+                    .into_bevy_error()
+            })?;
         *world
             .get_mut::<WaveformCursor>(entity)
             .ok_or_else(|| BevyError::error("Waveform cursor missing"))? =
@@ -182,7 +189,8 @@ impl Waveform {
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .clear_session()?;
+            .clear_session()
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
         if changed {
             *world
                 .get_mut::<WaveformCursor>(entity)
@@ -208,7 +216,8 @@ impl Waveform {
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .set_running(running)?;
+            .set_running(running)
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
         if changed {
             world.trigger(crate::WaveformRunningChanged { entity, running });
         }

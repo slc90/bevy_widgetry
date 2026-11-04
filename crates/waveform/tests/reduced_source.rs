@@ -124,11 +124,9 @@ fn stale_invalid_and_failed_reduced_reads_cannot_replace_the_snapshot() {
     for mode in [2, 3] {
         source.0.lock().unwrap().0 = mode;
         let error = runtime.update(Duration::from_secs(2), 30).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert_eq!(error.diagnostics().count(), 1);
         if mode == 2 {
-            let report = error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .unwrap();
+            let report = error.into_report();
             let mut cause = report.diagnostics().next().unwrap().source();
             let mut typed = false;
             while let Some(error) = cause {

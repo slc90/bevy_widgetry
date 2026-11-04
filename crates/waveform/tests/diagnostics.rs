@@ -62,13 +62,7 @@ fn source_failures_keep_origin_native_cause_request_context_and_one_error_log() 
                 Ok(mut runtime) => runtime.update(Duration::from_millis(100), 8).unwrap_err(),
             },
         );
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-        let diagnostic = error
-            .downcast_ref::<WidgetryEcsError>()
-            .unwrap()
-            .diagnostics()
-            .next()
-            .unwrap();
+        let diagnostic = error.diagnostics().next().unwrap();
         assert!(Arc::ptr_eq(diagnostic.origin(), &origin));
         let mut cause = diagnostic.source();
         let mut native = false;
@@ -163,4 +157,63 @@ fn numeric_failures_keep_original_units_and_values() {
             channels: 2
         }
     ));
+}
+
+#[test]
+fn runtime_system_reports_every_root_with_entity_context() {
+    use bevy::prelude::*;
+    use bevy_widgetry_test_utils::ErrorCapture;
+    let errors = ErrorCapture::default();
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins).add_plugins(WaveformPlugin);
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(Update, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let manager = app
+        .world()
+        .resource::<bevy_widgetry_job::JobManager>()
+        .clone();
+    let mut expected = Vec::new();
+    for _ in 0..2 {
+        let failure = WaveformReadError::from(io::Error::other("same text, distinct read"));
+        let origin = failure.diagnostics().next().unwrap().origin().clone();
+        let runtime = WaveformRuntime::new(
+            Default::default(),
+            Arc::new(FailingSource {
+                error: failure,
+                phase: 1,
+            }),
+            &manager,
+        )
+        .unwrap();
+        let entity = app
+            .world_mut()
+            .spawn((
+                runtime,
+                WaveformCursor {
+                    position: Duration::from_millis(100),
+                    ..Default::default()
+                },
+                WaveformOutputLength(8),
+            ))
+            .id();
+        expected.push((entity, origin));
+    }
+    errors.run(|| app.update());
+    let captured = errors.take();
+    assert_eq!(captured.len(), 1);
+    let report = captured[0].downcast_ref::<WidgetryEcsError>().unwrap();
+    assert_eq!(report.diagnostics().count(), 2);
+    for (entity, origin) in expected {
+        let diagnostic = report
+            .diagnostics()
+            .find(|d| Arc::ptr_eq(d.origin(), &origin))
+            .unwrap();
+        assert!(diagnostic.contexts().iter().any(|c| {
+            c.fields()
+                .iter()
+                .any(|(k, v)| k == "entity" && v == &entity.to_string())
+        }));
+    }
 }

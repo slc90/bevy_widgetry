@@ -33,7 +33,8 @@ impl Waveform {
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .set_algorithm(algorithm)?;
+            .set_algorithm(algorithm)
+            .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
         if changed {
             world.trigger(WaveformAlgorithmChanged { entity, algorithm });
         }

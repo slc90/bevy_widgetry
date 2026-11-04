@@ -77,3 +77,5 @@
 
 - `diagnostics.rs`：Metadata / Raw / Reduced Source 失败跨 Runtime 保留同一 origin、原始 I/O source、完整已知请求字段与一次源头 ERROR；数值校验保留幅值单位、非有限值、时间/采样率及容量参数。普通领域错误和执行边界的 Error Severity 分开验证。
 - Source 源码回归覆盖通道表/完整帧长度/重叠缺口/NaN 的结构化分类与实际位置，分配回归验证样本和超大通道表返回原 TryReserveError 及请求规模，避免容量溢出 panic。既有 gap、两种 reducer 数值及工作量回归继续保护正常计算。
+
+- Runtime 多实例同帧失败在 `diagnostics.rs` 验证全部 origin 与实体语境进入同次 System 报告；Runtime 单元测试验证 Reducer panic 跨 Job 保留 origin、任务现场、已提交快照及 reducer 生命周期，目标退休后的晚到失败由实际 Owner 消费，再提交新算法结果。

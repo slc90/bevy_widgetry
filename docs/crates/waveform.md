@@ -110,6 +110,11 @@ Source 使用 `WaveformReadError = JobFailure` 传递共享诊断，不再提供
 
 数值与读取错误在普通 API 中保留领域诊断；直接调用者在 Bevy 执行边界显式转为 Error Severity。相同文案的独立请求失败拥有不同 ID；Source 返回既有受管错误不会在 Runtime 再建源头。
 
-后台 Reducer 的 JobFailure 进入 Runtime 时保留共享诊断并显式转为Bevy Error Severity；Source里的Job报告跨后台打开任务时仍保留原origin，读取和记录快照不算已处理。
+后台 Reducer 的 JobFailure 进入 Runtime 时保留共享诊断，在 System/Scene 边界显式转为 Bevy Error Severity；Source里的Job报告跨后台打开任务时仍保留原origin，读取和记录快照不算已处理。
 
 Runtime 销毁时请求取消已有归约，并将其接收器移交给已有后台池的终态 Owner。即使 Reducer 已进入不可中断调用、取消后才 panic，Owner 也会等待真实 Finished，明确放弃过期失败结果并移除原 Job 记录；该清理不依赖 UI 继续轮询，也不向已经关闭的 JobManager 提交新 Job。
+
+
+Runtime 的构造与更新返回共享 `JobFailure` 诊断，调用层在 ECS/Scene 边界显式转换为 `Severity::Error`。后台降采样结果带原始 reader、session/target/reduction generation、算法、range/viewport、通道数、输出密度与 job_id；Job 失败与清理失败同时存在时都保留。所有 Waveform 同帧更新失败汇总上报，单个实例失败不阻止其他实例继续更新。`last_error()` 仅用于界面展示，不能替代待传播诊断；不同请求不按文案合并。
+
+取消和目标替换仍等待真实 `Finished` 并返还 reducer。退休任务已经产生的失败在确认放弃时记录一次处理 DEBUG，不中止新会话或算法；当前任务仍需上报的失败只传播。正常 Pending 与取消不创建错误。

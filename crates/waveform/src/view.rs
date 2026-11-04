@@ -102,7 +102,7 @@ impl Waveform {
                 match props.source.clone() {
                     Some(source) => WaveformRuntime::new(props.config.clone(), source, &manager),
                     None => WaveformRuntime::empty(props.config.clone(), &manager),
-                }
+                }.map_err(bevy_widgetry_job::JobFailure::into_bevy_error)
             })
             template(move |_| Ok(props.style.clone()))
             WaveformCursor::default()
