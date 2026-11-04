@@ -8,7 +8,7 @@
 
 ## Stimuli
 
-- 调用 `widgetry_debug!`、`widgetry_info!`、`widgetry_warn!`、`widgetry_error!` 并传入中文正文及英文 Structured Field。
+- 调用五级日志 Macro（含临时诊断 `widgetry_trace!`）并传入中文正文及英文 Structured Field，测试沿用局部 lint 例外验证 TRACE 契约。
 
 ## Guards
 

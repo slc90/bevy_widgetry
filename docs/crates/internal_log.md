@@ -10,7 +10,7 @@
 
 ## 主要功能
 
-- `widgetry_debug!`、`widgetry_info!`、`widgetry_warn!`、`widgetry_error!` 分别发出 Debug、Info、Warn、Error 记录。
+- `widgetry_trace!`、`widgetry_debug!`、`widgetry_info!`、`widgetry_warn!`、`widgetry_error!` 分别发出 Trace、Debug、Info、Warn、Error 记录。
 - 支持普通 Message 与 Structured Field。
 - 保留调用位置元数据，方便定位实际产生日志的代码。
 
@@ -25,6 +25,7 @@
 ## 已知限制
 
 - 不是通用日志框架，不提供文件管理、Filter 或 Subscriber 安装。
-- Debug 只用于真实错误的实际处理措施与结果，不作为正常执行轨迹。
+- Debug 用于有诊断价值的程序生命周期、内部执行阶段、状态转换及真实错误的实际处理，不记录普通函数调用和逐帧同步。
+- Trace 仅用于临时开发诊断，正式提交前必须移除实现代码中的调用；宏定义保留，由 Workspace Clippy `disallowed_macros` 禁止遗留调用。
 - Gallery 的应用日志使用官方 Bevy Macro，而不是这些内部 Macro。
 

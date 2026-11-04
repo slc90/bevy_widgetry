@@ -1,4 +1,7 @@
 disallowed-macros = [
+  { path = "bevy_widgetry_internal_log::widgetry_trace", reason = "TRACE 仅用于临时诊断，提交前移除调用", allow-invalid = true },
+  { path = "tracing::trace", reason = "TRACE 仅用于临时诊断，提交前移除调用", allow-invalid = true },
+  { path = "bevy::log::trace", reason = "TRACE 仅用于临时诊断，提交前移除调用", allow-invalid = true },
   { path = "std::assert", reason = "记录错误并返回 BevyError" },
   { path = "std::assert_eq", reason = "记录错误并返回 BevyError" },
   { path = "std::assert_ne", reason = "记录错误并返回 BevyError" },

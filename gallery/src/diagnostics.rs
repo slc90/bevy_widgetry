@@ -109,11 +109,8 @@ pub(crate) fn handler(error: BevyError, context: ErrorContext) {
         |error, context| {
             match error.severity() {
                 Severity::Ignore => {}
-                Severity::Trace => {
-                    trace!(target: "widget_gallery", phase = "unhandled", error = %error, details = ?error, ecs_context = ?context, "Gallery 外来错误未被处理")
-                }
-                Severity::Debug => {
-                    debug!(target: "widget_gallery", phase = "unhandled", error = %error, details = ?error, ecs_context = ?context, "Gallery 外来错误未被处理")
+                Severity::Trace | Severity::Debug => {
+                    debug!(target: "widget_gallery", phase = "unhandled", native_severity = ?error.severity(), error = %error, details = ?error, ecs_context = ?context, "Gallery 外来错误未被处理")
                 }
                 Severity::Info => {
                     info!(target: "widget_gallery", phase = "unhandled", error = %error, details = ?error, ecs_context = ?context, "Gallery 外来错误未被处理")
@@ -218,6 +215,25 @@ mod tests {
     use bevy_widgetry::diagnostics::bevy::{DiagnosticBatch, WidgetryEcsError};
     use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
     use std::io;
+
+    #[test]
+    fn native_trace_error_remains_diagnosable_without_a_trace_call() {
+        let logs = LogCapture::with_targets(["widget_gallery"]);
+        logs.run(|| {
+            handler(
+                BevyError::trace(io::Error::other("native trace reason")),
+                ErrorContext::Command {
+                    name: "probe.native.trace".into(),
+                },
+            );
+        });
+        let records = logs.records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].level, bevy::log::Level::DEBUG);
+        assert_eq!(records[0].fields["native_severity"], "Trace");
+        assert!(records[0].fields["error"].contains("native trace reason"));
+        assert!(records[0].fields.contains_key("ecs_context"));
+    }
 
     #[test]
     fn native_error_is_reported_and_native_panic_resumes_its_original_payload() {
