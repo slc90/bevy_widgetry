@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 winresource.workspace = true
+bevy_widgetry_diagnostics = { path = "../diagnostics" }
 
 [lints]
 workspace = true

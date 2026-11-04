@@ -184,3 +184,5 @@ ListView 直接依赖 Diagnostics 保存 Model、数据源配置及选择 API �
 Tree 直接依赖 diagnostics 的 Bevy 桥接，节点移动与拖放开关返回领域失败；纯移动拒绝与公开请求诊断分离，下层 ListView 配置错误继承原始原因与 origin。
 
 ComboBox 直接依赖 diagnostics 的 Bevy 桥接。注册、查询及颜色 API 返回领域失败；组合 ListView、TextField、Button 和 Icon 的失败保留原始原因与 origin。Field、搜索、图标和自有配色结构异常由实例保存持续诊断，多个实例的未处理失败全部传至宿主；实际 Scene 重试保留独立诊断及原生策略。
+
+构建期 app_icon_build 直接依赖默认无 Bevy 的 diagnostics 和 winresource；Gallery build.rs 独立使用 Tracing 接收与终结构建失败，不接入运行期日志或 ECS。

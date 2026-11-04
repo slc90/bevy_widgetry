@@ -27,6 +27,8 @@ futures-timer.workspace = true
 futures-util.workspace = true
 
 [build-dependencies]
+tracing.workspace = true
+tracing-subscriber.workspace = true
 bevy_widgetry_app_icon_build = { path = "../crates/app_icon_build" }
 
 [lints]

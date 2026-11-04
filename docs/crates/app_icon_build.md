@@ -20,7 +20,9 @@
 
 ## 边界情况与错误处理
 
-路径或资源处理失败通过 `io::Result` 返回，由应用构建脚本负责决定是否中断构建。
+`set_exe_icon` 返回 `IconBuildFailure`（统一 `WidgetryFailure<IconBuildError>`）。Environment、InvalidPath、Read 和 Compile 保留操作阶段、实际路径及真实 VarError/io::Error。源头捕获原始回溯并记录一次 ERROR，普通格式化不输出栈。调用方应在构建入口配置 Cargo 可见的接收器，并在最终未处理时输出同一 ID 与原始栈、返回失败状态；运行期 ECS Handler 不参与此路径。Gallery 的 build.rs 使用局部 Tracing Subscriber 接收源头事件，stderr 输出最终报告并以失败 ExitCode 结束。
+
+仅支持 Cargo Windows MSVC 构建环境。调用依赖前检查其必要环境，缺失变量返回领域失败；相对路径、rerun-if-changed 和有效 ICO 的资源嵌入保持。
 
 ## 已知限制
 
