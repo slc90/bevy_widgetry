@@ -197,3 +197,5 @@ png_gpu.rs显式真实DX12测试混合Rectangle/Ellipse/含Line/Quad/Cubic/Arc�
 Review 回归：`renderer.rs` 以有界子进程验证已选坏 Ellipse 不会进入无限轮廓细分；`selection.rs` 通过真实 Picking press 验证命中校验保留已知 Owner；`diagnostics.rs` 验证拒绝选择集合和追加矩形 min/max，以及 SVG/PNG 模型拒绝的 Owner 与源头一次 ERROR。
 
 Document 绑定拒绝分别从同步和 Commands 两种入口检查请求目标、真实 Handler 与 Severity；受管批次重新聚合后保留全部传播 frame，由 error Module 单测保护。
+
+SVG 诊断：`svg.rs` 覆盖 I/O 原因链、统一 origin 穿过 ECS 转换、源头一次 ERROR，以及无效 document/region/geometry/color 拒绝时的文件保护；已有混合图形输出、颜色边界保持。

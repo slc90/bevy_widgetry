@@ -216,3 +216,5 @@ PNG 后台工作失败通过 CanvasExportError::Background 共享 JobFailure 报
 普通模型、几何、编辑与 View API 返回 `JobFailure`，原因链中的 `CanvasError` 提供可匹配的 `CanvasErrorKind`，并通过 `CanvasInput` 保留 document/shape/view、实际参数、原始 Path 命令及派生段位置。几何细分保留 lyon 的真实错误类型。独立请求各自建立诊断；输入、Commands 和 Renderer 执行边界显式转换为 `Severity::Error`，外来 Bevy 错误保留原生策略。
 
 Renderer 按 View 阶段与 shape 分别持有持续故障，同一业务输入持续失败复用原 origin；同帧多个失败完整上报，健康图形继续更新。正常隐藏与零尺寸等待不代表恢复；非法网格更新先检查共享资源，拒绝后保留健康 fill。合法空选择、取消、未完成 Pen draft 与原有通知顺序保持。SVG 与 PNG 的导出诊断见各自接口。
+
+SVG 同步导出返回统一 `JobFailure`，原因链保留 `CanvasExportError` 分类或原始 `CanvasError`。导出上下文保存 document、目标 path 和 region；不支持颜色另存 shape 与实际 Color。I/O 保留 `io::Error`，模型诊断只追加语境，不重新生成 origin。生成与校验成功后才写文件，失败交由调用方实际提示/放弃或继续传播。

@@ -718,7 +718,8 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
         std::fs::create_dir_all(&demo.directory).map_err(CanvasExportError::Io)?;
         if matches!(action, Action::Svg) {
             let path = demo.directory.join("canvas.svg");
-            CanvasDocument::export_svg(world, demo.document, &path, demo.region)?;
+            CanvasDocument::export_svg(world, demo.document, &path, demo.region)
+                .map_err(CanvasExportError::Background)?;
             info!(?path, "Canvas SVG 文件导出完成");
             Ok(LocalizedText::with_args(
                 TextKey::Canvas(CanvasKey::Saved),
@@ -745,7 +746,10 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
     let (binding, failure) = match result {
         Ok(binding) => (binding, None),
         Err(error) => {
-            if !matches!(error, CanvasExportError::Job(_)) {
+            if !matches!(
+                error,
+                CanvasExportError::Job(_) | CanvasExportError::Background(_)
+            ) {
                 warn!(%error,"Canvas 文件导出失败");
             }
             let binding = LocalizedText::with_args(
@@ -756,8 +760,14 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
         }
     };
     bind(world, demo.result, binding)?;
-    if let Some(CanvasExportError::Job(error)) = failure {
-        error.record_handled("停止 Canvas PNG 导出并显示失败状态", "导出请求被拒绝");
+    match failure {
+        Some(CanvasExportError::Job(error)) => {
+            error.record_handled("停止 Canvas PNG 导出并显示失败状态", "导出请求被拒绝")
+        }
+        Some(CanvasExportError::Background(error)) => {
+            error.record_handled("停止 Canvas SVG 导出并显示失败状态", "导出失败")
+        }
+        _ => {}
     }
     Ok(())
 }

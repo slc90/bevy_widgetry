@@ -215,6 +215,7 @@ fn start(
         let temporary = temporary(path).map_err(CanvasExportError::Io)?;
         let result = match scale {
             None => CanvasDocument::export_svg(world, document, &temporary, Some(region))
+                .map_err(CanvasExportError::Background)
                 .and_then(|()| publish(&temporary, path).map_err(CanvasExportError::Io))
                 .map(|()| FileState::Succeeded),
             Some(scale) => CanvasDocument::export_png(
@@ -251,6 +252,8 @@ fn start(
             let state = FileState::Failed(error.to_string());
             if let CanvasExportError::Job(error) = &error {
                 error.record_handled("停止绘画阶段文件导出并保存失败状态", "导出请求被拒绝");
+            } else if let CanvasExportError::Background(error) = &error {
+                error.record_handled("终止 SVG 导出并保存失败状态", "导出失败");
             } else {
                 warn!(?path,%error,"绘画阶段文件导出请求失败");
             }

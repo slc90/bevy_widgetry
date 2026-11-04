@@ -5,6 +5,95 @@ use bevy_widgetry_canvas::*;
 use resvg::usvg::{self, roxmltree};
 mod common;
 
+fn has_export(
+    error: &bevy_widgetry_job::JobFailure,
+    check: impl Fn(&CanvasExportError) -> bool,
+) -> bool {
+    error.diagnostics().any(|diagnostic| {
+        let mut cause: Option<&dyn std::error::Error> = Some(diagnostic);
+        while let Some(current) = cause {
+            if let Some(error) = current.downcast_ref::<CanvasExportError>() {
+                return check(error);
+            }
+            cause = current.source();
+        }
+        false
+    })
+}
+fn has_model(error: &bevy_widgetry_job::JobFailure) -> bool {
+    error.diagnostics().any(|diagnostic| {
+        let mut cause: Option<&dyn std::error::Error> = Some(diagnostic);
+        while let Some(current) = cause {
+            if current.is::<CanvasError>() {
+                return true;
+            }
+            cause = current.source();
+        }
+        false
+    })
+}
+
+#[test]
+fn svg_io_failure_keeps_source_context_and_one_origin_through_the_boundary() {
+    use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+    let logs = LogCapture::default();
+    logs.run(|| {
+        let mut world = World::new();
+        let document = world.spawn(CanvasDocument).id();
+        CanvasDocument::create_rectangle(
+            &mut world,
+            document,
+            CanvasRectangle {
+                size: Vec2::splat(20.0),
+                corner_radius: 0.0,
+            },
+            Transform::default(),
+            CanvasPaint::default(),
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let error =
+            CanvasDocument::export_svg(&mut world, document, directory.path(), None).unwrap_err();
+        let diagnostic = error.diagnostics().next().unwrap();
+        let origin = diagnostic.origin().clone();
+        let frame = diagnostic
+            .contexts()
+            .iter()
+            .find(|f| f.operation() == "canvas.export.svg")
+            .unwrap();
+        assert!(
+            frame
+                .fields()
+                .iter()
+                .any(|(key, value)| key == "region" && value.contains("Some(Rect"))
+        );
+        let mut cause: &dyn std::error::Error = diagnostic;
+        while !cause.is::<std::io::Error>() {
+            cause = cause.source().unwrap();
+        }
+        assert!(
+            diagnostic
+                .contexts()
+                .iter()
+                .any(|frame| frame.operation() == "canvas.export.svg")
+        );
+        let boundary = error.into_bevy_error();
+        assert_eq!(boundary.severity(), bevy::ecs::error::Severity::Error);
+        let report = boundary
+            .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+            .unwrap();
+        assert!(std::sync::Arc::ptr_eq(
+            &origin,
+            report.diagnostics().next().unwrap().origin()
+        ));
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+    });
+}
+
 fn values(text: &str) -> Vec<f32> {
     text.split(|c: char| c.is_whitespace() || c == ',')
         .filter(|s| !s.is_empty())
@@ -303,7 +392,7 @@ fn svg_rejects_missing_components_foreign_members_and_invalid_paths_without_repa
         let logs = LogCapture::default();
         assert!(matches!(
             logs.run(|| CanvasDocument::export_svg(&mut world, document, file.path(), None)),
-            Err(CanvasExportError::Model(_))
+            Err(ref error) if has_model(error)
         ));
         assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
     }
@@ -471,7 +560,7 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
     let missing = world.spawn_empty().id();
     assert!(matches!(
         CanvasDocument::export_svg(&mut world, missing, file.path(), None),
-        Err(CanvasExportError::InvalidDocument)
+        Err(ref error) if has_export(error, |error| matches!(error, CanvasExportError::InvalidDocument))
     ));
     for region in [
         None,
@@ -479,7 +568,7 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
     ] {
         assert!(matches!(
             CanvasDocument::export_svg(&mut world, document, file.path(), region),
-            Err(CanvasExportError::EmptyDocument)
+            Err(ref error) if has_export(error, |error| matches!(error, CanvasExportError::EmptyDocument))
         ));
         assert_eq!(std::fs::read(file.path()).unwrap(), b"keep me");
     }
@@ -510,7 +599,7 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
     ] {
         assert!(matches!(
             CanvasDocument::export_svg(&mut world, document, file.path(), Some(region)),
-            Err(CanvasExportError::InvalidRegion)
+            Err(ref error) if has_export(error, |error| matches!(error, CanvasExportError::InvalidRegion { .. }))
         ));
         assert_eq!(std::fs::read(file.path()).unwrap(), b"keep me");
     }
@@ -524,7 +613,7 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
         .unwrap();
     assert!(matches!(
         CanvasDocument::export_svg(&mut world, document, file.path(), None),
-        Err(CanvasExportError::Model(_))
+        Err(ref error) if has_model(error)
     ));
     assert_eq!(std::fs::read(file.path()).unwrap(), b"keep me");
     world
@@ -544,7 +633,7 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
     let dir = tempfile::tempdir().unwrap();
     assert!(matches!(
         CanvasDocument::export_svg(&mut world, document, dir.path(), None),
-        Err(CanvasExportError::Io(_))
+        Err(ref error) if has_export(error, |error| matches!(error, CanvasExportError::Io(_)))
     ));
 }
 
@@ -726,9 +815,32 @@ fn svg_rejects_unrepresentable_hdr_and_out_of_range_alpha_before_touching_the_fi
             .unwrap();
             assert!(matches!(
                 CanvasDocument::export_svg(&mut world, document, file.path(), None),
-                Err(CanvasExportError::UnsupportedColor)
+                Err(ref error) if has_export(error, |error| matches!(error, CanvasExportError::UnsupportedColor { .. }))
             ));
             assert_eq!(std::fs::read(file.path()).unwrap(), b"keep me");
         }
     }
+}
+
+#[test]
+fn default_region_overflow_keeps_the_actual_rejected_rectangle() {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    for x in [-2e38, 2e38] {
+        CanvasDocument::create_rectangle(
+            &mut world,
+            document,
+            CanvasRectangle {
+                size: Vec2::splat(10.0),
+                corner_radius: 0.0,
+            },
+            Transform::from_xyz(x, 0.0, 0.0),
+            CanvasPaint::default(),
+        )
+        .unwrap();
+    }
+    let file = tempfile::NamedTempFile::new().unwrap();
+    let failure = CanvasDocument::export_svg(&mut world, document, file.path(), None).unwrap_err();
+    assert!(has_export(&failure, |error| matches!(error,
+        CanvasExportError::InvalidRegion { region } if region.min.x == -2e38 && region.max.x == 2e38 && !region.width().is_finite())));
 }

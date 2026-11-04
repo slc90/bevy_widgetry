@@ -1,6 +1,7 @@
 use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasPathCommand};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
+use bevy_widgetry_job::JobFailure;
 use std::{fmt, path::Path};
 mod png;
 pub use png::{CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions};
@@ -12,10 +13,14 @@ pub(crate) fn install(app: &mut App) {
 pub enum CanvasExportError {
     EmptyDocument,
     InvalidDocument,
-    InvalidGeometry(String),
     Model(bevy_widgetry_job::JobFailure),
-    InvalidRegion,
-    UnsupportedColor,
+    InvalidRegion {
+        region: Rect,
+    },
+    UnsupportedColor {
+        shape: Entity,
+        color: Color,
+    },
     InvalidScale,
     InvalidResolution,
     RendererUnavailable,
@@ -38,9 +43,11 @@ impl fmt::Display for CanvasExportError {
         match self {
             Self::EmptyDocument => f.write_str("Canvas document has no committed shapes"),
             Self::InvalidDocument => f.write_str("CanvasDocument missing"),
-            Self::InvalidGeometry(error) => write!(f, "Invalid Canvas geometry: {error}"),
-            Self::InvalidRegion => {
-                f.write_str("Canvas export region must be finite with positive dimensions")
+            Self::InvalidRegion { region } => {
+                write!(
+                    f,
+                    "Canvas export region must be finite with positive dimensions: {region:?}"
+                )
             }
             Self::Io(error) => write!(f, "Canvas export I/O failed: {error}"),
             Self::Job(error) => write!(f, "Canvas PNG Job submission failed: {error}"),
@@ -56,8 +63,11 @@ impl fmt::Display for CanvasExportError {
             Self::Scene(error) => write!(f, "Canvas PNG scene failed: {error}"),
             Self::Render(error) => write!(f, "Canvas PNG rendering failed: {error}"),
             Self::Encoding(error) => write!(f, "Canvas PNG encoding failed: {error}"),
-            Self::UnsupportedColor => {
-                f.write_str("SVG requires sRGB colors and alpha within [0, 1]")
+            Self::UnsupportedColor { shape, color } => {
+                write!(
+                    f,
+                    "SVG requires sRGB colors and alpha within [0, 1]: {shape:?}, {color:?}"
+                )
             }
         }
     }
@@ -84,10 +94,12 @@ impl CanvasDocument {
         document: Entity,
         path: impl AsRef<Path>,
         region: Option<Rect>,
-    ) -> std::result::Result<(), CanvasExportError> {
+    ) -> std::result::Result<(), JobFailure> {
         let path = path.as_ref();
+        let mut actual_region = region;
         let result = (|| {
             let snapshot = snapshot(world, document, region)?;
+            actual_region = Some(snapshot.region);
             for shape in &snapshot.shapes {
                 for color in shape
                     .paint
@@ -100,7 +112,10 @@ impl CanvasDocument {
                         .into_iter()
                         .any(|channel| !(0.0..=1.0).contains(&channel))
                     {
-                        return Err(CanvasExportError::UnsupportedColor);
+                        return Err(CanvasExportError::UnsupportedColor {
+                            shape: shape.entity,
+                            color,
+                        });
                     }
                 }
             }
@@ -182,10 +197,13 @@ impl CanvasDocument {
             svg.push_str("</g></svg>\n");
             std::fs::write(path, svg).map_err(CanvasExportError::Io)
         })();
-        result.inspect_err(|error| {
-            if !matches!(error, CanvasExportError::Model(_)) {
-                widgetry_error!(?document,?path,%error,"Canvas SVG 导出失败");
-            }
+        result.map_err(|error| {
+            error.into_failure(
+                ErrorFrame::new("canvas.export.svg")
+                    .field("document", document)
+                    .field("path", path.display())
+                    .field("region", format_args!("{actual_region:?}")),
+            )
         })
     }
 }
@@ -285,8 +303,11 @@ fn snapshot(
         let transform = world.get::<Transform>(entity);
         let paint = world.get::<CanvasPaint>(entity);
         let (Some(geometry), Some(transform), Some(paint)) = (geometry, transform, paint) else {
-            return Err(CanvasExportError::InvalidGeometry(
-                "Shape requires CanvasGeometry, Transform and CanvasPaint".to_owned(),
+            return Err(CanvasExportError::Model(
+                crate::error::missing(crate::CanvasPart::Geometry)
+                    .at("document", document)
+                    .at("shape", entity)
+                    .into_failure(ErrorFrame::new("canvas.export.snapshot")),
             ));
         };
         let b = geometry._bounds(transform, paint).map_err(|error| {
@@ -317,12 +338,25 @@ fn snapshot(
         || !region.size().is_finite()
         || region.size().min_element() <= 0.0
     {
-        return Err(CanvasExportError::InvalidRegion);
+        return Err(CanvasExportError::InvalidRegion { region });
     }
     Ok(Snapshot { shapes, region })
 }
 
 impl CanvasExportError {
+    #[track_caller]
+    fn into_failure(self, frame: ErrorFrame) -> JobFailure {
+        match self {
+            Self::Model(error) | Self::Background(error) => error.with_context(frame),
+            Self::Job(error) => JobFailure::from(error).with_context(frame),
+            Self::Offscreen(error) => JobFailure::from(error.into_bevy_error()).with_context(frame),
+            Self::Scene(error) => JobFailure::from(error.into_bevy_error()).with_context(frame),
+            Self::Cleanup { primary, cleanup } => primary
+                .into_failure(frame.clone())
+                .combine(JobFailure::from(cleanup.into_bevy_error()).with_context(frame)),
+            error => WidgetryFailure::new(error, frame).into(),
+        }
+    }
     fn into_job_failure(self) -> bevy_widgetry_job::JobFailure {
         use bevy_widgetry_job::JobFailure;
         match self {
