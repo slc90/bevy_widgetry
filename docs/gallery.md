@@ -12,7 +12,7 @@ Gallery 不只是静态控件预览。多数页面提供可操作的演示场景
 
 Gallery 使用 Widgetry 自身提供的 Widget 和 Bevy BSN 构造界面，以实际使用场景展示库能力，而不是建立独立的模拟控件实现。
 
-宿主日志通过 Facade 的可选 `app_logging` Feature 装配：先准备日志并 `install`，再安装 `log_plugin()` 返回的官方 LogPlugin 配置，持有 LoggingGuard 直到日志生产者结束并完成可观察 flush。文件保存必要诊断 DEBUG 与 INFO/ERROR，终端保持 INFO 及以上，普通 DEBUG/TRACE 被过滤；有界异步 writer 明确使用非丢弃背压策略。日志初始化失败在正式 Subscriber 不可用时由入口使用 stderr 补齐同一 ID 的原因、路径与原始栈。日志实现保留在独立的 app_logging crate，Gallery 负责目录、生命周期和宿主策略。
+宿主日志通过 Facade 的可选 `app_logging` Feature 装配：先准备日志并 `install`，再安装 `log_plugin()` 返回的官方 LogPlugin 配置，持有 LoggingGuard 直到日志生产者结束并完成可观察 flush。文件保存 DEBUG、INFO、WARN、ERROR，包含普通生命周期和错误处理 DEBUG；TRACE 默认关闭，终端保持 INFO 及以上，宿主可显式覆盖环境过滤及第三方 Target 策略。有界异步 writer 明确使用非丢弃背压策略。日志初始化失败在正式 Subscriber 不可用时由入口使用 stderr 补齐同一 ID 的原因、路径与原始栈。日志实现保留在独立的 app_logging crate，Gallery 负责目录、生命周期和宿主策略。
 
 Gallery 在构造 App 时安装一次宿主 Error Handler，供主 World 和未单独设置策略的 SubApp 继承。受管错误按原始 ID 逐项终结，同一诊断的重复上报只输出一次完整原栈，保留 ECS、附加传播和 Bevy context，不重放源头原因。非受管错误记录 Bevy 提供的 Display、Debug 和 ECS context，保留其 Severity 与 Panic payload 策略；Trace 级外来错误通过 DEBUG 记录并附上原始 `native_severity`，避免长期兜底路径保留临时 TRACE 调用。第三方未捕获的原始栈不会被伪造。
 

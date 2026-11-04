@@ -1,7 +1,7 @@
 #![allow(clippy::disallowed_macros)]
 
 use bevy::ecs::error::Severity;
-use bevy::log::{debug, error, info};
+use bevy::log::{debug, error, info, trace, warn};
 use bevy::prelude::*;
 use bevy_widgetry_app_logging::{AppLogging, LoggingStage, file_layer, log_plugin, terminal_layer};
 use std::fs;
@@ -80,6 +80,10 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     info!(target: "bevy_widgetry", "Widgetry target 输出验证");
     debug!(target: "bevy_widgetry", error_id = "probe", phase = "handled", action = "fallback", "必要处理诊断");
     debug!(target: "ordinary_module", "普通模块DEBUG过滤验证");
+    debug!(target: "bevy_widgetry", "库生命周期DEBUG验证");
+    warn!(target: "ordinary_module", "宿主风险WARN验证");
+    trace!(target: "ordinary_module", "宿主TRACE默认关闭验证");
+    trace!(target: "bevy_widgetry", "库TRACE默认关闭验证");
     error!(target: "widget_gallery", error_id = "probe", phase = "unhandled", backtrace = %"frame1\nframe2", "最终报告验证");
     drop(app);
     info!("guard 释放前的最后一条日志");
@@ -92,7 +96,11 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     assert!(contents.contains("guard 释放前的最后一条日志"));
     assert!(contents.contains("必要处理诊断"));
     assert!(contents.contains("frame1\nframe2"));
-    assert!(!contents.contains("普通模块DEBUG过滤验证"));
+    assert!(contents.contains("普通模块DEBUG过滤验证"));
+    assert!(contents.contains("库生命周期DEBUG验证"));
+    assert!(contents.contains("宿主风险WARN验证"));
+    assert!(!contents.contains("宿主TRACE默认关闭验证"));
+    assert!(!contents.contains("库TRACE默认关闭验证"));
     assert!(!contents.contains('\u{1b}'));
     assert!(!contents.contains("bevy_widgetry"));
     let timestamp = contents.lines().next().ok_or("日志为空")?;

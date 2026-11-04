@@ -57,10 +57,7 @@ pub fn file_layer(app: &mut App) -> Option<BoxedLayer> {
             .with_ansi(false)
             .with_writer(output.writer.clone())
             .with_filter(filter_fn(|metadata| {
-                *metadata.level() <= bevy::log::Level::INFO
-                    || (*metadata.level() == bevy::log::Level::DEBUG
-                        && metadata.fields().field("error_id").is_some()
-                        && metadata.fields().field("phase").is_some())
+                *metadata.level() <= bevy::log::Level::DEBUG
             })),
     ))
 }

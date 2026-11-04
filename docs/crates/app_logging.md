@@ -4,7 +4,7 @@
 
 供宿主选择使用的 Terminal / File 日志基础设施。`AppLogging::new` 准备本地时间、目录和带毫秒时间戳的文件；`install` 安装输出资源并返回 `LoggingGuard`。库不安装全局 Subscriber，也不配置 ECS Error Handler。
 
-宿主先 install，再由自身调用 `app.add_plugins(log_plugin())`。该函数返回官方 Bevy LogPlugin 的完整配置：外层允许 DEBUG，文件层保留 INFO 及以上和带 error_id/phase 的诊断 DEBUG；普通模块 DEBUG/TRACE 仍过滤。终端只展示 INFO 及以上。环境过滤是宿主主动覆盖项，RUST_LOG 的显式过滤仍生效。若自行使用 `file_layer` / `terminal_layer`，须保证外层过滤不裁掉必要诊断。Facade 独立非默认 app_logging Feature 重导出这些 API 与错误类型。
+宿主先 install，再由自身调用 `app.add_plugins(log_plugin())`。该函数返回官方 Bevy LogPlugin 的完整配置：外层允许 DEBUG，文件层保存 DEBUG、INFO、WARN、ERROR，包括库和宿主普通模块的生命周期及错误处理诊断，不再要求 DEBUG 带 error_id/phase。TRACE 默认关闭，终端只展示 INFO 及以上。环境过滤是宿主主动覆盖项，RUST_LOG 的显式过滤仍生效；第三方噪声可按 Target 单独过滤。若自行使用 `file_layer` / `terminal_layer`，须保证外层过滤不裁掉必要诊断。Facade 独立非默认 app_logging Feature 重导出这些 API 与错误类型。
 
 两层保持本地时间、毫秒格式；文件无 ANSI 并保存源码位置。正式诊断的多行 Backtrace 按 Display 写入。
 
