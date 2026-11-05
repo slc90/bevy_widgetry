@@ -281,6 +281,18 @@ pub(crate) enum ColorShowcaseKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ButtonKey {
+    CustomTitle,
+    CustomDescription,
+    CustomAction,
+    CustomWorking,
+    CustomLocalDisabled,
+    CustomAncestorDisabled,
+    CustomLoading,
+    CustomStatus,
+    CustomDisabled,
+    CustomPressed,
+    CustomHovered,
+    CustomNormal,
     ToggleDescription,
     ToggleButton,
     ToggleProgrammatic,

@@ -1,3 +1,4 @@
+mod custom;
 mod hold;
 mod toggle;
 use crate::assets::GalleryIcon;
@@ -19,6 +20,7 @@ pub(crate) struct ButtonDemoPlugin;
 impl Plugin for ButtonDemoPlugin {
     fn build(&self, app: &mut App) {
         hold::install(app);
+        custom::install(app);
         app.add_systems(OnEnter(GalleryPage::Button), enter)
             .add_systems(OnExit(GalleryPage::Button), exit)
             .add_systems(
@@ -57,6 +59,7 @@ pub(crate) fn scene() -> impl Scene {
                 Children [@localized(TextKey::Common(CommonKey::Normal)) bevy_widgetry::text::WidgetryText-- @button_row(false)]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @button_row(true)]--
+            @custom::scene()--
             @toggle::scene()--
             @hold::scene()--
             @link_examples()--
