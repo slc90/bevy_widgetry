@@ -10,8 +10,8 @@ pub(crate) use key::{
     ButtonKey, CanvasKey, CheckBoxKey, CloseKey, CollapsibleKey, ColorShowcaseKey, ComboBoxKey,
     CommonKey, CursorKey, DatePickerKey, HeaderKey, JobKey, ListViewKey, NavigationKey,
     NumberInputKey, PowerInhibitKey, ProgressBarKey, ScrollAreaKey, SegmentedKey, SliderKey,
-    SplitterKey, TableKey, TabsKey, TextFieldKey, TextKey, TooltipKey, TreeKey, WaveformKey,
-    WindowKey,
+    SplitterKey, TableKey, TabsKey, TextFieldKey, TextKey, TooltipKey, TrayKey, TreeKey,
+    WaveformKey, WindowKey,
 };
 pub(crate) use language::Language;
 

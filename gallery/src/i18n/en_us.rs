@@ -7,6 +7,19 @@ use super::{ListViewKey, TableKey, TreeKey};
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
         TextKey::SplashSkip => "Skip",
+        TextKey::GalleryTray(key) => match key {
+            super::TrayKey::Restore => "Restore window",
+            super::TrayKey::Exit => "Exit application",
+            super::TrayKey::Demo => "Feature demo",
+            super::TrayKey::Check => "Check test",
+            super::TrayKey::Disabled => "Disabled demo item",
+            super::TrayKey::ToggleEnabled => "Toggle disabled item",
+            super::TrayKey::Rename => "Change demo label",
+            super::TrayKey::Renamed => "Demo label changed",
+            super::TrayKey::Add => "Add dynamic item",
+            super::TrayKey::Remove => "Remove dynamic item",
+            super::TrayKey::Dynamic => "Dynamically added item",
+        },
         TextKey::Navigation(NavigationKey::DatePicker) => "DatePicker",
         TextKey::DatePicker(key) => match key {
             super::DatePickerKey::Description => "Browse months without changing selection. Click the title for month/year navigation. Only committed changes enter the event history; Today never selects a date.",

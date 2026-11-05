@@ -7,6 +7,19 @@ use super::{ListViewKey, TableKey, TreeKey};
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
         TextKey::SplashSkip => "跳过",
+        TextKey::GalleryTray(key) => match key {
+            super::TrayKey::Restore => "恢复窗口",
+            super::TrayKey::Exit => "退出程序",
+            super::TrayKey::Demo => "功能演示",
+            super::TrayKey::Check => "复选测试",
+            super::TrayKey::Disabled => "禁用演示项",
+            super::TrayKey::ToggleEnabled => "切换禁用项状态",
+            super::TrayKey::Rename => "修改演示项文字",
+            super::TrayKey::Renamed => "演示项文字已修改",
+            super::TrayKey::Add => "添加动态菜单项",
+            super::TrayKey::Remove => "删除动态菜单项",
+            super::TrayKey::Dynamic => "动态添加的项目",
+        },
         TextKey::Navigation(NavigationKey::DatePicker) => "日期选择",
         TextKey::DatePicker(key) => match key {
             super::DatePickerKey::Description => {

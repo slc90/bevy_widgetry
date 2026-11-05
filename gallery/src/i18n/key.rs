@@ -4,6 +4,7 @@ use bevy::prelude::*;
 pub(crate) enum TextKey {
     SplashSkip,
     GalleryClose(CloseKey),
+    GalleryTray(TrayKey),
     Navigation(NavigationKey),
     GalleryHeader(HeaderKey),
     Common(CommonKey),
@@ -31,6 +32,21 @@ pub(crate) enum TextKey {
     Canvas(CanvasKey),
     Job(JobKey),
     PowerInhibit(PowerInhibitKey),
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TrayKey {
+    Restore,
+    Exit,
+    Demo,
+    Check,
+    Disabled,
+    ToggleEnabled,
+    Rename,
+    Renamed,
+    Add,
+    Remove,
+    Dynamic,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

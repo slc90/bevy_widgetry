@@ -22,6 +22,7 @@ use bevy_widgetry::{
 };
 
 mod shutdown;
+mod tray_menu;
 
 pub(crate) fn request_exit(world: &mut World) -> Result {
     shutdown::begin(world, AppExit::Success)
@@ -58,6 +59,7 @@ pub(crate) fn install(app: &mut App) -> Result {
     .init_resource::<GalleryTrayState>()
     .add_systems(First, focus_restored)
     .add_systems(Update, (restore_from_tray, close_requests).chain());
+    tray_menu::install(app)?;
     shutdown::install(app);
     Ok(())
 }
@@ -249,17 +251,23 @@ fn restore_from_tray(world: &mut World, mut cursor: Local<MessageCursor<Widgetry
         .read(world.resource::<Messages<WidgetryTrayClick>>())
         .count()
         > 0;
-    if !clicked
-        || world.resource::<GalleryTrayState>().exiting
+    if clicked {
+        restore_hidden(world, "tray");
+    }
+}
+
+fn restore_hidden(world: &mut World, origin: &'static str) {
+    if world.resource::<GalleryTrayState>().exiting
         || world
             .resource::<GalleryTrayState>()
             .hidden_windows
             .is_empty()
     {
+        info!(origin, restored = 0, "托盘恢复请求未改变 Gallery 窗口");
         return;
     }
     info!(
-        origin = "tray",
+        origin,
         window_count = world.resource::<GalleryTrayState>().hidden_windows.len(),
         "请求恢复 Gallery 托盘隐藏会话"
     );
