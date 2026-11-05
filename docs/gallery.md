@@ -308,7 +308,7 @@ Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调�
 
 从托盘隐藏会话程序化退出时，先停止托盘恢复并主动发送 Winit WakeUp，在下一帧 `First` 中恢复该会话记录中仍存活的全部窗口并清空隐藏记录。窗口变更会在该帧 `Last` 同步到原生窗口；不会在 `RemoteLast` 后先将 ECS 标为可见，避免仍隐藏的原生窗口无法产生下一次重绘。隐藏的模态 MessageBox 或 FileDialog 因此可以正常操作和取消，不会以不可见状态阻挡主窗口的收尾决策。原本不属于隐藏会话的窗口不被纳入恢复。
 
-`GalleryShutdownState` 反射 Resource 提供阶段、剩余任务数、超时毫秒数、超时通知次数与最终退出是否已发送；界面使用 `GalleryShutdown`、`GalleryShutdownStatus`、`GalleryShutdownDetails`、`GalleryContinueWaiting` 和 `GalleryForceExit` 等 Name。界面按状态和 Theme 变化同步，并沿用双语文本及 Winit WakeUp；最后一个任务退出后可在静止 Reactive 模式下自动收敛到一次最终 `AppExit`。隐藏和恢复日志分别描述已提交的可见性变更；退出日志描述收尾请求、超时、用户决策和真实回收，不把请求视为 OS 已完成关闭。取消与会话外点击不产生隐藏、恢复或退出业务日志。
+`GalleryShutdownState` 反射 Resource 提供阶段、剩余任务数、超时毫秒数、超时通知次数与最终退出是否已发送；界面使用 `GalleryShutdown`、`GalleryShutdownStatus`、`GalleryShutdownDetails`、`GalleryContinueWaiting` 和 `GalleryForceExit` 等 Name。界面按状态和 Theme 变化同步，并沿用双语文本及 Winit WakeUp；最后一个任务退出后可在静止 Reactive 模式下自动收敛到一次最终 `AppExit`。关闭确认的退出、隐藏和取消选择、有效托盘恢复意图、继续等待及强制退出决定使用 INFO。确认窗口构造、已提交的窗口可见性变更、聚焦请求、进入收尾、真实回收及最终退出通知使用 DEBUG；超时和强制退出的清理风险使用 WARN，不把请求视为 OS 已完成关闭。取消只记录取消决定，不产生隐藏、恢复或退出成功日志；会话外托盘点击保持静默。
 
 ### 独立 Canvas 绘画实验
 

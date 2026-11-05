@@ -157,6 +157,7 @@ fn open_confirmation(world: &mut World, parent: Entity) -> Result {
         })?;
     WidgetryRadioGroup::set_selected(&mut world.commands(), choices, 1);
     world.flush();
+    debug!(?parent, ?root, "Gallery 关闭确认窗口已构造");
     Ok(())
 }
 
@@ -201,6 +202,12 @@ fn finish(world: &mut World, root: Entity, choice: Option<Choice>) -> Result {
     {
         return Ok(());
     }
+    let action = match choice {
+        None => "cancel",
+        Some(Choice::Exit) => "exit",
+        Some(Choice::Hide) => "hide",
+    };
+    info!(action, ?root, "Gallery 关闭确认已选择");
     world.resource_mut::<GalleryTrayState>().dialog = None;
     world.entity_mut(root).despawn();
     // Owned-window cleanup is deferred; finish it before collecting the hide session.
@@ -225,10 +232,10 @@ fn finish(world: &mut World, root: Entity, choice: Option<Choice>) -> Result {
                     }
                     window.visible = false;
                     hidden.push(entity);
-                    info!(title = %window.title, ?entity, "已提交 Gallery 窗口隐藏变更");
+                    debug!(title = %window.title, ?entity, "已提交 Gallery 窗口隐藏变更");
                 }
             }
-            info!(window_count = hidden.len(), "Gallery 已进入托盘隐藏会话");
+            debug!(window_count = hidden.len(), "Gallery 已进入托盘隐藏会话");
             let mut state = world.resource_mut::<GalleryTrayState>();
             state.hidden_windows = hidden;
             state.focus_after_restore = None;
@@ -251,6 +258,11 @@ fn restore_from_tray(world: &mut World, mut cursor: Local<MessageCursor<Widgetry
     {
         return;
     }
+    info!(
+        origin = "tray",
+        window_count = world.resource::<GalleryTrayState>().hidden_windows.len(),
+        "请求恢复 Gallery 托盘隐藏会话"
+    );
     let hidden = std::mem::take(&mut world.resource_mut::<GalleryTrayState>().hidden_windows);
     let mut count = 0;
     for entity in hidden {
@@ -259,10 +271,10 @@ fn restore_from_tray(world: &mut World, mut cursor: Local<MessageCursor<Widgetry
         {
             window.visible = true;
             count += 1;
-            info!(title = %window.title, ?entity, "已提交 Gallery 窗口恢复变更");
+            debug!(title = %window.title, ?entity, "已提交 Gallery 窗口恢复变更");
         }
     }
-    info!(window_count = count, "Gallery 已结束托盘隐藏会话");
+    debug!(window_count = count, "Gallery 已结束托盘隐藏会话");
     let primary = world
         .query_filtered::<Entity, With<PrimaryWindow>>()
         .single(world)
@@ -289,7 +301,7 @@ fn focus_restored(
         WINIT_WINDOWS.with_borrow(|windows| {
             if let Some(window) = windows.get_window(primary) {
                 window.focus_window();
-                info!(entity = ?primary, "已请求 Gallery 主窗口聚焦");
+                debug!(entity = ?primary, "已请求 Gallery 主窗口聚焦");
             }
         });
     }

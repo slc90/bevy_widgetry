@@ -108,7 +108,8 @@ pub(super) fn begin(world: &mut World, intent: AppExit) -> Result {
         state.timeout_ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX);
     }
     world.resource_mut::<GalleryTrayState>().exiting = true;
-    info!(
+    debug!(
+        remaining,
         timeout_ms = timeout.as_millis(),
         "Gallery 开始等待全部后台任务真实退出"
     );
@@ -147,7 +148,7 @@ fn prepare_windows(world: &mut World) {
     for entity in hidden {
         if let Some(mut window) = world.get_mut::<Window>(entity) {
             window.visible = true;
-            info!(?entity, "Gallery 退出前已提交托盘窗口恢复变更");
+            debug!(?entity, "Gallery 退出前已提交托盘窗口恢复变更");
         }
     }
     for mut window in world
@@ -205,7 +206,7 @@ fn drive(world: &mut World) -> Result {
                         state.stage = Stage::Completed;
                     }
                     state.remaining = 0;
-                    info!("Gallery 全部后台任务已真实退出并回收");
+                    debug!("Gallery 全部后台任务已真实退出并回收");
                 }
             }
             changed = true;
@@ -226,7 +227,7 @@ fn drive(world: &mut World) -> Result {
         let intent = world.resource::<ExitFlow>().intent.clone();
         world.resource_mut::<GalleryShutdownState>().exit_sent = true;
         world.write_message(intent);
-        info!("Gallery 已提交最终应用退出通知");
+        debug!("Gallery 已提交最终应用退出通知");
     } else if changed {
         world.write_message(RequestRedraw);
     }
@@ -239,10 +240,11 @@ fn decide(world: &mut World, force: bool) {
         return;
     }
     if force {
+        info!(remaining = state.remaining, "用户选择强制退出 Gallery");
         state.stage = Stage::Forced;
         warn!(
             remaining = state.remaining,
-            "用户选择强制退出 Gallery，后台清理及外部副作用不保证完成"
+            "强制退出时后台清理及外部副作用不保证完成"
         );
     } else if state.stage == Stage::TimedOut {
         state.stage = Stage::Continuing;
@@ -373,6 +375,8 @@ fn show(world: &mut World) -> Result {
 mod tests {
     use super::*;
     use bevy::app::OnAppExitSystems;
+    use bevy::log::Level;
+    use bevy_widgetry_test_utils::LogCapture;
     use std::sync::mpsc;
     use std::time::Instant;
 
@@ -416,12 +420,20 @@ mod tests {
     #[test]
     fn empty_programmatic_exit_is_completed_and_preserves_error_code() {
         let mut app = app();
+        let logs = LogCapture::with_targets(["widget_gallery::close::shutdown"]);
         app.world_mut().write_message(AppExit::from_code(7));
-        app.update();
+        logs.run(|| app.update());
         let state = app.world().resource::<GalleryShutdownState>();
         assert_eq!(state.stage, Stage::Completed);
         assert!(state.exit_sent);
         assert_eq!(app.should_exit(), Some(AppExit::from_code(7)));
+        assert_eq!(
+            logs.records()
+                .iter()
+                .map(|record| record.level)
+                .collect::<Vec<_>>(),
+            [Level::DEBUG, Level::DEBUG, Level::DEBUG]
+        );
         assert!(matches!(
             app.world()
                 .resource::<JobManager>()
@@ -614,17 +626,20 @@ mod tests {
     #[test]
     fn force_requires_timeout_and_sends_exit_only_once_with_a_live_job() {
         let mut app = app();
+        let logs = LogCapture::with_targets(["widget_gallery::close::shutdown"]);
         app.world_mut().resource_mut::<ExitFlow>().timeout = Duration::ZERO;
         let (_, _receiver, release) = controlled(&app, false);
-        decide(app.world_mut(), true);
+        logs.run(|| decide(app.world_mut(), true));
         assert_eq!(
             app.world().resource::<GalleryShutdownState>().stage,
             Stage::Idle
         );
-        begin(app.world_mut(), AppExit::Success).unwrap();
-        app.update();
-        decide(app.world_mut(), true);
-        app.update();
+        logs.run(|| {
+            begin(app.world_mut(), AppExit::Success).unwrap();
+            app.update();
+            decide(app.world_mut(), true);
+            app.update();
+        });
         assert_eq!(app.should_exit(), Some(AppExit::Success));
         assert_eq!(
             app.world().resource::<GalleryShutdownState>().stage,
@@ -632,9 +647,24 @@ mod tests {
         );
         assert_eq!(app.world().resource::<GalleryShutdownState>().remaining, 1);
         let messages = app.world().resource::<Messages<AppExit>>().len();
-        decide(app.world_mut(), true);
-        app.update();
+        logs.run(|| {
+            decide(app.world_mut(), true);
+            app.update();
+        });
         assert_eq!(app.world().resource::<Messages<AppExit>>().len(), messages);
+        assert_eq!(
+            logs.records()
+                .iter()
+                .map(|record| record.level)
+                .collect::<Vec<_>>(),
+            [
+                Level::DEBUG,
+                Level::WARN,
+                Level::INFO,
+                Level::WARN,
+                Level::DEBUG
+            ]
+        );
         release.send(()).unwrap();
     }
 
