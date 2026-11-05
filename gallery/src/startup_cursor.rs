@@ -81,14 +81,28 @@ fn enable_cursor(
     startup: Res<StartupCursor>,
     mut theme: ResMut<WidgetryCursorTheme>,
     mut redraw: MessageWriter<RequestRedraw>,
+    ready: Option<Res<GalleryFirstFrameReady>>,
+    splash: Option<Res<crate::splash::SplashEnabled>>,
+    page: Res<State<crate::gallery::GalleryPage>>,
+    content: Query<&crate::gallery::GalleryPageContent>,
 ) {
     if startup.presented.load(Ordering::Acquire) {
-        commands.insert_resource(GalleryFirstFrameReady {
-            window: startup.window,
-            background: startup.background,
-        });
-        *theme = WidgetryCursorTheme::Kamuri;
-        commands.remove_resource::<StartupCursor>();
+        if ready.is_none() {
+            commands.insert_resource(GalleryFirstFrameReady {
+                window: startup.window,
+                background: startup.background,
+            });
+            *theme = WidgetryCursorTheme::Kamuri;
+        }
+        if splash.is_none()
+            && *page.get() != crate::gallery::GalleryPage::Initializing
+            && content
+                .single()
+                .is_ok_and(|content| content.0 == *page.get())
+        {
+            debug!(window = ?startup.window, page = ?page.get(), "Gallery 首屏已就绪");
+            commands.remove_resource::<StartupCursor>();
+        }
     } else {
         redraw.write(RequestRedraw);
     }

@@ -161,6 +161,7 @@ fn advance(
     }
     if lifecycle.phase != previous_phase {
         lifecycle.wait_ms = 0.0;
+        debug!(from = ?previous_phase, to = ?lifecycle.phase, "Splash 阶段已切换");
     }
     let waiting = matches!(
         lifecycle.phase,
@@ -196,6 +197,7 @@ fn advance(
             presentation.submit_terminal();
         }
         if presentation.terminal_presented.load(Ordering::Acquire) {
+            debug!(window = ?presentation.window, "Splash 淡出帧已呈现，完成 Gallery 交接");
             lifecycle.phase = SplashPhase::Finished;
             status.playing = false;
             super::cleanup(&mut commands, &mut session);

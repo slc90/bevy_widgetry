@@ -151,7 +151,7 @@ pub(crate) fn load(path: PathBuf) -> LoadedConfig {
             }
         },
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            info!(path = %file.path.display(), "Gallery 配置文件不存在，使用默认配置并尝试创建");
+            debug!(path = %file.path.display(), "Gallery 配置文件不存在，使用默认配置并尝试创建");
             let config = AppConfig::default();
             if let Err(error) = file.create_default(&config) {
                 handled("create", &file.path, error, "继续使用内存默认配置");

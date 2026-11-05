@@ -82,6 +82,7 @@ fn run(
     *guard = Some(logging.install(&mut app));
     app.add_plugins(log_plugin());
     *logging_ready = true;
+    debug!("Gallery 启动配置开始");
     if let Some(mode) = std::env::var_os("GALLERY_DIAGNOSTIC_PROBE") {
         return diagnostics::run_probe(&mut app, &mode);
     }
@@ -153,7 +154,10 @@ fn run(
     page_lifecycle_benchmark::install(&mut app)?;
     close::install(&mut app)?;
     canvas_experiment::install(&mut app);
-    Ok(app.run())
+    debug!("Gallery 配置装配完成，准备进入主循环");
+    let exit = app.run();
+    debug!(?exit, "Gallery 主循环已返回");
+    Ok(exit)
 }
 
 fn window_startup_failure(failure: bevy_widgetry::window::WindowFailure) -> BevyError {
