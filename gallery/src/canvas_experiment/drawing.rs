@@ -62,12 +62,35 @@ pub(super) struct ShapeRecord {
 }
 
 pub(super) fn batch(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
-    let request: Batch = params(value)?;
+    let request: Batch = params(value).inspect_err(|error| {
+        info!(
+            operation = "batch",
+            origin = "brp",
+            result = "rejected",
+            code = error.code,
+            "绘图批次参数被拒绝"
+        );
+    })?;
     if request.operations.len() > 1024 {
+        info!(
+            session = request.session,
+            operation = "batch",
+            origin = "brp",
+            total = request.operations.len(),
+            result = "rejected",
+            reason = "too_many_operations",
+            "绘图批次请求被拒绝"
+        );
         return Err(invalid_params("A batch accepts at most 1024 operations"));
     }
     world.resource_scope(|world, mut sessions: Mut<Sessions>| {
-        let session = sessions.0.get_mut(&request.session).ok_or_else(|| invalid_params("Unknown session"))?;
+        let session = sessions.0.get_mut(&request.session).ok_or_else(|| {
+            info!(session=request.session, operation="batch", origin="brp", total=request.operations.len(),
+                result="rejected", reason="unknown_session", "绘图批次请求被拒绝");
+            invalid_params("Unknown session")
+        })?;
+        info!(session=request.session, operation="batch", origin="brp", total=request.operations.len(),
+            result="accepted", "绘图批次已接受");
         let mut results = Vec::with_capacity(request.operations.len());
         let mut successful = 0;
         for (index, operation) in request.operations.into_iter().enumerate() {
@@ -76,16 +99,19 @@ pub(super) fn batch(In(value): In<Option<Value>>, world: &mut World) -> BrpResul
             results.push(match result {
                 Ok(id) => { successful += 1; json!({"index": index, "ok": true, "id": id}) }
                 Err(error) => {
-                    warn!(session = request.session, index, error = %error.message, "BRP 绘图操作失败，保留此前成功修改并继续批次");
                     json!({"index": index, "ok": false, "error": error})
                 }
             });
         }
         world.write_message(RequestRedraw);
         super::storage::persist(world, &request.session, session);
-        info!(session = request.session, successful, total = results.len(), "通过 BRP 完成绘图批次");
+        let failed = results.len() - successful;
+        let all_succeeded = failed == 0;
+        let outcome = if all_succeeded { "succeeded" } else if successful == 0 { "failed" } else { "partial_failure" };
+        info!(session = request.session, operation="batch", origin="brp", successful, failed, total = results.len(),
+            all_succeeded, saved=!session.dirty, error=?session.save_error, result=outcome, "绘图批次执行结果");
         Ok(json!({"session": request.session, "results": results, "successful": successful,
-            "all_succeeded": results.iter().all(|result| result["ok"] == true),
+            "all_succeeded": all_succeeded,
             "shape_count": CanvasDocument::shape_order(world, session.document).map_err(crate::diagnostics::managed_response_error)?.len(),
             "persistence": {"saved": !session.dirty, "error": session.save_error}}))
     })
@@ -350,6 +376,188 @@ mod tests {
             },
         );
         app
+    }
+
+    #[test]
+    fn batch_logs_match_responses_without_warning_for_expected_rejections() {
+        use bevy_widgetry_test_utils::LogCapture;
+        let mut app = app();
+        let logs = LogCapture::with_targets([
+            "widget_gallery::canvas_experiment::drawing",
+            "widget_gallery",
+            "bevy_widgetry",
+        ]);
+        let responses = logs.run(|| {
+            let mut responses = Vec::new();
+            for operations in [
+                json!([
+                    {"op":"create","id":"first","geometry":{"Rectangle":{"size":[10,10],"corner_radius":0}}},
+                    {"op":"delete","id":"missing"},
+                    {"op":"nonsense"}
+                ]),
+                json!([]),
+                json!([{"op":"delete","id":"missing"}]),
+                json!([{"op":"delete","id":"first"}]),
+            ] {
+                responses.push(batch(In(Some(json!({"session":"test","operations":operations}))), app.world_mut()).unwrap());
+            }
+            for request in [
+                json!({"session":"test","operations":vec![Value::Null; 1025]}),
+                json!({"session":"missing","operations":[]}),
+                json!({"session":"test","operations":"invalid"}),
+            ] {
+                assert!(batch(In(Some(request)), app.world_mut()).is_err());
+            }
+            responses
+        });
+        let records = logs.records();
+        assert!(
+            !records
+                .iter()
+                .any(|r| r.level == bevy::log::tracing::Level::WARN
+                    || r.level == bevy::log::tracing::Level::ERROR)
+        );
+        assert_eq!(
+            records
+                .iter()
+                .filter(|r| r.matches_field("result", "accepted"))
+                .count(),
+            4
+        );
+        assert_eq!(
+            records
+                .iter()
+                .filter(|r| r.matches_field("result", "rejected"))
+                .count(),
+            3
+        );
+        let summaries: Vec<_> = records
+            .iter()
+            .filter(|r| r.fields.contains_key("all_succeeded"))
+            .collect();
+        assert_eq!(summaries.len(), responses.len());
+        for (summary, response) in summaries.into_iter().zip(responses) {
+            let total = response["results"].as_array().unwrap().len();
+            let successful = response["successful"].as_u64().unwrap() as usize;
+            assert!(summary.matches_field("session", "test"));
+            assert!(summary.matches_field("origin", "brp"));
+            for (field, value) in [
+                ("total", total),
+                ("successful", successful),
+                ("failed", total - successful),
+            ] {
+                assert!(summary.matches_field(field, &value.to_string()));
+            }
+            assert!(summary.matches_field("all_succeeded", &response["all_succeeded"].to_string()));
+            assert!(summary.matches_field("saved", &response["persistence"]["saved"].to_string()));
+        }
+    }
+
+    #[test]
+    fn batch_keeps_real_failure_diagnostics_and_continues_after_mixed_errors() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let mut app = app();
+        let geometry = json!({"Rectangle":{"size":[10,10],"corner_radius":0}});
+        batch(In(Some(json!({"session":"test","operations":[{"op":"create","id":"broken","geometry":geometry}]}))), app.world_mut()).unwrap();
+        let broken = app.world().resource::<Sessions>().0["test"].shapes["broken"];
+        app.world_mut().entity_mut(broken).remove::<CanvasPaint>();
+        let logs = LogCapture::with_targets([
+            "widget_gallery::canvas_experiment::drawing",
+            "widget_gallery",
+            "bevy_widgetry",
+        ]);
+        let response = logs.run(|| {
+            batch(
+                In(Some(json!({"session":"test","operations":[
+                    {"op":"nonsense"}, {"op":"update","id":"broken"},
+                    {"op":"create","id":"good","geometry":geometry}
+                ]}))),
+                app.world_mut(),
+            )
+            .unwrap()
+        });
+        assert_eq!(response["successful"], 1);
+        assert_eq!(response["all_succeeded"], false);
+        assert_eq!(response["shape_count"], 1);
+        assert_eq!(response["persistence"]["saved"], true);
+        let records = logs.records();
+        assert!(
+            !records
+                .iter()
+                .any(|r| r.level == bevy::log::tracing::Level::WARN)
+        );
+        let sources: Vec<_> = records
+            .iter()
+            .filter(|r| r.phase() == Some(DiagnosticPhase::Source))
+            .collect();
+        assert_eq!(sources.len(), 1);
+        for source in sources {
+            assert_eq!(source.level, bevy::log::tracing::Level::ERROR);
+            assert_eq!(
+                records
+                    .iter()
+                    .filter(|r| r.phase() == Some(DiagnosticPhase::Handled)
+                        && r.fields.get("error_id") == source.fields.get("error_id"))
+                    .count(),
+                1
+            );
+        }
+        let summary = records
+            .iter()
+            .find(|r| r.fields.contains_key("all_succeeded"))
+            .unwrap();
+        assert!(summary.matches_field("successful", "1"));
+        assert!(summary.matches_field("failed", "2"));
+    }
+
+    #[test]
+    fn successful_batch_with_failed_persistence_keeps_edits_and_logs_saved_false() {
+        use bevy_widgetry_test_utils::LogCapture;
+        use std::os::windows::fs::OpenOptionsExt;
+        let mut app = app();
+        batch(
+            In(Some(json!({"session":"test","operations":[]}))),
+            app.world_mut(),
+        )
+        .unwrap();
+        let path = app.world().resource::<Sessions>().0["test"]
+            .directory
+            .join("document.json");
+        let previous = std::fs::read(&path).unwrap();
+        let locked = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .unwrap();
+        let logs = LogCapture::with_targets([
+            "widget_gallery::canvas_experiment::drawing",
+            "widget_gallery",
+            "bevy_widgetry",
+        ]);
+        let response = logs.run(|| batch(In(Some(json!({"session":"test","operations":[
+            {"op":"create","id":"unsaved","geometry":{"Rectangle":{"size":[10,10],"corner_radius":0}}}
+        ]}))), app.world_mut()).unwrap());
+        assert_eq!(response["successful"], 1);
+        assert_eq!(response["all_succeeded"], true);
+        assert_eq!(response["persistence"]["saved"], false);
+        assert_eq!(response["shape_count"], 1);
+        drop(locked);
+        assert_eq!(std::fs::read(path).unwrap(), previous);
+        let records = logs.records();
+        let summary = records
+            .iter()
+            .find(|r| r.fields.contains_key("all_succeeded"))
+            .unwrap();
+        assert!(summary.matches_field("all_succeeded", "true"));
+        assert!(summary.matches_field("saved", "false"));
+        assert!(!summary.matches_field("error", "None"));
+        assert_eq!(
+            records
+                .iter()
+                .filter(|r| r.level == bevy::log::tracing::Level::ERROR)
+                .count(),
+            1
+        );
     }
 
     #[test]

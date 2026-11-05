@@ -324,6 +324,8 @@ Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调�
 
 `gallery/canvas_batch` 接收 `{ "session": "<ID>", "operations": [...] }`，每批最多 1024 项，按顺序逐项解析并执行，某项失败后继续后续项。响应的 `results` 包含每项 index、ok、成功的 id 或失败 error，`successful` 和 `all_succeeded` 描述真实结果；批次不回滚成功项，也不自动返回全部几何。
 
+绘图批次以 INFO 记录接受或入口拒绝，执行结果包含 session、origin="brp"、total、successful、failed、all_succeeded 以及真实 saved/error。预期单项输入拒绝不逐项记录 WARN，详情保留在 results；真实内部失败仍保留源头 ERROR 与处理 DEBUG。空批次也报告实际结果，操作全部成功与存档是否保存分别表达。
+
 操作格式为 `create {id,geometry,paint?,transform?}`、`update {id,geometry?,paint?,transform?}`、`delete {id}`、`order {id,order}`，均通过 `op` 字段区分。order 支持 `raise/lower/front/back`。ID 由调用方指定，为 1–128 个 ASCII 字母、数字、下划线或短横线，可在同一批次的后续项直接引用；同一会话内已使用的 ID 不能重新分配，即使图形已删除，存档恢复也保留这一约束。更新中省略的属性保留原值，不能变更几何类型；创建省略 Paint/Transform 使用 Canvas 默认值。
 
 geometry、paint、transform 使用对应已注册公开类型的 Bevy 反射 JSON 值，去掉外层类型路径。例如 `{"op":"create","id":"face","geometry":{"Ellipse":{"radii":[80,100]}}}` 或 `{"op":"create","id":"background","geometry":{"Rectangle":{"size":[1920,1080],"corner_radius":0}}}`。Paint 的颜色空间、填充规则、端点/连接，Transform 的三维平移/Scale 和仅绕 Z 的标准化 Quaternion，以及 Path 的全部原始命令均按 Canvas 原语义传递。适配层先重建这些已知类型，再调用 `CanvasDocument` 公开 API；不使用组件写入接口。
