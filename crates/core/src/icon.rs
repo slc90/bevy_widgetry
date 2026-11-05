@@ -16,6 +16,7 @@ use crate::{
     foreground::InheritedForeground,
     ui::{WidgetryUiPlugin, WidgetryUiSystems},
 };
+use bevy::ui::ComputedUiRenderTargetInfo;
 use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
 use bevy_widgetry_internal_log::widgetry_debug;
@@ -28,7 +29,7 @@ pub struct WidgetryIcon {
     max_size: Option<UVec2>,
 }
 
-/// Wait for the complete subtree and glyph shape projection before creating or replacing the raster image.
+/// Prepare the image subtree after glyph shape projection so UI target information can propagate into it.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WidgetryIconMaterialize;
 
@@ -43,6 +44,13 @@ pub struct WidgetryIconProps {
 struct IconMaterialized {
     image_entity: Entity,
     svg_asset_id: AssetId<svg::SvgAsset>,
+    raster_spec: IconRasterSpec,
+}
+
+struct ResolvedIconImage {
+    handle: Handle<Image>,
+    logical_size: Vec2,
+    raster_spec: IconRasterSpec,
 }
 
 #[derive(Component)]
@@ -118,19 +126,20 @@ pub struct WidgetryIconPlugin;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum IconRasterSpec {
-    Intrinsic,
+    Intrinsic { scale: u32 },
     MaxSize { width: u32, height: u32 },
 }
 
 fn resolve_icon_image_handle(
     entity: Entity,
     icon: &WidgetryIcon,
+    scale: f32,
     diagnostics: &mut IconRasterState,
     svg_assets: &Assets<svg::SvgAsset>,
     server: &AssetServer,
     images: &mut Assets<Image>,
     cache: &mut IconImageCache,
-) -> Result<Option<Handle<Image>>, WidgetryEcsError> {
+) -> Result<Option<ResolvedIconImage>, WidgetryEcsError> {
     let Some(svg_asset) = svg_assets.get(&icon.svg) else {
         if let bevy::asset::LoadState::Failed(error) = server.load_state(icon.svg.id()) {
             let key = IconFailureKey::Load {
@@ -169,16 +178,23 @@ fn resolve_icon_image_handle(
 
     let key = IconImageCacheKey {
         svg_asset_id: icon.svg.id(),
-        raster_spec: icon.raster_spec(),
+        raster_spec: icon.raster_spec(scale),
     };
+    let logical_size = svg_asset.logical_size(icon.max_size);
 
     if let Some(handle) = cache.images.get(&key) {
         diagnostics.raster_recovered(entity);
-        return Ok(Some(handle.clone()));
+        return Ok(Some(ResolvedIconImage {
+            handle: handle.clone(),
+            logical_size,
+            raster_spec: key.raster_spec,
+        }));
     }
 
     let image = match key.raster_spec {
-        IconRasterSpec::Intrinsic => svg_asset.render_intrinsic_to_image(),
+        IconRasterSpec::Intrinsic { scale } => {
+            svg_asset.render_intrinsic_to_image(f32::from_bits(scale))
+        }
         IconRasterSpec::MaxSize { width, height } => svg_asset.render_to_image(width, height),
     };
     let image = match image {
@@ -211,15 +227,29 @@ fn resolve_icon_image_handle(
 
     cache.images.insert(key, handle.clone());
 
-    Ok(Some(handle))
+    Ok(Some(ResolvedIconImage {
+        handle,
+        logical_size,
+        raster_spec: key.raster_spec,
+    }))
 }
 
 fn mark_changed_icons(
     mut commands: Commands,
-    icons: Query<(Entity, &WidgetryIcon, &IconMaterialized), Changed<WidgetryIcon>>,
+    icons: Query<
+        (
+            Entity,
+            &WidgetryIcon,
+            &IconMaterialized,
+            &ComputedUiRenderTargetInfo,
+        ),
+        Or<(Changed<WidgetryIcon>, Changed<ComputedUiRenderTargetInfo>)>,
+    >,
 ) {
-    for (entity, icon, materialized) in &icons {
-        if icon.svg.id() != materialized.svg_asset_id {
+    for (entity, icon, materialized, target) in &icons {
+        if icon.svg.id() != materialized.svg_asset_id
+            || icon.raster_spec(target.scale_factor()) != materialized.raster_spec
+        {
             commands.entity(entity).insert(IconPendingUpdate);
         }
     }
@@ -231,6 +261,7 @@ fn materialize_icons(
         (
             Entity,
             &WidgetryIcon,
+            &ComputedUiRenderTargetInfo,
             &mut Node,
             &colors::ColorState,
             Option<&InheritedForeground>,
@@ -247,10 +278,13 @@ fn materialize_icons(
     mode: Res<bevy_widgetry_theme::WidgetryThemeMode>,
 ) -> Result<(), BevyError> {
     let mut failures = DiagnosticBatch::default();
-    for (entity, icon, mut node, overrides, foreground, disabled, mut diagnostics) in &mut icons {
+    for (entity, icon, target, mut node, overrides, foreground, disabled, mut diagnostics) in
+        &mut icons
+    {
         let Some(image_handle) = (match resolve_icon_image_handle(
             entity,
             icon,
+            target.scale_factor(),
             &mut diagnostics,
             &svg_assets,
             &server,
@@ -279,7 +313,7 @@ fn materialize_icons(
             node.height = Val::Px(size.y as f32);
         }
 
-        let mut image_node = ImageNode::new(image_handle);
+        let mut image_node = ImageNode::new(image_handle.handle);
 
         let color = resolve_icon_color(&overrides.0, foreground, disabled, mode.colors());
 
@@ -288,7 +322,17 @@ fn materialize_icons(
         // An icon image covering its parent can intercept widget clicks or title bar drags.
         // Use Pickable::IGNORE so input still reaches the parent.
         let image_entity = commands
-            .spawn((IconImage, image_node, Pickable::IGNORE))
+            .spawn((
+                IconImage,
+                image_node,
+                Node {
+                    width: px(image_handle.logical_size.x),
+                    height: px(image_handle.logical_size.y),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
             .id();
 
         commands
@@ -297,6 +341,7 @@ fn materialize_icons(
             .insert(IconMaterialized {
                 image_entity,
                 svg_asset_id: icon.svg.id(),
+                raster_spec: image_handle.raster_spec,
             });
         // A reactive App can stop updating before the new Image's asset events and render preparation finish.
         // Request a redraw to continue preparation across frames.
@@ -311,6 +356,7 @@ fn update_pending_icons(
         (
             Entity,
             &WidgetryIcon,
+            &ComputedUiRenderTargetInfo,
             &mut IconMaterialized,
             &mut IconRasterState,
         ),
@@ -319,15 +365,16 @@ fn update_pending_icons(
     svg_assets: Res<Assets<svg::SvgAsset>>,
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<IconImageCache>,
-    mut image_nodes: Query<&mut ImageNode, With<IconImage>>,
+    mut image_nodes: Query<(&mut ImageNode, &mut Node), With<IconImage>>,
     server: Res<AssetServer>,
     mut redraw: MessageWriter<RequestRedraw>,
 ) -> Result<(), BevyError> {
     let mut failures = DiagnosticBatch::default();
-    for (entity, icon, mut materialized, mut diagnostics) in icons {
+    for (entity, icon, target, mut materialized, mut diagnostics) in icons {
         let Some(image_handle) = (match resolve_icon_image_handle(
             entity,
             icon,
+            target.scale_factor(),
             &mut diagnostics,
             &svg_assets,
             &server,
@@ -350,7 +397,7 @@ fn update_pending_icons(
             continue;
         };
 
-        let Ok(mut image_node) = image_nodes.get_mut(materialized.image_entity) else {
+        let Ok((mut image_node, mut node)) = image_nodes.get_mut(materialized.image_entity) else {
             let error = diagnostics.image.failure(materialized.image_entity, || {
                 Arc::new(failure(
                     IconError::MissingImageNode {
@@ -369,9 +416,12 @@ fn update_pending_icons(
             .image
             .recover(|| ErrorFrame::new("icon image restored").field("entity", entity));
 
-        image_node.image = image_handle;
+        image_node.image = image_handle.handle;
+        node.width = px(image_handle.logical_size.x);
+        node.height = px(image_handle.logical_size.y);
 
         materialized.svg_asset_id = icon.svg.id();
+        materialized.raster_spec = image_handle.raster_spec;
 
         commands.entity(entity).remove::<IconPendingUpdate>();
         redraw.write(RequestRedraw);
@@ -572,13 +622,15 @@ impl WidgetryIcon {
         });
     }
 
-    fn raster_spec(&self) -> IconRasterSpec {
+    fn raster_spec(&self, scale: f32) -> IconRasterSpec {
         match self.max_size {
             Some(size) => IconRasterSpec::MaxSize {
-                width: size.x,
-                height: size.y,
+                width: (size.x as f32 * scale).ceil() as u32,
+                height: (size.y as f32 * scale).ceil() as u32,
             },
-            None => IconRasterSpec::Intrinsic,
+            None => IconRasterSpec::Intrinsic {
+                scale: scale.to_bits(),
+            },
         }
     }
 }
@@ -603,9 +655,14 @@ impl Plugin for WidgetryIconPlugin {
             .add_systems(
                 // Prepare the subtree and glyph shape first so the image reaches propagation and layout in the same frame.
                 PostUpdate,
-                (materialize_icons, mark_changed_icons, update_pending_icons)
+                materialize_icons.in_set(WidgetryIconMaterialize),
+            )
+            .add_systems(
+                PostUpdate,
+                (mark_changed_icons, update_pending_icons)
                     .chain()
-                    .in_set(WidgetryIconMaterialize),
+                    .after(bevy::ui::UiSystems::Propagate)
+                    .before(bevy::ui::UiSystems::Content),
             )
             .add_systems(
                 PostUpdate,
@@ -750,6 +807,100 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryIconPlugin);
         app
+    }
+
+    #[test]
+    fn target_density_changes_raster_pixels_without_changing_logical_image_size() {
+        use bevy_widgetry_test_utils::{add_ui_plugins, spawn_ui_camera};
+        for max_size in [None, Some(UVec2::splat(16))] {
+            let mut app = controlled_app();
+            add_ui_plugins(&mut app);
+            let camera = spawn_ui_camera(&mut app, UVec2::new(400, 200), 1.0);
+            let svg = app
+                .world()
+                .resource::<Assets<svg::SvgAsset>>()
+                .reserve_handle();
+            make_ready(&mut app, &svg, 16);
+            let icon = app
+                .world_mut()
+                .spawn_scene(bsn! {
+                    WidgetryIcon {svg: {svg}, max_size: {max_size}} UiTargetCamera(camera)
+                })
+                .unwrap()
+                .id();
+            let mut first = None;
+            for scale in [1.0_f32, 1.25, 1.5, 2.0, 1.0] {
+                app.world_mut()
+                    .get_mut::<Camera>(camera)
+                    .unwrap()
+                    .computed
+                    .target_info
+                    .as_mut()
+                    .unwrap()
+                    .scale_factor = scale;
+                app.update();
+                let child = app.world().get::<Children>(icon).unwrap()[0];
+                let image = app.world().get::<ImageNode>(child).unwrap();
+                let pixels = app
+                    .world()
+                    .resource::<Assets<Image>>()
+                    .get(&image.image)
+                    .unwrap();
+                assert_eq!(pixels.width(), (16.0 * scale).ceil() as u32);
+                assert_eq!(pixels.height(), (8.0 * scale).ceil() as u32);
+                assert_eq!(
+                    app.world().get::<ComputedNode>(child).unwrap().size(),
+                    Vec2::new(16.0, 8.0) * scale
+                );
+                if scale == 1.0 {
+                    if let Some(first) = &first {
+                        assert_eq!(&image.image, first);
+                    } else {
+                        first = Some(image.image.clone());
+                    }
+                }
+            }
+            assert_eq!(app.world().resource::<Assets<Image>>().len(), 4);
+            for _ in 0..3 {
+                app.update();
+            }
+            assert_eq!(app.world().resource::<Assets<Image>>().len(), 4);
+        }
+    }
+
+    #[test]
+    fn density_uses_each_target_camera_and_includes_ui_scale_once() {
+        use bevy_widgetry_test_utils::{add_ui_plugins, spawn_ui_camera};
+        let mut app = controlled_app();
+        add_ui_plugins(&mut app);
+        let a = spawn_ui_camera(&mut app, UVec2::new(400, 200), 1.0);
+        let b = spawn_ui_camera(&mut app, UVec2::new(400, 200), 1.5);
+        let svg = app
+            .world()
+            .resource::<Assets<svg::SvgAsset>>()
+            .reserve_handle();
+        make_ready(&mut app, &svg, 16);
+        let icons = [a, a, b].map(|camera| app.world_mut().spawn_scene(bsn! {
+            WidgetryIcon {svg: {svg.clone()},max_size: {Some(UVec2::splat(16))}} UiTargetCamera(camera)
+        }).unwrap().id());
+        app.world_mut().resource_mut::<bevy::ui::UiScale>().0 = 2.0;
+        app.update();
+        let handles = icons.map(|icon| {
+            let child = app.world().get::<Children>(icon).unwrap()[0];
+            app.world().get::<ImageNode>(child).unwrap().image.clone()
+        });
+        assert_eq!(handles[0], handles[1]);
+        assert_ne!(handles[0], handles[2]);
+        for (image, expected) in handles.iter().zip([32, 32, 48]) {
+            assert_eq!(
+                app.world()
+                    .resource::<Assets<Image>>()
+                    .get(image)
+                    .unwrap()
+                    .width(),
+                expected
+            );
+        }
     }
 
     fn patch_test_icon(app: &mut App, entity: Entity, patch: impl FnOnce(&mut WidgetryIcon)) {

@@ -316,7 +316,7 @@ fn runtime_mutations_survive_scene_initialization() {
         .resource::<Assets<Image>>()
         .get(&initial_image)
         .unwrap();
-    assert_eq!(image.size(), UVec2::splat(16));
+    assert_eq!(image.size(), UVec2::splat(32));
     assert_eq!(
         app.world().get::<ComputedNode>(entity).unwrap().size(),
         Vec2::splat(32.0)
@@ -681,8 +681,9 @@ fn all_builtin_icons_materialize_through_real_loader() {
         let handle = &app.world().get::<ImageNode>(child).unwrap().image;
         let image = app.world().resource::<Assets<Image>>().get(handle).unwrap();
         assert!(
-            image.width() <= 24 && image.height() <= 24,
-            "{builtin:?} 应遵守尺寸上限"
+            image.width() <= 48 && image.height() <= 48,
+            "{builtin:?} 应遵守 2.0 倍率下的物理尺寸上限"
         );
+        assert_eq!(app.world().get::<Node>(icon).unwrap().width, px(24));
     }
 }

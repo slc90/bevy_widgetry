@@ -123,8 +123,12 @@ impl SvgAsset {
         self.render_with_scale(scale)
     }
 
-    fn render_intrinsic_to_pixmap(&self) -> Result<Pixmap, RasterizationError> {
-        self.render_with_scale(1.0)
+    pub(super) fn logical_size(&self, max_size: Option<UVec2>) -> Vec2 {
+        let size = Vec2::new(self.tree.size().width(), self.tree.size().height());
+        let scale = max_size.map_or(1.0, |max| {
+            (max.x as f32 / size.x).min(max.y as f32 / size.y)
+        });
+        (size * scale).ceil()
     }
 
     pub(super) fn render_to_image(
@@ -136,8 +140,11 @@ impl SvgAsset {
         Ok(image_from_pixmap(pixmap))
     }
 
-    pub(super) fn render_intrinsic_to_image(&self) -> Result<Image, RasterizationError> {
-        let pixmap = self.render_intrinsic_to_pixmap()?;
+    pub(super) fn render_intrinsic_to_image(
+        &self,
+        scale: f32,
+    ) -> Result<Image, RasterizationError> {
+        let pixmap = self.render_with_scale(scale)?;
         Ok(image_from_pixmap(pixmap))
     }
 }
@@ -183,12 +190,14 @@ mod tests {
     #[test]
     fn intrinsic_dimensions_preserve_rectangle_and_round_up() {
         assert_image(
-            &rectangle(13.0, 7.0).render_intrinsic_to_image().unwrap(),
+            &rectangle(13.0, 7.0).render_intrinsic_to_image(1.0).unwrap(),
             13,
             7,
         );
         assert_image(
-            &rectangle(10.25, 3.5).render_intrinsic_to_image().unwrap(),
+            &rectangle(10.25, 3.5)
+                .render_intrinsic_to_image(1.0)
+                .unwrap(),
             11,
             4,
         );

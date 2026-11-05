@@ -37,6 +37,8 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 
 `WidgetryIcon::set_svg_in_world()` 与 `WidgetryIcon::set_svg()` 用于切换已构造图标的 SVG，不用于先创建空图标再补充初始路径。直接构造底层 `WidgetryIcon` 组件的内部接口不经过 Props 校验。
 
+图标的 `max_size` 与未指定时的 SVG 固有尺寸用于逻辑布局；实际栅格化使用所属 UI 相机目标与 `UiScale` 合成后的倍率。图像子节点显式保留逻辑尺寸，增加栅格像素不会撑大控件。倍率或目标相机变化后，在 UI 目标信息传播完成、内容布局前更新既有图像节点；相同资产与栅格规格复用缓存，颜色仍独立投影到 ImageNode，不因配色变化重新栅格化。
+
 `IconFailure = WidgetryFailure<IconError>` 覆盖空初始路径、无效目标/颜色状态、托管颜色 Owner、无效颜色、缺失 AssetServer/内部 ImageNode、SVG 读取/解析、资产加载及像素分配失败。同步颜色与 SVG setter、颜色查询返回领域失败；无效 Icon 颜色通过共享 Core 校验映射分类，保留原 CoreError 原因链及同一 origin；领域字段和首个 context 保留目标、路径、缺失结构及颜色状态。读取与解析保留原生 source；像素失败保留实际 width/height、请求 max_size 和 scale。调用方只在真正 ECS 边界使用 `failure.into_bevy_error()`，不能使用裸 `?` 依赖 Bevy 默认转换。
 
 SVG Loader 在读取/解析源头创建一次诊断，显式转换到 Bevy 的 Loader 返回接口。Owner 从 `LoadState::Failed` 取回 Loader 的共享诊断，保留同一个 origin/source/首次 Backtrace；Loader 之前的 reader/source/metadata 失败由 Owner 首次惰性纳入 Icon 领域。已经失败的加载保留现有图像或初始空态，实际采取此降级后记录一次 handled DEBUG。正常等待、尚未物化、零尺寸不创建错误或假恢复。
