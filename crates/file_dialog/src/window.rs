@@ -56,7 +56,9 @@ fn construct(event: On<Add<Construction>>, config: Query<&Construction>, mut com
         return;
     };
     let root = event.entity;
-    let options = options.clone();
+    let mut options = options.clone();
+    options.native.resizable = false;
+    options.native.enabled_buttons.maximize = false;
     commands.queue(move |world: &mut World| -> Result {
         if world.get_entity(root).is_err() || world.get::<WidgetryFileDialogState>(root).is_some_and(|state| state.result().is_some()) {return Ok(());}
         if options.parent.is_some_and(|parent| !is_widgetry_window(world, parent)) {
@@ -333,6 +335,11 @@ impl Default for WidgetryFileDialogWindow {
         Self {
             native: Window {
                 title: "File dialog".into(),
+                resizable: false,
+                enabled_buttons: bevy::window::EnabledButtons {
+                    maximize: false,
+                    ..default()
+                },
                 resolution: (960, 640).into(),
                 resize_constraints: bevy::window::WindowResizeConstraints {
                     min_width: 720.0,

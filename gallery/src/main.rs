@@ -21,6 +21,7 @@ mod splash;
 mod startup_cursor;
 mod waveform_benchmark;
 mod waveform_data;
+mod window_scale;
 
 use crate::assets::GalleryAssetPlugin;
 use crate::gallery::{GalleryPage, GalleryPlugin};

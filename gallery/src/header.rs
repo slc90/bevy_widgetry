@@ -25,6 +25,7 @@ struct ScaleFactorComboBox {
 }
 
 pub(crate) fn install(app: &mut App) -> Result {
+    crate::window_scale::install(app);
     app.register_widgetry_combo_box::<WidgetryThemeMode>()
         .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
         .register_widgetry_combo_box::<f32>()
@@ -34,7 +35,6 @@ pub(crate) fn install(app: &mut App) -> Result {
         .add_observer(on_language_changed)
         .add_observer(on_theme_combo_box_changed)
         .add_observer(on_scale_factor_combo_box_changed)
-        .add_observer(apply_scale_factor_to_new_window)
         .add_observer(sync_theme_combo_box)
         .add_systems(Update, sync_external_settings)
         .add_systems(
@@ -45,19 +45,6 @@ pub(crate) fn install(app: &mut App) -> Result {
                 initialize_language_selection,
             ),
         );
-    Ok(())
-}
-
-fn apply_scale_factor_to_new_window(
-    event: On<Add<Window>>,
-    config: Res<AppConfig>,
-    mut windows: Query<&mut Window>,
-) -> Result {
-    windows
-        .get_mut(event.entity)
-        .map_err(crate::diagnostics::error)?
-        .resolution
-        .set_scale_factor_override(Some(config.scale_factor));
     Ok(())
 }
 
@@ -242,9 +229,19 @@ fn initialize_scale_factor_selection(
 
 fn on_scale_factor_combo_box_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
+    _main_thread: bevy::ecs::system::NonSendMarker,
     combos: Query<(&WidgetryComboBox<f32>, &ScaleFactorComboBox)>,
     models: Query<&WidgetryListModel<f32>>,
-    mut windows: Query<&mut Window>,
+    mut windows: Query<(
+        Entity,
+        &mut Window,
+        Option<&mut crate::window_scale::PopupSize>,
+    )>,
+    monitors: Query<(
+        Entity,
+        &bevy::window::Monitor,
+        Has<bevy::window::PrimaryMonitor>,
+    )>,
     mut config: ResMut<AppConfig>,
     config_file: Res<ConfigFile>,
 ) -> Result {
@@ -275,9 +272,9 @@ fn on_scale_factor_combo_box_changed(
                 .field("window", format_args!("{:?}", scale_combo.target_window)),
         )
     })?;
-    for mut window in &mut windows {
+    for (entity, mut window, mut size) in &mut windows {
         if window.resolution.scale_factor_override() != Some(scale) {
-            window.resolution.set_scale_factor_override(Some(scale));
+            crate::window_scale::apply(entity, &mut window, size.as_deref_mut(), scale, &monitors)?;
         }
     }
     if config.scale_factor != scale {
@@ -461,8 +458,8 @@ mod tests {
     #[test]
     fn new_windows_inherit_the_gallery_scale_before_the_first_update() {
         let mut app = App::new();
-        app.insert_resource(AppConfig::default())
-            .add_observer(apply_scale_factor_to_new_window);
+        app.insert_resource(AppConfig::default());
+        crate::window_scale::install(&mut app);
         for override_scale in [None, Some(2.0)] {
             let mut resolution = bevy::window::WindowResolution::new(640, 400);
             resolution.set_scale_factor_override(override_scale);

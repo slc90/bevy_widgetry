@@ -76,7 +76,9 @@ fn independent_dialog_keeps_one_business_root_and_reclaims_its_window_and_camera
     assert!(icons.contains(&bevy_widgetry_asset::BuiltinIcon::WindowClose.path()));
     assert!(!icons.contains(&bevy_widgetry_asset::BuiltinIcon::WindowMaximize.path()));
     assert!(!icons.contains(&bevy_widgetry_asset::BuiltinIcon::WindowMinimize.path()));
-    assert!(app.world().get::<Window>(target).unwrap().resizable);
+    let native = app.world().get::<Window>(target).unwrap();
+    assert!(!native.resizable);
+    assert!(!native.enabled_buttons.maximize);
     assert!(app.world().get::<ChildOf>(root).is_none());
     assert_eq!(
         app.world_mut()
@@ -92,6 +94,26 @@ fn independent_dialog_keeps_one_business_root_and_reclaims_its_window_and_camera
     for entity in [root, target, camera] {
         assert!(app.world().get_entity(entity).is_err());
     }
+}
+
+#[test]
+fn independent_dialog_disables_resize_even_when_native_options_request_it() {
+    let mut app = fixture();
+    let mut options = WidgetryFileDialogWindow::default();
+    options.native.resizable = true;
+    options.native.enabled_buttons.maximize = true;
+    let root = bevy_widgetry_core::scene::spawn_scene(
+        app.world_mut(),
+        bsn! {
+            @WidgetryFileDialog { @window: {Some(options)} }
+        },
+    )
+    .unwrap();
+    app.update();
+    let target = bevy_widgetry_window::widgetry_window_target(app.world(), root).unwrap();
+    let native = app.world().get::<Window>(target).unwrap();
+    assert!(!native.resizable);
+    assert!(!native.enabled_buttons.maximize);
 }
 
 #[test]

@@ -28,6 +28,7 @@
 - Navigate / Search / Select / Save / Overwrite / Cancel / Reopen。
 - Scope Preferences Merge 与迟到 Reply 丢弃。
 - Owned Window 在结果 Consumer 后结束，外部销毁不合成 Cancel。
+- Owned Window 禁用用户 Resize 与原生最大化，传入 Native Window 的启用请求不覆盖该约束；程序化尺寸调整保留。
 
 ## Invariants
 
