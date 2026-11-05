@@ -34,6 +34,7 @@ pub(crate) fn install(app: &mut App) -> Result {
         .add_observer(on_language_changed)
         .add_observer(on_theme_combo_box_changed)
         .add_observer(on_scale_factor_combo_box_changed)
+        .add_observer(apply_scale_factor_to_new_window)
         .add_observer(sync_theme_combo_box)
         .add_systems(Update, sync_external_settings)
         .add_systems(
@@ -44,6 +45,19 @@ pub(crate) fn install(app: &mut App) -> Result {
                 initialize_language_selection,
             ),
         );
+    Ok(())
+}
+
+fn apply_scale_factor_to_new_window(
+    event: On<Add<Window>>,
+    config: Res<AppConfig>,
+    mut windows: Query<&mut Window>,
+) -> Result {
+    windows
+        .get_mut(event.entity)
+        .map_err(crate::diagnostics::error)?
+        .resolution
+        .set_scale_factor_override(Some(config.scale_factor));
     Ok(())
 }
 
@@ -254,19 +268,30 @@ fn on_scale_factor_combo_box_changed(
                 .field("selected", format_args!("{:?}", selected)),
         )
     })?;
-    let mut window = windows
-        .get_mut(scale_combo.target_window)
-        .map_err(|error| {
-            crate::diagnostics::at(
-                error,
-                bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor 目标窗口缺失")
-                    .field("window", format_args!("{:?}", scale_combo.target_window)),
-            )
-        })?;
-    if window.resolution.scale_factor_override() != Some(scale) {
-        info!(setting = "scale_factor", requested = scale, previous = ?window.resolution.scale_factor_override(), "用户选择 Gallery 设置");
-        window.resolution.set_scale_factor_override(Some(scale));
-        debug!(setting = "scale_factor", applied = scale, window = ?scale_combo.target_window, "Gallery 设置已生效");
+    windows.get(scale_combo.target_window).map_err(|error| {
+        crate::diagnostics::at(
+            error,
+            bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor 目标窗口缺失")
+                .field("window", format_args!("{:?}", scale_combo.target_window)),
+        )
+    })?;
+    for mut window in &mut windows {
+        if window.resolution.scale_factor_override() != Some(scale) {
+            window.resolution.set_scale_factor_override(Some(scale));
+        }
+    }
+    if config.scale_factor != scale {
+        info!(
+            setting = "scale_factor",
+            requested = scale,
+            previous = config.scale_factor,
+            "用户选择 Gallery 设置"
+        );
+        debug!(
+            setting = "scale_factor",
+            applied = scale,
+            "Gallery 全部窗口设置已生效"
+        );
         config.scale_factor = scale;
         config.save(&config_file);
     }
@@ -432,6 +457,83 @@ fn on_language_changed(
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
+
+    #[test]
+    fn new_windows_inherit_the_gallery_scale_before_the_first_update() {
+        let mut app = App::new();
+        app.insert_resource(AppConfig::default())
+            .add_observer(apply_scale_factor_to_new_window);
+        for override_scale in [None, Some(2.0)] {
+            let mut resolution = bevy::window::WindowResolution::new(640, 400);
+            resolution.set_scale_factor_override(override_scale);
+            let window = app
+                .world_mut()
+                .spawn(Window {
+                    resolution,
+                    ..default()
+                })
+                .id();
+            assert_eq!(
+                app.world()
+                    .get::<Window>(window)
+                    .unwrap()
+                    .resolution
+                    .scale_factor_override(),
+                Some(1.25)
+            );
+        }
+    }
+
+    #[test]
+    fn scale_selection_updates_open_windows_and_subsequent_popups() {
+        let directory = tempfile::tempdir().unwrap();
+        let config_path = directory.path().join("config.ron");
+        let loaded = crate::config::load(config_path.clone());
+        let mut app = scene_app();
+        app.insert_resource(loaded.config.language)
+            .insert_resource(loaded.config)
+            .insert_resource(loaded.file);
+        install(&mut app).unwrap();
+        let primary = app.world_mut().spawn(Window::default()).id();
+        let independent = app.world_mut().spawn(Window::default()).id();
+        let selector = scale_factor_selector(&mut app.world_mut().commands(), primary).unwrap();
+        app.world_mut().flush();
+        let root = bevy_widgetry::scene::spawn_scene(app.world_mut(), selector).unwrap();
+        let source = app
+            .world()
+            .get::<WidgetryComboBox<f32>>(root)
+            .unwrap()
+            .source();
+        for (index, expected) in [(0, 1.0), (2, 1.5)] {
+            let selected = app
+                .world()
+                .get::<WidgetryListModel<f32>>(source)
+                .unwrap()
+                .id(index)
+                .unwrap();
+            app.world_mut().trigger(ValueChange {
+                source: root,
+                value: Some(selected),
+                is_final: true,
+            });
+            let popup = app.world_mut().spawn(Window::default()).id();
+            for entity in [primary, independent, popup] {
+                assert_eq!(
+                    app.world()
+                        .get::<Window>(entity)
+                        .unwrap()
+                        .resolution
+                        .scale_factor_override(),
+                    Some(expected)
+                );
+            }
+            assert_eq!(app.world().resource::<AppConfig>().scale_factor, expected);
+            assert_eq!(
+                crate::config::load(config_path.clone()).config.scale_factor,
+                expected
+            );
+        }
+    }
 
     #[test]
     fn missing_theme_reaches_the_command_error_handler_without_logging_success() {
