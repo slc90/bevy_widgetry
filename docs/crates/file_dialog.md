@@ -45,6 +45,20 @@ Path、Filename、Search 等 TextField 的业务 Part 保留在控件根，真�
 
 组合配色失败按所有部件和所有 Dialog 汇总受管诊断，滚动层的 ID / origin 与原始原因保留，并附加所属 Dialog 和部件上下文。未迁移的原生 Bevy 失败各自通过实际 Command 边界交给宿主，保留 Severity / payload；失败部件继续保留待更新状态，恢复后重试。
 
+### Windows 文件图标
+
+自动服务开启时，文件行在等待期间显示内建文件 / 文件夹 SVG，占用约 16 逻辑像素；后台通过 Windows Shell 获取当前系统关联图标，转换为 32×32 straight RGBA，再由主线程注册到 `Assets<Image>` 并使用 `ImageNode` 显示。原生颜色和透明度不随行前景色重新着色。传统掩码图标与带 Alpha 的图标均通过黑白背景合成恢复透明度，不包含文件内容缩略图和云状态覆盖标记。
+
+普通文件按 ASCII 大小写归一的扩展名共享系统关联图标，目录共享系统文件夹图标。EXE、ICO、LNK、URL、CPL、SCR 和符号链接文件按原始 `PathBuf` 区分，避免将某个文件的专属图标用于同类型其他文件；仅在 Shell 调用边界将 canonicalize 的扩展磁盘 / UNC 前缀转换为 Shell 路径表示，保持全部 UTF-16 单元及原始缓存键，不经过有损字符串往返。Shell 不支持的路径继续使用占位。不提供资源管理器的完整 Shell 扩展或预览能力。
+
+图标缓存按 Dialog Session / 目录 Generation 管理，最多 512 项，区分 Loading、Ready 和 Unavailable。Search、Sort 等同目录重投影复用缓存；导航、刷新和重开使旧缓存及请求失效。容量不足时按进入顺序淘汰不再可见且不在加载中的项，图像强引用随缓存和可见行的生命周期释放。Unavailable 不因稳定帧或往返滚动反复重试；新目录 Generation 可以重新请求。
+
+每个 Dialog 的当前目录 Generation 复用一条 `JobManager` 受管线程同步调用 Shell，最多一个在途批次，每批最多 16 个去重后的可见请求；请求与回复均使用容量 1 的有界通道。慢速滚动出现单行新文件时也复用该线程，不在 UI 线程取图。批次取图完成后返回像素，所有 Dialog 每次更新最多消费 16 个图标结果，预算耗尽后请求后续帧；Job 的 Finished 表示整条服务线程真实退出。COM 初始化、Icon、DIB 和 DC 均限制在工作线程内。异步结果只写所属缓存，再按当前文件行绑定投影，不按发起请求时的 Entity 回写。文件行复用立即恢复新条目的占位图标。
+
+无法提取图标时使用占位，不影响目录、选择、确认或结果。真实原生转换 / Job 错误保留类型、源头和原因链，在提交降级结果后记录处理；服务取图失败、Manager 拒绝提交或取消图标工作后，该图标服务停止继续提交请求，Dialog 仍可取消或选择。UI 资源不变量失效通过真实 ECS 边界报告一次，并停止当前目录 Generation 的图标更新；刷新或导航后可重新建立服务。关闭、销毁、Generation 变更和 App Drop 会取消服务，并复用 Runtime 的后台终态收尾能力回收记录，不等待 OS 调用，也不依赖 UI 再次更新。
+
+`RuntimeOptions.automatic = false` 同时关闭自动 Shell 图标请求，手工 Backend / Headless 场景保留原有 SVG 占位。HeadlessPlugin 不创建图像或执行取图。
+
 ### Session 与后台服务
 
 独立窗口的默认标题使用 Window 的 `WidgetryWindowTitle` 绑定，可对 Dialog Root 调用该类型的 `set_in_world` / `set` 更新原生标题与显示文字；不重建文件列表或重置 Session。嵌入式 Dialog 本身不提供 Window 标题。

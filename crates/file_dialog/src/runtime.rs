@@ -2062,44 +2062,53 @@ impl Drop for Runtime {
         if let Some(service) = &self.retention {
             service.stop();
         }
-        if retired.is_empty() {
-            return;
-        }
-        // Retired jobs have heterogeneous result types and no remaining receivers.
-        // Drive their real exit on the existing pool, without requiring another UI update
-        // or submitting a managed job after shutdown has closed admission.
-        bevy::tasks::IoTaskPool::get()
-            .spawn(async move {
-                loop {
-                    retired.retain(|(manager, id)| {
-                        let Some(status) = manager.find_status(*id) else {
-                            return false;
-                        };
-                        if !status.state.is_finished() {
-                            return true;
-                        }
-                        if let Err(error) = manager.remove_if_present(*id) {
-                            error.record_handled(
-                                "保留无法移除的 FileDialog 任务记录",
-                                "Runtime 已销毁，结果已放弃",
-                            );
-                        }
-                        if let Some(JobOutcome::Failed(error)) = status.outcome {
-                            error.record_handled(
-                                "放弃已销毁 FileDialog Runtime 的后台结果",
-                                "过期任务已真实退出",
-                            );
-                        }
-                        false
-                    });
-                    if retired.is_empty() {
-                        break;
-                    }
-                    futures_timer::Delay::new(std::time::Duration::from_millis(1)).await;
-                }
-            })
-            .detach();
+        finish_abandoned_jobs(retired);
     }
+}
+
+pub(crate) fn abandon_job(manager: JobManager, id: JobId) {
+    manager.cancel_if_present(id);
+    finish_abandoned_jobs(vec![(manager, id)]);
+}
+
+fn finish_abandoned_jobs(mut retired: Vec<(JobManager, JobId)>) {
+    if retired.is_empty() {
+        return;
+    }
+    // Retired jobs have heterogeneous result types and no remaining receivers.
+    // Drive their real exit on the existing pool, without requiring another UI update
+    // or submitting a managed job after shutdown has closed admission.
+    bevy::tasks::IoTaskPool::get()
+        .spawn(async move {
+            loop {
+                retired.retain(|(manager, id)| {
+                    let Some(status) = manager.find_status(*id) else {
+                        return false;
+                    };
+                    if !status.state.is_finished() {
+                        return true;
+                    }
+                    if let Err(error) = manager.remove_if_present(*id) {
+                        error.record_handled(
+                            "保留无法移除的 FileDialog 任务记录",
+                            "后台 Owner 已销毁，结果已放弃",
+                        );
+                    }
+                    if let Some(JobOutcome::Failed(error)) = status.outcome {
+                        error.record_handled(
+                            "放弃已销毁 FileDialog Owner 的后台结果",
+                            "过期任务已真实退出",
+                        );
+                    }
+                    false
+                });
+                if retired.is_empty() {
+                    break;
+                }
+                futures_timer::Delay::new(std::time::Duration::from_millis(1)).await;
+            }
+        })
+        .detach();
 }
 
 #[cfg(test)]

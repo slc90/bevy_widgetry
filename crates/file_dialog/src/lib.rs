@@ -11,6 +11,7 @@ mod error;
 mod filesystem;
 mod filter;
 mod folder;
+mod icons;
 mod input;
 mod locations;
 mod model;

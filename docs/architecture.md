@@ -165,6 +165,8 @@ FileDialog 的组合配色更新直接使用 diagnostics 的 Bevy 桥接汇总�
 
 FileDialog 的状态、选择和存储契约使用同一 diagnostics 领域载体；组合公开 API 单独承接领域诊断与 Job 失败，在 Template / ECS 边界保留原始身份并显式转换。Facade 重导出这些错误类别，不参与生命周期处理。
 
+FileDialog 的样式层直接使用 windows-sys 获取 Windows Shell 文件图标，FFI 限制在私有 native 模块；图标请求由 JobManager 受管线程批量执行，缓存和 ImageNode 投影归属 FileDialog，不进入业务 Backend、快照或选择结果。图像注册使用 Bevy Assets，销毁后的在途任务复用 Runtime 的终态收尾能力；Core 的 WidgetryIcon 继续只承担 SVG。FileDialog 与 PowerInhibit 一样在 crate 内采用 unsafe deny，仅允许各自私有 FFI 模块使用 unsafe，其余 lint 与 Workspace 一致。
+
 Splitter 直接依赖 diagnostics 的 Bevy 桥接。比例 / 配置 API 返回领域失败，布局和样式按业务键惰性记录持续诊断并在执行边界聚合多个 Root；底层数值与原生查询原因由 Splitter 领域类型保留。
 
 Tabs 直接依赖 Core、Theme、ScrollArea 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。标签栏以 ScrollArea 的 Auto 策略承载 Header，选中定位复用最近 Viewport 的 ScrollIntoView；页面位于独立内容容器，不默认套滚动层。Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。

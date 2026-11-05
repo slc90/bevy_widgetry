@@ -2,9 +2,7 @@ use crate::*;
 use bevy::a11y::AccessibilityNode;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
-use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use std::ops::Range;
@@ -128,11 +126,6 @@ fn bootstrap(
 }
 
 fn row_content(entry: &WidgetryFileDialogEntry, font: f32) -> impl SceneList {
-    let icon = if entry.kind().is_directory() {
-        BuiltinIcon::FileDialogFolder
-    } else {
-        BuiltinIcon::FileDialogFile
-    };
     let size = if entry.kind().is_directory() {
         String::new()
     } else {
@@ -142,7 +135,7 @@ fn row_content(entry: &WidgetryFileDialogEntry, font: f32) -> impl SceneList {
             .unwrap_or_else(|| "—".into())
     };
     bsn_list! {
-        @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(16))} } Node { width: px(16), height: px(16), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))--
+        @crate::icons::scene(entry)--
         @detail_cell(entry.name().to_string_lossy().into_owned(),font,None,false)--
         @detail_cell(entry_type(entry),font,Some(90.0),false)--
         @detail_cell(modified_text(entry.modified()),font,Some(132.0),false)--

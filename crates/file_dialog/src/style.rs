@@ -191,7 +191,7 @@ pub(crate) fn install(app: &mut App) {
     app.add_observer(on_control)
         .add_systems(
             PostUpdate,
-            (reconcile, configuration::configure)
+            (reconcile, configuration::configure, crate::icons::update)
                 .chain()
                 .in_set(WidgetryUiSystems::Build),
         )

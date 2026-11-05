@@ -2051,6 +2051,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "time",
+ "windows-sys 0.61.2",
  "wmi",
 ]
 
