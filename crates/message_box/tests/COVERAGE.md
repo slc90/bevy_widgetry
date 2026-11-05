@@ -26,7 +26,7 @@
 
 - Result Source 为 Dialog Root，最多一次。
 - Observer 在清理前可读取状态；其他 Dialog 与 Parent Blocker 不受影响。
-- 长正文 Layout 不覆盖固定结果按钮区域。
+- 长正文在有界宽度内换行并可通过 ScrollPosition 滚动，不覆盖独立结果按钮区域；窄窗口下结果按钮换行并保持在窗口范围内，正文和结果按钮的配色与生命周期保持既有契约。
 
 ## Couplings
 

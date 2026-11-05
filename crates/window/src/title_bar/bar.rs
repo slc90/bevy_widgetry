@@ -35,6 +35,7 @@ pub(crate) struct WindowControls;
 fn title_bar_node() -> Node {
     Node {
         width: percent(100),
+        min_width: px(0),
         height: px(36),
         flex_shrink: 0.0,
         border_radius: BorderRadius::top(px(8)),
@@ -59,6 +60,12 @@ fn title_bar_drag_area_node() -> Node {
 fn title_bar_content_node() -> Node {
     Node {
         flex_grow: 1.0,
+        flex_basis: px(0),
+        min_width: px(0),
+        overflow: Overflow {
+            x: OverflowAxis::Clip,
+            y: OverflowAxis::Visible,
+        },
         height: percent(100),
         align_items: AlignItems::Center,
         ..default()
@@ -67,6 +74,7 @@ fn title_bar_content_node() -> Node {
 
 fn window_controls_node() -> Node {
     Node {
+        flex_shrink: 0.0,
         height: percent(100),
         flex_direction: FlexDirection::Row,
         align_items: AlignItems::Stretch,

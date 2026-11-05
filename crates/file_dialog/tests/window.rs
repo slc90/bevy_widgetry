@@ -845,8 +845,17 @@ fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_cl
         })
         .unwrap()
         .0;
-    let content = app.world().get::<ChildOf>(label).unwrap().parent();
-    let body_host = app.world().get::<ChildOf>(content).unwrap().parent();
+    let mut ancestor = app.world().get::<ChildOf>(label).unwrap().parent();
+    let body_host = loop {
+        if app
+            .world()
+            .get::<bevy_widgetry_core::foreground::ResolvedForeground>(ancestor)
+            .is_some()
+        {
+            break ancestor;
+        }
+        ancestor = app.world().get::<ChildOf>(ancestor).unwrap().parent();
+    };
     let buttons = app
         .world_mut()
         .query_filtered::<Entity, With<bevy_widgetry_button::WidgetryButton>>()

@@ -642,7 +642,11 @@ fn rendering_app() -> App {
 
 fn prepare_bound_camera(app: &mut App, root: Entity) {
     let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
-    let temporary = spawn_ui_camera(app, UVec2::new(460, 260), 1.0);
+    let window = app
+        .world()
+        .get::<Window>(native(app.world(), root))
+        .unwrap();
+    let temporary = spawn_ui_camera(app, window.physical_size(), window.scale_factor());
     let computed = app
         .world()
         .get::<Camera>(temporary)
@@ -651,6 +655,57 @@ fn prepare_bound_camera(app: &mut App, root: Entity) {
         .clone();
     app.world_mut().despawn(temporary);
     app.world_mut().get_mut::<Camera>(camera).unwrap().computed = computed;
+}
+
+#[test]
+fn narrow_message_box_wraps_results_inside_the_window() {
+    let mut app = rendering_app();
+    let (_, parent) = parent(&mut app);
+    let root = bevy_widgetry_core::scene::spawn_scene(app.world_mut(), bsn! {
+        @widgetry_message_box(parent, "Narrow", WidgetryMessageBoxButtons::YesNoCancel, Default::default(), bsn_list!{Text("Message")})
+    }).unwrap();
+    app.update();
+    let native = native(app.world(), root);
+    app.world_mut()
+        .get_mut::<Window>(native)
+        .unwrap()
+        .resolution
+        .set_physical_resolution(260, 260);
+    prepare_bound_camera(&mut app, root);
+    app.update();
+    let origin = app
+        .world()
+        .get::<UiGlobalTransform>(root)
+        .unwrap()
+        .translation;
+    for label in ["Yes", "No", "Cancel"] {
+        let button = action(&app, root, label);
+        let node = app.world().get::<ComputedNode>(button).unwrap();
+        let center = app
+            .world()
+            .get::<UiGlobalTransform>(button)
+            .unwrap()
+            .translation;
+        assert!(node.size().x >= 84.0);
+        assert!(center.x - node.size().x / 2.0 >= origin.x - 130.1);
+        assert!(center.x + node.size().x / 2.0 <= origin.x + 130.1);
+        assert!(center.y + node.size().y / 2.0 <= origin.y + 130.1);
+    }
+    let yes = action(&app, root, "Yes");
+    let cancel = action(&app, root, "Cancel");
+    assert!(
+        app.world()
+            .get::<UiGlobalTransform>(cancel)
+            .unwrap()
+            .translation
+            .y
+            > app
+                .world()
+                .get::<UiGlobalTransform>(yes)
+                .unwrap()
+                .translation
+                .y
+    );
 }
 
 #[test]
@@ -688,14 +743,40 @@ fn long_body_layout_keeps_the_fixed_result_row_visible() {
             .glyphs
             .is_empty()
     );
-    let body = app.world().get::<ChildOf>(text).unwrap().parent();
+    let body = subtree(app.world(), root)
+        .into_iter()
+        .find(|entity| {
+            app.world()
+                .get::<bevy::ui_widgets::ScrollArea>(*entity)
+                .is_some()
+        })
+        .unwrap();
     let body_size = app.world().get::<ComputedNode>(body).unwrap().size();
     assert!(body_size.y > 0.0 && body_size.y < 260.0);
     assert_eq!(
         app.world().get::<Node>(body).unwrap().overflow,
-        Overflow::clip()
+        Overflow {
+            x: bevy::ui::OverflowAxis::Clip,
+            y: bevy::ui::OverflowAxis::Scroll
+        }
     );
     assert!(app.world().get::<ComputedNode>(text).unwrap().size().y > body_size.y);
+    let before = app
+        .world()
+        .get::<UiGlobalTransform>(text)
+        .unwrap()
+        .translation
+        .y;
+    app.world_mut().get_mut::<ScrollPosition>(body).unwrap().y = 100.0;
+    app.update();
+    assert!(
+        app.world()
+            .get::<UiGlobalTransform>(text)
+            .unwrap()
+            .translation
+            .y
+            < before
+    );
     for label in ["Yes", "No", "Cancel"] {
         let button = action(&app, root, label);
         let size = app.world().get::<ComputedNode>(button).unwrap().size();

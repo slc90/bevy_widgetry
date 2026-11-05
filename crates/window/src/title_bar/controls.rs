@@ -16,6 +16,7 @@ use bevy_widgetry_core::disabled::queue_intrinsic_disabled;
 pub(super) fn window_control_button_node() -> Node {
     Node {
         width: px(46),
+        flex_shrink: 0.0,
         height: percent(100),
         border_radius: BorderRadius::all(px(4)),
         align_items: AlignItems::Center,

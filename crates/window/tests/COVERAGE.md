@@ -45,6 +45,7 @@
 ## Coverage Map
 
 - `window.rs`：Native 属性、绑定、Camera / Scene Slot、Controls 与 Theme。
+- `title.rs`：长标题单行裁剪、窄窗口下关闭按钮保留尺寸并位于窗口范围内，标题栏保持 36 逻辑像素高；标题栏 Popout 向下超出标题栏仍不被裁剪。
 - `owned_window.rs`：Owned Lifecycle、Modal 资源隔离、Focus / IME。
 - `owned_window.rs` 同时保护复合 Root 的 InitialFocus Priority 与实际输入目标之间的路由，以及映射后的 Tab 来回导航。
 - 显式清空 Focus（含隐藏旧页面）后，普通键与快捷键 Release 不恢复旧 Editor，也不选择新 Editor；Tab 仍显式进入可见 Tab Stop。

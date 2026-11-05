@@ -39,7 +39,7 @@
 
 ## Coverage Map
 
-- `bsn_scroll_area.rs`：公开 Scene、真实 Layout、Keyboard / Wheel / IntoView、Drag / Disabled / Cursor 组合。
+- `bsn_scroll_area.rs`：公开 Scene 与垂直模式的内容宽度约束、真实 Layout、Keyboard / Wheel / IntoView、Drag / Disabled / Cursor 组合。MessageBox 的长正文集成回归同时保护有界宽度下的换行、真实 ScrollPosition 位移与结果按钮留在视口内。
 - `diagnostics.rs`：多个 Root 的 Viewport 损坏聚合、重复检查共享 origin、恢复后新失败、Bar / Thumb / 已测量 ComputedNode 损坏、滚动条目标 / 方向与轴策略归属、组合样式消费共享诊断、IntoView 队列边界、无布局 / 空内容 / 零尺寸 / 非所属事件静默，以及宽度配置经 Scene 传播和颜色 API 的独立请求身份。
 - `colors.rs` / `error.rs` Unit Test：多个颜色 State 损坏在 Theme 刷新与修复时的生命周期，Core 原 source 与 origin 经领域包装和 ECS 边界保留。
 - `diagnostics.rs` 还保护几何损坏期间 Root Override 与 Thumb Hover 被跳过后，几何恢复自动重做样式，无需新的输入。

@@ -105,6 +105,65 @@ fn fixture() -> App {
 }
 
 #[test]
+fn narrow_shell_keeps_file_names_and_actions_inside_the_viewport() {
+    let mut app = fixture();
+    let root = bevy_widgetry_core::scene::spawn_scene(
+        app.world_mut(),
+        bsn! {
+            @WidgetryFileDialog Node { width: px(360), height: px(360) }
+        },
+    )
+    .unwrap();
+    loaded(&mut app, root, 3);
+    for _ in 0..4 {
+        app.update();
+    }
+    let name = named(&mut app, root, "FileDialogNameColumn");
+    assert!(app.world().get::<ComputedNode>(name).unwrap().size().x >= 60.0);
+    let navigation = named(&mut app, root, "FileDialogNavigation");
+    assert!(
+        app.world()
+            .get::<ComputedNode>(navigation)
+            .unwrap()
+            .size()
+            .y
+            > 30.0
+    );
+    let root_center = app
+        .world()
+        .get::<UiGlobalTransform>(root)
+        .unwrap()
+        .translation;
+    for name in [
+        "FileDialogPath",
+        "FileDialogSearch",
+        "FileDialogCancel",
+        "FileDialogConfirm",
+    ] {
+        let entity = named(&mut app, root, name);
+        let node = app.world().get::<ComputedNode>(entity).unwrap();
+        let center = app
+            .world()
+            .get::<UiGlobalTransform>(entity)
+            .unwrap()
+            .translation;
+        assert!(node.size().min_element() > 0.0, "{name}");
+        assert!(
+            center.x - node.size().x / 2.0 >= root_center.x - 180.1,
+            "{name}"
+        );
+        assert!(
+            center.x + node.size().x / 2.0 <= root_center.x + 180.1,
+            "{name}"
+        );
+        assert!(
+            center.y + node.size().y / 2.0 <= root_center.y + 180.1,
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn compact_shell_preserves_background_preferences_and_plain_headers() {
     let mut app = fixture();
     let root = app

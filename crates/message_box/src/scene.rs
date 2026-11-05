@@ -144,8 +144,11 @@ impl MessageBoxScene {
                     BackgroundColor
                     Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), padding: UiRect::all(px(24)), row_gap: px(20) }
                     Children [
-                        Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), row_gap: px(12), overflow: Overflow::clip() } Children [{content}]--
-                        Node { justify_content: JustifyContent::Center, column_gap: px(12), flex_shrink: 0.0 } Children [{actions}]
+                        @bevy_widgetry_scroll_area::WidgetryScrollArea { @children: {Some(Box::new(bsn_list! {
+                            Node {width:percent(100),max_width:percent(100),flex_shrink:0.0,flex_direction:FlexDirection::Column,row_gap:px(12)} Children [{content}]
+                        }) as Box<dyn SceneList>)} }
+                        Node { width:percent(100),flex_grow:1.0,min_width:px(0),min_height:px(0) }--
+                        Node { justify_content: JustifyContent::Center, column_gap: px(12),row_gap:px(8),flex_wrap:FlexWrap::Wrap, flex_shrink: 0.0 } Children [{actions}]
                     ]
                 })
         }

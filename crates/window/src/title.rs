@@ -8,8 +8,17 @@ use bevy_widgetry_core::ui::WidgetryUiSystems;
 use crate::{title_bar::bar::TitleBarContent, window_root::WindowRoot};
 
 #[derive(Component, Default, FromTemplate)]
-#[require(Text)]
+#[require(Text, TextLayout = TextLayout::no_wrap(), Node = title_text_node())]
 pub struct WidgetryWindowTitle;
+
+fn title_text_node() -> Node {
+    Node {
+        min_width: px(0),
+        max_width: percent(100),
+        overflow: Overflow::clip(),
+        ..default()
+    }
+}
 
 impl WidgetryWindowTitle {
     pub fn set_in_world(

@@ -26,6 +26,26 @@ use bevy_widgetry_test_utils::{
 struct AncestorKeyboardCount(usize);
 
 #[test]
+fn vertical_content_constrains_wrapping_without_losing_default_scroll_geometry() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryScrollAreaPlugin);
+    let root = bevy_widgetry_core::scene::spawn_scene(app.world_mut(), bsn! {
+        @WidgetryScrollArea { @content: {Some(Box::new(bsn! { Node {width:px(44),max_width:px(44)} }) as Box<dyn Scene>)} }
+    }).unwrap();
+    let content = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryScrollAreaContent>>()
+        .single(app.world())
+        .unwrap();
+    let node = app.world().get::<Node>(content).unwrap();
+    assert_eq!(node.width, percent(100));
+    assert_eq!(node.max_width, percent(100));
+    assert_eq!(node.min_height, percent(100));
+    assert_eq!(node.flex_shrink, 0.0);
+    assert!(app.world().get::<WidgetryScrollArea>(root).is_some());
+}
+
+#[test]
 fn public_scene_exposes_viewport_and_respects_root_patch() {
     let mut app = scene_app();
     app.add_plugins(WidgetryScrollAreaPlugin);

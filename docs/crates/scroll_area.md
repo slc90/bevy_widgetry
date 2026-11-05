@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-ScrollArea 以 BSN `content` / `children` 组合调用方 UI，以独立的 Viewport 和 Scrollbar 表达可见范围及交互。Scrollbar 可见策略与真正允许滚动的 Axis 分离。
+ScrollArea 以 BSN `content` / `children` 组合调用方 UI，以独立的 Viewport 和 Scrollbar 表达可见范围及交互。垂直模式的内容容器宽度限制为 Viewport 宽度，支持文本在视口内换行；横向和双轴模式保留固有内容宽度。`content` 可修饰布局方向与 Padding，容器的尺寸与滚动几何由 ScrollArea 管理。Scrollbar 可见策略与真正允许滚动的 Axis 分离。
 
 ## 主要功能
 

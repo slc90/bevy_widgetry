@@ -41,7 +41,7 @@ Image 背景覆盖包含 Title Bar 在内的整个窗口，并随圆角和裁剪
 
 ### 标题文字绑定
 
-在 Title Bar 内容的一个文字节点上挂载 `WidgetryWindowTitle`，将其明确绑定为本 Window 的可见标题；标记自动要求 `Text`，可以与 Icon、其他 Text 或任意容器组合。每个 Window 最多一个标记，嵌套 Window 单独归属；正文和未标记的标题栏内容不参与更新。自定义 Title Bar 可以完全不绑定标题文字。
+在 Title Bar 内容的一个文字节点上挂载 `WidgetryWindowTitle`，将其明确绑定为本 Window 的可见标题；标记自动要求 `Text`，默认单行显示并裁剪溢出，可以与 Icon、其他 Text 或任意容器组合。标题栏保持 36 逻辑像素高，内容区可收缩并仅裁剪横向溢出，允许下拉菜单向下展开；系统按钮保持 46 逻辑像素宽，不被长标题压缩。每个 Window 最多一个标记，嵌套 Window 单独归属；正文和未标记的标题栏内容不参与更新。自定义 Title Bar 可以完全不绑定标题文字。
 
 `Window.title` 是标题文本来源。`WidgetryWindowTitle::set_in_world(world, root, title)` 先校验 Root、Native Window / Camera 与全部显式绑定，再同步原生标题和绑定 Text；返回值表示原生标题是否实际改变，同值返回 `false`，不发出标题事件。`WidgetryWindowTitle::set(commands, root, title)` 在 Command 执行时完成同样的校验和更新。无绑定时只更新原生标题；无效 Root、失效原生绑定、缺失 Text、标记落入正文或多个标记均返回 Error，失败前不修改标题或文字。
 

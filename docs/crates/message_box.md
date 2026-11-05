@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-MessageBox 复用 Widgetry Window 和 Button：对话框的结果与关闭生命周期由 MessageBox 负责，正文由调用方的 `SceneList` 组合。应用创建对话框后继续运行，不等待同步返回值。
+MessageBox 复用 Widgetry Window、Button 和 ScrollArea：对话框的结果与关闭生命周期由 MessageBox 负责，正文由调用方的 `SceneList` 组合并置于可滚动区域，结果按钮位于滚动区域外，窄空间下可换行。应用创建对话框后继续运行，不等待同步返回值。
 
 ## 主要功能
 

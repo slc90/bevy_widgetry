@@ -320,16 +320,16 @@ fn shell_scene(
         BackgroundColor::default()
         template(|_| Ok(ResolvedForeground::default()))
         Children [
-            Name("FileDialogNavigation") Node { width:percent(100),flex_shrink:0.0,column_gap:px(4),align_items:AlignItems::Center } Children [
+            Name("FileDialogNavigation") Node { width:percent(100),flex_shrink:0.0,column_gap:px(4),row_gap:px(4),flex_wrap:FlexWrap::Wrap,align_items:AlignItems::Center } Children [
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Back), "FileDialogBack", "Back")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Forward), "FileDialogForward", "Forward")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Up), "FileDialogUp", "Up")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Refresh), "FileDialogRefresh", "Refresh")--
-                @editor_scene(root, PartKind::Path, "FileDialogPath", path)--
+                @editor_scene(root, PartKind::Path, "FileDialogPath", path) Node {min_width:px(120)}--
                 @editor_scene(root, PartKind::Search, "FileDialogSearch", state.search().into()) Node {width:percent(24),min_width:px(120),flex_grow:0.0,flex_shrink:0.0}
             ]--
             Node { flex_grow: 1.0, min_height: px(0), width: percent(100), column_gap: px(style.spacing) } Children [
-                @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), flex_shrink: 0.0, min_height: px(0), height: percent(100) }--
+                @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), max_width:percent(28), flex_shrink: 0.0, min_height: px(0), height: percent(100) }--
                 Name("FileDialogSidebarDivider") template(move |_| Ok(Part {root,kind:PartKind::SidebarDivider}))
                 Node {width:px(1),height:percent(100),flex_shrink:0.0} BackgroundColor(Color::NONE) template(|_| Ok(Pickable::IGNORE))--
                 Node {flex_direction:FlexDirection::Column,flex_grow:1.0,min_width:px(0),min_height:px(0),height:percent(100)} Children [
@@ -344,7 +344,7 @@ fn shell_scene(
                 {filename}-- {summary}
             ]--
             {filter}--
-            Node { width: percent(100),flex_shrink:0.0, justify_content: JustifyContent::FlexEnd, column_gap: px(style.spacing) } Children [
+            Node { width: percent(100),flex_shrink:0.0, flex_wrap:FlexWrap::Wrap,row_gap:px(4), justify_content: JustifyContent::FlexEnd, column_gap: px(style.spacing) } Children [
                 @control_scene(root, WidgetryFileDialogAction::Confirm, "FileDialogConfirm", label)--
                 @control_scene(root, WidgetryFileDialogAction::Cancel, "FileDialogCancel", "Cancel")
             ]

@@ -53,6 +53,7 @@ pub struct WidgetryScrollAreaPlugin;
 
 impl Plugin for WidgetryScrollAreaPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<bevy::ui::UiScale>();
         if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
             app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
         }

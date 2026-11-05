@@ -31,6 +31,7 @@ fn window_root_node() -> Node {
     Node {
         width: percent(100),
         height: percent(100),
+        min_width: px(0),
         min_height: px(0),
         border: UiRect::all(px(1)),
         border_radius: BorderRadius::all(px(8)),
@@ -42,6 +43,7 @@ fn window_root_node() -> Node {
 fn window_content_node() -> Node {
     Node {
         width: percent(100),
+        min_width: px(0),
         flex_grow: 1.0,
         min_height: px(0),
         border_radius: BorderRadius::bottom(px(8)),

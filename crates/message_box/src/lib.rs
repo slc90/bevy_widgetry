@@ -26,6 +26,9 @@ impl Plugin for WidgetryMessageBoxPlugin {
         if !app.is_plugin_added::<WidgetryButtonPlugin>() {
             app.add_plugins(WidgetryButtonPlugin);
         }
+        if !app.is_plugin_added::<bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin>() {
+            app.add_plugins(bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin);
+        }
         app.add_systems(
             PostUpdate,
             style::update_colors.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),

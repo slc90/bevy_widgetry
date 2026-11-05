@@ -128,7 +128,7 @@ impl WidgetryScrollArea {
                         WidgetryScrollAreaContent
                         Node { flex_direction: direction }
                         @{content}
-                        Node { width: Val::Auto, height: Val::Auto, min_width: percent(100), min_height: percent(100), max_width: Val::Auto, max_height: Val::Auto, flex_shrink: 0.0, overflow: Overflow::visible() }
+                        Node { width: {if axis == ScrollAxis::Vertical {percent(100)} else {Val::Auto}}, height: Val::Auto, min_width: percent(100), min_height: percent(100), max_width: {if axis == ScrollAxis::Vertical {percent(100)} else {Val::Auto}}, max_height: Val::Auto, flex_shrink: 0.0, overflow: Overflow::visible() }
                         Children [{children}]
                     ]
                 --

@@ -198,10 +198,10 @@ fn modified_text(timestamp: Option<std::time::SystemTime>) -> String {
 fn detail_cell(label: String, font: f32, width: Option<f32>, right: bool) -> impl Scene {
     let justify = if right { Justify::Right } else { Justify::Left };
     let flex_grow: f32 = if width.is_none() { 1.0 } else { 0.0 };
-    let flex_shrink: f32 = if width.is_none() { 1.0 } else { 0.0 };
+    let min_width = if width.is_none() { percent(40) } else { px(0) };
     let width = width.map(px).unwrap_or(Val::Auto);
     bsn! { @crate::style::text_scene(label,font) TextLayout {linebreak:bevy::text::LineBreak::NoWrap,justify}
-        Node {width,flex_grow,flex_shrink,min_width:px(0),overflow:Overflow::clip()}
+        Node {width,flex_grow,flex_shrink:1.0,min_width,overflow:Overflow::clip()}
     }
 }
 

@@ -38,6 +38,94 @@ fn fixture() -> App {
 }
 
 #[test]
+fn long_title_stays_on_one_line_and_keeps_system_buttons_inside_the_window() {
+    use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon};
+    use bevy_widgetry_core::{WidgetryAppExt, icon::WidgetryIcon};
+    use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, spawn_ui_camera};
+    let mut app = fixture();
+    add_ui_plugins(&mut app);
+    let font = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Default.path());
+    advance_until(
+        &mut app,
+        std::time::Duration::from_secs(10),
+        "title font",
+        |world| world.resource::<Assets<Font>>().contains(&font),
+    )
+    .unwrap();
+    app.set_default_font(bevy::text::FontSource::Handle(font));
+    let (root, native) = window(
+        &mut app,
+        bsn_list! { WidgetryWindowTitle Name("LongTitle") TextFont {font_size: {bevy::text::FontSize::Px(20.0)}}--
+        Node {position_type:PositionType::Absolute,left:px(20),top:px(40),width:px(100),height:px(60)} Name("TitlePopout") },
+    );
+    WidgetryWindowTitle::set_in_world(app.world_mut(), root, "A very long title ".repeat(40))
+        .unwrap();
+    app.world_mut()
+        .get_mut::<Window>(native)
+        .unwrap()
+        .resolution
+        .set_physical_resolution(320, 200);
+    app.update();
+    let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
+    let temporary = spawn_ui_camera(&mut app, UVec2::new(320, 200), 1.0);
+    let computed = app
+        .world()
+        .get::<Camera>(temporary)
+        .unwrap()
+        .computed
+        .clone();
+    app.world_mut().despawn(temporary);
+    app.world_mut().get_mut::<Camera>(camera).unwrap().computed = computed;
+    app.update();
+    let title = named(&mut app, "LongTitle");
+    assert!(app.world().get::<ComputedNode>(title).unwrap().size().y <= 36.0);
+    let icon = app
+        .world_mut()
+        .query::<(Entity, &WidgetryIcon)>()
+        .iter(app.world())
+        .find(|(_, icon)| icon.path() == Some(&BuiltinIcon::WindowClose.path()))
+        .unwrap()
+        .0;
+    let button = app.world().get::<ChildOf>(icon).unwrap().parent();
+    let size = app.world().get::<ComputedNode>(button).unwrap().size();
+    let center = app
+        .world()
+        .get::<UiGlobalTransform>(button)
+        .unwrap()
+        .translation;
+    let root_center = app
+        .world()
+        .get::<UiGlobalTransform>(root)
+        .unwrap()
+        .translation;
+    assert_eq!(size.x, 46.0);
+    assert_eq!(size.y, 35.0);
+    let bar = app.world().get::<Children>(root).unwrap()[0];
+    assert_eq!(app.world().get::<ComputedNode>(bar).unwrap().size().y, 36.0);
+    assert!(
+        center.x + size.x / 2.0 <= root_center.x + 160.1,
+        "root={:?} center={root_center:?}; bar={:?}; button center={center:?} size={size:?}",
+        app.world().get::<ComputedNode>(root).unwrap().size(),
+        app.world().get::<ComputedNode>(bar).unwrap().size()
+    );
+    let popup = named(&mut app, "TitlePopout");
+    let center = app
+        .world()
+        .get::<UiGlobalTransform>(popup)
+        .unwrap()
+        .translation;
+    assert!(
+        app.world()
+            .get::<bevy::ui::CalculatedClip>(popup)
+            .unwrap()
+            .contains_point(center)
+    );
+}
+
+#[test]
 fn explicit_title_updates_only_the_bound_text_and_native_window() {
     let mut app = fixture();
     let (a, native_a) = window(
