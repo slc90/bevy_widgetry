@@ -225,6 +225,8 @@ Path结构工具只作用于主View单选Path：上一段/下一段遍历绘制�
 
 导出按钮将文件写入Executable同级`exports/canvas.svg`和`exports/canvas.png`，直接覆盖已有文件；目录/路径在页面显示。区域按钮在内容AABB与Document坐标(-100,-75)至(100,75)之间切换，PNG倍率按1/2/4循环，与窗口Scale Factor及View Zoom独立。SVG保留三类参数几何与原始Path命令；PNG使用与View相同的通用曲线细分、填充/描边和Document叠放顺序。两种导出均只包含已提交模型，排除选择/节点覆盖层、在途草稿、View Pan/Zoom与背景。SVG同步报告写盘结果，PNG先显示进行中、收到关联完成事件后才显示成功尺寸或错误。为避免并发写入同一PNG路径，已有请求结束前再次点击PNG只提示等待重试；导出进行期间请求重绘，结束后恢复按需更新；离开页面的已发起导出仍完成并记录结果，不更新新页面。空Document导出显示错误且保留已有目标。
 
+Canvas 文件导出以 INFO 区分请求、Busy 拒绝、同步失败和实际结果；PNG 提交包含 request、路径、区域和倍率，真实终态关联同一 request 与 job_id，区分成功、取消与失败。离页后仍记录终态，结果归档使用 DEBUG，不将提交视为写盘成功。
+
 离页销毁本页拥有的Document、图形与两个View，重新进入恢复初始状态。隐藏辅助View不删除共享Document，恢复时继续显示当前模型。窗口比例可通过Header在1/1.25/1.5/2之间切换，与CanvasZoom和文件像素尺寸分别生效。
 
 ### Cursor

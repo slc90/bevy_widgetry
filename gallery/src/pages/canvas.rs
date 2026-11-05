@@ -704,14 +704,24 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             }
             Action::Svg | Action::Png => export(world, &demo, action)?,
         }
-        info!(?action, "执行 Canvas 演示操作");
+        if !matches!(action, Action::Svg | Action::Png) {
+            info!(?action, "执行 Canvas 演示操作");
+        }
         refresh(world)
     });
 }
 
 fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
+    let format = if matches!(action, Action::Svg) {
+        "svg"
+    } else {
+        "png"
+    };
+    let path = demo.directory.join(format!("canvas.{format}"));
+    info!(format, ?path, region=?demo.region, scale=demo.scale, "请求导出 Canvas 文件");
     if matches!(action, Action::Png) && world.query::<&PendingExport>().iter(world).next().is_some()
     {
+        info!(format, ?path, result = "busy", "Canvas 文件导出请求被拒绝");
         return bind(
             world,
             demo.result,
@@ -729,16 +739,14 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
             ))
         })?;
         if matches!(action, Action::Svg) {
-            let path = demo.directory.join("canvas.svg");
             CanvasDocument::export_svg(world, demo.document, &path, demo.region)
                 .map_err(CanvasExportError::Background)?;
-            info!(?path, "Canvas SVG 文件导出完成");
+            info!(format, ?path, result = "succeeded", "Canvas 文件导出结果");
             Ok(LocalizedText::with_args(
                 TextKey::Canvas(CanvasKey::Saved),
                 vec![("path", path.display().to_string()), ("size", "SVG".into())],
             ))
         } else {
-            let path = demo.directory.join("canvas.png");
             let request = CanvasDocument::export_png(
                 world,
                 demo.document,
@@ -752,13 +760,14 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
             world.entity_mut(request).insert(PendingExport {
                 result: demo.result,
             });
-            info!(?request, ?path, "已发起 Canvas PNG 导出");
+            info!(format, ?request, ?path, region=?demo.region, scale=demo.scale, result="submitted", "已提交 Canvas PNG 导出请求");
             Ok(LocalizedText::new(TextKey::Canvas(CanvasKey::Pending)))
         }
     })();
     let (binding, failure) = match result {
         Ok(binding) => (binding, None),
         Err(error) => {
+            info!(format, ?path, result = "failed", "Canvas 文件导出结果");
             let binding = LocalizedText::with_args(
                 TextKey::Canvas(CanvasKey::Failed),
                 vec![("error", error.to_string())],
@@ -788,17 +797,21 @@ fn png_finished(
         return;
     };
     let result = pending.result;
+    let request = event.entity;
+    let outcome = match &event.result {
+        Ok(_) => "succeeded",
+        Err(CanvasPngStop::Canceled) => "canceled",
+        Err(CanvasPngStop::Failed(_)) => "failed",
+    };
+    info!(format="png", request=?event.entity, job_id=event.job_id.get(), path=?event.path, size=?event.result.as_ref().ok(), result=outcome, "Canvas 文件导出结果");
     let binding = match &event.result {
-        Ok(size) => {
-            info!(request=?event.entity,path=?event.path,?size,"Canvas PNG 文件导出完成");
-            LocalizedText::with_args(
-                TextKey::Canvas(CanvasKey::Saved),
-                vec![
-                    ("path", event.path.display().to_string()),
-                    ("size", format!("{} × {}", size.x, size.y)),
-                ],
-            )
-        }
+        Ok(size) => LocalizedText::with_args(
+            TextKey::Canvas(CanvasKey::Saved),
+            vec![
+                ("path", event.path.display().to_string()),
+                ("size", format!("{} × {}", size.x, size.y)),
+            ],
+        ),
         Err(error) => LocalizedText::with_args(
             TextKey::Canvas(CanvasKey::Failed),
             vec![("error", error.to_string())],
@@ -824,6 +837,161 @@ fn png_finished(
                 "终止本次 PNG 导出",
             );
         }
+        debug!(
+            ?request,
+            page_present = world.get_entity(result).is_ok(),
+            "Canvas PNG 导出结果已归档"
+        );
         Ok(())
     });
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+    use bevy_widgetry::job::{JobFailure, JobManager};
+    use bevy_widgetry_test_utils::LogCapture;
+
+    fn fixture(directory: PathBuf) -> (App, Demo) {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_observer(png_finished);
+        let world = app.world_mut();
+        let document = world.spawn(CanvasDocument).id();
+        add_rectangle(world, document).unwrap();
+        let result = world.spawn_empty().id();
+        (
+            app,
+            Demo {
+                document,
+                main: result,
+                auxiliary: result,
+                readout: result,
+                result,
+                directory,
+                region: None,
+                scale: 2.0,
+                segment: 0,
+            },
+        )
+    }
+
+    #[test]
+    fn export_logs_sync_results_and_busy_without_submitting_another_request() {
+        let directory = tempfile::tempdir().unwrap();
+        let (mut app, mut demo) = fixture(directory.path().into());
+        let logs = LogCapture::with_targets([
+            "widget_gallery::pages::canvas",
+            "widget_gallery",
+            "bevy_widgetry",
+        ]);
+        logs.run(|| {
+            export(app.world_mut(), &demo, Action::Svg).unwrap();
+            assert!(demo.directory.join("canvas.svg").exists());
+            let blocker = demo.directory.join("blocker");
+            std::fs::write(&blocker, b"blocked").unwrap();
+            demo.directory = blocker;
+            export(app.world_mut(), &demo, Action::Svg).unwrap();
+            app.world_mut().spawn(PendingExport {
+                result: demo.result,
+            });
+            export(app.world_mut(), &demo, Action::Png).unwrap();
+        });
+        let records = logs.records();
+        for outcome in ["succeeded", "failed", "busy"] {
+            assert_eq!(
+                records
+                    .iter()
+                    .filter(|r| r.matches_field("result", outcome))
+                    .count(),
+                1
+            );
+        }
+        assert!(
+            !records
+                .iter()
+                .any(|r| r.matches_field("result", "submitted"))
+        );
+        assert_eq!(
+            records
+                .iter()
+                .filter(|r| r.level == bevy::log::tracing::Level::ERROR)
+                .count(),
+            1
+        );
+        assert_eq!(
+            app.world_mut()
+                .query::<&PendingExport>()
+                .iter(app.world())
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn png_terminal_logs_preserve_identity_and_handle_failure_after_page_removal() {
+        let directory = tempfile::tempdir().unwrap();
+        let (mut app, demo) = fixture(directory.path().into());
+        let manager = JobManager::default();
+        let (job, _) = manager
+            .spawn_thread::<(), _>(Default::default(), |_| Ok(()))
+            .unwrap();
+        let logs = LogCapture::with_targets([
+            "widget_gallery::pages::canvas",
+            "widget_gallery",
+            "bevy_widgetry",
+        ]);
+        logs.run(|| {
+            for outcome in ["succeeded", "canceled", "failed"] {
+                let request = app
+                    .world_mut()
+                    .spawn(PendingExport {
+                        result: demo.result,
+                    })
+                    .id();
+                let result = match outcome {
+                    "succeeded" => Ok(UVec2::new(240, 160)),
+                    "canceled" => Err(CanvasPngStop::Canceled),
+                    _ => {
+                        app.world_mut().despawn(demo.result);
+                        Err(CanvasPngStop::Failed(JobFailure::external(
+                            std::io::Error::other("write failed"),
+                            bevy_widgetry::diagnostics::ErrorFrame::new("gallery.canvas.test"),
+                        )))
+                    }
+                };
+                app.world_mut().trigger(CanvasPngExportFinished {
+                    entity: request,
+                    job_id: job,
+                    document: demo.document,
+                    path: demo.directory.join("canvas.png"),
+                    result,
+                });
+                app.world_mut().flush();
+                assert_eq!(
+                    logs.records()
+                        .iter()
+                        .filter(|r| r.matches_field("result", outcome)
+                            && r.matches_field("request", &format!("{request:?}")))
+                        .count(),
+                    1
+                );
+            }
+        });
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|r| r.level == bevy::log::tracing::Level::ERROR)
+                .count(),
+            1
+        );
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|r| r.matches_field("phase", "handled"))
+                .count(),
+            1
+        );
+    }
 }
