@@ -269,6 +269,8 @@ Waveform GUI Benchmark 现有 `pixels_nonempty` 检查仍按包含控制栏和�
 
 Gallery 初始化完成后，默认进入 Button 页面。
 
+有效导航选择以 INFO 记录 `from`、`to` 和 `unchanged`；重复选择当前页仍记录操作，不重复挂载。实际页面状态迁移以 DEBUG 记录原状态和新状态，包含程序初始化导航。该 DEBUG 只证明状态已提交，页面构造失败仍按原有诊断处理，不表示页面内容已就绪。
+
 Header、Sidebar 和主窗口保持常驻，切换页面时仅替换当前页面内容。
 
 页面重新进入时：

@@ -3,6 +3,7 @@ use crate::i18n::{TextKey, localized};
 use crate::pages;
 use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
+use bevy::state::state::{StateTransitionEvent, StateTransitionSystems};
 use bevy::ui::UiSystems;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
@@ -244,12 +245,21 @@ fn on_nav_button_activated(
     let Ok(nav) = nav_buttons.get(event.entity) else {
         return;
     };
-    if *current_page.get() == nav.0 {
+    let unchanged = *current_page.get() == nav.0;
+    info!(from = ?current_page.get(), to = ?nav.0, unchanged, "用户选择 Gallery 页面");
+    if unchanged {
         return;
     }
 
-    info!(page = ?nav.0, "请求切换 Gallery 页面");
     next_page.set_if_different(nav.0);
+}
+
+fn log_page_transition(mut transitions: MessageReader<StateTransitionEvent<GalleryPage>>) {
+    for transition in transitions.read() {
+        if transition.exited != transition.entered {
+            debug!(from = ?transition.exited, to = ?transition.entered, "Gallery 页面状态已切换");
+        }
+    }
 }
 
 fn refresh_sidebar_theme(
@@ -274,6 +284,12 @@ impl Plugin for GalleryPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<GalleryPage>()
             .register_type::<State<GalleryPage>>()
+            .add_systems(
+                StateTransition,
+                log_page_transition
+                    .after(StateTransitionSystems::DependentTransitions)
+                    .before(StateTransitionSystems::ExitSchedules),
+            )
             .add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
         app.add_observer(refresh_sidebar_theme).add_plugins((
             pages::ButtonDemoPlugin,
