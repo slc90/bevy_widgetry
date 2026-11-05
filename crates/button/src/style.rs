@@ -23,7 +23,7 @@ use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_internal_log::widgetry_debug;
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryButtonProps)]
-#[require(crate::colors::ColorState, crate::loading::LoadingState)]
+#[require(crate::colors::ColorState, crate::WidgetryButtonLoading)]
 pub struct WidgetryButton;
 
 #[derive(Default)]
@@ -42,7 +42,7 @@ struct ButtonStyle {
 
 type ButtonStyleData = (
     &'static crate::colors::ColorState,
-    &'static crate::loading::LoadingState,
+    &'static crate::WidgetryButtonLoading,
     &'static Hovered,
     Has<Pressed>,
     Has<InteractionDisabled>,
@@ -64,7 +64,7 @@ type ChangedButtonStyleQuery<'w, 's> = Query<
             Added<WidgetryButton>,
             Changed<Hovered>,
             Changed<crate::colors::ColorState>,
-            Changed<crate::loading::LoadingState>,
+            Changed<crate::WidgetryButtonLoading>,
             Added<Pressed>,
             Added<InteractionDisabled>,
         )>,
@@ -100,9 +100,9 @@ fn apply_button_style(
     let colors = overrides.0.resolve(&colors.button);
     let style = resolve_button_style(
         &colors,
-        hovered.0 && !loading.0,
-        pressed && !loading.0,
-        disabled && !loading.0,
+        hovered.0 && !loading.is_active(),
+        pressed && !loading.is_active(),
+        disabled && !loading.is_active(),
     );
     apply_outputs(style, (background, border, foreground));
 }
@@ -182,7 +182,7 @@ fn refresh_button_theme(_event: On<WidgetryThemeChanged>, mut commands: bevy::pr
 
 impl WidgetryButton {
     fn scene(props: WidgetryButtonProps) -> impl Scene {
-        use crate::loading::{ButtonContent, Spinner, SpinnerArc, SpinnerTrack};
+        use crate::loading_style::{ButtonContent, Spinner, SpinnerArc, SpinnerTrack};
         use bevy::prelude::*;
         let WidgetryButtonProps {
             colors,
@@ -235,6 +235,7 @@ impl Plugin for WidgetryButtonPlugin {
         crate::headless::install(app);
         crate::link::install(app);
         crate::loading::install(app);
+        crate::loading_style::install(app);
         app.add_systems(
             PostUpdate,
             (

@@ -51,7 +51,7 @@ crates/
 └── test_utils/
 ```
 
-Button 直接依赖 Diagnostics 的统一诊断和 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button；可组合 Headless、Loading 状态和默认 Spinner 实现归属 Button，Disabled 理由组合继续由 Core 管理。
+Button 直接依赖 Diagnostics 的统一诊断和 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button；可组合 Headless、可选 Loading 行为与默认 Style（含 Spinner）实现归属 Button，Disabled 理由组合继续由 Core 管理。
 
 ToggleButton 直接使用 Diagnostics 的领域诊断、持续异常状态和批量错误桥接，选中状态继续采用官方 Checked。
 

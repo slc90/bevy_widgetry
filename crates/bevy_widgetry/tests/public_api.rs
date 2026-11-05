@@ -20,6 +20,7 @@
 use bevy::text::FontSource;
 use bevy::{app::App, color::Color, ecs::entity::Entity, prelude::*};
 use bevy_widgetry::button::{WidgetryButton, WidgetryButtonLoadingChanged, WidgetryButtonPlugin};
+use bevy_widgetry::button::{WidgetryButtonHeadless, WidgetryButtonLoading};
 use bevy_widgetry::check_box::{
     WidgetryCheckBox, WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
 };
@@ -559,12 +560,16 @@ fn button_loading_api_and_notifications_are_available_through_facade() {
         );
     let button = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryButton })
+        .spawn_scene(bsn! { @WidgetryButtonHeadless WidgetryButtonLoading::default() })
         .unwrap()
         .id();
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
-    assert!(WidgetryButton::is_loading(app.world(), button).unwrap());
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
+    assert!(
+        WidgetryButtonLoading::get(app.world(), button)
+            .unwrap()
+            .is_active()
+    );
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();
     assert_eq!(app.world().resource::<LoadingChanges>().0, [true, false]);
 }
 

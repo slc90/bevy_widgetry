@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry::{
-    button::{WidgetryButton, WidgetryLinkButton},
+    button::{WidgetryButton, WidgetryButtonLoading, WidgetryLinkButton},
     icon::WidgetryIcon,
     radio_group::{WidgetryRadioGroup, WidgetryRadioOption},
 };
@@ -119,7 +119,7 @@ fn loading_example() -> impl Scene {
 fn start_loading(event: On<Activate>, mut commands: Commands) {
     let entity = event.entity;
     commands.queue(move |world: &mut World| -> Result {
-        WidgetryButton::set_loading_in_world(world, entity, true)
+        WidgetryButtonLoading::set_in_world(world, entity, true)
             .map_err(|error| error.into_bevy_error())?;
         let mut demo = world.get_mut::<LoadingDemo>(entity).ok_or_else(|| {
             crate::diagnostics::at(
@@ -150,7 +150,7 @@ fn finish_loading(
 
 fn queue_finish_loading(commands: &mut Commands, entity: Entity) {
     commands.queue(move |world: &mut World| -> Result {
-        if WidgetryButton::set_loading_in_world(world, entity, false)
+        if WidgetryButtonLoading::set_in_world(world, entity, false)
             .map_err(|error| error.into_bevy_error())?
         {
             info!(?entity, "结束 Button Loading 演示");

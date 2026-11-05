@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
-use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
+use bevy_widgetry_button::{WidgetryButton, WidgetryButtonLoading, WidgetryButtonPlugin};
 use bevy_widgetry_test_utils::scene_app;
 
 fn fixture() -> (App, Entity) {
@@ -19,16 +19,32 @@ fn fixture() -> (App, Entity) {
 #[test]
 fn loading_commits_synchronously_and_queued_calls_wait_for_flush() {
     let (mut app, button) = fixture();
-    assert!(!WidgetryButton::is_loading(app.world(), button).unwrap());
-    assert!(!WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap());
-    assert!(WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap());
-    assert!(WidgetryButton::is_loading(app.world(), button).unwrap());
+    assert!(
+        !WidgetryButtonLoading::get(app.world(), button)
+            .unwrap()
+            .is_active()
+    );
+    assert!(!WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap());
+    assert!(WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap());
+    assert!(
+        WidgetryButtonLoading::get(app.world(), button)
+            .unwrap()
+            .is_active()
+    );
     assert!(app.world().get::<InteractionDisabled>(button).is_some());
-    assert!(!WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap());
-    WidgetryButton::set_loading(&mut app.world_mut().commands(), button, false);
-    assert!(WidgetryButton::is_loading(app.world(), button).unwrap());
+    assert!(!WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap());
+    WidgetryButtonLoading::set(&mut app.world_mut().commands(), button, false);
+    assert!(
+        WidgetryButtonLoading::get(app.world(), button)
+            .unwrap()
+            .is_active()
+    );
     app.world_mut().flush();
-    assert!(!WidgetryButton::is_loading(app.world(), button).unwrap());
+    assert!(
+        !WidgetryButtonLoading::get(app.world(), button)
+            .unwrap()
+            .is_active()
+    );
     assert!(app.world().get::<InteractionDisabled>(button).is_none());
 }
 
@@ -49,7 +65,7 @@ fn loading_preserves_local_and_inherited_disabled_requests() {
                     .entity_mut(parent)
                     .insert(InteractionDisabled);
             }
-            WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
+            WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
             if !local_first {
                 app.world_mut()
                     .entity_mut(button)
@@ -60,7 +76,7 @@ fn loading_preserves_local_and_inherited_disabled_requests() {
                     .entity_mut(parent)
                     .insert(InteractionDisabled);
             }
-            WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
+            WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();
             assert!(app.world().get::<InteractionDisabled>(button).is_some());
             app.world_mut()
                 .entity_mut(parent)
@@ -72,12 +88,12 @@ fn loading_preserves_local_and_inherited_disabled_requests() {
             assert!(app.world().get::<InteractionDisabled>(button).is_none());
         }
     }
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
     app.world_mut()
         .entity_mut(button)
         .remove::<InteractionDisabled>();
     assert!(app.world().get::<InteractionDisabled>(button).is_some());
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_none());
 }
 
@@ -85,16 +101,16 @@ fn loading_preserves_local_and_inherited_disabled_requests() {
 fn loading_does_not_cancel_another_intrinsic_reason() {
     let (mut app, button) = fixture();
     bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, true).unwrap();
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_some());
     bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_none());
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
     bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, true).unwrap();
     bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_some());
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_none());
 }
 
@@ -122,7 +138,7 @@ fn content_with_explicit_visibility_is_hidden_without_changing_layout_or_child_s
     let children = app.world().get::<Children>(content).unwrap().to_vec();
     let initial_size = app.world().get::<ComputedNode>(button).unwrap().size();
     let initial_transform = *app.world().get::<UiTransform>(content).unwrap();
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
     app.update();
     assert_eq!(
         app.world().get::<ComputedNode>(button).unwrap().size(),
@@ -145,7 +161,7 @@ fn content_with_explicit_visibility_is_hidden_without_changing_layout_or_child_s
             .try_inverse()
             .is_none()
     );
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();
     app.update();
     assert_eq!(
         *app.world().get::<UiTransform>(content).unwrap(),
@@ -171,7 +187,9 @@ fn changes_notify_after_commit_and_invalid_calls_reach_the_host_without_partial_
     app.init_resource::<Changes>().add_observer(
         |event: On<WidgetryButtonLoadingChanged>, world: &World| {
             assert_eq!(
-                WidgetryButton::is_loading(world, event.entity).unwrap(),
+                WidgetryButtonLoading::get(world, event.entity)
+                    .unwrap()
+                    .is_active(),
                 event.loading
             );
         },
@@ -182,7 +200,7 @@ fn changes_notify_after_commit_and_invalid_calls_reach_the_host_without_partial_
         },
     );
     for loading in [false, true, true, false, false] {
-        WidgetryButton::set_loading_in_world(app.world_mut(), button, loading).unwrap();
+        WidgetryButtonLoading::set_in_world(app.world_mut(), button, loading).unwrap();
     }
     assert_eq!(app.world().resource::<Changes>().0, [true, false]);
     let wrong = app.world_mut().spawn(Node::default()).id();
@@ -192,25 +210,29 @@ fn changes_notify_after_commit_and_invalid_calls_reach_the_host_without_partial_
     for invalid in [wrong, stale] {
         for loading in [false, true] {
             let error = logs
-                .run(|| WidgetryButton::set_loading_in_world(app.world_mut(), invalid, loading))
+                .run(|| WidgetryButtonLoading::set_in_world(app.world_mut(), invalid, loading))
                 .unwrap_err();
             assert!(
                 matches!(error.kind(), bevy_widgetry_button::ButtonError::InvalidTarget { root } if *root == invalid)
             );
         }
         assert!(
-            logs.run(|| WidgetryButton::is_loading(app.world(), invalid))
+            logs.run(|| WidgetryButtonLoading::get(app.world(), invalid))
                 .is_err()
         );
     }
     app.set_error_handler(ErrorCapture::handler());
     let errors = ErrorCapture::default();
-    WidgetryButton::set_loading(&mut app.world_mut().commands(), stale, true);
+    WidgetryButtonLoading::set(&mut app.world_mut().commands(), stale, true);
     logs.run(|| errors.run(|| app.world_mut().flush()));
     assert_eq!(errors.take().len(), 1);
     assert!(!logs.records().is_empty());
     assert_eq!(app.world().resource::<Changes>().0, [true, false]);
-    assert!(!WidgetryButton::is_loading(app.world(), button).unwrap());
+    assert!(
+        !WidgetryButtonLoading::get(app.world(), button)
+            .unwrap()
+            .is_active()
+    );
 }
 
 #[test]
@@ -242,7 +264,7 @@ fn spinner_uses_normal_foreground_and_shared_masks_and_stops_when_loading_ends()
     app.world_mut()
         .entity_mut(button)
         .insert(InteractionDisabled);
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
     for mode in [
         WidgetryThemeMode::Dark,
         WidgetryThemeMode::Light,
@@ -279,7 +301,7 @@ fn spinner_uses_normal_foreground_and_shared_masks_and_stops_when_loading_ends()
         app.world().get::<ImageNode>(arc).unwrap().color,
         colors.normal.foreground.unwrap()
     );
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
+    WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();
     let stopped = *app.world().get::<UiTransform>(arc).unwrap();
     app.update();
     app.update();
@@ -309,78 +331,81 @@ fn real_pointer_and_keyboard_inputs_stop_activating_but_explicit_activate_remain
     };
     #[derive(Resource, Default)]
     struct Activations(Vec<Entity>);
-    let mut app = picking_app();
-    app.add_plugins(WidgetryButtonPlugin)
-        .init_resource::<Activations>();
-    add_keyboard_dispatch(&mut app);
-    app.add_observer(
-        |event: On<Activate>, mut activations: ResMut<Activations>| {
-            activations.0.push(event.entity)
-        },
-    );
-    let window = app
-        .world_mut()
-        .spawn((
-            Window {
-                resolution: (400, 400).into(),
-                ..default()
+    for custom in [false, true] {
+        let mut app = picking_app();
+        app.add_plugins(WidgetryButtonPlugin)
+            .init_resource::<Activations>();
+        add_keyboard_dispatch(&mut app);
+        app.add_observer(
+            |event: On<Activate>, mut activations: ResMut<Activations>| {
+                activations.0.push(event.entity)
             },
-            PrimaryWindow,
-        ))
-        .id();
-    let camera = spawn_picking_camera(&mut app, window, UVec2::splat(400), 1.0);
-    let button = app.world_mut().spawn_scene(bsn! {
-        @WidgetryButton { @children: {Some(Box::new(bsn_list! { Node { width: px(80), height: px(24) } }) as Box<dyn SceneList>)}, }
+        );
+        let window = app
+            .world_mut()
+            .spawn((
+                Window {
+                    resolution: (400, 400).into(),
+                    ..default()
+                },
+                PrimaryWindow,
+            ))
+            .id();
+        let camera = spawn_picking_camera(&mut app, window, UVec2::splat(400), 1.0);
+        let button = app.world_mut().spawn_scene(bsn! {
+        @{(!custom).then_some(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! { Node { width: px(80), height: px(24) } }) as Box<dyn SceneList>)}, } })}
+        @{custom.then_some(bsn! { @bevy_widgetry_button::WidgetryButtonHeadless WidgetryButtonLoading::default() template(|_| Ok(bevy::picking::cursor::EntityCursor::System(SystemCursorIcon::Pointer))) })}
         Node { width: px(160), height: px(50) } template(move |_| Ok(UiTargetCamera(camera)))
     }).unwrap().id();
-    let location = Location {
-        target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
-            .normalize(None)
-            .unwrap(),
-        position: Vec2::new(60.0, 25.0),
-    };
-    app.update();
-    app.update();
-    let click = |app: &mut App| {
-        for action in [
-            PointerAction::Move { delta: Vec2::ONE },
-            PointerAction::Press(PointerButton::Primary),
-            PointerAction::Release(PointerButton::Primary),
-        ] {
-            queue_pointer(app, PointerId::Mouse, location.clone(), action);
-            app.update();
+        let location = Location {
+            target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+                .normalize(None)
+                .unwrap(),
+            position: Vec2::new(60.0, 25.0),
+        };
+        app.update();
+        app.update();
+        let click = |app: &mut App| {
+            for action in [
+                PointerAction::Move { delta: Vec2::ONE },
+                PointerAction::Press(PointerButton::Primary),
+                PointerAction::Release(PointerButton::Primary),
+            ] {
+                queue_pointer(app, PointerId::Mouse, location.clone(), action);
+                app.update();
+            }
+        };
+        click(&mut app);
+        assert_eq!(app.world().resource::<Activations>().0, [button]);
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
+        assert_eq!(
+            app.world()
+                .get::<bevy::input_focus::tab_navigation::TabIndex>(button),
+            Some(&bevy::input_focus::tab_navigation::TabIndex(-1))
+        );
+        WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
+        click(&mut app);
+        for key in [KeyCode::Enter, KeyCode::Space] {
+            press_key(&mut app, window, key);
         }
-    };
-    click(&mut app);
-    assert_eq!(app.world().resource::<Activations>().0, [button]);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
-    assert_eq!(
-        app.world()
-            .get::<bevy::input_focus::tab_navigation::TabIndex>(button),
-        Some(&bevy::input_focus::tab_navigation::TabIndex(-1))
-    );
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
-    click(&mut app);
-    for key in [KeyCode::Enter, KeyCode::Space] {
-        press_key(&mut app, window, key);
+        assert_eq!(app.world().resource::<Activations>().0, [button]);
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
+        assert_eq!(
+            app.world().get::<CursorIcon>(window),
+            Some(&CursorIcon::System(SystemCursorIcon::Wait))
+        );
+        app.world_mut().trigger(Activate { entity: button });
+        assert_eq!(app.world().resource::<Activations>().0, [button, button]);
+        WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();
+        app.update();
+        assert_eq!(
+            app.world().get::<CursorIcon>(window),
+            Some(&CursorIcon::System(SystemCursorIcon::Pointer))
+        );
+        for key in [KeyCode::Enter, KeyCode::Space] {
+            press_key(&mut app, window, key);
+        }
+        click(&mut app);
+        assert_eq!(app.world().resource::<Activations>().0, vec![button; 5]);
     }
-    assert_eq!(app.world().resource::<Activations>().0, [button]);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
-    assert_eq!(
-        app.world().get::<CursorIcon>(window),
-        Some(&CursorIcon::System(SystemCursorIcon::Wait))
-    );
-    app.world_mut().trigger(Activate { entity: button });
-    assert_eq!(app.world().resource::<Activations>().0, [button, button]);
-    WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
-    app.update();
-    assert_eq!(
-        app.world().get::<CursorIcon>(window),
-        Some(&CursorIcon::System(SystemCursorIcon::Pointer))
-    );
-    for key in [KeyCode::Enter, KeyCode::Space] {
-        press_key(&mut app, window, key);
-    }
-    click(&mut app);
-    assert_eq!(app.world().resource::<Activations>().0, vec![button; 5]);
 }

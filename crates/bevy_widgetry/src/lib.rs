@@ -47,9 +47,9 @@ pub mod button {
     pub use bevy_widgetry_button::{
         ButtonError, ButtonFailure, LinkButtonError, LinkButtonFailure, LinkUrlRejection,
         WidgetryButton, WidgetryButtonColorOverrides, WidgetryButtonHeadless,
-        WidgetryButtonLoadingChanged, WidgetryButtonPlugin, WidgetryButtonProps,
-        WidgetryButtonStateColorOverrides, WidgetryLinkButton, WidgetryLinkButtonColorOverrides,
-        WidgetryLinkButtonProps,
+        WidgetryButtonLoading, WidgetryButtonLoadingChanged, WidgetryButtonPlugin,
+        WidgetryButtonProps, WidgetryButtonStateColorOverrides, WidgetryLinkButton,
+        WidgetryLinkButtonColorOverrides, WidgetryLinkButtonProps,
     };
 }
 

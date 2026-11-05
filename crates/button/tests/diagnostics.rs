@@ -3,7 +3,8 @@
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry_button::{
-    ButtonError, ButtonFailure, WidgetryButton, WidgetryButtonColorOverrides, WidgetryButtonPlugin,
+    ButtonError, ButtonFailure, WidgetryButton, WidgetryButtonColorOverrides,
+    WidgetryButtonLoading, WidgetryButtonPlugin,
 };
 use bevy_widgetry_core::{color::WidgetryStyleOwner, diagnostics::CoreError};
 use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
@@ -30,7 +31,7 @@ fn invalid_targets_and_managed_color_owners_are_distinct_domain_failures() {
     let logs = LogCapture::default();
     logs.run(|| {
         for target in [wrong, stale] {
-            let failure: ButtonFailure = WidgetryButton::set_loading_in_world(app.world_mut(), target, true).unwrap_err();
+            let failure: ButtonFailure = WidgetryButtonLoading::set_in_world(app.world_mut(), target, true).unwrap_err();
             assert!(matches!(failure.kind(), ButtonError::InvalidTarget { root } if *root == target));
             assert_eq!(logs.diagnostic_records(failure.origin().id(), DiagnosticPhase::Source).len(), 1);
         }
@@ -74,7 +75,7 @@ fn actual_loading_and_color_commands_reach_the_host_with_the_source_identity() {
     app.set_error_handler(ErrorCapture::handler());
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
-    WidgetryButton::set_loading(&mut app.world_mut().commands(), stale, true);
+    WidgetryButtonLoading::set(&mut app.world_mut().commands(), stale, true);
     WidgetryButtonColorOverrides::clear(&mut app.world_mut().commands(), stale);
     assert!(logs.records().is_empty());
     logs.run(|| errors.run(|| app.world_mut().flush()));
@@ -178,7 +179,7 @@ fn normal_loading_disabled_and_same_value_color_requests_are_silent() {
     logs.run(|| {
         app.world_mut().entity_mut(root).insert(InteractionDisabled);
         for loading in [false, true, true, false, false] {
-            WidgetryButton::set_loading_in_world(app.world_mut(), root, loading).unwrap();
+            WidgetryButtonLoading::set_in_world(app.world_mut(), root, loading).unwrap();
             assert!(app.world().get::<InteractionDisabled>(root).is_some());
         }
         assert!(!WidgetryButtonColorOverrides::clear_in_world(app.world_mut(), root).unwrap());
