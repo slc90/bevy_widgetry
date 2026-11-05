@@ -7,8 +7,8 @@ use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::picking::events::{Pointer, PointerScroll};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
-use bevy::ui_widgets::Button;
 use bevy::window::PrimaryWindow;
+use bevy_widgetry_button::WidgetryButtonHeadless;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_list_view::{WidgetryListView, WidgetryListViewItem, WidgetryListViewState};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
@@ -162,7 +162,7 @@ fn assert_style_owners(app: &mut App, view: Entity) {
 fn expander(world: &World, row: Entity) -> Entity {
     let mut stack = vec![row];
     while let Some(entity) = stack.pop() {
-        if world.get::<Button>(entity).is_some() {
+        if world.get::<WidgetryButtonHeadless>(entity).is_some() {
             return entity;
         }
         if let Some(children) = world.get::<Children>(entity) {
@@ -548,7 +548,7 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
         app.update();
         for button in app
             .world_mut()
-            .query_filtered::<Entity, With<Button>>()
+            .query_filtered::<Entity, With<WidgetryButtonHeadless>>()
             .iter(app.world())
         {
             let colors = mode.colors();
@@ -895,7 +895,7 @@ fn disabled_preserves_external_pressed_and_blocks_wheel_until_reenabled() {
         .content_size = Vec2::new(400.0, 416.0);
     let first = row(&mut app, 0);
     let button = expander(app.world(), first);
-    press(&mut app, button);
+    app.world_mut().entity_mut(button).insert(Pressed);
     assert!(app.world().get::<Pressed>(button).is_some());
     app.world_mut().entity_mut(view).insert(InteractionDisabled);
     app.world_mut().flush();

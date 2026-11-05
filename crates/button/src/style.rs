@@ -12,7 +12,6 @@ use bevy::{
         schedule::IntoScheduleConfigs,
         system::{Query, Res},
     },
-    input_focus::tab_navigation::TabIndex,
     picking::hover::Hovered,
     prelude::DetectChangesMut,
     prelude::{Scene, SceneComponent},
@@ -185,7 +184,6 @@ impl WidgetryButton {
     fn scene(props: WidgetryButtonProps) -> impl Scene {
         use crate::loading::{ButtonContent, Spinner, SpinnerArc, SpinnerTrack};
         use bevy::prelude::*;
-        use bevy::ui_widgets::Button;
         let WidgetryButtonProps {
             colors,
             content,
@@ -193,11 +191,8 @@ impl WidgetryButton {
         } = props;
         bsn! {
             template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
-            Button
+            @crate::WidgetryButtonHeadless
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            bevy_widgetry_core::pointer::WidgetryPointerPressed
-            Hovered(false)
-            TabIndex(-1)
             Node {
                 min_height: px(32),
                 padding: UiRect::axes(px(12), px(6)),
@@ -237,6 +232,7 @@ impl Plugin for WidgetryButtonPlugin {
             app.add_plugins(WidgetryThemePlugin);
         }
         app.add_observer(refresh_button_theme);
+        crate::headless::install(app);
         crate::link::install(app);
         crate::loading::install(app);
         app.add_systems(

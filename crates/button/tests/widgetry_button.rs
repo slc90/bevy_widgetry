@@ -7,7 +7,7 @@ use bevy::{
     picking::hover::Hovered,
     prelude::*,
     ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed},
-    ui_widgets::{Activate, Button, ButtonPlugin},
+    ui_widgets::{Activate, ButtonPlugin},
 };
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
@@ -579,7 +579,7 @@ fn scene_provides_default_shell() {
         .id();
     let root = app.world().entity(entity);
     assert!(root.contains::<WidgetryButton>());
-    assert!(root.contains::<Button>());
+    assert!(root.contains::<bevy_widgetry_button::WidgetryButtonHeadless>());
     assert!(!root.get::<Hovered>().unwrap().0);
     assert_eq!(root.get::<TabIndex>().unwrap().0, -1);
     assert_eq!(

@@ -1,3 +1,4 @@
+use crate::WidgetryButtonHeadless;
 use crate::{
     ButtonError, ButtonFailure, WidgetryButton,
     error::{core, failure},
@@ -6,7 +7,6 @@ use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy::ui_widgets::Button;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_cursor::internal::LoadingCursor;
@@ -56,8 +56,8 @@ fn parts(world: &World, entity: Entity) -> Result<Parts, ButtonFailure> {
     if world.get::<WidgetryButton>(entity).is_none() {
         return Err(invalid_target(entity));
     }
-    if world.get::<Button>(entity).is_none() {
-        return Err(missing(entity, "Button"));
+    if world.get::<WidgetryButtonHeadless>(entity).is_none() {
+        return Err(missing(entity, "WidgetryButtonHeadless"));
     }
     if world.get::<LoadingState>(entity).is_none() {
         return Err(missing(entity, "LoadingState"));
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn missing_loading_parts_are_classified_before_state_or_notifications_change() {
         for missing in [
-            "Button",
+            "WidgetryButtonHeadless",
             "LoadingState",
             "content",
             "spinner",
@@ -296,8 +296,10 @@ mod tests {
                 .id();
             let parts = parts(app.world(), root).unwrap();
             match missing {
-                "Button" => {
-                    app.world_mut().entity_mut(root).remove::<Button>();
+                "WidgetryButtonHeadless" => {
+                    app.world_mut()
+                        .entity_mut(root)
+                        .remove::<WidgetryButtonHeadless>();
                 }
                 "LoadingState" => {
                     app.world_mut().entity_mut(root).remove::<LoadingState>();

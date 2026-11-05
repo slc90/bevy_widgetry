@@ -4,8 +4,8 @@
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, UiSystems};
-use bevy::ui_widgets::Button;
 use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon};
+use bevy_widgetry_button::WidgetryButtonHeadless;
 use bevy_widgetry_theme::WidgetryThemeMode;
 
 use bevy_widgetry_core::WidgetryAppExt;
@@ -75,7 +75,7 @@ fn assert_expander_ready(world: &World, view: Entity, expected_background: Color
     let mut stack = vec![view];
     let mut buttons = 0;
     while let Some(entity) = stack.pop() {
-        if world.get::<Button>(entity).is_some()
+        if world.get::<WidgetryButtonHeadless>(entity).is_some()
             && world.get::<InheritedVisibility>(entity).unwrap().get()
         {
             buttons += 1;
@@ -101,7 +101,13 @@ fn assert_expander_ready(world: &World, view: Entity, expected_background: Color
                     .get(&image_node.image)
                     .unwrap()
                     .size(),
-                UVec2::splat(12)
+                (Vec2::splat(12.0)
+                    / world
+                        .get::<ComputedNode>(image)
+                        .unwrap()
+                        .inverse_scale_factor())
+                .ceil()
+                .as_uvec2()
             );
             assert!(world.get::<ComputedNode>(image).unwrap().size().x > 0.0);
         }

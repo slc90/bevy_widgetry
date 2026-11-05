@@ -8,7 +8,7 @@ use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::text::TextLayoutInfo;
 use bevy::ui::InteractionDisabled;
-use bevy::ui_widgets::{Activate, Button, ValueChange};
+use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxContent};
 use bevy_widgetry_core::WidgetryAppExt;
@@ -599,7 +599,11 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     assert!(app.world().get_entity(old_wrapper).is_err());
     assert!(app.world().get_entity(old_text).is_err());
     assert_eq!(content(app.world(), root), container);
-    assert!(app.world().get::<Button>(field).is_some());
+    assert!(
+        app.world()
+            .get::<bevy_widgetry_button::WidgetryButtonHeadless>(field)
+            .is_some()
+    );
     assert!(app.world().get::<WidgetryIcon>(icon).is_some());
     assert_eq!(*app.world().get::<Node>(field).unwrap(), node);
     assert_eq!(

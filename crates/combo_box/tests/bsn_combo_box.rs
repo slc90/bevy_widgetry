@@ -9,8 +9,9 @@ use bevy::picking::{
 };
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
-use bevy::ui_widgets::{Activate, Button};
+use bevy::ui_widgets::Activate;
 use bevy_widgetry_asset::BuiltinIcon;
+use bevy_widgetry_button::WidgetryButtonHeadless;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
@@ -30,7 +31,7 @@ fn app_with_combo() -> (App, Entity, Entity, Entity) {
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(combo(source)).unwrap().id();
     app.update();
-    let field = child::<Button>(app.world(), root);
+    let field = child::<WidgetryButtonHeadless>(app.world(), root);
     let popup = app.world().get::<Children>(root).unwrap()[1];
     (app, root, field, popup)
 }
@@ -137,7 +138,7 @@ fn clicking_another_combo_closes_previous_popup() {
     let source = app.world_mut().spawn(model).id();
     let other = app.world_mut().spawn_scene(combo(source)).unwrap().id();
     app.update();
-    let other_field = child::<Button>(app.world(), other);
+    let other_field = child::<WidgetryButtonHeadless>(app.world(), other);
     let other_popup = app.world().get::<Children>(other).unwrap()[1];
     app.world_mut().trigger(Activate { entity: field });
     app.world_mut().trigger(primary_press(other_field));
@@ -286,7 +287,7 @@ fn internal_color_ownership_is_present_before_the_first_pass() {
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(combo(source)).unwrap().id();
     app.world_mut().flush();
-    let field = child::<Button>(app.world(), root);
+    let field = child::<WidgetryButtonHeadless>(app.world(), root);
     assert!(
         bevy_widgetry_button::WidgetryButtonColorOverrides::clear_in_world(app.world_mut(), field)
             .is_err()

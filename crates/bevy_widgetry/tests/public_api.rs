@@ -771,7 +771,7 @@ fn button_scene_api_is_usable() {
     assert!(app.world().get::<WidgetryButton>(entity).is_some());
     assert!(
         app.world()
-            .get::<bevy::ui_widgets::Button>(entity)
+            .get::<bevy_widgetry::button::WidgetryButtonHeadless>(entity)
             .is_some()
     );
     assert_eq!(

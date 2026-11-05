@@ -14,7 +14,7 @@ use bevy::picking::pointer::PointerButton;
 use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverSide};
-use bevy::ui_widgets::{Activate, Button, ScrollArea, ValueChange};
+use bevy::ui_widgets::{Activate, ScrollArea, ValueChange};
 use bevy::window::PrimaryWindow;
 use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon};
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
@@ -346,7 +346,11 @@ fn popup_and_field_keep_geometry_and_current_theme() {
         ..
     } = fixture(2);
     assert!(app.world().get::<WidgetryComboBox<String>>(root).is_some());
-    assert!(app.world().get::<Button>(field).is_some());
+    assert!(
+        app.world()
+            .get::<bevy_widgetry_button::WidgetryButtonHeadless>(field)
+            .is_some()
+    );
     assert!(app.world().get::<WidgetryListView<String>>(list).is_some());
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),

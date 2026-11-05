@@ -129,3 +129,5 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 - `edit_diagnostics.rs` 保护非法取消的 View / 阶段和单次受管源头；业务解析拒绝、合法取消及无会话提交保持静默，旧回执携带具体请求与 Pending 身份且不提交状态。
 - 同帧多个 View 的读取失败全部抵达真实宿主 Handler，保留外部具体 cause、Severity::Error 和单次源头，不创建 Pending / 伪验证反馈；`editing.rs` 的真实 TextField 组合保护下层诊断和读取阶段上下文。
 - Editor Scene 失败保留普通 / Panic Severity 与 payload、原生具体 cause 和独立 ID；失败重试只清理本次构造，已有业务实体与已提交的状态保留。
+
+- 内嵌业务 Button 的拖动隔离同时覆盖原生 Button 与公开 WidgetryButtonHeadless，避免表格矩形选择抢占子控件输入。

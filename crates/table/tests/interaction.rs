@@ -3289,50 +3289,55 @@ fn drag_capture_cleans_up_on_disabled_deleted_anchor_cancel_and_view_destruction
 #[test]
 fn nested_business_button_keeps_its_drag_input_and_does_not_start_a_table_rectangle() {
     use bevy::picking::hover::PointerCaptureMap;
-    let (mut app, _, root, _) = interaction_fixture();
-    app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list! { bevy::ui_widgets::Button Node { width: percent(100), height: percent(100) } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText] }
+    #[derive(Component)]
+    struct BusinessButton;
+    for headless in [false, true] {
+        let (mut app, _, root, _) = interaction_fixture();
+        app.add_plugins(bevy_widgetry_button::WidgetryButtonPlugin);
+        app.register_table_cell_renderer(WidgetryTableCellRenderer::new(move |value: &String| {
+        bsn_list! { @{headless.then_some(bsn! { @bevy_widgetry_button::WidgetryButtonHeadless })} @{(!headless).then_some(bsn! { bevy::ui_widgets::Button })} template(|_| Ok(BusinessButton)) Node { width: percent(100), height: percent(100) } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText] }
     })).unwrap();
-    app.update();
-    let target = app
-        .world_mut()
-        .query_filtered::<Entity, With<bevy::ui_widgets::Button>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
-    let camera = app
-        .world_mut()
-        .query_filtered::<Entity, With<Camera>>()
-        .single(app.world())
-        .unwrap();
-    app.world_mut()
-        .trigger(pointer(target, |entity, pointer| PointerDragStart {
-            entity,
-            pointer,
-            button: PointerButton::Primary,
-            hit: HitData::new(camera, 0.0, None, None),
-        }));
-    app.world_mut().flush();
-    app.world_mut()
-        .trigger(pointer(target, |entity, pointer| PointerDrag {
-            entity,
-            pointer,
-            button: PointerButton::Primary,
-            distance: Vec2::splat(100.0),
-            delta: Vec2::splat(100.0),
-        }));
-    app.world_mut().flush();
-    assert_eq!(
-        app.world()
-            .get::<WidgetryTableState>(root)
-            .unwrap()
-            .selection(),
-        WidgetryTableSelection::None
-    );
-    assert!(
-        !app.world()
-            .resource::<PointerCaptureMap>()
-            .is_captured(&PointerId::Mouse)
-    );
-    assert!(app.world().resource::<Events>().0.is_empty());
+        app.update();
+        let target = app
+            .world_mut()
+            .query_filtered::<Entity, With<BusinessButton>>()
+            .iter(app.world())
+            .next()
+            .unwrap();
+        let camera = app
+            .world_mut()
+            .query_filtered::<Entity, With<Camera>>()
+            .single(app.world())
+            .unwrap();
+        app.world_mut()
+            .trigger(pointer(target, |entity, pointer| PointerDragStart {
+                entity,
+                pointer,
+                button: PointerButton::Primary,
+                hit: HitData::new(camera, 0.0, None, None),
+            }));
+        app.world_mut().flush();
+        app.world_mut()
+            .trigger(pointer(target, |entity, pointer| PointerDrag {
+                entity,
+                pointer,
+                button: PointerButton::Primary,
+                distance: Vec2::splat(100.0),
+                delta: Vec2::splat(100.0),
+            }));
+        app.world_mut().flush();
+        assert_eq!(
+            app.world()
+                .get::<WidgetryTableState>(root)
+                .unwrap()
+                .selection(),
+            WidgetryTableSelection::None
+        );
+        assert!(
+            !app.world()
+                .resource::<PointerCaptureMap>()
+                .is_captured(&PointerId::Mouse)
+        );
+        assert!(app.world().resource::<Events>().0.is_empty());
+    }
 }

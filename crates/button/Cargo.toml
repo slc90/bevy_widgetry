@@ -9,6 +9,7 @@ bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 bevy_widgetry_theme = { path = "../theme" }
 bevy_widgetry_internal_log = { path = "../internal_log" }
 bevy.workspace = true
+accesskit.workspace = true
 url.workspace = true
 winsafe = { workspace = true, features = ["advapi", "shell"] }
 bevy_widgetry_core = { path = "../core" }

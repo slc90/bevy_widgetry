@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
 use bevy::text::TextLayoutInfo;
 use bevy::ui::{InteractionDisabled, UiSystems};
-use bevy::ui_widgets::Button;
 use bevy::window::RequestRedraw;
+use bevy_widgetry::button::WidgetryButtonHeadless;
 use bevy_widgetry::icon::WidgetryIcon;
 use std::fs;
 use std::path::PathBuf;
@@ -87,7 +87,7 @@ fn capture_when_ready(world: &mut World) -> Result {
             return Ok(());
         }
         if name == "WaveformNav"
-            && (world.get::<Button>(*entity).is_none()
+            && (world.get::<WidgetryButtonHeadless>(*entity).is_none()
                 || world.get::<InteractionDisabled>(*entity).is_some())
         {
             return Err(crate::diagnostics::error(

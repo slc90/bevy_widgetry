@@ -34,6 +34,8 @@
 
 ## Coverage Map
 
+- `headless.rs`：公开 BSN 根无默认视觉与 Loading；真实 Picking 主/副键、Pressed、取消/拖出、Focus、无障碍角色、显式/祖先 Disabled 与恢复，Enter/Space 非重复键盘激活；宿主同时安装原生 ButtonPlugin 时无重复激活；嵌套父级输入隔离涵盖取消后 Click、拖出并移回后的 Click/DragStart。
+
 - `widgetry_button.rs`：基础状态、样式转换、Override、Theme、Scene Patch、内容传播与 Pointer Activation。
 - `diagnostics.rs`：无效目标与托管 Owner 的领域分类，Core 颜色真实 source/origin 及 root/state/field，真实 Command 的共享源头与 Error Severity；托管输出缺失保留 Query source 和已有输出，非法初始颜色经 Scene 保留身份并清理根，正常 loading/disabled/同值颜色请求静默。Loading Unit Test 覆盖内部 Button/state/content/spinner/必需组件损坏的原子拒绝，以及 Core disabled 运行资源不可用时保留表现。
 - `link_diagnostics.rs`：URL 拒绝分类、原始 parser source 与输入原文，失败后 URL/文字不变；Core 颜色 source/origin/字段及转换保真；真实 URL/颜色 Command 的 Error Severity、源头 ID 和纯传播无 handled；初始 URL/颜色失败的 Scene 同源身份与根清理。

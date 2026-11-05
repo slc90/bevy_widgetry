@@ -85,8 +85,8 @@ fn button_press_focuses_button_even_when_propagation_stops() {
             Some(input_entity(app.world(), text))
         );
         press(&mut app, button);
-        app.update();
         assert!(app.world().get::<Pressed>(button).is_some());
+        app.update();
         assert_eq!(app.world().get::<TabIndex>(button), Some(&TabIndex(-1)));
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
         assert_eq!(
