@@ -37,6 +37,7 @@ default = [
   "file_dialog",
 ]
 canvas = ["dep:bevy_widgetry_canvas"]
+canvas_png_export = ["canvas", "bevy_widgetry_canvas/png_export"]
 button = ["dep:bevy_widgetry_button"]
 hold_button = ["dep:bevy_widgetry_hold_button"]
 toggle_button = ["dep:bevy_widgetry_toggle_button"]

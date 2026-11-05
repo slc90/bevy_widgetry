@@ -21,9 +21,10 @@ mod scale;
 mod selection;
 mod view;
 
+pub use export::CanvasExportError;
+#[cfg(feature = "png_export")]
 pub use export::{
-    CanvasExportError, CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop,
-    CanvasRenderIssue,
+    CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop, CanvasRenderIssue,
 };
 pub use model::{
     CanvasDocument, CanvasEllipse, CanvasFillRule, CanvasGeometry, CanvasLineCap, CanvasLineJoin,

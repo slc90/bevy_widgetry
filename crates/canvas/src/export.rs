@@ -3,12 +3,16 @@ use bevy::prelude::*;
 use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
 use bevy_widgetry_job::JobFailure;
 use std::{fmt, path::Path};
+#[cfg(feature = "png_export")]
 mod png;
+#[cfg(feature = "png_export")]
 pub use png::{CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop};
+#[cfg(feature = "png_export")]
 pub(crate) fn install(app: &mut App) {
     png::install(app);
 }
 
+#[cfg(feature = "png_export")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CanvasRenderIssue {
     MissingTileResources,
@@ -37,19 +41,29 @@ pub enum CanvasExportError {
         shape: Entity,
         color: Color,
     },
+    #[cfg(feature = "png_export")]
     InvalidScale,
+    #[cfg(feature = "png_export")]
     InvalidResolution,
+    #[cfg(feature = "png_export")]
     RendererUnavailable,
+    #[cfg(feature = "png_export")]
     Render(CanvasRenderIssue),
+    #[cfg(feature = "png_export")]
     Offscreen(bevy_widgetry_core::offscreen::OffscreenFailures),
+    #[cfg(feature = "png_export")]
     Cleanup {
         primary: Box<CanvasExportError>,
         cleanup: bevy_widgetry_core::offscreen::OffscreenFailures,
     },
+    #[cfg(feature = "png_export")]
     Scene(bevy_widgetry_core::scene::SceneFailure),
+    #[cfg(feature = "png_export")]
     Encoding(image::ImageError),
     Io(std::io::Error),
+    #[cfg(feature = "png_export")]
     Job(bevy_widgetry_job::SubmitFailure),
+    #[cfg(feature = "png_export")]
     Background(bevy_widgetry_job::JobFailure),
 }
 
@@ -65,17 +79,28 @@ impl fmt::Display for CanvasExportError {
                 )
             }
             Self::Io(error) => write!(f, "Canvas export I/O failed: {error}"),
+            #[cfg(feature = "png_export")]
             Self::Job(error) => write!(f, "Canvas PNG Job submission failed: {error}"),
-            Self::Background(error) | Self::Model(error) => fmt::Display::fmt(error, f),
+            Self::Model(error) => fmt::Display::fmt(error, f),
+            #[cfg(feature = "png_export")]
+            Self::Background(error) => fmt::Display::fmt(error, f),
+            #[cfg(feature = "png_export")]
             Self::InvalidScale => f.write_str("PNG scale must be finite and positive"),
+            #[cfg(feature = "png_export")]
             Self::InvalidResolution => {
                 f.write_str("PNG resolution exceeds texture, buffer or memory limits")
             }
+            #[cfg(feature = "png_export")]
             Self::RendererUnavailable => f.write_str("Canvas PNG renderer unavailable"),
+            #[cfg(feature = "png_export")]
             Self::Offscreen(error) => write!(f, "Canvas PNG offscreen failed: {error}"),
+            #[cfg(feature = "png_export")]
             Self::Cleanup { primary, cleanup } => write!(f, "{primary}; cleanup: {cleanup}"),
+            #[cfg(feature = "png_export")]
             Self::Scene(error) => write!(f, "Canvas PNG scene failed: {error}"),
+            #[cfg(feature = "png_export")]
             Self::Render(error) => write!(f, "Canvas PNG rendering failed: {error:?}"),
+            #[cfg(feature = "png_export")]
             Self::Encoding(error) => write!(f, "Canvas PNG encoding failed: {error}"),
             Self::UnsupportedColor { shape, color } => {
                 write!(
@@ -90,13 +115,20 @@ impl fmt::Display for CanvasExportError {
 impl std::error::Error for CanvasExportError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            #[cfg(feature = "png_export")]
             Self::Offscreen(error) => Some(error),
+            #[cfg(feature = "png_export")]
             Self::Cleanup { primary, .. } => Some(primary.as_ref()),
+            #[cfg(feature = "png_export")]
             Self::Scene(error) => Some(error.diagnostics()),
             Self::Io(error) => Some(error),
+            #[cfg(feature = "png_export")]
             Self::Encoding(error) => Some(error),
+            #[cfg(feature = "png_export")]
             Self::Job(error) => Some(error),
-            Self::Background(error) | Self::Model(error) => Some(error),
+            Self::Model(error) => Some(error),
+            #[cfg(feature = "png_export")]
+            Self::Background(error) => Some(error),
             _ => None,
         }
     }
@@ -361,16 +393,23 @@ impl CanvasExportError {
     #[track_caller]
     fn into_failure(self, frame: ErrorFrame) -> JobFailure {
         match self {
-            Self::Model(error) | Self::Background(error) => error.with_context(frame),
+            Self::Model(error) => error.with_context(frame),
+            #[cfg(feature = "png_export")]
+            Self::Background(error) => error.with_context(frame),
+            #[cfg(feature = "png_export")]
             Self::Job(error) => JobFailure::from(error).with_context(frame),
+            #[cfg(feature = "png_export")]
             Self::Offscreen(error) => JobFailure::from(error.into_bevy_error()).with_context(frame),
+            #[cfg(feature = "png_export")]
             Self::Scene(error) => JobFailure::from(error.into_bevy_error()).with_context(frame),
+            #[cfg(feature = "png_export")]
             Self::Cleanup { primary, cleanup } => primary
                 .into_failure(frame.clone())
                 .combine(JobFailure::from(cleanup.into_bevy_error()).with_context(frame)),
             error => WidgetryFailure::new(error, frame).into(),
         }
     }
+    #[cfg(feature = "png_export")]
     fn with_cleanup(
         self,
         result: Result<(), bevy_widgetry_core::offscreen::OffscreenFailures>,

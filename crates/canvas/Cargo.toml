@@ -4,6 +4,10 @@ name = "bevy_widgetry_canvas"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+png_export = ["dep:image", "dep:png", "dep:event-listener"]
+
 [dependencies]
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 lyon.workspace = true
@@ -12,9 +16,9 @@ bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_internal_log = { path = "../internal_log" }
 bevy_widgetry_job.workspace = true
-image.workspace = true
-png.workspace = true
-event-listener.workspace = true
+image = { workspace = true, optional = true }
+png = { workspace = true, optional = true }
+event-listener = { workspace = true, optional = true }
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
@@ -28,6 +32,7 @@ workspace = true
 [[bench]]
 name = "png_export"
 harness = false
+required-features = ["png_export"]
 
 [[bench]]
 name = "document_order"

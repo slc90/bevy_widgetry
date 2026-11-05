@@ -2,6 +2,7 @@
 
 use bevy::prelude::*;
 use bevy_widgetry_canvas::*;
+use bevy_widgetry_job::JobFailure;
 use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
 use std::error::Error;
 
@@ -157,24 +158,18 @@ fn export_model_rejections_preserve_owner_and_emit_only_the_source_error() {
             corner_radius: 0.0,
         }));
     let file = tempfile::NamedTempFile::new().unwrap();
-    for png in [false, true] {
+    let exporters: &[fn(&mut World, Entity, &std::path::Path) -> Result<(), JobFailure>] = &[
+        |world, document, path| CanvasDocument::export_svg(world, document, path, None),
+        #[cfg(feature = "png_export")]
+        |world, document, path| {
+            CanvasDocument::export_png(world, document, path, CanvasPngOptions::default())
+                .map(|_| ())
+        },
+    ];
+    for export in exporters {
         let logs = LogCapture::default();
         let error = logs
-            .run(|| {
-                if png {
-                    CanvasDocument::export_png(
-                        &mut world,
-                        document,
-                        file.path(),
-                        CanvasPngOptions::default(),
-                    )
-                    .map(|_| ())
-                    .map_err(CanvasExportError::Model)
-                } else {
-                    CanvasDocument::export_svg(&mut world, document, file.path(), None)
-                        .map_err(CanvasExportError::Model)
-                }
-            })
+            .run(|| export(&mut world, document, file.path()).map_err(CanvasExportError::Model))
             .unwrap_err();
         assert_eq!(logs.records().len(), 1);
         let domain = cause::<CanvasError>(&error).unwrap();

@@ -653,6 +653,7 @@ fn release_renderer(event: On<Remove<Renderer>>, mut commands: Commands) {
 impl Plugin for CanvasPlugin {
     fn build(&self, app: &mut App) {
         crate::alpha::install(app);
+        #[cfg(feature = "png_export")]
         crate::export::install(app);
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);

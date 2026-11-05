@@ -212,6 +212,7 @@ fn ellipse_bounds_include_rotation_mirroring_stroke_and_small_radii() {
 }
 
 #[test]
+#[cfg(feature = "png_export")]
 fn ellipse_png_without_renderer_fails_before_modifying_the_destination() {
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();

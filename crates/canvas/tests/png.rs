@@ -1,4 +1,5 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+#![cfg(feature = "png_export")]
 use bevy::prelude::*;
 use bevy_widgetry_canvas::*;
 

@@ -1,5 +1,9 @@
 # Canvas Integration Test Coverage
 
+## 编译配置
+
+默认配置覆盖模型、View/Renderer、交互和 SVG（含共享 JobFailure 诊断）。`png_export` 开启后增加 `png.rs`、`png_gpu.rs`、椭圆/Path 的 PNG 拒绝检查及诊断测试中的 PNG 路径；真实 DX12 测试仍需显式 `--ignored`。PNG 关闭时不编译专用 API、错误变体或导出系统，PNG Benchmark 也仅在功能开启时构建。
+
 ## Model
 
 `model.rs` 覆盖没有 UI/渲染插件的纯 World 模型：多个矩形共享 Document、负坐标、原生 Transform 更新、无填充与透明填充语义、更新与移除、Document 的 ChildOf 级联清理。

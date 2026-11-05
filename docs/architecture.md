@@ -91,6 +91,8 @@ Gallery 显式启用 `power_inhibit` Feature 并安装对应 Plugin；独立页�
 
 ## Workspace Roles
 
+Canvas 默认保留 Document、View/Renderer 与 SVG；默认关闭的 `png_export` 控制异步 PNG API、导出系统及直接的 `image`、`png`、`event-listener` 依赖。Facade 的 `canvas_png_export` 同时启用 Canvas 并转发该开关，Gallery 显式选择。共享 JobFailure/SVG 仍依赖 Job，正常绘制仍安装 StraightAlpha Shader。Bevy 等依赖可能继续使用图像库，关闭 Canvas PNG 不保证整个应用排除这些传递依赖。
+
 Theme 默认仅包含 Dark 配色，Facade 的 `light`、`pink_dream`、`kamuri_violet` 独立转发到 Theme 同名 Feature；它们不控制 Cursor。Gallery 显式选择三者。`test_utils` 通过默认关闭的主题转发和 `all_themes` 集合供各 crate 的测试依赖选择，不向库的生产依赖路径启用额外主题。
 
 Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活，并传递到 Asset 的同名嵌入资源 Feature。Facade 提供同名入口，Gallery 显式启用；Core 使用 Cursor 不会自动启用 Kamuri。System-only Cursor 不安装图集支持，Core 原有的字体、图标等 Asset 依赖保留。

@@ -1,5 +1,7 @@
 # Canvas
 
+默认提供 Document、View/Renderer、交互与同步 SVG 导出。异步 PNG 导出通过默认关闭的 `png_export` 开启，Facade 对应入口为 `canvas_png_export`（同时启用 Canvas），Gallery 显式选择该功能。关闭时 `export_png`、`CanvasPngOptions`、`CanvasPngExport`、`CanvasPngExportFinished`、`CanvasPngStop`、`CanvasRenderIssue` 和 PNG 专用错误变体不存在，也不安装 PNG 导出系统。共享 `CanvasExportError`、SVG 的 `JobFailure`、正常绘制使用的 StraightAlpha Shader 保留。
+
 Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模型和普通 Bevy UI CanvasView。当前提供矩形、椭圆与多子路径显示、View 平移/缩放与三类图形的真实几何选择集合，支持三类已选图形整体移动和一次性矩形/椭圆绘制，支持八向整体缩放与旋转，支持独立SVG矢量导出和异步透明PNG导出。
 
 ## Document 与矩形
@@ -134,7 +136,9 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 
 SVG以rect（含rx/ry）、ellipse及原始path命令M/L/Q/C/A/Z保留参数几何、开放/闭合多子路径和弧标志，弧轴旋转由弧度转换为角度；二维matrix保留平移、旋转、镜像与非均匀Scale，保留无填充、填充/描边Alpha、NonZero/EvenOdd、Butt/Round/Square、Miter/Round/Bevel及miterlimit=4；图形按Document顺序输出，每个图形的填充及描边连续，与View相同；SVG根显式声明color-interpolation="linearRGB"，按Canvas的线性Alpha合成语义输出。部分SVG消费者（包括当前resvg）忽略该属性，其重叠半透明颜色可能不同；导出保留标准声明，不将这类渲染器结果当作Canvas颜色真值。输出不依赖任何View，不包含背景、选择控制点或未提交预览。`CanvasExportError` 区分EmptyDocument、InvalidDocument、InvalidGeometry、Model、InvalidRegion、UnsupportedColor和Io，Model 保留原始模型诊断；SVG仅接受转换后sRGB及Alpha通道均在[0,1]的颜色，模型允许但SVG无法等价表达的HDR/负通道/越界Alpha在写文件前拒绝，不预先钳制源色。Document为空时即使指定区域仍报EmptyDocument。快照严格检查Document顺序内各成员的身份、所属与必需组件，不自动修复或静默跳过非法成员。完整几何/区域校验先于打开目标文件，因此校验失败不创建或截断文件；I/O失败返回错误。宿主将该类型错误交给Bevy时应显式使用`BevyError::error`。
 
-## PNG 离屏导出
+## PNG 离屏导出（png_export）
+
+直接使用 Canvas crate 时显式开启 `png_export`。PNG Benchmark 命令：`cargo bench -p bevy_widgetry_canvas --features png_export --bench png_export --locked`。默认配置不构建此 Benchmark，其余 Benchmark 继续可用。
 
 `CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正。输出按最终像素坐标逐块渲染，内部块默认不超过2048×512像素，两侧最多扩展2像素并在读回后裁去，保留跨块描边、曲线及透明叠加。各块按实际RenderDevice纹理和Buffer上限缩小，并通过包含4×MSAA、线性浮点中间目标和读回副本的512 MiB工作集估算（块像素数×80加对齐读回及32 MiB行带预算）。整幅输出不再受单张GPU纹理或整幅工作集限制，支持1920×1080区域的1×/2×/4×导出；单行RGBA不超过32 MiB，最终像素数不超过u32::MAX，两轴不超过2^24以保留整数像素坐标。逐块检查相机中心和尺寸相对理想像素映射的最坏边界误差，超过1/256像素或无法表示的投影明确失败，不缩小输出；首块在请求校验时检查，后续块在分配读回前检查。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回原因链保留 EmptyDocument 的 JobFailure。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回原因链保留 RendererUnavailable 的 JobFailure。CanvasPlugin自动复用或安装App共享的JobManagerPlugin；Manager停止接纳后返回保留 SubmitError::ShuttingDown 的 JobFailure，不分配导出渲染资源。
 

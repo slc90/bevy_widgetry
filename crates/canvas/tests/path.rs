@@ -239,18 +239,21 @@ fn path_export_rejection_and_kind_guards_preserve_existing_data() {
         ))
         .is_err()
     );
-    let file = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(file.path(), b"preserve").unwrap();
-    assert!(matches!(
-        logs.run(|| CanvasDocument::export_png(
-            &mut world,
-            document,
-            file.path(),
-            CanvasPngOptions::default()
-        )),
-        Err(ref error) if error.to_string().contains("Canvas PNG renderer unavailable")
-    ));
-    assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
+    #[cfg(feature = "png_export")]
+    {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), b"preserve").unwrap();
+        assert!(matches!(
+            logs.run(|| CanvasDocument::export_png(
+                &mut world,
+                document,
+                file.path(),
+                CanvasPngOptions::default()
+            )),
+            Err(ref error) if error.to_string().contains("Canvas PNG renderer unavailable")
+        ));
+        assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
+    }
     let p = CanvasPath {
         commands: vec![
             CanvasPathCommand::MoveTo(Vec2::splat(-1e38)),
