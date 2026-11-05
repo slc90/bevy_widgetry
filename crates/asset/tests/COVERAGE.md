@@ -27,6 +27,7 @@
 - 45种Cursor素材与语义对应，均为80px RGBA，边界透明，完全透明像素无残余RGB。
 - 45种Atlas与RGBA数据合法，各自动画非静态，首帧身份独立；3×3热点区域全帧固定，独立时序在帧边界和Duration::MAX下循环有效。
 - 内建 Font / Icon / Cursor 路径确实指向可读取资源。
+- FileDialog 的四个导航图标与搜索图标各自通过语义标识读取唯一的 Embedded SVG。
 - DatePicker Today SVG 通过专用 Icon 语义标识读取真实 Embedded 字节。
 
 ## Couplings

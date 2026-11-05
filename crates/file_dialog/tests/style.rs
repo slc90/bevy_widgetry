@@ -105,6 +105,248 @@ fn fixture() -> App {
 }
 
 #[test]
+fn compact_shell_preserves_background_preferences_and_plain_headers() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialog Node {width:px(900),height:px(650)}
+        })
+        .unwrap()
+        .id();
+    for action in [
+        WidgetryFileDialogAction::Sort(WidgetryFileDialogSort::ModifiedDescending),
+        WidgetryFileDialogAction::ShowHidden(true),
+        WidgetryFileDialogAction::ShowSystem(true),
+        WidgetryFileDialogAction::Pin(PathBuf::from("C:/pinned")),
+    ] {
+        WidgetryFileDialog::apply(app.world_mut(), root, action).unwrap();
+    }
+    for _ in 0..4 {
+        app.update();
+    }
+    let absent = [
+        "FileDialogToolbar",
+        "FileDialogPin",
+        "FileDialogNewFolder",
+        "FileDialogSort",
+        "FileDialogHidden",
+        "FileDialogSystem",
+    ];
+    assert!(
+        !app.world_mut()
+            .query::<(Entity, &Name)>()
+            .iter(app.world())
+            .any(|(entity, name)| belongs(app.world(), entity, root)
+                && absent.contains(&name.as_str()))
+    );
+    for sort in [
+        WidgetryFileDialogSort::NameAscending,
+        WidgetryFileDialogSort::NameDescending,
+        WidgetryFileDialogSort::SizeAscending,
+        WidgetryFileDialogSort::ModifiedDescending,
+    ] {
+        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Sort(sort))
+            .unwrap();
+        app.update();
+        for (name, label) in [
+            ("FileDialogNameColumn", "Name"),
+            ("FileDialogModifiedColumn", "Modified"),
+            ("FileDialogSizeColumn", "Size"),
+        ] {
+            let entity = named(&mut app, root, name);
+            assert_eq!(app.world().get::<Text>(entity).unwrap().0, label);
+        }
+    }
+    app.world_mut()
+        .entity_mut(root)
+        .insert(WidgetryFileDialogStyle {
+            sidebar_width: 180.0,
+            ..default()
+        });
+    app.update();
+    let prefs = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .preferences();
+    assert!(prefs.show_hidden && prefs.show_system);
+    assert_eq!(prefs.sort, WidgetryFileDialogSort::ModifiedDescending);
+    assert_eq!(prefs.pinned, vec![PathBuf::from("C:/pinned")]);
+    let divider = named(&mut app, root, "FileDialogSidebarDivider");
+    assert_eq!(app.world().get::<Node>(divider).unwrap().width, px(1));
+    assert_eq!(
+        app.world().get::<Pickable>(divider),
+        Some(&Pickable::IGNORE)
+    );
+    assert!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(divider)
+            .is_none()
+    );
+}
+
+#[test]
+fn sidebar_projects_only_available_backend_places_in_fixed_order() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialog Node {width:px(900),height:px(650)}
+        })
+        .unwrap()
+        .id();
+    let token = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    let locations = [
+        ("Downloads", "Z:/custom-downloads"),
+        ("Disk", "C:/"),
+        ("Desktop", "Z:/custom-desktop"),
+        ("Home", "Z:/custom-home"),
+    ]
+    .map(|(name, path)| WidgetryFileDialogLocation {
+        name: name.into(),
+        path: path.into(),
+    })
+    .to_vec();
+    WidgetryFileDialog::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::Locations {
+            token,
+            outcome: Ok(locations.clone()),
+        },
+    )
+    .unwrap();
+    WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Pin("Z:/pinned".into()),
+    )
+    .unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let sidebar = named(&mut app, root, "FileDialogSidebar");
+    let mut rows = app
+        .world_mut()
+        .query::<(Entity, &Name, &UiGlobalTransform)>()
+        .iter(app.world())
+        .filter(|(entity, name, _)| {
+            name.as_str() == "FileDialogLocation" && belongs(app.world(), *entity, sidebar)
+        })
+        .map(|(entity, _, transform)| (entity, transform.translation.y))
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| left.1.total_cmp(&right.1));
+    assert_eq!(rows.len(), 3);
+    for ((entity, _), (label, path)) in rows.into_iter().zip([
+        ("Home", "Z:/custom-home"),
+        ("Desktop", "Z:/custom-desktop"),
+        ("Downloads", "Z:/custom-downloads"),
+    ]) {
+        assert_eq!(
+            app.world()
+                .get::<bevy::a11y::AccessibilityNode>(entity)
+                .unwrap()
+                .0
+                .label(),
+            Some(label)
+        );
+        app.world_mut()
+            .trigger(bevy::ui_widgets::Activate { entity });
+        app.world_mut().flush();
+        assert_eq!(
+            app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .requested_path(),
+            Some(PathBuf::from(path).as_path())
+        );
+    }
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .locations(),
+        locations
+    );
+}
+
+#[test]
+fn search_suffix_stays_inside_frame_without_taking_input_or_tab_focus() {
+    use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldSuffix};
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialog Node {width:px(900),height:px(650)}
+        })
+        .unwrap()
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    let search = named(&mut app, root, "FileDialogSearch");
+    let suffixes = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryTextFieldSuffix>>()
+        .iter(app.world())
+        .filter(|entity| belongs(app.world(), *entity, root))
+        .collect::<Vec<_>>();
+    assert_eq!(suffixes.len(), 1);
+    let suffix = suffixes[0];
+    assert!(belongs(app.world(), suffix, search));
+    assert_eq!(app.world().get::<Pickable>(suffix), Some(&Pickable::IGNORE));
+    assert!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(suffix)
+            .is_none()
+    );
+    WidgetryTextField::set_text_in_world(
+        app.world_mut(),
+        search,
+        "a very long search query that exceeds the available width",
+    )
+    .unwrap();
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(search, FocusCause::Navigated);
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .search(),
+        "a very long search query that exceeds the available width"
+    );
+    let frame = frame_entity(app.world(), search);
+    let suffix_right = app
+        .world()
+        .get::<UiGlobalTransform>(suffix)
+        .unwrap()
+        .translation
+        .x
+        + app.world().get::<ComputedNode>(suffix).unwrap().size().x / 2.0;
+    let frame_right = app
+        .world()
+        .get::<UiGlobalTransform>(frame)
+        .unwrap()
+        .translation
+        .x
+        + app.world().get::<ComputedNode>(frame).unwrap().size().x / 2.0;
+    assert!(suffix_right <= frame_right + 0.5);
+    assert_eq!(
+        app.world().resource::<InputFocus>().get(),
+        Some(input_entity(app.world(), search))
+    );
+}
+
+#[test]
 fn address_display_hides_filesystem_prefix_without_changing_enter_identity() {
     use std::os::windows::ffi::OsStringExt;
     let mut units = r"\\?\C:\fixture\".encode_utf16().collect::<Vec<_>>();
@@ -530,51 +772,50 @@ fn filename_confirmation_revalidates_a_file_removed_after_snapshot() {
 
 #[test]
 fn combo_escape_closes_popup_before_cancelling_dialog_from_the_closed_field() {
-    for name in ["FileDialogFilter", "FileDialogSort"] {
-        let mut app = fixture();
-        let root = app
-            .world_mut()
-            .spawn_scene(bsn! {@WidgetryFileDialog Node {width:px(800),height:px(600)}})
-            .unwrap()
-            .id();
-        for _ in 0..3 {
-            app.update();
-        }
-        let combo = named(&mut app, root, name);
-        let field = app
-            .world()
-            .get::<Children>(combo)
-            .unwrap()
-            .iter()
-            .find(|entity| {
-                app.world()
-                    .get::<bevy_widgetry_button::WidgetryButton>(*entity)
-                    .is_some()
-            })
-            .unwrap();
-        app.world_mut()
-            .resource_mut::<InputFocus>()
-            .set(field, FocusCause::Navigated);
-        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
-        assert_ne!(app.world().resource::<InputFocus>().get(), Some(field));
-        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Escape);
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(field));
-        assert!(
-            app.world()
-                .get::<WidgetryFileDialogState>(root)
-                .unwrap()
-                .result()
-                .is_none()
-        );
-        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Escape);
-        assert_eq!(
-            app.world()
-                .get::<WidgetryFileDialogState>(root)
-                .unwrap()
-                .result(),
-            Some(&WidgetryFileDialogResult::Cancelled)
-        );
+    let name = "FileDialogFilter";
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {@WidgetryFileDialog Node {width:px(800),height:px(600)}})
+        .unwrap()
+        .id();
+    for _ in 0..3 {
+        app.update();
     }
+    let combo = named(&mut app, root, name);
+    let field = app
+        .world()
+        .get::<Children>(combo)
+        .unwrap()
+        .iter()
+        .find(|entity| {
+            app.world()
+                .get::<bevy_widgetry_button::WidgetryButton>(*entity)
+                .is_some()
+        })
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(field, FocusCause::Navigated);
+    press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
+    assert_ne!(app.world().resource::<InputFocus>().get(), Some(field));
+    press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Escape);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(field));
+    assert!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .result()
+            .is_none()
+    );
+    press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Escape);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .result(),
+        Some(&WidgetryFileDialogResult::Cancelled)
+    );
 }
 
 #[test]
@@ -1010,10 +1251,7 @@ fn invalid_folder_enter_does_not_discard_following_escape_in_the_same_update() {
     for _ in 0..3 {
         app.update();
     }
-    let open = named(&mut app, root, "FileDialogNewFolder");
-    app.world_mut()
-        .trigger(bevy::ui_widgets::Activate { entity: open });
-    app.world_mut().flush();
+    open_folder_panel(&mut app, root);
     for key_code in [KeyCode::Enter, KeyCode::Escape] {
         bevy_widgetry_test_utils::queue_key(
             &mut app,
@@ -1046,80 +1284,79 @@ fn invalid_folder_enter_does_not_discard_following_escape_in_the_same_update() {
 }
 
 #[test]
-fn tab_focus_opens_filter_and_sort_popups_and_disabled_fields_are_skipped() {
-    for label in ["FileDialogFilter", "FileDialogSort"] {
-        let mut app = fixture();
-        let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog Node {width: px(800), height: px(600)} bevy::input_focus::tab_navigation::TabGroup::new(0) }).unwrap().id();
-        for _ in 0..4 {
-            app.update();
-        }
-        let combo = named(&mut app, root, label);
-        let field = app
-            .world()
-            .get::<Children>(combo)
-            .unwrap()
-            .iter()
-            .next()
-            .unwrap();
-        let path = named(&mut app, root, "FileDialogPath");
-        app.world_mut()
-            .resource_mut::<InputFocus>()
-            .set(path, FocusCause::Navigated);
-        let mut reached = false;
-        let mut diagnostic_focus = Vec::new();
-        for _ in 0..40 {
-            press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Tab);
-            diagnostic_focus.push(app.world().resource::<InputFocus>().get().map(|focus| {
-                (
-                    focus,
-                    app.world()
-                        .get::<Name>(focus)
-                        .map(|n| n.as_str().to_owned()),
-                )
-            }));
-            if app.world().resource::<InputFocus>().get() == Some(field) {
-                reached = true;
-                break;
-            }
-        }
-        assert!(
-            reached,
-            "Tab must reach the activatable ComboBox field: {diagnostic_focus:?}"
-        );
-        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
-        for _ in 0..3 {
-            app.update();
-        }
-        let popup = app
-            .world()
-            .get::<Children>(combo)
-            .unwrap()
-            .iter()
-            .nth(1)
-            .unwrap();
-        assert_ne!(
-            app.world().get::<Visibility>(popup),
-            Some(&Visibility::Hidden)
-        );
-        app.world_mut()
-            .entity_mut(root)
-            .insert(bevy::ui::InteractionDisabled);
-        for _ in 0..3 {
-            app.update();
-        }
-        assert!(
-            app.world()
-                .get::<bevy::ui::InteractionDisabled>(field)
-                .is_some()
-        );
-        assert_eq!(
-            app.world()
-                .get::<bevy::input_focus::tab_navigation::TabIndex>(field)
-                .unwrap()
-                .0,
-            -1
-        );
+fn tab_focus_opens_filter_popup_and_disabled_fields_are_skipped() {
+    let label = "FileDialogFilter";
+    let mut app = fixture();
+    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog Node {width: px(800), height: px(600)} bevy::input_focus::tab_navigation::TabGroup::new(0) }).unwrap().id();
+    for _ in 0..4 {
+        app.update();
     }
+    let combo = named(&mut app, root, label);
+    let field = app
+        .world()
+        .get::<Children>(combo)
+        .unwrap()
+        .iter()
+        .next()
+        .unwrap();
+    let path = named(&mut app, root, "FileDialogPath");
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(path, FocusCause::Navigated);
+    let mut reached = false;
+    let mut diagnostic_focus = Vec::new();
+    for _ in 0..40 {
+        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Tab);
+        diagnostic_focus.push(app.world().resource::<InputFocus>().get().map(|focus| {
+            (
+                focus,
+                app.world()
+                    .get::<Name>(focus)
+                    .map(|n| n.as_str().to_owned()),
+            )
+        }));
+        if app.world().resource::<InputFocus>().get() == Some(field) {
+            reached = true;
+            break;
+        }
+    }
+    assert!(
+        reached,
+        "Tab must reach the activatable ComboBox field: {diagnostic_focus:?}"
+    );
+    press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
+    for _ in 0..3 {
+        app.update();
+    }
+    let popup = app
+        .world()
+        .get::<Children>(combo)
+        .unwrap()
+        .iter()
+        .nth(1)
+        .unwrap();
+    assert_ne!(
+        app.world().get::<Visibility>(popup),
+        Some(&Visibility::Hidden)
+    );
+    app.world_mut()
+        .entity_mut(root)
+        .insert(bevy::ui::InteractionDisabled);
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(
+        app.world()
+            .get::<bevy::ui::InteractionDisabled>(field)
+            .is_some()
+    );
+    assert_eq!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(field)
+            .unwrap()
+            .0,
+        -1
+    );
 }
 
 #[test]
@@ -1166,7 +1403,7 @@ fn sidebar_selection_matches_canonical_prefix_and_keeps_original_navigation_path
             WidgetryFileDialogReply::Locations {
                 token,
                 outcome: Ok(vec![WidgetryFileDialogLocation {
-                    name: "Location".into(),
+                    name: "Home".into(),
                     path: location.into(),
                 }]),
             },
@@ -1219,7 +1456,7 @@ fn sidebar_selection_matches_canonical_prefix_and_keeps_original_navigation_path
 }
 
 #[test]
-fn sidebar_locations_and_pins_follow_disabled_and_resolved_tab_state() {
+fn sidebar_locations_follow_disabled_and_resolved_tab_state() {
     let mut app = fixture();
     let root = app
         .world_mut()
@@ -1237,7 +1474,7 @@ fn sidebar_locations_and_pins_follow_disabled_and_resolved_tab_state() {
         WidgetryFileDialogReply::Locations {
             token,
             outcome: Ok(vec![WidgetryFileDialogLocation {
-                name: "Fixture".into(),
+                name: "Home".into(),
                 path: PathBuf::from("C:/fixture"),
             }]),
         },
@@ -1261,7 +1498,7 @@ fn sidebar_locations_and_pins_follow_disabled_and_resolved_tab_state() {
         })
         .map(|(entity, _)| entity)
         .collect();
-    assert_eq!(locations.len(), 2);
+    assert_eq!(locations.len(), 1);
     for &row in &locations {
         let label = app
             .world_mut()
@@ -1647,7 +1884,7 @@ fn invalid_style_is_reported_once_and_does_not_starve_another_dialog() {
 }
 
 #[test]
-fn new_folder_escape_dismisses_editor_before_cancel_and_pins_are_navigable() {
+fn retained_folder_panel_dismisses_before_dialog_cancel() {
     let mut app = fixture();
     let root = app
         .world_mut()
@@ -1658,21 +1895,7 @@ fn new_folder_escape_dismisses_editor_before_cancel_and_pins_are_navigable() {
     for _ in 0..3 {
         app.update();
     }
-    let pin = named(&mut app, root, "FileDialogPin");
-    app.world_mut()
-        .trigger(bevy::ui_widgets::Activate { entity: pin });
-    app.world_mut().flush();
-    app.update();
-    assert!(
-        app.world_mut()
-            .query::<&Name>()
-            .iter(app.world())
-            .any(|name| name.as_str() == "FileDialogLocation")
-    );
-    let new_folder = named(&mut app, root, "FileDialogNewFolder");
-    app.world_mut()
-        .trigger(bevy::ui_widgets::Activate { entity: new_folder });
-    app.world_mut().flush();
+    open_folder_panel(&mut app, root);
     press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Escape);
     assert_eq!(
         app.world()
@@ -1956,80 +2179,6 @@ fn save_validation_overwrite_no_and_cancel_keep_the_session_contract() {
     );
 }
 
-#[test]
-fn real_sort_popup_choice_and_hidden_toggle_update_headless_query() {
-    let mut app = fixture();
-    let root = app
-        .world_mut()
-        .spawn_scene(bsn! { @WidgetryFileDialog Node {width: px(800), height: px(600)} })
-        .unwrap()
-        .id();
-    loaded(&mut app, root, 30);
-    for _ in 0..3 {
-        app.update();
-    }
-    let sort = named(&mut app, root, "FileDialogSort");
-    let field = app
-        .world()
-        .get::<Children>(sort)
-        .unwrap()
-        .iter()
-        .next()
-        .unwrap();
-    press(&mut app, field);
-    release(&mut app, field);
-    app.world_mut().trigger(primary_click(field));
-    app.world_mut().flush();
-    for _ in 0..3 {
-        app.update();
-    }
-    let popup = app
-        .world()
-        .get::<Children>(sort)
-        .unwrap()
-        .iter()
-        .nth(1)
-        .unwrap();
-    let list = app
-        .world()
-        .get::<Children>(popup)
-        .unwrap()
-        .iter()
-        .next()
-        .unwrap();
-    let row = app
-        .world_mut()
-        .query::<(Entity, &bevy_widgetry_list_view::WidgetryListViewItem)>()
-        .iter(app.world())
-        .find(|(entity, item)| item.index == 1 && belongs(app.world(), *entity, list))
-        .unwrap()
-        .0;
-    press(&mut app, row);
-    release(&mut app, row);
-    app.world_mut().trigger(primary_click(row));
-    app.world_mut().flush();
-    assert_eq!(
-        app.world()
-            .get::<WidgetryFileDialogState>(root)
-            .unwrap()
-            .preferences()
-            .sort,
-        WidgetryFileDialogSort::NameDescending
-    );
-    let hidden = named(&mut app, root, "FileDialogHidden");
-    press(&mut app, hidden);
-    release(&mut app, hidden);
-    app.world_mut().trigger(primary_click(hidden));
-    app.world_mut().flush();
-    assert!(
-        app.world()
-            .get::<WidgetryFileDialogState>(root)
-            .unwrap()
-            .preferences()
-            .show_hidden
-    );
-}
-
 fn named(app: &mut App, root: Entity, label: &str) -> Entity {
     let candidates: Vec<_> = app
         .world_mut()
@@ -2107,7 +2256,6 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
     }
     let path = named(&mut app, root, "FileDialogPath");
     let cancel = named(&mut app, root, "FileDialogCancel");
-    let hidden = named(&mut app, root, "FileDialogHidden");
     let area = named(&mut app, root, "FileDialogEntries");
     let status = named(&mut app, root, "FileDialogStatus");
     assert_eq!(app.world().get::<BackgroundColor>(root).unwrap().0, body);
@@ -2146,12 +2294,6 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
             )
             .unwrap_err()
             .into_bevy_error(),
-            bevy_widgetry_check_box::WidgetryCheckBoxColorOverrides::clear_in_world(
-                app.world_mut(),
-                hidden,
-            )
-            .unwrap_err()
-            .into_bevy_error(),
             bevy_widgetry_scroll_area::WidgetryScrollAreaColorOverrides::clear_in_world(
                 app.world_mut(),
                 area,
@@ -2169,7 +2311,7 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
             .iter()
             .filter(|r| r.target == "bevy_widgetry" && r.level == bevy::log::Level::ERROR)
             .count(),
-        4
+        3
     );
     assert_eq!(
         WidgetryFileDialogColorOverrides::get(app.world(), root).unwrap(),
@@ -2541,18 +2683,15 @@ fn search_editor_updates_query_and_theme_keeps_text_cursor_and_session() {
 }
 
 #[test]
-fn filter_sort_visibility_new_folder_and_overwrite_controls_exist_without_loading_dependency() {
+fn filter_filename_and_internal_panels_exist_without_loading_dependency() {
     let mut app = fixture();
     let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::SaveFile } Node { width: px(800), height: px(600) } }).unwrap().id();
     app.update();
     for label in [
         "FileDialogFilter",
-        "FileDialogSort",
-        "FileDialogHidden",
-        "FileDialogSystem",
-        "FileDialogNewFolder",
-        "FileDialogPin",
         "FileDialogFilename",
+        "FileDialogFolderPanel",
+        "FileDialogOverwritePanel",
     ] {
         named(&mut app, root, label);
     }
@@ -2703,4 +2842,14 @@ fn all_owned_scroll_failures_reach_the_host_with_dialog_and_part_context() {
             && frame.fields().iter().any(|(field, value)| field == "root"
                 && roots.iter().any(|root| root.to_string() == *value))));
     }
+}
+
+fn open_folder_panel(app: &mut App, root: Entity) {
+    let panel = named(app, root, "FileDialogFolderPanel");
+    app.world_mut().get_mut::<Node>(panel).unwrap().display = Display::Flex;
+    let input = named(app, root, "FileDialogFolderName");
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(input, FocusCause::Navigated);
+    app.update();
 }

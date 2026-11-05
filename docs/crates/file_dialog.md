@@ -25,6 +25,10 @@
 
 ### 输入与候选身份
 
+可见界面保留顶部后退、前进、上一级、刷新、路径和搜索输入；导航与搜索装饰使用 Fluent Regular 图标。搜索图标位于 TextField 内部右侧 Suffix，不接受 Picking 或 Tab 焦点。侧栏仅按 Home、Desktop、Documents、Downloads 的顺序投影 Backend 提供的同名位置；缺失位置不显示，不自行推导路径。侧栏与文件列表之间使用随主题变化的 1 逻辑像素静态分隔线，不提供拖动调宽。
+
+界面不提供固定目录、新建目录、排序、隐藏文件和系统文件选项的操作入口，也不显示分组、磁盘或固定目录列表；对应 Action、偏好、后台处理及新建目录内部面板继续保留，UI 构造与样式同步不重置这些状态。文件详情表头保持 Name、Type、Modified、Size，不显示排序箭头或 UTC 标签；实际排序和 UTC 时间计算保持原有语义。底部状态、文件名或选择摘要、类型过滤、确认和取消按模式提供。
+
 PickFile 与 SaveFile 提供 Filename Editor，多选与目录模式提供选择摘要，目录模式隐藏文件类型栏。PickFile 的临时文本只解析当前可见文件名，确认时使用真实 EntryId 并进入后台校验；公开 Filename Action 仅用于 SaveFile。地址栏隐藏常规 Windows 扩展路径前缀，未编辑的显示文本仍对应原始 PathBuf。详细行的修改时间使用 UTC。
 
 方向键、Home / End、Page Navigation 改变 Active。多选模式 Space 切换 Selection，Ctrl+A 冻结当时已到达条目的范围；单选模式 Space 使用 Replace，SaveFile 或不匹配的 Kind 不执行 Selection，Enter 按模式 Activate。Selection Job 保留 Ctrl+A、Ctrl 点击和 Shift Range 的输入顺序，Filter / Search / Sort 可基于缓存重新投影而不改变原始路径与 Stable ID。Pending Selection / Projection 阻止 Confirm，Cancel 继续可用。

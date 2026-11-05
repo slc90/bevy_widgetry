@@ -218,62 +218,10 @@ pub(crate) fn column_header(font: f32) -> impl Scene {
             Node {width:px(16),flex_shrink:0.0}--
             Name("FileDialogNameColumn") @detail_cell("Name".into(),font,None,false)--
             @detail_cell("Type".into(),font,Some(90.0),false)--
-            Name("FileDialogModifiedColumn") @detail_cell("Modified (UTC)".into(),font,Some(132.0),false)--
+            Name("FileDialogModifiedColumn") @detail_cell("Modified".into(),font,Some(132.0),false)--
             Name("FileDialogSizeColumn") @detail_cell("Size".into(),font,Some(75.0),true)
         ]
     }
-}
-
-pub(crate) fn sync_header(
-    world: &mut World,
-    header: Entity,
-    sort: WidgetryFileDialogSort,
-) -> Result {
-    let children = world
-        .get::<Children>(header)
-        .ok_or_else(|| {
-            crate::error::internal_error(FileDialogInternalFault::Missing {
-                part: "column header",
-            })
-        })?
-        .iter()
-        .collect::<Vec<_>>();
-    for entity in children {
-        let Some(name) = world.get::<Name>(entity) else {
-            continue;
-        };
-        let label = match name.as_str() {
-            "FileDialogNameColumn" => match sort {
-                WidgetryFileDialogSort::NameAscending => "Name ↑",
-                WidgetryFileDialogSort::NameDescending => "Name ↓",
-                _ => "Name",
-            },
-            "FileDialogModifiedColumn" => {
-                if sort == WidgetryFileDialogSort::ModifiedDescending {
-                    "Modified (UTC) ↓"
-                } else {
-                    "Modified (UTC)"
-                }
-            }
-            "FileDialogSizeColumn" => {
-                if sort == WidgetryFileDialogSort::SizeAscending {
-                    "Size ↑"
-                } else {
-                    "Size"
-                }
-            }
-            _ => continue,
-        };
-        world
-            .get_mut::<Text>(entity)
-            .ok_or_else(|| {
-                crate::error::internal_error(FileDialogInternalFault::Missing {
-                    part: "column label",
-                })
-            })?
-            .set_if_neq(Text(label.into()));
-    }
-    Ok(())
 }
 
 pub(crate) fn page_size(world: &World, area: Entity) -> usize {

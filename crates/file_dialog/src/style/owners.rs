@@ -1,9 +1,8 @@
 use super::*;
-use crate::controls::{FilterChoice, LocationControl, SortChoice, UiControl};
+use crate::controls::{FilterChoice, LocationControl, UiControl};
 use crate::view::EntryRow;
 use crate::window::{Independent, OverwriteOwner};
 use bevy::ecs::entity::EntityHashSet;
-use bevy_widgetry_check_box::WidgetryCheckBox;
 use bevy_widgetry_combo_box::WidgetryComboBox;
 use bevy_widgetry_core::color::WidgetryStyleOwner;
 use bevy_widgetry_message_box::WidgetryMessageBox;
@@ -49,8 +48,6 @@ type Owners = (
     WidgetryStyleOwner<WidgetryTextField>,
     WidgetryStyleOwner<WidgetryScrollArea>,
     WidgetryStyleOwner<WidgetryComboBox<FilterChoice>>,
-    WidgetryStyleOwner<WidgetryComboBox<SortChoice>>,
-    WidgetryStyleOwner<WidgetryCheckBox>,
     WidgetryStyleOwner<WidgetryMessageBox>,
 );
 
@@ -96,8 +93,6 @@ fn removed(
             WidgetryStyleOwner<WidgetryTextField>,
             WidgetryStyleOwner<WidgetryScrollArea>,
             WidgetryStyleOwner<WidgetryComboBox<FilterChoice>>,
-            WidgetryStyleOwner<WidgetryComboBox<SortChoice>>,
-            WidgetryStyleOwner<WidgetryCheckBox>,
             WidgetryStyleOwner<WidgetryMessageBox>,
         )>,
     >,
@@ -200,10 +195,6 @@ fn apply(world: &mut World, entity: Entity, binding: Binding, attach: bool) {
             }
             PartKind::Filter => {
                 update::<WidgetryComboBox<FilterChoice>>(world, entity, root, attach)
-            }
-            PartKind::Sort => update::<WidgetryComboBox<SortChoice>>(world, entity, root, attach),
-            PartKind::Hidden | PartKind::System => {
-                update::<WidgetryCheckBox>(world, entity, root, attach)
             }
             _ => {}
         },

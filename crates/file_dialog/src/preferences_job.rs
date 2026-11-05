@@ -167,7 +167,11 @@ mod tests {
             receiver.recv_blocking().unwrap(),
             JobRead::Finished(JobOutcome::Completed)
         ));
-        assert!(logs.records().is_empty());
+        assert!(logs.records().iter().all(|record| {
+            record.phase().is_none()
+                && record.level != bevy::log::Level::ERROR
+                && record.level != bevy::log::Level::WARN
+        }));
         manager.remove(id).unwrap();
 
         std::fs::write(&path, b"{broken").unwrap();

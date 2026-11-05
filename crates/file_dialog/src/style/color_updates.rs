@@ -429,6 +429,16 @@ fn apply_part(
                     .insert(ResolvedForeground(state.foreground));
             }
         }
+        if kind == PartKind::SidebarDivider {
+            let body = if world.get::<InteractionDisabled>(entity).is_some() {
+                colors.body.disabled
+            } else {
+                colors.body.normal
+            };
+            world
+                .entity_mut(entity)
+                .insert(BackgroundColor(body.foreground.with_alpha(0.15)));
+        }
     }
     crate::controls::apply_color(world, entity, root, colors)?;
     crate::view::update_entry_color(world, entity, root, colors)?;
@@ -614,6 +624,7 @@ mod tests {
             (move |mut commands: Commands| {
                 commands.entity(reused).insert(binding);
             })
+            .after(WidgetryUiSystems::Build)
             .before(collect)
             .run_if(bevy::ecs::schedule::common_conditions::run_once),
         );

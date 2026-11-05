@@ -256,7 +256,7 @@ fn on_key(
     while !roots.contains(ancestor) {
         if parts
             .get(ancestor)
-            .is_ok_and(|part| matches!(part.kind, PartKind::Filter | PartKind::Sort))
+            .is_ok_and(|part| part.kind == PartKind::Filter)
             && (key != KeyCode::Escape || !buttons.contains(branch))
         {
             return;

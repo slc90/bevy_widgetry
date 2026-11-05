@@ -45,6 +45,11 @@ fn builtin_icons_resolve_to_registered_embedded_assets() {
         BuiltinIcon::ChevronUp,
         BuiltinIcon::TreeExpand,
         BuiltinIcon::TreeCollapse,
+        BuiltinIcon::FileDialogBack,
+        BuiltinIcon::FileDialogForward,
+        BuiltinIcon::FileDialogUp,
+        BuiltinIcon::FileDialogRefresh,
+        BuiltinIcon::FileDialogSearch,
     ] {
         let path = icon.path();
         assert_eq!(path.source(), &AssetSourceId::from("embedded"));

@@ -16,7 +16,9 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_scroll_area::{WidgetryScrollArea, WidgetryScrollAreaPlugin};
-use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
+use bevy_widgetry_text_field::{
+    WidgetryTextField, WidgetryTextFieldPlugin, WidgetryTextFieldSuffix,
+};
 use bevy_widgetry_tooltip::{TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin};
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf, Prefix};
@@ -64,14 +66,12 @@ pub(crate) enum PartKind {
     Entries,
     Status,
     Sidebar,
+    SidebarDivider,
     Filename,
     FilenameSummary,
     ColumnHeader,
     Folder,
     Filter,
-    Sort,
-    Hidden,
-    System,
     FolderPanel,
     OverwritePanel,
 }
@@ -249,8 +249,14 @@ pub(crate) fn editor_scene(
     name: &'static str,
     value: String,
 ) -> impl Scene {
+    let suffix = (kind == PartKind::Search).then(|| bsn_list! {
+        Name("FileDialogSearchIcon") WidgetryTextFieldSuffix
+        @WidgetryIcon { @path: {BuiltinIcon::FileDialogSearch.path()}, @max_size: {Some(UVec2::splat(16))} }
+        Node {width:px(16),height:px(16),margin:UiRect::left(px(6)),flex_shrink:0.0}
+        template(|_| Ok(Pickable::IGNORE))
+    });
     bsn! {
-        @WidgetryTextField { @value: value } Name(name) TabIndex::default()
+        @WidgetryTextField { @value: value, @children: {suffix.map(|scene| Box::new(scene) as Box<dyn SceneList>)} } Name(name) TabIndex::default()
         template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryTextField>::new(root)))
         template(move |_| Ok(Part {root, kind}))
         template(move |_| Ok(bevy_widgetry_window::WidgetryWindowInitialFocus(if kind == PartKind::Filename {0} else {i32::MAX})))
@@ -322,13 +328,10 @@ fn shell_scene(
                 @editor_scene(root, PartKind::Path, "FileDialogPath", path)--
                 @editor_scene(root, PartKind::Search, "FileDialogSearch", state.search().into()) Node {width:percent(24),min_width:px(120),flex_grow:0.0,flex_shrink:0.0}
             ]--
-            Name("FileDialogToolbar") Node {width:percent(100),flex_shrink:0.0,flex_wrap:FlexWrap::Wrap,column_gap:px(style.spacing),row_gap:px(4),align_items:AlignItems::Center} Children [
-                {crate::controls::toolbar(root)}--
-                Node {flex_grow:1.0,min_width:px(0)}--
-                @crate::controls::options(root,style)
-            ]--
             Node { flex_grow: 1.0, min_height: px(0), width: percent(100), column_gap: px(style.spacing) } Children [
                 @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), flex_shrink: 0.0, min_height: px(0), height: percent(100) }--
+                Name("FileDialogSidebarDivider") template(move |_| Ok(Part {root,kind:PartKind::SidebarDivider}))
+                Node {width:px(1),height:percent(100),flex_shrink:0.0} BackgroundColor(Color::NONE) template(|_| Ok(Pickable::IGNORE))--
                 Node {flex_direction:FlexDirection::Column,flex_grow:1.0,min_width:px(0),min_height:px(0),height:percent(100)} Children [
                     Name("FileDialogColumnHeader") template(move |_| Ok(Part {root,kind:PartKind::ColumnHeader})) @crate::view::column_header(style.font_size)--
                     @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0,width:percent(100), min_width: px(0), min_height: px(0) }

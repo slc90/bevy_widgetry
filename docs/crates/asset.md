@@ -14,6 +14,7 @@ Kamuri 资源由默认关闭的 `kamuri_cursor` Feature 控制。只有开启时
 
 - 提供内建 CJK Font 路径，供需要默认字体的应用或基础设施使用。
 - 提供 CheckBox、Tree、Window、FileDialog、Table 排序及筛选、Playback 播放/暂停等内建 SVG Icon 的语义路径。
+- FileDialog 的后退、前进、上一级、刷新和搜索使用 Fluent 20 Regular 图形，按控件前景色着色；素材来源版本及随附许可证见 `crates/asset/LICENSES/README.md`。
 - `BuiltinIcon::DatePickerToday` 提供 DatePicker 固定朱红色透明笔圈 SVG；笔触与颜色由素材本身确定。
 - `BuiltinCursorAnimation` 提供 Kamuri 全部 45 种语义的独立动画图集、帧数、时长、热点及帧计算，包括 ReadOnly 扫描文档与蓝白挂锁动画。
 - 动画与静态后备帧均为 80×80 RGBA 切片。动画图集为 8 列、行数随帧数确定，Layout 仅包含实际动画帧；静态后备图集为 8×6，Layout 仅包含 45 项。

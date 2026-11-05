@@ -234,12 +234,19 @@ fn window_tab_restores_visible_focus_after_pointer_focus() {
 }
 
 #[test]
-fn closed_sort_popup_is_not_restored_as_remembered_window_focus() {
+fn closed_filter_popup_is_not_restored_as_remembered_window_focus() {
     let mut app = fixture();
     let root = dialog(&mut app, None, WidgetryFileDialogModality::NonModal);
+    let expected_filter = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .preferences()
+        .filter
+        .clone();
     let native = widgetry_window_target(app.world(), root).unwrap();
-    let sort = named(&mut app, "FileDialogSort", root);
-    let field = app.world().get::<Children>(sort).unwrap()[0];
+    let filter = named(&mut app, "FileDialogFilter", root);
+    let field = app.world().get::<Children>(filter).unwrap()[0];
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(field, FocusCause::Navigated);
@@ -261,8 +268,8 @@ fn closed_sort_popup_is_not_restored_as_remembered_window_focus() {
             .get::<WidgetryFileDialogState>(root)
             .unwrap()
             .preferences()
-            .sort,
-        WidgetryFileDialogSort::NameDescending
+            .filter,
+        expected_filter
     );
     let active = app
         .world()
@@ -288,8 +295,8 @@ fn closed_sort_popup_is_not_restored_as_remembered_window_focus() {
             .get::<WidgetryFileDialogState>(root)
             .unwrap()
             .preferences()
-            .sort,
-        WidgetryFileDialogSort::NameDescending
+            .filter,
+        expected_filter
     );
 }
 
