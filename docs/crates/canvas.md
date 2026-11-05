@@ -158,7 +158,7 @@ RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，�
 
 ## Gallery 展示
 
-Gallery 的 Canvas 页面通过 Facade 安装 CanvasPlugin，并组合外部工具栏和两个引用同一 Document 的 CanvasView。演示页面拥有 Document 并在离页时清理；视图的导航/选择和绘制预览各自独立。导出区域/倍率、目标路径与异步完成反馈由 Gallery 管理，详见 [Gallery Canvas](../gallery.md#canvas)。
+Gallery 的 Canvas 页面通过 Facade 安装 CanvasPlugin，并组合外部工具栏和两个引用同一 Document 的 CanvasView。演示页面拥有 Document 并在离页时清理；视图的导航/选择和绘制预览各自独立。导出区域/倍率、目标路径与异步完成反馈由 Gallery 管理，示例实现见 [Gallery Canvas](../../gallery/src/pages/canvas.rs)。
 
 真实 Picking 点击与完整 Headless 帧的可重复 Benchmark 见 `crates/canvas/benches/selection.rs`：100/1000条重叠的带孔洞Path及底部Ellipse，双View中交替点击孔洞与环边，覆盖穿透全部Path和直接命中顶部Path，不包含GPU提交和窗口呈现。
 

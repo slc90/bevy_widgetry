@@ -52,9 +52,8 @@
 
 - `docs/architecture.md`：Workspace 当前结构及各成员职责。
 - `docs/crates/`：各 crate 的功能、设计思路、行为契约及限制。
-- `docs/gallery.md`：Gallery 的功能与展示行为。
 
-涉及特定 crate 或 Gallery 时，优先阅读相应功能文档，并结合公共接口及必要源码确认实际行为。
+涉及特定 crate 时，优先阅读相应功能文档，并结合公共接口及必要源码确认实际行为。Gallery 的展示与交互以 `gallery/` 中的实际实现为准，不维护独立的集中功能文档。
 
 文档不能替代代码事实。发现文档与当前实现不一致时，应依据实际实现核实，并在任务范围内修正文档。
 
@@ -109,7 +108,7 @@
 
 修改当前架构事实时，必须同步更新 `docs/architecture.md`，例如 Workspace 成员、crate 职责或文档记录的依赖结构发生变化。
 
-修改 crate 或 Gallery 的对外功能、可观察行为、重要设计决策或已知限制时，应同步更新 `docs/crates/` 或 `docs/gallery.md` 中受影响的内容。
+修改 crate 的对外功能、可观察行为、重要设计决策或已知限制时，应同步更新 `docs/crates/` 中受影响的内容。Gallery 变更涉及文档记录的库契约或架构事实时，同步相应 crate 文档或 `docs/architecture.md`。
 
 纯内部重构且不改变文档所描述事实的，不要求机械修改文档。
 

@@ -53,4 +53,4 @@ Normal / Hovered / Pressed / Disabled 使用当前 Theme 的 `slider` 配色。�
 
 ## Gallery
 
-[Slider 页面](../gallery.md) 展示连续、步进、垂直、Disabled 及自定义尺寸。数值 Text 由 Gallery 在控件外组合并监听 `ValueChange<f32>` 更新，不属于 Slider 内部结构。离开页面销毁临时状态，再次进入采用各示例的初始值。页面支持现有 Theme、语言、Scale Factor 和配色对照机制。
+[Gallery Slider 页面](../../gallery/src/pages/slider.rs) 展示连续、步进、垂直、Disabled 及自定义尺寸。数值 Text 由 Gallery 在控件外组合并监听 `ValueChange<f32>` 更新，不属于 Slider 内部结构。离开页面销毁临时状态，再次进入采用各示例的初始值。页面支持现有 Theme、语言、Scale Factor 和配色对照机制。

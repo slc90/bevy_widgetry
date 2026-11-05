@@ -97,11 +97,11 @@ Theme 默认仅包含 Dark 配色，Facade 的 `light`、`pink_dream`、`kamuri_
 
 Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活，并传递到 Asset 的同名嵌入资源 Feature。Facade 提供同名入口，Gallery 显式启用；Core 使用 Cursor 不会自动启用 Kamuri。System-only Cursor 不安装图集支持，Core 原有的字体、图标等 Asset 依赖保留。
 
-本节概述各 Workspace 成员的职责。具体功能、设计思路、行为契约和已知限制见对应的独立功能文档。
+本节概述各 Workspace 成员的职责。各库 crate 的具体功能、设计思路、行为契约和已知限制见对应的独立功能文档；Gallery 的展示与交互以应用实现为准。
 
 | 成员 | 职责 |
 | --- | --- |
-| [gallery](gallery.md) | Widgetry 的功能展示与 GUI 运行时验证应用。 |
+| [gallery](../gallery/) | Widgetry 的功能展示与 GUI 运行时验证应用。 |
 | [bevy_widgetry](crates/bevy_widgetry.md) | 聚合并导出 Widgetry 公共 API 的顶层 Facade。 |
 | [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影、原生 Mouse 有序失焦取消适配、组合控件输入目标元数据与组合控件支持。 |
 | [canvas](crates/canvas.md) | 提供独立 CanvasDocument、统一 CanvasShape/CanvasGeometry、矩形、参数椭圆与多子路径命令模型及普通 UI CanvasView，使用 Core 公共离屏层显示图形，依赖 Asset 的颜色表示转换 Shader；椭圆与 Path 通过 lyon 细分共享 Mesh。View 引用 Document，专属代理不进入业务模型。三类图形支持保留参数及原始命令的独立SVG导出；三类图形使用与View相同的Mesh管线分块异步导出PNG；通过png流式编码、image转换读回块，整个PNG导出通过共享JobManager纳管，ECS/GPU仍负责渲染与截图。 |

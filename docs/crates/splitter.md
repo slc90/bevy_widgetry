@@ -32,4 +32,4 @@ Handle 内居中绘制细线：一次性 `line_thickness` Props 默认 2px，必
 
 `colors` Props 初始化 `WidgetrySplitterColorOverrides`（四态 `Option<Color>`）；运行时由该类型的 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 查询、替换、清除。缺省字段随当前四套 Theme 解析，主题切换保留 Override 和比例。Setter 同值返回 false，真实变更返回 true；错误目标、非有限颜色或越界 alpha 返回 Error 且不修改已有配置。Commands 在执行时校验，不发送比例通知。
 
-Gallery 的 Splitter 页面提供真实 BSN 组合与公开 API 示例：双轴嵌套、Pane Node 约束、主动/被动比例区别、两种禁用、颜色覆盖和外部滚动，详见 [Gallery](../gallery.md)。
+Gallery 的 Splitter 页面提供真实 BSN 组合与公开 API 示例：双轴嵌套、Pane Node 约束、主动/被动比例区别、两种禁用、颜色覆盖和外部滚动，示例实现见 [Gallery Splitter](../../gallery/src/pages/splitter.rs)。

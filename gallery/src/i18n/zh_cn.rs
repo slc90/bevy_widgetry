@@ -675,7 +675,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Waveform(WaveformKey::ModeReplay) => "回放",
         TextKey::Waveform(WaveformKey::ModeDisk) => "本地大文件回放",
         TextKey::Waveform(WaveformKey::DiskMissing) => {
-            "本地记录不存在：{path}。请按 docs/gallery.md 的命令生成后重新加载；其他演示仍可使用。"
+            "本地记录不存在：{path}。请按 docs/crates/waveform_file.md 的命令生成后重新加载；其他演示仍可使用。"
         }
         TextKey::Waveform(WaveformKey::DiskLoading) => {
             "正在打开本地记录：{path}。加载完成前保留当前记录。"

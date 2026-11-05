@@ -695,7 +695,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Waveform(WaveformKey::ModeReplay) => "Replay",
         TextKey::Waveform(WaveformKey::ModeDisk) => "Large local Replay",
         TextKey::Waveform(WaveformKey::DiskMissing) => {
-            "Local recording missing: {path}. Generate it using the command in docs/gallery.md, then reload. The other demos remain available."
+            "Local recording missing: {path}. Generate it using the command in docs/crates/waveform_file.md, then reload. The other demos remain available."
         }
         TextKey::Waveform(WaveformKey::DiskLoading) => {
             "Opening local recording: {path}. The current recording stays visible until loading completes."
