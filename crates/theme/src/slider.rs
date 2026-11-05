@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -17,6 +23,7 @@ pub struct WidgetrySliderColors {
     pub disabled: WidgetrySliderStateColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetrySliderColors = WidgetrySliderColors {
     normal: WidgetrySliderStateColors {
         track: light::BORDER,
@@ -71,6 +78,7 @@ pub const DARK: WidgetrySliderColors = WidgetrySliderColors {
     },
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetrySliderColors = WidgetrySliderColors {
     normal: WidgetrySliderStateColors {
         track: pink_dream::BORDER,
@@ -98,6 +106,7 @@ pub const PINK_DREAM: WidgetrySliderColors = WidgetrySliderColors {
     },
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetrySliderColors = WidgetrySliderColors {
     normal: WidgetrySliderStateColors {
         track: kamuri_violet::BORDER,

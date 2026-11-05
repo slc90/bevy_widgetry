@@ -18,7 +18,7 @@ bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 
 [dev-dependencies]
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 
 [lints]
 workspace = true

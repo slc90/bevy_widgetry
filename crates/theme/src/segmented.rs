@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -97,6 +103,7 @@ const fn colors(
     }
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetrySegmentedColors = colors(
     light::HOVER_SURFACE,
     light::ELEVATED_SURFACE,
@@ -117,6 +124,7 @@ pub const DARK: WidgetrySegmentedColors = colors(
     dark::DISABLED_TEXT,
     dark::FOCUS_BORDER,
 );
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetrySegmentedColors = colors(
     pink_dream::HOVER_SURFACE,
     pink_dream::ELEVATED_SURFACE,
@@ -127,6 +135,7 @@ pub const PINK_DREAM: WidgetrySegmentedColors = colors(
     pink_dream::DISABLED_TEXT,
     pink_dream::FOCUS_BORDER,
 );
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetrySegmentedColors = colors(
     kamuri_violet::HOVER_SURFACE,
     kamuri_violet::ELEVATED_SURFACE,
@@ -145,7 +154,16 @@ mod tests {
 
     #[test]
     fn every_palette_keeps_checked_blocks_distinct_when_enabled_or_disabled() {
-        for palette in [LIGHT, DARK, PINK_DREAM, KAMURI_VIOLET] {
+        let palettes = [
+            DARK,
+            #[cfg(feature = "light")]
+            LIGHT,
+            #[cfg(feature = "pink_dream")]
+            PINK_DREAM,
+            #[cfg(feature = "kamuri_violet")]
+            KAMURI_VIOLET,
+        ];
+        for palette in palettes {
             assert_ne!(
                 palette.option.checked.normal.background,
                 palette.container.normal.background

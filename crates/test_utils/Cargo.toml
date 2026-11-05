@@ -4,6 +4,13 @@ name = "bevy_widgetry_test_utils"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+light = ["bevy_widgetry_theme/light"]
+pink_dream = ["bevy_widgetry_theme/pink_dream"]
+kamuri_violet = ["bevy_widgetry_theme/kamuri_violet"]
+all_themes = ["light", "pink_dream", "kamuri_violet"]
+
 [dependencies]
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 bevy_widgetry_theme = { path = "../theme" }

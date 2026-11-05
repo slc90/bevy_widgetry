@@ -2,11 +2,13 @@
 
 ## 功能概述
 
-提供 Widgetry 的四种预定义配色模式，以及各 Widget / 组合部件的完整颜色数据与全局主题切换能力。
+提供 Widgetry 的预定义配色模式，以及各 Widget / 组合部件的完整颜色数据与全局主题切换能力。默认只编译 Dark；Light、Pink Dream、Kamuri Violet 分别通过默认关闭的 `light`、`pink_dream`、`kamuri_violet` Feature 开启。
 
 ## 当前设计思路
 
 Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 的样式更新。每个消费者使用当前 `WidgetryThemeMode` 和自身状态选择合适的颜色输出。
+
+每个可选主题同时控制 `WidgetryThemeMode` 变体、整套公开常量、各控件的配色常量与公共色值。关闭时这些 API 不存在，不在运行时回退 Dark；`WidgetryTheme` 的完整字段结构保持稳定。Facade 转发三个同名 Feature，Gallery 显式启用全部主题，三个开关可以独立组合，且与 `kamuri_cursor` 无关。Cargo Feature 在依赖图中累加，精简构建需使用独立调用方验证。
 
 ## 主要功能
 

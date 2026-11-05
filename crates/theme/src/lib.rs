@@ -78,9 +78,14 @@ pub use text::{WidgetryTextColors, WidgetryTextStateColors};
 pub use text_field::{
     WidgetryTextFieldColors, WidgetryTextFieldInteractionColors, WidgetryTextFieldStateColors,
 };
+#[cfg(feature = "kamuri_violet")]
+pub use theme::WIDGETRY_KAMURI_VIOLET_THEME;
+#[cfg(feature = "light")]
+pub use theme::WIDGETRY_LIGHT_THEME;
+#[cfg(feature = "pink_dream")]
+pub use theme::WIDGETRY_PINK_DREAM_THEME;
 pub use theme::{
-    ThemeError, ThemeFailure, WIDGETRY_DARK_THEME, WIDGETRY_KAMURI_VIOLET_THEME,
-    WIDGETRY_LIGHT_THEME, WIDGETRY_PINK_DREAM_THEME, WidgetryTheme, WidgetryThemeChanged,
+    ThemeError, ThemeFailure, WIDGETRY_DARK_THEME, WidgetryTheme, WidgetryThemeChanged,
     WidgetryThemeMode, WidgetryThemePlugin,
 };
 pub use tooltip::{WidgetryTooltipColors, WidgetryTooltipPopupColors, WidgetryTooltipStateColors};

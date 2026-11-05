@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -18,6 +24,7 @@ pub struct WidgetryTooltipColors {
     pub popup: WidgetryTooltipPopupColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryTooltipColors = WidgetryTooltipColors {
     popup: WidgetryTooltipPopupColors {
         normal: WidgetryTooltipStateColors {
@@ -38,6 +45,7 @@ pub const DARK: WidgetryTooltipColors = WidgetryTooltipColors {
     },
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryTooltipColors = WidgetryTooltipColors {
     popup: WidgetryTooltipPopupColors {
         normal: WidgetryTooltipStateColors {
@@ -48,6 +56,7 @@ pub const PINK_DREAM: WidgetryTooltipColors = WidgetryTooltipColors {
     },
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryTooltipColors = WidgetryTooltipColors {
     popup: WidgetryTooltipPopupColors {
         normal: WidgetryTooltipStateColors {
@@ -63,6 +72,7 @@ pub const KAMURI_VIOLET: WidgetryTooltipColors = WidgetryTooltipColors {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [

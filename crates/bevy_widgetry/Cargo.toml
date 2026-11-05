@@ -6,6 +6,9 @@ edition.workspace = true
 
 [features]
 kamuri_cursor = ["bevy_widgetry_cursor/kamuri_cursor"]
+light = ["bevy_widgetry_theme/light"]
+pink_dream = ["bevy_widgetry_theme/pink_dream"]
+kamuri_violet = ["bevy_widgetry_theme/kamuri_violet"]
 default = [
   "canvas",
   "button",
@@ -101,7 +104,7 @@ bevy_widgetry_file_dialog = { path = "../file_dialog", optional = true }
 [dev-dependencies]
 bevy.workspace = true
 bevy_widgetry_asset = { path = "../asset" }
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 
 [[bench]]
 name = "pointer_lifecycle"

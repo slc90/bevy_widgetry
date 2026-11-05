@@ -1,7 +1,13 @@
 use crate::button::WidgetryButtonColors;
 use crate::check_box::WidgetryCheckBoxColors;
 use crate::combo_box::WidgetryComboBoxColors;
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use crate::message_box::WidgetryMessageBoxColors;
 use crate::scroll_area::WidgetryScrollAreaColors;
 use crate::text_field::WidgetryTextFieldColors;
@@ -74,6 +80,7 @@ pub struct WidgetryFileDialogColors {
     pub confirmation: WidgetryMessageBoxColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryFileDialogColors = WidgetryFileDialogColors {
     window: crate::window::LIGHT,
     body: WidgetryFileDialogBodyColors {
@@ -194,6 +201,7 @@ pub const DARK: WidgetryFileDialogColors = WidgetryFileDialogColors {
     confirmation: crate::message_box::DARK,
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryFileDialogColors = WidgetryFileDialogColors {
     window: crate::window::PINK_DREAM,
     body: WidgetryFileDialogBodyColors {
@@ -254,6 +262,7 @@ pub const PINK_DREAM: WidgetryFileDialogColors = WidgetryFileDialogColors {
     confirmation: crate::message_box::PINK_DREAM,
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryFileDialogColors = WidgetryFileDialogColors {
     window: crate::window::KAMURI_VIOLET,
     body: WidgetryFileDialogBodyColors {
@@ -319,6 +328,7 @@ pub const KAMURI_VIOLET: WidgetryFileDialogColors = WidgetryFileDialogColors {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "pink_dream")]
     #[test]
     fn pink_dream_reuses_widget_colors() {
         assert_eq!(PINK_DREAM.window, crate::window::PINK_DREAM);
@@ -349,6 +359,7 @@ mod tests {
         assert_eq!(PINK_DREAM.confirmation, crate::message_box::PINK_DREAM);
     }
 
+    #[cfg(feature = "kamuri_violet")]
     #[test]
     fn kamuri_violet_reuses_widget_colors() {
         assert_eq!(KAMURI_VIOLET.window, crate::window::KAMURI_VIOLET);
@@ -400,6 +411,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [

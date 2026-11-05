@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use crate::list_view::WidgetryListViewContainerColors;
 use crate::list_view::WidgetryListViewItemColors;
 use bevy::color::Color;
@@ -31,6 +37,7 @@ pub struct WidgetryTreeColors {
     pub expander: WidgetryTreeExpanderColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryTreeColors = WidgetryTreeColors {
     container: crate::list_view::LIGHT.container,
     item: crate::list_view::LIGHT.item,
@@ -133,6 +140,7 @@ pub const DARK: WidgetryTreeColors = WidgetryTreeColors {
     },
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryTreeColors = WidgetryTreeColors {
     container: crate::list_view::PINK_DREAM.container,
     item: crate::list_view::PINK_DREAM.item,
@@ -184,6 +192,7 @@ pub const PINK_DREAM: WidgetryTreeColors = WidgetryTreeColors {
     },
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryTreeColors = WidgetryTreeColors {
     container: crate::list_view::KAMURI_VIOLET.container,
     item: crate::list_view::KAMURI_VIOLET.item,
@@ -240,12 +249,14 @@ pub const KAMURI_VIOLET: WidgetryTreeColors = WidgetryTreeColors {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "pink_dream")]
     #[test]
     fn pink_dream_reuses_widget_colors() {
         assert_eq!(PINK_DREAM.container, crate::list_view::PINK_DREAM.container);
         assert_eq!(PINK_DREAM.item, crate::list_view::PINK_DREAM.item);
     }
 
+    #[cfg(feature = "kamuri_violet")]
     #[test]
     fn kamuri_violet_reuses_widget_colors() {
         assert_eq!(
@@ -255,6 +266,7 @@ mod tests {
         assert_eq!(KAMURI_VIOLET.item, crate::list_view::KAMURI_VIOLET.item);
     }
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [

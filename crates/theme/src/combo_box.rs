@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use crate::list_view::WidgetryListViewColors;
 use bevy::color::Color;
 
@@ -39,6 +45,7 @@ pub struct WidgetryComboBoxColors {
     pub list: WidgetryListViewColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryComboBoxColors = WidgetryComboBoxColors {
     field: WidgetryComboBoxFieldColors {
         normal: WidgetryComboBoxFieldStateColors {
@@ -173,6 +180,7 @@ pub const DARK: WidgetryComboBoxColors = WidgetryComboBoxColors {
     },
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryComboBoxColors = WidgetryComboBoxColors {
     field: WidgetryComboBoxFieldColors {
         normal: WidgetryComboBoxFieldStateColors {
@@ -240,6 +248,7 @@ pub const PINK_DREAM: WidgetryComboBoxColors = WidgetryComboBoxColors {
     },
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryComboBoxColors = WidgetryComboBoxColors {
     field: WidgetryComboBoxFieldColors {
         normal: WidgetryComboBoxFieldStateColors {
@@ -312,11 +321,13 @@ pub const KAMURI_VIOLET: WidgetryComboBoxColors = WidgetryComboBoxColors {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "pink_dream")]
     #[test]
     fn pink_dream_reuses_widget_colors() {
         assert_eq!(PINK_DREAM.list.item, crate::list_view::PINK_DREAM.item);
     }
 
+    #[cfg(feature = "kamuri_violet")]
     #[test]
     fn kamuri_violet_reuses_widget_colors() {
         assert_eq!(
@@ -325,6 +336,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [

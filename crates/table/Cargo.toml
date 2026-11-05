@@ -18,7 +18,7 @@ bevy_widgetry_cursor = { path = "../cursor", features = ["kamuri_cursor"] }
 bevy_widgetry_combo_box = { path = "../combo_box" }
 bevy_widgetry_list_view = { path = "../list_view" }
 bevy_widgetry_text_field = { path = "../text_field" }
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 
 [lints]
 workspace = true

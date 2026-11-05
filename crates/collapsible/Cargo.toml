@@ -15,7 +15,7 @@ bevy_widgetry_internal_log = { path = "../internal_log" }
 
 [dev-dependencies]
 bevy_widgetry_text_field = { path = "../text_field" }
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 
 [lints]
 workspace = true

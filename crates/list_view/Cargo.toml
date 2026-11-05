@@ -16,7 +16,7 @@ bevy_widgetry_internal_log = { path = "../internal_log" }
 [dev-dependencies]
 proptest.workspace = true
 bevy_widgetry_asset = { path = "../asset" }
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 
 [lints]
 workspace = true

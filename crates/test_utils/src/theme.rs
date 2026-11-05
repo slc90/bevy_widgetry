@@ -36,14 +36,14 @@ mod tests {
         let logs = LogCapture::default();
         let errors = ErrorCapture::default();
         logs.run(|| {
-            let first = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+            let first = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark)
                 .unwrap_err();
             let second = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark)
                 .unwrap_err();
             assert!(matches!(
                 first.kind(),
                 ThemeError::MissingMode {
-                    mode: WidgetryThemeMode::Light
+                    mode: WidgetryThemeMode::Dark
                 }
             ));
             assert_ne!(first.origin().id(), second.origin().id());
@@ -69,7 +69,7 @@ mod tests {
             assert!(matches!(
                 kind(diagnostic),
                 ThemeError::MissingMode {
-                    mode: WidgetryThemeMode::Light
+                    mode: WidgetryThemeMode::Dark
                 }
             ));
             assert_eq!(
@@ -95,7 +95,7 @@ mod tests {
         logs.run(|| {
             let mut queue = bevy::ecs::world::CommandQueue::default();
             let mut commands = Commands::new(&mut queue, app.world());
-            WidgetryThemeMode::set(&mut commands, WidgetryThemeMode::PinkDream);
+            WidgetryThemeMode::set(&mut commands, WidgetryThemeMode::Dark);
             assert!(logs.records().is_empty());
             app.world_mut().remove_resource::<WidgetryThemeMode>();
             errors.run(|| queue.apply(app.world_mut()));
@@ -107,7 +107,7 @@ mod tests {
             assert!(matches!(
                 kind(diagnostic),
                 ThemeError::MissingMode {
-                    mode: WidgetryThemeMode::PinkDream
+                    mode: WidgetryThemeMode::Dark
                 }
             ));
             assert_eq!(
@@ -138,16 +138,26 @@ mod tests {
                 seen.0.push(event.mode);
             },
         );
+        let modes = [
+            WidgetryThemeMode::Dark,
+            #[cfg(feature = "light")]
+            WidgetryThemeMode::Light,
+            #[cfg(feature = "pink_dream")]
+            WidgetryThemeMode::PinkDream,
+            #[cfg(feature = "kamuri_violet")]
+            WidgetryThemeMode::KamuriViolet,
+        ];
         let logs = LogCapture::default();
         logs.run(|| {
-            switch_theme(&mut app, WidgetryThemeMode::Dark);
-            switch_theme(&mut app, WidgetryThemeMode::Light);
-            switch_theme(&mut app, WidgetryThemeMode::Light);
+            for mode in modes {
+                switch_theme(&mut app, mode);
+                switch_theme(&mut app, mode);
+            }
         });
         assert!(logs.records().is_empty());
         assert_eq!(
             app.world().resource::<Notifications>().0,
-            [WidgetryThemeMode::Light]
+            modes.into_iter().skip(1).collect::<Vec<_>>()
         );
     }
 }

@@ -8,6 +8,8 @@
 
 通过真实 Bevy ECS / UI / Picking 环境建立可控场景，允许测试显式推进 `App::update`。与直接 Trigger Observer 不同，Picking Fixture 可以把受控 PointerInput 送入实际输入管线。
 
+默认仅使用 Dark 主题。测试基础设施提供 `light`、`pink_dream`、`kamuri_violet` 转发 Feature，以及三者的集合 `all_themes`；需要多主题样式回归的 crate 通过 dev-dependency 显式选择。`switch_theme(app, mode)` 接口保持不变，只接受已编译的模式。基础诊断和同值不通知测试在默认配置也运行，扩展主题通知按实际开启的模式覆盖。
+
 ## 主要功能
 
 - `scene_app`、`text_input_app`、`text_edit_app`、`picking_app` 等不同能力的 App Fixture。

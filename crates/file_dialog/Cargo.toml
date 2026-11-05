@@ -34,7 +34,7 @@ directories.workspace = true
 accesskit.workspace = true
 
 [dev-dependencies]
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 proptest.workspace = true
 wmi.workspace = true
 

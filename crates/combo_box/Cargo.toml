@@ -19,7 +19,7 @@ bevy_widgetry_text_field = { path = "../text_field" }
 
 [dev-dependencies]
 rstest.workspace = true
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 
 [lints]
 workspace = true

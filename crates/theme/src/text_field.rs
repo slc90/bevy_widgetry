@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -27,6 +33,7 @@ pub struct WidgetryTextFieldColors {
     pub read_only: WidgetryTextFieldInteractionColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryTextFieldColors = WidgetryTextFieldColors {
     hint_warning: Color::srgb_u8(128, 96, 0),
     editable: WidgetryTextFieldInteractionColors {
@@ -187,6 +194,7 @@ pub const DARK: WidgetryTextFieldColors = WidgetryTextFieldColors {
     },
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryTextFieldColors = WidgetryTextFieldColors {
     hint_warning: Color::srgb_u8(126, 92, 0),
     editable: WidgetryTextFieldInteractionColors {
@@ -267,6 +275,7 @@ pub const PINK_DREAM: WidgetryTextFieldColors = WidgetryTextFieldColors {
     },
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryTextFieldColors = WidgetryTextFieldColors {
     hint_warning: Color::srgb_u8(116, 91, 0),
     editable: WidgetryTextFieldInteractionColors {
@@ -358,12 +367,16 @@ mod tests {
             let linear = color.to_linear();
             0.2126 * linear.red + 0.7152 * linear.green + 0.0722 * linear.blue
         }
-        for (theme, background) in [
-            (LIGHT, light::WINDOW_BACKGROUND),
+        let palettes = [
             (DARK, dark::WINDOW_BACKGROUND),
+            #[cfg(feature = "light")]
+            (LIGHT, light::WINDOW_BACKGROUND),
+            #[cfg(feature = "pink_dream")]
             (PINK_DREAM, pink_dream::WINDOW_BACKGROUND),
+            #[cfg(feature = "kamuri_violet")]
             (KAMURI_VIOLET, kamuri_violet::WINDOW_BACKGROUND),
-        ] {
+        ];
+        for (theme, background) in palettes {
             for surface in [
                 background,
                 theme.editable.normal.background,
@@ -380,6 +393,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [

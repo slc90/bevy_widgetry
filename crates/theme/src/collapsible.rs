@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -22,7 +28,10 @@ macro_rules! palette {
     };
 }
 
+#[cfg(feature = "light")]
 palette!(LIGHT, light);
 palette!(DARK, dark);
+#[cfg(feature = "pink_dream")]
 palette!(PINK_DREAM, pink_dream);
+#[cfg(feature = "kamuri_violet")]
 palette!(KAMURI_VIOLET, kamuri_violet);

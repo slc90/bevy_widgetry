@@ -15,7 +15,7 @@ resvg.workspace = true
 
 [dev-dependencies]
 bevy_ecs = { workspace = true, features = ["backtrace"] }
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 rstest.workspace = true
 
 [lints]

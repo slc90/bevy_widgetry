@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -12,6 +18,7 @@ pub struct WidgetryTextColors {
     pub disabled: WidgetryTextStateColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryTextColors = WidgetryTextColors {
     normal: WidgetryTextStateColors {
         foreground: light::TEXT,
@@ -30,6 +37,7 @@ pub const DARK: WidgetryTextColors = WidgetryTextColors {
     },
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryTextColors = WidgetryTextColors {
     normal: WidgetryTextStateColors {
         foreground: pink_dream::TEXT,
@@ -39,6 +47,7 @@ pub const PINK_DREAM: WidgetryTextColors = WidgetryTextColors {
     },
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryTextColors = WidgetryTextColors {
     normal: WidgetryTextStateColors {
         foreground: kamuri_violet::TEXT,
@@ -53,6 +62,7 @@ pub const KAMURI_VIOLET: WidgetryTextColors = WidgetryTextColors {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [LIGHT.normal.foreground, LIGHT.disabled.foreground];

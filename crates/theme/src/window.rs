@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -38,6 +44,7 @@ pub struct WidgetryWindowColors {
     pub image_tint: Color,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryWindowColors = WidgetryWindowColors {
     frame: WidgetryWindowSurfaceColors {
         normal: WidgetryWindowStateColors {
@@ -202,6 +209,7 @@ pub const DARK: WidgetryWindowColors = WidgetryWindowColors {
     image_tint: dark::IMAGE_TINT,
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryWindowColors = WidgetryWindowColors {
     frame: WidgetryWindowSurfaceColors {
         normal: WidgetryWindowStateColors {
@@ -284,6 +292,7 @@ pub const PINK_DREAM: WidgetryWindowColors = WidgetryWindowColors {
     image_tint: pink_dream::IMAGE_TINT,
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryWindowColors = WidgetryWindowColors {
     frame: WidgetryWindowSurfaceColors {
         normal: WidgetryWindowStateColors {
@@ -371,6 +380,7 @@ pub const KAMURI_VIOLET: WidgetryWindowColors = WidgetryWindowColors {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [

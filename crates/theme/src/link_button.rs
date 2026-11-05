@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -9,6 +15,7 @@ pub struct WidgetryLinkButtonColors {
     pub disabled: Color,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryLinkButtonColors = WidgetryLinkButtonColors {
     normal: light::PRIMARY,
     hovered: light::PRIMARY_HOVER,
@@ -23,6 +30,7 @@ pub const DARK: WidgetryLinkButtonColors = WidgetryLinkButtonColors {
     disabled: dark::DISABLED_TEXT,
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryLinkButtonColors = WidgetryLinkButtonColors {
     normal: pink_dream::PRIMARY,
     hovered: pink_dream::PRIMARY_HOVER,
@@ -30,6 +38,7 @@ pub const PINK_DREAM: WidgetryLinkButtonColors = WidgetryLinkButtonColors {
     disabled: pink_dream::DISABLED_TEXT,
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryLinkButtonColors = WidgetryLinkButtonColors {
     normal: kamuri_violet::PRIMARY,
     hovered: kamuri_violet::PRIMARY_HOVER,

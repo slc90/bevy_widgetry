@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -27,6 +33,7 @@ pub struct WidgetryTableColors {
     pub cell: WidgetryTableRegionColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryTableColors = WidgetryTableColors {
     table: WidgetryTableRegionColors {
         normal: WidgetryTableStateColors {
@@ -273,6 +280,7 @@ pub const DARK: WidgetryTableColors = WidgetryTableColors {
     },
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryTableColors = WidgetryTableColors {
     table: WidgetryTableRegionColors {
         normal: WidgetryTableStateColors {
@@ -396,6 +404,7 @@ pub const PINK_DREAM: WidgetryTableColors = WidgetryTableColors {
     },
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryTableColors = WidgetryTableColors {
     table: WidgetryTableRegionColors {
         normal: WidgetryTableStateColors {
@@ -524,6 +533,7 @@ pub const KAMURI_VIOLET: WidgetryTableColors = WidgetryTableColors {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [

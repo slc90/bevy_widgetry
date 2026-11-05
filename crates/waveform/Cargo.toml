@@ -20,7 +20,7 @@ bevy_widgetry_list_view = { path = "../list_view" }
 bevy_widgetry_scroll_area = { path = "../scroll_area" }
 
 [dev-dependencies]
-bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 
 [lints]
 workspace = true

@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -80,9 +86,12 @@ const fn state(background: Color, border: Color, foreground: Color) -> WidgetryT
     }
 }
 
+#[cfg(feature = "light")]
 palette!(LIGHT, light);
 palette!(DARK, dark);
+#[cfg(feature = "pink_dream")]
 palette!(PINK_DREAM, pink_dream);
+#[cfg(feature = "kamuri_violet")]
 palette!(KAMURI_VIOLET, kamuri_violet);
 
 #[cfg(test)]
@@ -92,7 +101,16 @@ mod tests {
 
     #[test]
     fn selected_headers_remain_distinct_when_enabled_and_disabled() {
-        for palette in [LIGHT, DARK, PINK_DREAM, KAMURI_VIOLET] {
+        let palettes = [
+            DARK,
+            #[cfg(feature = "light")]
+            LIGHT,
+            #[cfg(feature = "pink_dream")]
+            PINK_DREAM,
+            #[cfg(feature = "kamuri_violet")]
+            KAMURI_VIOLET,
+        ];
+        for palette in palettes {
             assert_ne!(
                 palette.header.selected.normal.background,
                 palette.header.unselected.normal.background

@@ -1,5 +1,11 @@
 use crate::button::WidgetryButtonColors;
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use crate::window::WidgetryWindowColors;
 use bevy::color::Color;
 
@@ -22,6 +28,7 @@ pub struct WidgetryMessageBoxColors {
     pub action_button: WidgetryButtonColors,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryMessageBoxColors = WidgetryMessageBoxColors {
     window: crate::window::LIGHT,
     body: WidgetryMessageBoxBodyColors {
@@ -52,6 +59,7 @@ pub const DARK: WidgetryMessageBoxColors = WidgetryMessageBoxColors {
     action_button: crate::button::DARK,
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryMessageBoxColors = WidgetryMessageBoxColors {
     window: crate::window::PINK_DREAM,
     body: WidgetryMessageBoxBodyColors {
@@ -67,6 +75,7 @@ pub const PINK_DREAM: WidgetryMessageBoxColors = WidgetryMessageBoxColors {
     action_button: crate::button::PINK_DREAM,
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryMessageBoxColors = WidgetryMessageBoxColors {
     window: crate::window::KAMURI_VIOLET,
     body: WidgetryMessageBoxBodyColors {
@@ -87,18 +96,21 @@ pub const KAMURI_VIOLET: WidgetryMessageBoxColors = WidgetryMessageBoxColors {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "pink_dream")]
     #[test]
     fn pink_dream_reuses_widget_colors() {
         assert_eq!(PINK_DREAM.window, crate::window::PINK_DREAM);
         assert_eq!(PINK_DREAM.action_button, crate::button::PINK_DREAM);
     }
 
+    #[cfg(feature = "kamuri_violet")]
     #[test]
     fn kamuri_violet_reuses_widget_colors() {
         assert_eq!(KAMURI_VIOLET.window, crate::window::KAMURI_VIOLET);
         assert_eq!(KAMURI_VIOLET.action_button, crate::button::KAMURI_VIOLET);
     }
 
+    #[cfg(feature = "light")]
     #[test]
     fn light_colors_are_finite() {
         let colors = [

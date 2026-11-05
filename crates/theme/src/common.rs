@@ -1,5 +1,6 @@
 use bevy::color::Color;
 
+#[cfg(feature = "light")]
 pub(crate) mod light {
     use super::Color;
     pub const WINDOW_BACKGROUND: Color = Color::srgb_u8(255, 255, 255);
@@ -60,6 +61,7 @@ pub(crate) mod dark {
     pub const IMAGE_TINT: Color = Color::srgb_u8(255, 255, 255);
 }
 
+#[cfg(feature = "pink_dream")]
 pub(crate) mod pink_dream {
     use super::Color;
     pub const WINDOW_BACKGROUND: Color = Color::srgb_u8(246, 220, 233);
@@ -90,6 +92,7 @@ pub(crate) mod pink_dream {
     pub const IMAGE_TINT: Color = Color::srgb_u8(255, 255, 255);
 }
 
+#[cfg(feature = "kamuri_violet")]
 pub(crate) mod kamuri_violet {
     use super::Color;
     pub const WINDOW_BACKGROUND: Color = Color::srgb_u8(227, 217, 241);

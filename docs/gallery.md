@@ -101,6 +101,8 @@ Header 提供三个常驻选择器。
 
 **Theme**
 
+Gallery 显式启用 Facade 的 `light`、`pink_dream`、`kamuri_violet`，保留四套配色、已有配置序列化和主题选择演示；库默认构建仅有 Dark。
+
 支持四种主题：
 
 - Dark

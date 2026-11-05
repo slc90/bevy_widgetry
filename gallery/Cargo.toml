@@ -11,6 +11,9 @@ bevy_brp_runtime.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry", features = [
   "app_logging",
   "kamuri_cursor",
+  "light",
+  "pink_dream",
+  "kamuri_violet",
   "tray",
   "job",
   "power_inhibit",

@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,6 +41,7 @@ palette!(
     Color::srgb_u8(40, 40, 40),
     Color::srgb_u8(50, 50, 50)
 );
+#[cfg(feature = "light")]
 palette!(
     LIGHT,
     light,
@@ -42,6 +49,7 @@ palette!(
     Color::srgb_u8(245, 245, 245),
     Color::srgb_u8(235, 235, 235)
 );
+#[cfg(feature = "pink_dream")]
 palette!(
     PINK_DREAM,
     pink_dream,
@@ -49,6 +57,7 @@ palette!(
     Color::srgb_u8(245, 245, 245),
     Color::srgb_u8(235, 235, 235)
 );
+#[cfg(feature = "kamuri_violet")]
 palette!(
     KAMURI_VIOLET,
     kamuri_violet,

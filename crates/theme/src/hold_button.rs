@@ -18,6 +18,7 @@ pub struct WidgetryHoldButtonColors {
     pub success_border: Color,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetryHoldButtonColors = WidgetryHoldButtonColors {
     normal: WidgetryHoldButtonStateColors {
         background: Color::srgb_u8(235, 242, 249),
@@ -82,6 +83,7 @@ pub const DARK: WidgetryHoldButtonColors = WidgetryHoldButtonColors {
     success_border: Color::srgb_u8(173, 219, 255),
 };
 
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryHoldButtonColors = WidgetryHoldButtonColors {
     normal: WidgetryHoldButtonStateColors {
         background: Color::srgb_u8(252, 234, 243),
@@ -114,6 +116,7 @@ pub const PINK_DREAM: WidgetryHoldButtonColors = WidgetryHoldButtonColors {
     success_border: Color::srgb_u8(245, 171, 212),
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetryHoldButtonColors = WidgetryHoldButtonColors {
     normal: WidgetryHoldButtonStateColors {
         background: Color::srgb_u8(240, 232, 250),

@@ -1,4 +1,10 @@
-use crate::common::{dark, kamuri_violet, light, pink_dream};
+use crate::common::dark;
+#[cfg(feature = "kamuri_violet")]
+use crate::common::kamuri_violet;
+#[cfg(feature = "light")]
+use crate::common::light;
+#[cfg(feature = "pink_dream")]
+use crate::common::pink_dream;
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -9,6 +15,7 @@ pub struct WidgetrySplitterColors {
     pub disabled: Color,
 }
 
+#[cfg(feature = "light")]
 pub const LIGHT: WidgetrySplitterColors = WidgetrySplitterColors {
     normal: light::BORDER,
     hovered: light::PRIMARY_HOVER,
@@ -21,12 +28,14 @@ pub const DARK: WidgetrySplitterColors = WidgetrySplitterColors {
     dragging: dark::PRIMARY,
     disabled: dark::SUBTLE_BORDER,
 };
+#[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetrySplitterColors = WidgetrySplitterColors {
     normal: pink_dream::BORDER,
     hovered: pink_dream::PRIMARY_HOVER,
     dragging: pink_dream::PRIMARY,
     disabled: pink_dream::SUBTLE_BORDER,
 };
+#[cfg(feature = "kamuri_violet")]
 pub const KAMURI_VIOLET: WidgetrySplitterColors = WidgetrySplitterColors {
     normal: kamuri_violet::BORDER,
     hovered: kamuri_violet::PRIMARY_HOVER,

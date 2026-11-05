@@ -33,6 +33,7 @@ pub struct WidgetryTheme {
     pub waveform: WidgetryWaveformColors,
 }
 
+#[cfg(feature = "light")]
 pub const WIDGETRY_LIGHT_THEME: WidgetryTheme = WidgetryTheme {
     text: crate::text::LIGHT,
     icon: crate::icon::LIGHT,
@@ -89,6 +90,7 @@ pub const WIDGETRY_DARK_THEME: WidgetryTheme = WidgetryTheme {
     waveform: crate::waveform::DARK,
 };
 
+#[cfg(feature = "pink_dream")]
 pub const WIDGETRY_PINK_DREAM_THEME: WidgetryTheme = WidgetryTheme {
     text: crate::text::PINK_DREAM,
     icon: crate::icon::PINK_DREAM,
@@ -117,6 +119,7 @@ pub const WIDGETRY_PINK_DREAM_THEME: WidgetryTheme = WidgetryTheme {
     waveform: crate::waveform::PINK_DREAM,
 };
 
+#[cfg(feature = "kamuri_violet")]
 pub const WIDGETRY_KAMURI_VIOLET_THEME: WidgetryTheme = WidgetryTheme {
     text: crate::text::KAMURI_VIOLET,
     icon: crate::icon::KAMURI_VIOLET,
@@ -154,10 +157,13 @@ pub struct WidgetryThemePlugin;
 
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WidgetryThemeMode {
+    #[cfg(feature = "light")]
     Light,
     #[default]
     Dark,
+    #[cfg(feature = "pink_dream")]
     PinkDream,
+    #[cfg(feature = "kamuri_violet")]
     KamuriViolet,
 }
 
@@ -183,9 +189,12 @@ pub type ThemeFailure = WidgetryFailure<ThemeError>;
 impl WidgetryThemeMode {
     pub const fn colors(self) -> &'static WidgetryTheme {
         match self {
+            #[cfg(feature = "light")]
             Self::Light => &WIDGETRY_LIGHT_THEME,
             Self::Dark => &WIDGETRY_DARK_THEME,
+            #[cfg(feature = "pink_dream")]
             Self::PinkDream => &WIDGETRY_PINK_DREAM_THEME,
+            #[cfg(feature = "kamuri_violet")]
             Self::KamuriViolet => &WIDGETRY_KAMURI_VIOLET_THEME,
         }
     }
@@ -229,6 +238,25 @@ mod tests {
 
     use super::*;
 
+    #[cfg(not(any(feature = "light", feature = "pink_dream", feature = "kamuri_violet")))]
+    #[test]
+    fn default_build_exposes_only_dark() {
+        let WidgetryThemeMode::Dark = WidgetryThemeMode::default();
+        assert_eq!(WidgetryThemeMode::Dark.colors(), &WIDGETRY_DARK_THEME);
+    }
+
+    fn modes() -> &'static [WidgetryThemeMode] {
+        &[
+            WidgetryThemeMode::Dark,
+            #[cfg(feature = "light")]
+            WidgetryThemeMode::Light,
+            #[cfg(feature = "pink_dream")]
+            WidgetryThemeMode::PinkDream,
+            #[cfg(feature = "kamuri_violet")]
+            WidgetryThemeMode::KamuriViolet,
+        ]
+    }
+
     #[derive(Resource, Default)]
     struct Notifications(Vec<WidgetryThemeMode>);
 
@@ -250,12 +278,15 @@ mod tests {
     #[test]
     fn modes_resolve_complete_fixed_palettes() {
         assert_eq!(WidgetryThemeMode::default(), WidgetryThemeMode::Dark);
+        #[cfg(feature = "light")]
         assert_eq!(WidgetryThemeMode::Light.colors(), &WIDGETRY_LIGHT_THEME);
         assert_eq!(WidgetryThemeMode::Dark.colors(), &WIDGETRY_DARK_THEME);
+        #[cfg(feature = "pink_dream")]
         assert_eq!(
             WidgetryThemeMode::PinkDream.colors(),
             &WIDGETRY_PINK_DREAM_THEME
         );
+        #[cfg(feature = "kamuri_violet")]
         assert_eq!(
             WidgetryThemeMode::KamuriViolet.colors(),
             &WIDGETRY_KAMURI_VIOLET_THEME
@@ -264,12 +295,7 @@ mod tests {
 
     #[test]
     fn normal_text_contrast_matches_reference_budget() {
-        for mode in [
-            WidgetryThemeMode::Light,
-            WidgetryThemeMode::Dark,
-            WidgetryThemeMode::PinkDream,
-            WidgetryThemeMode::KamuriViolet,
-        ] {
+        for &mode in modes() {
             let theme = mode.colors();
             let text = theme.text.normal.foreground;
             for background in [
@@ -310,9 +336,16 @@ mod tests {
         }
     }
 
+    #[cfg(any(feature = "pink_dream", feature = "kamuri_violet"))]
     #[test]
     fn new_theme_marks_focus_and_danger_icons_have_non_text_contrast() {
-        for theme in [&WIDGETRY_PINK_DREAM_THEME, &WIDGETRY_KAMURI_VIOLET_THEME] {
+        let themes = [
+            #[cfg(feature = "pink_dream")]
+            &WIDGETRY_PINK_DREAM_THEME,
+            #[cfg(feature = "kamuri_violet")]
+            &WIDGETRY_KAMURI_VIOLET_THEME,
+        ];
+        for theme in themes {
             for state in [theme.check_box.checked, theme.check_box.indeterminate] {
                 for state in [state.normal, state.hovered, state.pressed] {
                     assert!(contrast(state.mark, state.background) >= 3.0);
@@ -335,14 +368,9 @@ mod tests {
 
     #[test]
     fn all_mode_transitions_match_world_and_deferred_commands() -> Result<(), ThemeFailure> {
-        let modes = [
-            WidgetryThemeMode::Dark,
-            WidgetryThemeMode::Light,
-            WidgetryThemeMode::PinkDream,
-            WidgetryThemeMode::KamuriViolet,
-        ];
-        for initial in modes {
-            for target in modes {
+        let modes = modes();
+        for &initial in modes {
+            for &target in modes {
                 let mut immediate = app();
                 let mut deferred = app();
                 WidgetryThemeMode::set_in_world(immediate.world_mut(), initial)?;
@@ -398,12 +426,7 @@ mod tests {
 
     #[test]
     fn plugin_preserves_initial_mode() {
-        for initial in [
-            WidgetryThemeMode::Dark,
-            WidgetryThemeMode::Light,
-            WidgetryThemeMode::PinkDream,
-            WidgetryThemeMode::KamuriViolet,
-        ] {
+        for &initial in modes() {
             let mut app = App::new();
             app.insert_resource(initial)
                 .add_plugins(WidgetryThemePlugin);
@@ -411,6 +434,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "light")]
     #[test]
     fn switching_commits_before_notification_and_same_value_is_noop() -> Result<(), ThemeFailure> {
         let mut app = app();
@@ -437,6 +461,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "light")]
     #[test]
     fn commands_validate_and_commit_at_execution_time() {
         let mut app = app();
@@ -461,12 +486,12 @@ mod tests {
     fn missing_mode_is_error_without_notification() {
         let mut app = app();
         app.world_mut().remove_resource::<WidgetryThemeMode>();
-        let error = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+        let error = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark)
             .expect_err("missing mode must fail");
         assert!(matches!(
             error.kind(),
             ThemeError::MissingMode {
-                mode: WidgetryThemeMode::Light
+                mode: WidgetryThemeMode::Dark
             }
         ));
         assert!(error.to_string().contains("WidgetryThemeMode"));
