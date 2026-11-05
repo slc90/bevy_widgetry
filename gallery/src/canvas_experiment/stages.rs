@@ -35,6 +35,27 @@ enum FileState {
     Canceled,
 }
 
+impl FileState {
+    fn status(&self) -> &'static str {
+        match self {
+            Self::Queued => "queued",
+            Self::Exporting { .. } => "exporting",
+            Self::Succeeded => "succeeded",
+            Self::Failed(_) => "failed",
+            Self::Canceled => "canceled",
+        }
+    }
+}
+
+fn log_file(session: &str, number: u64, file: &StageFile) {
+    let (request, job_id) = match &file.state {
+        FileState::Exporting { request, job, .. } => (Some(*request), Some(job.get())),
+        _ => (None, None),
+    };
+    debug!(session, stage=number, path=?file.path, scale=?file.scale, size=?file.size,
+        ?request, ?job_id, status=file.state.status(), "绘画阶段文件状态已更新");
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct IdentifyStage {
@@ -107,45 +128,95 @@ pub(crate) fn pending(world: &World) -> bool {
 
 pub(super) fn export(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     let request: Identify = params(value)?;
-    if pending(world) {
-        return Err(BrpError::resource_error(
-            "A stage export is already running; query it and retry after completion",
-        ));
+    info!(
+        session = request.session,
+        operation = "export_stage",
+        origin = "brp",
+        "请求导出绘画阶段"
+    );
+    let response = (|| {
+        if pending(world) {
+            return Err(BrpError::resource_error(
+                "A stage export is already running; query it and retry after completion",
+            ));
+        }
+        world.resource_scope(|world, mut sessions: Mut<Sessions>| {
+            let session = sessions
+                .0
+                .get_mut(&request.session)
+                .ok_or_else(|| invalid_params("Unknown session"))?;
+            if CanvasDocument::shape_order(world, session.document)
+                .map_err(crate::diagnostics::managed_response_error)?
+                .is_empty()
+            {
+                return Err(BrpError::resource_error(CanvasExportError::EmptyDocument));
+            }
+            let number = reserve(&session.directory, &mut session.next_stage)
+                .map_err(crate::diagnostics::response_error)?;
+            storage::persist(world, &request.session, session);
+            let directory = session.directory.join("stages");
+            let region = Rect::from_corners(Vec2::ZERO, session.size.as_vec2());
+            let document =
+                freeze(world, session.document).map_err(crate::diagnostics::bevy_response_error)?;
+            info!(
+                session = request.session,
+                stage = number,
+                operation = "export_stage",
+                origin = "brp",
+                status = "exporting",
+                "绘画阶段导出已接受"
+            );
+            let mut files = Vec::with_capacity(4);
+            for scale in [None, Some(1), Some(2), Some(4)] {
+                let name = match scale {
+                    None => format!("stage_{number:04}.svg"),
+                    Some(scale) => format!("stage_{number:04}_{scale}x.png"),
+                };
+                let path = directory.join(name);
+                let size = session.size.checked_mul(UVec2::splat(scale.unwrap_or(1)));
+                let state = match size {
+                    Some(_) if scale.is_none() => start(world, document, region, scale, &path),
+                    Some(_) => FileState::Queued,
+                    None => FileState::Failed("Output dimensions overflow".into()),
+                };
+                let file = StageFile {
+                    path,
+                    scale,
+                    size: size.unwrap_or(UVec2::ZERO),
+                    state,
+                };
+                if !matches!(file.state, FileState::Queued) {
+                    log_file(&request.session, number, &file);
+                }
+                files.push(file);
+            }
+            let mut stage = Stage {
+                document,
+                region,
+                files,
+            };
+            advance(world, &mut stage, &request.session, number);
+            let mut response = stage.describe(&request.session, number);
+            response["persistence"] = json!({"saved":!session.dirty,"error":session.save_error});
+            world
+                .resource_mut::<Stages>()
+                .0
+                .insert((request.session.clone(), number), stage);
+            world.write_message(RequestRedraw);
+            Ok(response)
+        })
+    })();
+    if let Err(error) = &response {
+        info!(
+            session = request.session,
+            operation = "export_stage",
+            origin = "brp",
+            result = "rejected",
+            code = error.code,
+            "绘画阶段导出请求被拒绝"
+        );
     }
-    world.resource_scope(|world, mut sessions: Mut<Sessions>| {
-        let session = sessions.0.get_mut(&request.session).ok_or_else(|| invalid_params("Unknown session"))?;
-        if CanvasDocument::shape_order(world, session.document).map_err(crate::diagnostics::managed_response_error)?.is_empty() {
-            return Err(BrpError::resource_error(CanvasExportError::EmptyDocument));
-        }
-        let number = reserve(&session.directory, &mut session.next_stage).map_err(crate::diagnostics::response_error)?;
-        storage::persist(world, &request.session, session);
-        let directory = session.directory.join("stages");
-        let region = Rect::from_corners(Vec2::ZERO, session.size.as_vec2());
-        let document = freeze(world, session.document).map_err(crate::diagnostics::bevy_response_error)?;
-        let mut files = Vec::with_capacity(4);
-        for scale in [None, Some(1), Some(2), Some(4)] {
-            let name = match scale {
-                None => format!("stage_{number:04}.svg"),
-                Some(scale) => format!("stage_{number:04}_{scale}x.png"),
-            };
-            let path = directory.join(name);
-            let size = session.size.checked_mul(UVec2::splat(scale.unwrap_or(1)));
-            let state = match size {
-                Some(_) if scale.is_none() => start(world, document, region, scale, &path),
-                Some(_) => FileState::Queued,
-                None => FileState::Failed("Output dimensions overflow".into()),
-            };
-            files.push(StageFile { path, scale, size: size.unwrap_or(UVec2::ZERO), state });
-        }
-        let mut stage = Stage {document, region, files};
-        advance(world, &mut stage, &request.session, number);
-        let mut response = stage.describe(&request.session, number);
-        response["persistence"] = json!({"saved":!session.dirty,"error":session.save_error});
-        info!(session=request.session, stage=number, status=%response["status"], "通过 BRP 发起绘画阶段导出");
-        world.resource_mut::<Stages>().0.insert((request.session, number), stage);
-        world.write_message(RequestRedraw);
-        Ok(response)
-    })
+    response
 }
 
 fn freeze(world: &mut World, source: Entity) -> Result<Entity> {
@@ -193,6 +264,7 @@ fn advance(world: &mut World, stage: &mut Stage, session: &str, number: u64) {
     for file in &mut stage.files {
         if matches!(file.state, FileState::Queued) {
             file.state = start(world, stage.document, stage.region, file.scale, &file.path);
+            log_file(session, number, file);
             if matches!(file.state, FileState::Exporting { .. }) {
                 return;
             }
@@ -200,7 +272,24 @@ fn advance(world: &mut World, stage: &mut Stage, session: &str, number: u64) {
     }
     if world.get_entity(stage.document).is_ok() {
         world.despawn(stage.document);
-        info!(session,stage=number,status=%stage.describe(session,number)["status"],"绘画阶段导出已收尾");
+        debug!(session, stage=number, document=?stage.document, "绘画阶段快照已释放");
+        let succeeded = stage
+            .files
+            .iter()
+            .filter(|file| matches!(file.state, FileState::Succeeded))
+            .count();
+        let failed = stage
+            .files
+            .iter()
+            .filter(|file| matches!(file.state, FileState::Failed(_)))
+            .count();
+        let canceled = stage
+            .files
+            .iter()
+            .filter(|file| matches!(file.state, FileState::Canceled))
+            .count();
+        info!(session, stage=number, operation="export_stage", origin="brp", succeeded, failed, canceled,
+            status=%stage.describe(session,number)["status"], "绘画阶段导出结果");
     }
 }
 
@@ -291,8 +380,15 @@ pub(super) fn query(In(value): In<Option<Value>>, world: &mut World) -> BrpResul
 
 pub(super) fn cancel(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     let request: IdentifyStage = params(value)?;
+    info!(
+        session = request.session,
+        stage = request.stage,
+        operation = "cancel_stage",
+        origin = "brp",
+        "请求取消绘画阶段导出"
+    );
     let manager = world.resource::<JobManager>().clone();
-    let response = world.resource_scope(|world, mut stages: Mut<Stages>| {
+    let response: BrpResult = world.resource_scope(|world, mut stages: Mut<Stages>| {
         let stage = stages
             .0
             .get_mut(&(request.session.clone(), request.stage))
@@ -302,16 +398,32 @@ pub(super) fn cancel(In(value): In<Option<Value>>, world: &mut World) -> BrpResu
             error.record_handled("拒绝本次阶段取消请求并返回 BRP 错误", "阶段任务状态保持");
             reply
         })?;
+        if pending {
+            debug!(
+                session = request.session,
+                stage = request.stage,
+                "绘画阶段取消请求已提交"
+            );
+        }
         advance(world, stage, &request.session, request.stage);
         let mut response = stage.describe(&request.session, request.stage);
         response["cancel_requested"] = json!(pending);
         Ok(response)
     });
-    info!(
-        session = request.session,
-        stage = request.stage,
-        "通过 BRP 请求取消绘画阶段导出"
-    );
+    match &response {
+        Ok(value) => {
+            info!(session=request.session, stage=request.stage, operation="cancel_stage", origin="brp", cancel_requested=%value["cancel_requested"], "绘画阶段取消请求结果")
+        }
+        Err(error) => info!(
+            session = request.session,
+            stage = request.stage,
+            operation = "cancel_stage",
+            origin = "brp",
+            result = "rejected",
+            code = error.code,
+            "绘画阶段取消请求被拒绝"
+        ),
+    }
     response
 }
 
@@ -339,7 +451,11 @@ pub(crate) fn cancel_all(world: &mut World) -> Result {
             let canceled =
                 request_cancel(stage, &manager).map_err(|error| error.into_bevy_error())?;
             if canceled {
-                info!(session, stage = number, "Gallery 退出取消绘画阶段导出");
+                debug!(
+                    session,
+                    stage = number,
+                    "Gallery 退出已请求取消绘画阶段导出"
+                );
                 advance(world, stage, session, *number);
             }
         }
@@ -400,6 +516,9 @@ fn completed(
             };
             cleanup(temporary);
             file.state = state;
+            debug!(session, stage=number, path=?file.path, scale=?file.scale,
+                request=?event.entity, job_id=event.job_id.get(), status=file.state.status(),
+                "绘画阶段 PNG 文件已结束");
             if let Some(failure) = local_failure {
                 failure.record_handled("终止阶段 PNG 发布并保存失败状态", "阶段结果可查询");
             }
@@ -507,6 +626,117 @@ fn cleanup(path: &Path) {
 #[allow(clippy::unwrap_used, clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_summary_is_emitted_once_with_real_file_counts() {
+        use bevy_widgetry_test_utils::LogCapture;
+        for (states, status, counts) in [
+            (
+                vec![FileState::Succeeded, FileState::Succeeded],
+                "succeeded",
+                [2, 0, 0],
+            ),
+            (
+                vec![FileState::Succeeded, FileState::Failed("failure".into())],
+                "partial_failure",
+                [1, 1, 0],
+            ),
+            (
+                vec![FileState::Failed("failure".into())],
+                "failed",
+                [0, 1, 0],
+            ),
+            (
+                vec![FileState::Succeeded, FileState::Canceled],
+                "canceled",
+                [1, 0, 1],
+            ),
+        ] {
+            let mut world = World::new();
+            let document = world.spawn(CanvasDocument).id();
+            let mut stage = Stage {
+                document,
+                region: Rect::default(),
+                files: states
+                    .into_iter()
+                    .map(|state| StageFile {
+                        path: "unused.png".into(),
+                        scale: Some(1),
+                        size: UVec2::ONE,
+                        state,
+                    })
+                    .collect(),
+            };
+            let logs = LogCapture::with_targets(["widget_gallery::canvas_experiment::stages"]);
+            logs.run(|| {
+                advance(&mut world, &mut stage, "painting-test", 3);
+                advance(&mut world, &mut stage, "painting-test", 3);
+                let _ = stage.describe("painting-test", 3);
+            });
+            assert!(world.get_entity(document).is_err());
+            let records = logs.records();
+            let results: Vec<_> = records
+                .iter()
+                .filter(|r| r.level == bevy::log::tracing::Level::INFO)
+                .collect();
+            assert_eq!(results.len(), 1);
+            let result = results[0];
+            assert!(result.matches_field("status", status));
+            assert!(result.matches_field("session", "painting-test"));
+            assert!(result.matches_field("stage", "3"));
+            for (field, count) in ["succeeded", "failed", "canceled"].into_iter().zip(counts) {
+                assert!(result.matches_field(field, &count.to_string()));
+            }
+        }
+    }
+
+    #[test]
+    fn unknown_session_and_busy_log_rejections_without_accepting_a_stage() {
+        use bevy_widgetry_test_utils::LogCapture;
+        let mut app = App::new();
+        app.init_resource::<Sessions>();
+        install(&mut app);
+        let logs = LogCapture::with_targets(["widget_gallery::canvas_experiment::stages"]);
+        logs.run(|| {
+            assert!(
+                export(
+                    In(Some(json!({"session":"painting-missing"}))),
+                    app.world_mut()
+                )
+                .is_err()
+            );
+            let document = app.world_mut().spawn(CanvasDocument).id();
+            app.world_mut().resource_mut::<Stages>().0.insert(
+                ("painting-other".into(), 1),
+                Stage {
+                    document,
+                    region: Rect::default(),
+                    files: vec![StageFile {
+                        path: "unused.png".into(),
+                        scale: Some(1),
+                        size: UVec2::ONE,
+                        state: FileState::Queued,
+                    }],
+                },
+            );
+            assert!(
+                export(
+                    In(Some(json!({"session":"painting-test"}))),
+                    app.world_mut()
+                )
+                .is_err()
+            );
+        });
+        let records = logs.records();
+        assert_eq!(
+            records
+                .iter()
+                .filter(|r| r.matches_field("result", "rejected"))
+                .count(),
+            2
+        );
+        assert!(!records.iter().any(|r| r.fields.contains_key("stage")));
+    }
     use bevy_widgetry::canvas::{CanvasGeometry, CanvasPaint, CanvasRectangle};
 
     #[test]

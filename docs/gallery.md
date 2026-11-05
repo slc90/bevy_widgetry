@@ -342,6 +342,8 @@ geometry、paint、transform 使用对应已注册公开类型的 Bevy 反射 JS
 
 `gallery/canvas_stage {session,stage}` 查询本进程接受的阶段。`status` 为 `exporting/succeeded/partial_failure/failed/canceled`，逐文件给出 `status/error`，等待提交的 PNG 为 `queued`；在途 PNG 还给出 `request/job_id`。只有收到关联的真实完成事件、核对尺寸且成功发布到最终路径，才标记 PNG 成功；真实失败保留错误，取消不会冒充成功。取消但没有其他失败时汇总为 canceled，此前成功文件仍保留。`gallery/canvas_cancel_stage {session,stage}` 请求取消剩余 PNG，返回 `cancel_requested`，实际取消与资源回收继续通过查询确认；已完成阶段不再取消。为控制资源占用，整个 Gallery 同时只接受一个在途阶段、最多一个 PNG Job，按1×/2×/4×依次提交；在途时新阶段请求明确返回 busy 错误，需查询完成后重试。这里不添加绘画窗口按钮，也不改变旧 Canvas 页面的固定路径导出。
 
+阶段导出以 INFO 记录请求、接受或拒绝，以及最终 status 和成功、失败、取消文件数量，通过 session 与 stage 关联。文件提交及真实终态使用 DEBUG，包含路径、倍率及在途 request/job_id；快照释放和 Gallery 退出时的取消请求也使用 DEBUG。取消请求不表示导出已经取消，重复只读查询不产生业务 INFO。
+
 阶段通过 `stage_0001.reserve` 的独占创建和同步持久占用编号；失败、取消及崩溃残留的编号不再复用。恢复和每次预留都会结合历史编号文件与 document.json 中的 next_stage 取下一未用编号。输出先写入同目录独占临时路径，完整写盘后以拒绝覆盖的硬链接发布最终文件，再移除临时路径；发布失败只报告该文件失败，保留已有历史。崩溃可能留下 `.tmp-*` 文件和预留记录，它们不会被当成成功输出或恢复 Document。阶段状态保存在当前进程，跨进程后从会话目录查看历史文件，新的导出继续使用新编号。document.json 的替换规则独立于不可覆盖的阶段文件，响应中的 persistence 仍只描述工作存档结果。
 
 实验窗口关闭或显式恢复会话不取消已接受的阶段，导出使用冻结快照继续完成；恢复时优先复用现有自绘窗口并通过 CanvasView 公开 API 切换 Document，Gallery 退出则通过共享 JobManager 协作取消并等待 Canvas 完成 GPU 读回和清理，随后继续等待阶段管理消费完成通知、发布或清理临时输出，才发送最终 AppExit。强制退出保留可能的残留，不宣称完成。
