@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 
 [features]
+kamuri_cursor = ["bevy_widgetry_cursor/kamuri_cursor"]
 default = [
   "canvas",
   "button",

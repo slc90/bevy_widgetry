@@ -13,6 +13,8 @@
 
 ## Guards
 
+- 默认配置验证 Font、Icon 和 Shader；Cursor 图集、解码和时序回归仅在 `kamuri_cursor` 开启时运行。
+
 - 素材必须经 Embedded Source 寻址，不从磁盘回退。
 
 ## Transitions

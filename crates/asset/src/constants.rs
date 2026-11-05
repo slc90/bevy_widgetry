@@ -14,6 +14,7 @@ pub(super) const TABLE_SORT_ICON: (&str, &[u8]) = asset_data!("assets/icons/tabl
 pub(super) const TABLE_FILTER_ICON: (&str, &[u8]) = asset_data!("assets/icons/table_filter.svg");
 pub(super) const TABLE_FILTER_ACTIVE_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/table_filter_active.svg");
+#[cfg(feature = "kamuri_cursor")]
 pub(super) const KAMURI_STATIC_ATLAS: (&str, &[u8]) =
     asset_data!("assets/cursors/kamuri/static_atlas_80.png");
 pub(super) const FILE_DIALOG_FOLDER_ICON: (&str, &[u8]) =

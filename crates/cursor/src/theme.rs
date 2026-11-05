@@ -5,6 +5,7 @@ use bevy::{prelude::*, window::SystemCursorIcon};
 pub enum WidgetryCursorTheme {
     #[default]
     System,
+    #[cfg(feature = "kamuri_cursor")]
     Kamuri,
 }
 
@@ -71,6 +72,7 @@ impl CursorIntent {
         }
     }
 
+    #[cfg(feature = "kamuri_cursor")]
     pub(crate) fn static_index(&self) -> Option<usize> {
         match self {
             Self::System(SystemCursorIcon::Default) => Some(0),

@@ -46,6 +46,8 @@
 
 ## 覆盖边界
 
+默认构建运行 System、Hint、Lease、Disabled、Loading、窗口隔离和 writer 冲突回归，并验证不安装 Atlas 支持且保留调用方 Custom 图像。`coordination/kamuri.rs` 仅在 `kamuri_cursor` 开启时运行动画、资源失败及播放生命周期回归；基础 Hint 测试在该配置下同时验证 Kamuri 的 System 回退。
+
 Headless 测试保护 ECS 请求与渲染配置，不证明系统级 Cursor 的真实视觉表现。
 
 

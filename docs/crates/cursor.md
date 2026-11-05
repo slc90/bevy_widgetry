@@ -2,11 +2,13 @@
 
 ## 功能概述
 
-为各 Native Window 独立管理 OS Mouse Cursor，并提供 System 与 Kamuri 两种显示主题。Widget 可以通过官方 Cursor 声明或 Widgetry 扩展 Hint 请求相应样式。
+为各 Native Window 独立管理 OS Mouse Cursor，默认只编译 System 主题。显式启用默认关闭的 `kamuri_cursor` Feature 后，可在 System 与 Kamuri 之间切换。Widget 可以通过官方 Cursor 声明或 Widgetry 扩展 Hint 请求相应样式。
 
 ## 当前设计思路
 
 Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mouse 身份驱动。Drag 使用有 Owner 的 `CursorLease` 临时固定样式；原生窗口 Move / Resize 期间让出 Cursor 控制权。展示主题与颜色 Theme 相互独立。
+
+`kamuri_cursor` 同时开启 Asset 的同名资源 Feature。关闭时 `WidgetryCursorTheme::Kamuri` 不存在，播放状态、资源加载、图集诊断和动画唤醒代码不参与编译，也不安装 Kamuri 专用 Asset / Atlas 支持。System、全部 Hint、Lease、Loading 优先级与调用方的原生 Custom Cursor 始终可用。Facade 提供同名转发 Feature，Gallery 显式启用以保留演示。
 
 ## 主要功能
 

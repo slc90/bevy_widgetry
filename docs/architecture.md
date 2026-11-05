@@ -91,6 +91,8 @@ Gallery 显式启用 `power_inhibit` Feature 并安装对应 Plugin；独立页�
 
 ## Workspace Roles
 
+Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活，并传递到 Asset 的同名嵌入资源 Feature。Facade 提供同名入口，Gallery 显式启用；Core 使用 Cursor 不会自动启用 Kamuri。System-only Cursor 不安装图集支持，Core 原有的字体、图标等 Asset 依赖保留。
+
 本节概述各 Workspace 成员的职责。具体功能、设计思路、行为契约和已知限制见对应的独立功能文档。
 
 | 成员 | 职责 |

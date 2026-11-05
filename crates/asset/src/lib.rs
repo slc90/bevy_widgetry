@@ -2,14 +2,17 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod constants;
+#[cfg(feature = "kamuri_cursor")]
 mod cursor_animation;
 
+#[cfg(feature = "kamuri_cursor")]
 pub use cursor_animation::BuiltinCursorAnimation;
 
 use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_debug;
+#[cfg(feature = "kamuri_cursor")]
 use constants::KAMURI_STATIC_ATLAS;
 use constants::{
     CHECKBOX_CHECK_ICON, CHECKBOX_INDETERMINATE_ICON, CHEVRON_DOWN_ICON, CHEVRON_UP_ICON,
@@ -68,11 +71,13 @@ pub enum BuiltinFont {
     Default,
 }
 
+#[cfg(feature = "kamuri_cursor")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinCursorImage {
     KamuriStaticAtlas,
 }
 
+#[cfg(feature = "kamuri_cursor")]
 impl BuiltinCursorImage {
     pub fn atlas_layout(self) -> TextureAtlasLayout {
         match self {
@@ -160,11 +165,13 @@ impl Plugin for WidgetryAssetPlugin {
             CHEVRON_UP_ICON,
             TREE_EXPAND_ICON,
             TREE_COLLAPSE_ICON,
+            #[cfg(feature = "kamuri_cursor")]
             KAMURI_STATIC_ATLAS,
-        ]
-        .into_iter()
-        .chain(cursor_animation::KAMURI_ANIMATIONS)
-        {
+        ] {
+            embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
+        }
+        #[cfg(feature = "kamuri_cursor")]
+        for (path, bytes) in cursor_animation::KAMURI_ANIMATIONS {
             embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
         }
         widgetry_debug!("WidgetryAssetPlugin 注册完成");

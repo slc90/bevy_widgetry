@@ -10,6 +10,7 @@ bevy_ecs = { workspace = true, features = ["backtrace"] }
 bevy_brp_runtime.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry", features = [
   "app_logging",
+  "kamuri_cursor",
   "tray",
   "job",
   "power_inhibit",

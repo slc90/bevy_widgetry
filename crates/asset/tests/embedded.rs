@@ -3,7 +3,9 @@
 use bevy::asset::io::AssetSourceId;
 use bevy::prelude::*;
 use bevy::tasks::block_on;
-use bevy_widgetry_asset::{BuiltinCursorImage, BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
+#[cfg(feature = "kamuri_cursor")]
+use bevy_widgetry_asset::BuiltinCursorImage;
+use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
 use std::collections::HashSet;
 
 #[test]
@@ -59,6 +61,7 @@ fn builtin_icons_resolve_to_registered_embedded_assets() {
     }
 }
 
+#[cfg(feature = "kamuri_cursor")]
 fn cursor_image(server: &AssetServer, path: bevy::asset::AssetPath<'static>) -> image::RgbaImage {
     let source = server.get_source(path.source()).unwrap();
     let bytes = block_on(async {
@@ -73,6 +76,7 @@ fn cursor_image(server: &AssetServer, path: bevy::asset::AssetPath<'static>) -> 
 }
 
 #[test]
+#[cfg(feature = "kamuri_cursor")]
 fn all_cursor_loops_have_80px_frames_fixed_anchors_and_matching_static_fallbacks() {
     use bevy_widgetry_asset::BuiltinCursorAnimation;
     let mut app = App::new();
@@ -137,6 +141,7 @@ fn all_cursor_loops_have_80px_frames_fixed_anchors_and_matching_static_fallbacks
 }
 
 #[test]
+#[cfg(feature = "kamuri_cursor")]
 fn cursor_timing_wraps_at_each_independent_duration_without_overflow() {
     use bevy_widgetry_asset::BuiltinCursorAnimation;
     use std::time::Duration;

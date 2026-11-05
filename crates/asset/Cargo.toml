@@ -4,6 +4,10 @@ name = "bevy_widgetry_asset"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+kamuri_cursor = []
+
 [dependencies]
 bevy_widgetry_internal_log = { path = "../internal_log" }
 bevy.workspace = true

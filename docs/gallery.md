@@ -233,6 +233,8 @@ Canvas 文件导出以 INFO 区分请求、Busy 拒绝、同步失败和实际�
 
 Cursor 页面可以独立选择 System 或 Kamuri Cursor，并通过不同语义的目标区域观察光标变化。
 
+Gallery 显式启用 Facade 的 `kamuri_cursor` Feature，保留启动光标和全部动画演示；库的默认构建只包含 System Cursor。
+
 Kamuri 提供 45 种语义：34 种系统光标与 11 种扩展 Hint。全部采用 80×80 循环动画。45 个预览同时自动播放，各自采用同一资源目录中的独立时序；悬停使用同源真实 Windows OS Cursor，BRP Custom Pointer 不改变 OS Cursor。System 主题恢复系统样式，页面动画预览继续播放供对照。ReadOnly 使用扫描文档与蓝白挂锁，并与祖先 Disabled 样例区分。
 
 预览加载期间保留必要更新，加载完成后自动播放，失败的素材不维持加载唤醒。预览仅在 Cursor 页且窗口有焦点时更新，不因目标区域离开滚动视口而暂停。退出页面销毁预览 Entity、移除页面资源和图集布局；其他页面仅保留实际 OS 光标需要的动画工作。

@@ -1,4 +1,5 @@
 use crate::lease::{CursorLease, LeaseMode};
+#[cfg(feature = "kamuri_cursor")]
 use crate::presentation::Presentation;
 use crate::theme::CursorIntent;
 use crate::{WidgetryCursorHint, WidgetryCursorTheme};
@@ -16,6 +17,7 @@ use bevy::{
     ui::InteractionDisabled,
     window::{CursorIcon, CursorSystems, SystemCursorIcon, WindowClosed, WindowFocused},
 };
+#[cfg(feature = "kamuri_cursor")]
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_internal_log::widgetry_debug;
 
@@ -26,6 +28,7 @@ struct CursorWriterEnabled(bool);
 
 impl Plugin for WidgetryCursorPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "kamuri_cursor")]
         if app.world().contains_resource::<AssetServer>() {
             if !app.is_plugin_added::<WidgetryAssetPlugin>() {
                 app.add_plugins(WidgetryAssetPlugin);
@@ -106,7 +109,7 @@ fn coordinate(
     mut raw: Local<Vec<PointerInput>>,
     mut inactive: Local<EntityHashSet>,
     mut active: Local<EntityHashMap<(Entity, LeaseMode)>>,
-    mut presentation: Presentation,
+    #[cfg(feature = "kamuri_cursor")] mut presentation: Presentation,
 ) {
     raw.clear();
     raw.extend(
@@ -220,11 +223,15 @@ fn coordinate(
     let hover_cursor = entity
         .and_then(|entity| resolve(entity, &nodes))
         .unwrap_or_default();
-    presentation.prepare();
-    presentation.retain_windows(|entity| windows.contains(entity));
+    #[cfg(feature = "kamuri_cursor")]
+    {
+        presentation.prepare();
+        presentation.retain_windows(|entity| windows.contains(entity));
+    }
     for (entity, window, current) in &mut windows {
         let next = match active.get(&entity).map(|(_, mode)| mode) {
             Some(LeaseMode::Native) => {
+                #[cfg(feature = "kamuri_cursor")]
                 presentation.stop(entity);
                 continue;
             }
@@ -234,6 +241,9 @@ fn coordinate(
             }
             None => CursorIntent::default(),
         };
+        #[cfg(not(feature = "kamuri_cursor"))]
+        let next = next.fallback();
+        #[cfg(feature = "kamuri_cursor")]
         let next = presentation.map(
             entity,
             next,

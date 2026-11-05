@@ -3,6 +3,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod coordination;
 mod lease;
+#[cfg(feature = "kamuri_cursor")]
 mod presentation;
 mod theme;
 

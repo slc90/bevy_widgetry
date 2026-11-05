@@ -8,6 +8,8 @@
 
 内建素材由 `WidgetryAssetPlugin` 注册为 Embedded Asset。其他 crate 依靠 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage`、`BuiltinCursorAnimation` 等标识获取路径，不自行依赖素材的实际目录布局。注册与加载是不同阶段。
 
+Kamuri 资源由默认关闭的 `kamuri_cursor` Feature 控制。只有开启时才提供 `BuiltinCursorImage`、`BuiltinCursorAnimation` 并嵌入、注册静态后备图集和 45 种动画；关闭时这些类型及对应 `include_bytes!` 不参与编译。Font、Icon 和 Shader 保持可用。
+
 ## 主要功能
 
 - 提供内建 CJK Font 路径，供需要默认字体的应用或基础设施使用。
