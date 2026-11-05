@@ -143,6 +143,19 @@ enum Action {
     Remove,
 }
 
+impl Action {
+    fn start_mode(self) -> Option<Mode> {
+        match self {
+            Self::StartIo => Some(Mode::Io),
+            Self::StartCpu => Some(Mode::Cpu),
+            Self::StartThread => Some(Mode::Thread),
+            Self::StartFailure => Some(Mode::Failure),
+            Self::StartLateComplete => Some(Mode::LateComplete),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Component)]
 struct Select(JobId);
 
@@ -482,9 +495,39 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             return Ok(());
         }
         world.resource_scope(|world, mut demo: Mut<Demo>| -> Result {
+            let selected = demo.runs.iter().find(|run| Some(run.id) == demo.selected);
+            let unchanged = match action {
+                Action::DropA => selected.map(|run| run.a.receiver.is_none() && run.a.last_batch.is_none()),
+                Action::DropB => selected.map(|run| run.b.receiver.is_none() && run.b.last_batch.is_none()),
+                _ => None,
+            };
+            let requested_mode = action.start_mode();
             let result = apply(world, &mut demo, action);
-            if let Ok(result) = &result {
-                info!(?action, %result, "执行 Job 演示操作");
+            let job_id = if (requested_mode.is_some() && result.is_err())
+                || matches!(action, Action::ToggleSlowB)
+            {
+                None
+            } else {
+                demo.selected
+            };
+            let run = demo.runs.iter().find(|run| Some(run.id) == job_id);
+            let mode = requested_mode.or_else(|| run.map(|run| run.mode));
+            match &result {
+                Ok(result) => {
+                    let outcome = if requested_mode.is_some() { "submitted" } else { "returned" };
+                    info!(?action, job_id = job_id.map(JobId::get), ?mode, unchanged, %result, outcome, "Job 演示操作已返回");
+                }
+                Err(WorkError::Rejected(reason)) => {
+                    info!(?action, job_id = job_id.map(JobId::get), ?mode, outcome = "rejected", %reason, "Job 演示操作已拒绝");
+                }
+                Err(WorkError::Failure(_)) => {
+                    info!(?action, job_id = job_id.map(JobId::get), ?mode, outcome = "failed", "Job 演示操作已失败");
+                }
+            }
+            if result.is_ok() && requested_mode.is_some()
+                && let Some(run) = run.filter(|run| run.status.state.is_finished())
+            {
+                info!(job_id = run.id.get(), mode = ?run.mode, outcome = ?run.status.state, "Job 演示任务执行结束");
             }
             let displayed = bind(
                 world,
@@ -534,15 +577,7 @@ fn apply(
     demo: &mut Demo,
     action: Action,
 ) -> std::result::Result<String, WorkError> {
-    let mode = match action {
-        Action::StartIo => Some(Mode::Io),
-        Action::StartCpu => Some(Mode::Cpu),
-        Action::StartThread => Some(Mode::Thread),
-        Action::StartFailure => Some(Mode::Failure),
-        Action::StartLateComplete => Some(Mode::LateComplete),
-        _ => None,
-    };
-    if let Some(mode) = mode {
+    if let Some(mode) = action.start_mode() {
         return start(world, demo, mode);
     }
     if matches!(action, Action::ToggleSlowB) {
@@ -686,9 +721,8 @@ fn poll(world: &mut World) -> Result {
             if !run.removed {
                 match manager.find_status(run.id) {
                     Some(status) => {
-                        if !run.status.state.is_finished() && status.state.is_finished()
-                            && !matches!(status.state, JobState::Failed) {
-                                info!(job_id=run.id.get(), outcome=?status.outcome, "Job 演示任务执行结束");
+                        if !run.status.state.is_finished() && status.state.is_finished() {
+                                info!(job_id=run.id.get(), mode=?run.mode, outcome=?status.state, "Job 演示任务执行结束");
                         }
                         run.status = status;
                     }

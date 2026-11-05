@@ -498,6 +498,8 @@ Job页面不提供全App关闭操作。所有演示直接提交到App唯一JobMa
 
 启动任务后选中其对应行，也可通过每行选择按钮切换当前Job。取消、重复取消、订阅B、丢弃A/B和移除Manager记录均调用正式API，显示操作结果；非终态remove会返回NotFinished，终态移除后已有Receiver仍可排空。每行保留Manager真实状态、实际生产批次，以及A/B各自的已消费条目/批次、首末序号、消费Progress和Finished结果；两侧最后Batch相同时显示Arc身份是否共享。Manager为Completed/Failed/Canceled不等于接收器已经消费Finished，进度条不会被Manager终态强制填满。
 
+每次演示操作以 INFO 记录真实提交或同步答复、业务拒绝或失败，带可用的结构化 JobId、Mode 与 Action；重复丢弃订阅记录 unchanged，取消答复不等于任务已经 Canceled。Completed、Canceled、Failed 均在 Owner 首次观察到实际终态时记录一条业务结果 INFO，包括提交时已经终结的任务；重复轮询不重播。终态 INFO 只记状态，不重复失败原因和堆栈，原有源头 ERROR 与处理 DEBUG 保持独立。
+
 A每帧最多读取8条；B默认慢消费，每200ms最多读取一条，可切换到每帧8条。慢消费不在主线程sleep或阻塞接收。新订阅只获得其加入后的数据，丢弃Receiver立即解除对应背压，全部Receiver丢弃后生产者继续运行且不回放旧数据。全页最多8行，列表随页面滚动；离页后清空页面记录和Receiver，按自己持有的JobId请求取消，App私有清理路径只移除已真实终结的遗留执行记录，再次进入回到空页面。
 
 失败演示的结果保留共享诊断；页面消费失败状态、用户移除终态记录、离页即时回收或遗留任务最终收割时，由对应 Owner 记录实际处理或放弃过期结果。读取 A/B Finished 或查询状态本身不标记错误已处理。
