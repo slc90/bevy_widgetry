@@ -28,6 +28,7 @@ impl Plugin for SliderDemoPlugin {
                     if let Ok(mut state) = states.get_mut(event.entity) {
                         state.active = false;
                         state.value = event.value;
+                        info!(entity = ?event.entity, outcome = ?event.outcome, value = event.value, "Slider 拖动操作已结束");
                         match event.outcome {
                             SliderDragOutcome::Completed => state.completed += 1,
                             SliderDragOutcome::Cancelled => state.cancelled += 1,

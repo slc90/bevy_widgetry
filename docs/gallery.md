@@ -426,6 +426,10 @@ Native Window 移动、Resize 及需要原生 Cursor 行为的场景，不能仅
 
 GUI 自动验证的具体能力边界与操作要求遵循 `rules/gui-debugging.md`。
 
+## Slider 示例
+
+Slider 演示在每次拖动结束时以 INFO 记录控件 Entity、真实 Completed / Cancelled 结果与最终值，值未改变的手势同样记录一次。取消保留实际值，不代表回滚或正式提交；连续 ValueChange 和未提供离散提交事件的键盘步进不写拖动结束日志。
+
 ## NumberInput 示例
 
 NumberInput 页包含 i32 的 0..10 / step=3、u8 类型边界、f64 两位小数与完整精度焦点显示、ReadOnly、本地及祖先 Disabled、min=max=7、i64 原类型极限，以及 50px 父容器中的 134px 最小宽度示例（外层 180px 裁剪）。各组状态独立展示公开 `value()` 的正式值、根 `ValueChange<T>` 次数及最近事件值；初始化、同值、取消与非法提交不计变化。预设按钮使用公开 Setter，合法同值仍覆盖草稿，只读/禁用也可程序设值。页面离开销毁示例与统计，再进入恢复初始状态。导航、说明和状态文字支持中英文，Theme Colors 展示实际复用的 text_field / button 配色，不提供 NumberInput 专属 Overrides 示例。
