@@ -15,6 +15,11 @@ pub struct WidgetryTrayPlugin {
     config: TrayConfig,
 }
 
+#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WidgetryTraySystems {
+    Sync,
+}
+
 #[derive(Resource, Clone)]
 struct TrayConfig {
     rgba: image::RgbaImage,
@@ -26,11 +31,14 @@ struct TrayOwner(Option<TrayInstance>);
 
 struct TrayInstance {
     _registration: Registration,
-    _menu_registration: Option<MenuRegistration>,
-    _session: Option<MenuSession>,
-    _icon: TrayIcon,
-    _menu: Option<NativeMenu>,
-    _bridge: std::sync::Arc<Bridge>,
+    menu_registration: Option<MenuRegistration>,
+    session: Option<MenuSession>,
+    icon: TrayIcon,
+    menu: Option<NativeMenu>,
+    bridge: std::sync::Arc<Bridge>,
+    applied: Option<WidgetryTrayMenu>,
+    failed_request: Option<Option<WidgetryTrayMenu>>,
+    last_sync_error: Option<std::sync::Arc<TrayFailure>>,
 }
 
 impl WidgetryTrayPlugin {
@@ -63,7 +71,13 @@ impl Plugin for WidgetryTrayPlugin {
             .add_message::<WidgetryTrayMenuClick>()
             .add_systems(Startup, initialize)
             .add_systems(PreUpdate, bridge::forward_clicks)
-            .add_systems(Last, release_on_exit);
+            .add_systems(
+                Last,
+                (
+                    synchronize_menu.in_set(WidgetryTraySystems::Sync),
+                    release_on_exit.after(WidgetryTraySystems::Sync),
+                ),
+            );
         widgetry_debug!("WidgetryTrayPlugin 注册完成");
     }
 }
@@ -114,10 +128,8 @@ fn initialize_instance(
                 frame(),
             )
         })?;
-    let menu = menu
-        .filter(|menu| !menu.entries().is_empty())
-        .map(NativeMenu::new)
-        .transpose()?;
+    let applied = menu.filter(|menu| !menu.entries().is_empty()).cloned();
+    let menu = applied.as_ref().map(NativeMenu::new).transpose()?;
     let mut builder = TrayIconBuilder::new()
         .with_icon(native_icon)
         .with_tooltip(&config.tooltip)
@@ -155,14 +167,90 @@ fn initialize_instance(
         .map(|menu| MenuRegistration::new(&menu.routes, &bridge));
     owner.0 = Some(TrayInstance {
         _registration: registration,
-        _menu_registration: menu_registration,
-        _session: session,
-        _icon: icon,
-        _menu: menu,
-        _bridge: bridge,
+        menu_registration,
+        session,
+        icon,
+        menu,
+        bridge,
+        applied,
+        failed_request: None,
+        last_sync_error: None,
     });
     commands.insert_resource(inbox);
     Ok(())
+}
+
+fn synchronize_menu(
+    _main_thread: NonSendMarker,
+    menu: Option<Res<WidgetryTrayMenu>>,
+    mut owner: NonSendMut<TrayOwner>,
+    exit: Res<Messages<AppExit>>,
+) -> Result {
+    if !exit.is_empty() {
+        return Ok(());
+    }
+    let Some(instance) = &mut owner.0 else {
+        return Ok(());
+    };
+    let changed = menu.as_ref().is_some_and(|menu| menu.is_changed());
+    let desired = menu.as_deref().filter(|menu| !menu.entries().is_empty());
+    let dirty = instance
+        .bridge
+        .menu_dirty
+        .swap(false, std::sync::atomic::Ordering::AcqRel);
+    if !changed
+        && !dirty
+        && instance
+            .failed_request
+            .as_ref()
+            .is_some_and(|failed| failed.as_ref() == desired)
+    {
+        return Ok(());
+    }
+    match instance.synchronize(desired, dirty) {
+        Ok(()) => {
+            instance.failed_request = None;
+            if let Some(failure) = instance.last_sync_error.take() {
+                failure.record_handled("恢复托盘菜单同步", "已按宿主当前期望状态完成原生菜单同步");
+            }
+            Ok(())
+        }
+        Err(failure) => {
+            instance.failed_request = Some(desired.cloned());
+            let failure = std::sync::Arc::new(failure);
+            instance.last_sync_error = Some(failure.clone());
+            Err(
+                bevy_widgetry_diagnostics::bevy::WidgetryEcsError::from_shared(failure)
+                    .into_bevy_error(),
+            )
+        }
+    }
+}
+
+impl TrayInstance {
+    fn synchronize(
+        &mut self,
+        desired: Option<&WidgetryTrayMenu>,
+        dirty: bool,
+    ) -> Result<(), TrayFailure> {
+        if desired == self.applied.as_ref() && self.failed_request.is_none() && !dirty {
+            return Ok(());
+        }
+        let next = desired.map(NativeMenu::new).transpose()?;
+        if next.is_some() && self.session.is_none() {
+            self.session = Some(MenuSession::new(&self.icon, &self.bridge)?);
+        }
+        // Revoke retired IDs before replacing the projection, including queued activations.
+        self.menu_registration = None;
+        self.icon
+            .set_menu(next.as_ref().map(|menu| Box::new(menu.root.clone()) as _));
+        self.menu_registration = next
+            .as_ref()
+            .map(|menu| MenuRegistration::new(&menu.routes, &self.bridge));
+        self.menu = next;
+        self.applied = desired.cloned();
+        Ok(())
+    }
 }
 
 fn release_on_exit(
@@ -178,6 +266,9 @@ fn release_on_exit(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod menu_tests;
 
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]

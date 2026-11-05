@@ -12,4 +12,4 @@ pub use bridge::{WidgetryTrayClick, WidgetryTrayMenuClick};
 pub use error::{TrayError, TrayFailure};
 
 pub use menu::{TrayMenuEntry, WidgetryTrayMenu};
-pub use plugin::WidgetryTrayPlugin;
+pub use plugin::{WidgetryTrayPlugin, WidgetryTraySystems};

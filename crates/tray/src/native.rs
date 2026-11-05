@@ -245,14 +245,34 @@ pub(crate) fn verify_menu(
     unsafe { verify_menu_handle(menu.hpopupmenu() as _, entries) }
 }
 
+#[cfg(test)]
+pub(crate) fn activate_item(icon: &TrayIcon, menu: &tray_icon::menu::Menu, path: &[u32]) {
+    use tray_icon::menu::ContextMenu;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetMenuItemID, GetSubMenu, SendMessageW, WM_COMMAND,
+    };
+    let Some((index, parents)) = path.split_last() else {
+        return;
+    };
+    let mut handle = menu.hpopupmenu() as windows_sys::Win32::UI::WindowsAndMessaging::HMENU;
+    // SAFETY: Test fixtures own the icon/menu on this thread and pass valid tree positions.
+    unsafe {
+        for parent in parents {
+            handle = GetSubMenu(handle, *parent as i32);
+        }
+        let command = GetMenuItemID(handle, *index as i32);
+        SendMessageW(icon.window_handle(), WM_COMMAND, command as usize, 0);
+    }
+}
+
 unsafe fn verify_menu_handle(
     handle: windows_sys::Win32::UI::WindowsAndMessaging::HMENU,
     entries: &[crate::TrayMenuEntry],
 ) -> Result<(), TrayFailure> {
     use crate::TrayMenuEntry;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetMenuItemCount, GetMenuItemInfoW, MENUITEMINFOW, MFT_SEPARATOR, MIIM_FTYPE, MIIM_STRING,
-        MIIM_SUBMENU,
+        GetMenuItemCount, GetMenuItemInfoW, MENUITEMINFOW, MFS_CHECKED, MFS_DISABLED,
+        MFT_SEPARATOR, MIIM_FTYPE, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
     };
     // SAFETY: The caller retains the owning root throughout recursive verification.
     let count = unsafe { GetMenuItemCount(handle) };
@@ -265,7 +285,7 @@ unsafe fn verify_menu_handle(
     for (index, entry) in entries.iter().enumerate() {
         let mut info = MENUITEMINFOW {
             cbSize: std::mem::size_of::<MENUITEMINFOW>() as _,
-            fMask: MIIM_SUBMENU | MIIM_STRING | MIIM_FTYPE,
+            fMask: MIIM_SUBMENU | MIIM_STRING | MIIM_FTYPE | MIIM_STATE,
             ..Default::default()
         };
         // SAFETY: Info is writable and initialized with its required size; positions are checked by Windows.
@@ -276,10 +296,32 @@ unsafe fn verify_menu_handle(
             ));
         }
         let (expected_text, children) = match entry {
-            TrayMenuEntry::Item { text, .. } => (Some(text.as_str()), None),
+            TrayMenuEntry::Item { text, .. } | TrayMenuEntry::Check { text, .. } => {
+                (Some(text.as_str()), None)
+            }
             TrayMenuEntry::Separator => (None, None),
-            TrayMenuEntry::Submenu { text, entries } => (Some(text.as_str()), Some(entries)),
+            TrayMenuEntry::Submenu { text, entries, .. } => (Some(text.as_str()), Some(entries)),
         };
+        let expected_enabled = match entry {
+            TrayMenuEntry::Item { enabled, .. }
+            | TrayMenuEntry::Check { enabled, .. }
+            | TrayMenuEntry::Submenu { enabled, .. } => Some(*enabled),
+            TrayMenuEntry::Separator => None,
+        };
+        if expected_enabled.is_some_and(|enabled| enabled != (info.fState & MFS_DISABLED == 0)) {
+            return Err(projection_failure(
+                index,
+                "native enabled state differs from requested tree",
+            ));
+        }
+        if let TrayMenuEntry::Check { checked, .. } = entry
+            && *checked != (info.fState & MFS_CHECKED != 0)
+        {
+            return Err(projection_failure(
+                index,
+                "native check state differs from host state",
+            ));
+        }
         if (info.fType & MFT_SEPARATOR != 0) != expected_text.is_none()
             || info.hSubMenu.is_null() == children.is_some()
         {

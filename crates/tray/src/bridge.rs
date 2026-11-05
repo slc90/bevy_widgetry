@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use bevy_widgetry_diagnostics::{ErrorFrame, bevy::DiagnosticBatch};
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded, unbounded};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use tray_icon::menu::{MenuEvent, MenuId};
 use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent, TrayIconId};
@@ -10,7 +11,7 @@ use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent, TrayIconId};
 const CAPACITY: usize = 64;
 type Routes = Mutex<HashMap<TrayIconId, Weak<Bridge>>>;
 static ROUTES: OnceLock<Routes> = OnceLock::new();
-type MenuRoutes = Mutex<HashMap<MenuId, (Weak<Bridge>, String)>>;
+type MenuRoutes = Mutex<HashMap<MenuId, (Weak<Bridge>, String, bool)>>;
 static MENU_ROUTES: OnceLock<MenuRoutes> = OnceLock::new();
 
 #[derive(Message, Clone, Copy, Debug)]
@@ -26,6 +27,7 @@ pub(crate) struct Bridge {
     clicks: Sender<()>,
     menus: Sender<(MenuId, String)>,
     pub(crate) gesture: crate::native::MenuGesture,
+    pub(crate) menu_dirty: AtomicBool,
     errors: Sender<TrayFailure>,
     wake: Box<dyn Fn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> + Send + Sync>,
 }
@@ -66,6 +68,7 @@ impl Bridge {
                 clicks,
                 menus,
                 gesture: Default::default(),
+                menu_dirty: AtomicBool::new(false),
                 errors,
                 wake: Box::new(wake),
             }),
@@ -115,7 +118,10 @@ impl Bridge {
         }
     }
 
-    fn notify_menu(&self, native: MenuId, id: String) {
+    fn notify_menu(&self, native: MenuId, id: String, check: bool) {
+        if check {
+            self.menu_dirty.store(true, Ordering::Release);
+        }
         match self.menus.try_send((native, id)) {
             Ok(()) => {}
             Err(TrySendError::Full((_, id))) => {
@@ -143,14 +149,14 @@ impl Bridge {
 }
 
 impl MenuRegistration {
-    pub(crate) fn new(items: &[(MenuId, String)], bridge: &Arc<Bridge>) -> Self {
+    pub(crate) fn new(items: &[(MenuId, String, bool)], bridge: &Arc<Bridge>) -> Self {
         install();
         with_menu_routes(|routes| {
-            for (native, id) in items {
-                routes.insert(native.clone(), (Arc::downgrade(bridge), id.clone()));
+            for (native, id, check) in items {
+                routes.insert(native.clone(), (Arc::downgrade(bridge), id.clone(), *check));
             }
         });
-        Self(items.iter().map(|(id, _)| id.clone()).collect())
+        Self(items.iter().map(|(id, _, _)| id.clone()).collect())
     }
 }
 
@@ -165,7 +171,7 @@ impl Drop for MenuRegistration {
 }
 
 fn with_menu_routes<T>(
-    action: impl FnOnce(&mut HashMap<MenuId, (Weak<Bridge>, String)>) -> T,
+    action: impl FnOnce(&mut HashMap<MenuId, (Weak<Bridge>, String, bool)>) -> T,
 ) -> T {
     install();
     let routes = MENU_ROUTES.get_or_init(Mutex::default);
@@ -191,10 +197,10 @@ fn dispatch_menu(event: MenuEvent) {
     let route = with_menu_routes(|routes| {
         routes
             .get(&event.id)
-            .and_then(|(bridge, id)| Some((bridge.upgrade()?, id.clone())))
+            .and_then(|(bridge, id, check)| Some((bridge.upgrade()?, id.clone(), *check)))
     });
-    if let Some((bridge, id)) = route {
-        bridge.notify_menu(event.id, id);
+    if let Some((bridge, id, check)) = route {
+        bridge.notify_menu(event.id, id, check);
     }
 }
 
@@ -275,6 +281,7 @@ fn dispatch(event: TrayIconEvent) {
 
 pub(crate) fn forward_clicks(
     inbox: Option<Res<Inbox>>,
+    menu: Option<Res<crate::WidgetryTrayMenu>>,
     mut clicks: MessageWriter<WidgetryTrayClick>,
     mut menus: MessageWriter<WidgetryTrayMenuClick>,
 ) -> Result {
@@ -285,7 +292,11 @@ pub(crate) fn forward_clicks(
         clicks.write(WidgetryTrayClick);
     }
     for (native, id) in inbox.menus.try_iter().take(CAPACITY) {
-        if with_menu_routes(|routes| routes.contains_key(&native)) {
+        if with_menu_routes(|routes| routes.contains_key(&native))
+            && menu
+                .as_ref()
+                .is_some_and(|menu| menu.accepts_activation(&id))
+        {
             menus.write(WidgetryTrayMenuClick { id });
         }
     }
@@ -599,9 +610,10 @@ mod tests {
         let second = tray_icon::menu::MenuItem::new("second", true, None)
             .id()
             .clone();
-        let registration = MenuRegistration::new(&[(first.clone(), "shared".into())], &bridge);
+        let registration =
+            MenuRegistration::new(&[(first.clone(), "shared".into(), false)], &bridge);
         let _other_registration =
-            MenuRegistration::new(&[(second.clone(), "shared".into())], &other);
+            MenuRegistration::new(&[(second.clone(), "shared".into(), false)], &other);
         dispatch_menu(MenuEvent { id: first.clone() });
         dispatch_menu(MenuEvent { id: first.clone() });
         dispatch_menu(MenuEvent {
@@ -612,6 +624,10 @@ mod tests {
         let mut app = App::new();
         app.add_message::<WidgetryTrayClick>()
             .add_message::<WidgetryTrayMenuClick>()
+            .insert_resource(
+                crate::WidgetryTrayMenu::new(vec![crate::TrayMenuEntry::item("shared", "Shared")])
+                    .unwrap(),
+            )
             .insert_resource(inbox);
         let mut cursor = app
             .world()
@@ -652,9 +668,10 @@ mod tests {
             Err(Box::new(std::io::Error::from_raw_os_error(5)))
         });
         for _ in 0..CAPACITY + 3 {
-            bridge.notify_menu(MenuId::new("native"), "action".into());
+            bridge.notify_menu(MenuId::new("native"), "action".into(), true);
         }
         assert_eq!(inbox.menus.len(), CAPACITY);
+        assert!(bridge.menu_dirty.load(Ordering::Acquire));
         let errors: Vec<_> = inbox.errors.try_iter().collect();
         assert_eq!(errors.len(), CAPACITY + 3);
         assert_eq!(

@@ -31,6 +31,12 @@ pub enum TrayError {
         source: Box<dyn Error + Send + Sync>,
     },
     RouteLock,
+    MissingMenuItem {
+        id: String,
+    },
+    NotCheckItem {
+        id: String,
+    },
     MenuProjection {
         detail: &'static str,
     },
@@ -61,6 +67,8 @@ impl fmt::Display for TrayError {
             Self::ClickOverflow { .. } => "托盘点击队列已满，拒绝本次点击",
             Self::Wake { .. } => "托盘点击唤醒失败",
             Self::RouteLock => "托盘事件路由锁中毒",
+            Self::MissingMenuItem { .. } => "托盘菜单项 ID 不存在",
+            Self::NotCheckItem { .. } => "托盘菜单项不支持勾选状态",
             Self::MenuProjection { .. } => "托盘原生菜单未应用期望结构或内容",
             Self::DuplicateMenuId { .. } => "托盘菜单项 ID 重复",
             Self::Menu { .. } => "托盘原生菜单创建失败",
