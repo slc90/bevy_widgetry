@@ -3,7 +3,7 @@ use crate::{
     i18n::{ButtonKey, Language, TextKey, localized, tr, tr_args},
 };
 use bevy::{
-    picking::hover::Hovered,
+    picking::{hover::Hovered, pointer::PointerId},
     prelude::*,
     ui::{InteractionDisabled, Pressed},
     ui_widgets::Activate,
@@ -18,7 +18,30 @@ use bevy_widgetry::{
 #[reflect(Component)]
 struct GalleryButton {
     activations: usize,
+    mark_changes: usize,
 }
+
+#[derive(Component, Default, Clone, Reflect)]
+#[reflect(Component)]
+struct GalleryButtonMarked(bool);
+
+#[derive(EntityEvent)]
+struct GalleryButtonMarkedChanged {
+    entity: Entity,
+    marked: bool,
+}
+
+#[derive(Component, Default)]
+struct SecondaryGesture(Option<SecondaryPress>);
+
+struct SecondaryPress {
+    pointer: PointerId,
+    target: bevy::camera::NormalizedRenderTarget,
+    dragged: bool,
+}
+
+#[derive(Component)]
+struct Star;
 
 #[derive(Component, Default)]
 struct DemoRequests {
@@ -47,6 +70,8 @@ impl GalleryButton {
         bsn! {
             @WidgetryButtonHeadless
             WidgetryButtonLoading::default()
+            GalleryButtonMarked::default()
+            template(|_| Ok(SecondaryGesture::default()))
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             Node {
                 width: px(248), height: px(68), border: UiRect::all(px(2)),
@@ -56,6 +81,12 @@ impl GalleryButton {
             BackgroundColor({Color::srgb_u8(15, 58, 72)})
             template(|_| Ok(BorderColor::all(Color::srgb_u8(62, 211, 190))))
             on(activated)
+            on(secondary_press)
+            on(secondary_drag)
+            on(secondary_cancel)
+            on(secondary_click)
+            on(disabled_gesture)
+            on(marked_changed)
             Children [
                 Pickable::IGNORE Node { position_type: PositionType::Absolute, left: px(10), top: px(16), bottom: px(16), width: px(4), border_radius: BorderRadius::all(px(2)) }
                 BackgroundColor({Color::srgb_u8(62, 211, 190)})--
@@ -69,7 +100,10 @@ impl GalleryButton {
                     Pickable::IGNORE @localized(TextKey::Button(ButtonKey::CustomWorking))
                     TextColor({Color::srgb_u8(225, 255, 249)}) TextFont { font_size: FontSize::Px(16.0) }--
                     Pickable::IGNORE Node { column_gap: px(6) } Children [@dot(0)-- @dot(1)-- @dot(2)]
-                ]
+                ]--
+                Name("GalleryButtonStar") template(|_| Ok(Star)) Pickable::IGNORE Visibility::Hidden
+                Text("★") TextFont { font_size: FontSize::Px(18.0) } TextColor({Color::srgb_u8(255, 218, 90)})
+                Node { position_type: PositionType::Absolute, top: px(2), right: px(8) }
             ]
         }
     }
@@ -97,6 +131,7 @@ pub(super) fn scene() -> impl Scene {
         Children [
             @localized(TextKey::Button(ButtonKey::CustomTitle)) WidgetryText--
             @localized(TextKey::Button(ButtonKey::CustomDescription)) WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            @localized(TextKey::Button(ButtonKey::CustomMarkDescription)) WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             Name("GalleryButtonParent") template(|_| Ok(DemoRequests::default())) Node
                 Children [ @GalleryButton Name("GalleryButton") ]--
             Name("GalleryButtonStatus") template(|_| Ok(Status)) Text("") WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
@@ -111,12 +146,116 @@ pub(super) fn scene() -> impl Scene {
 }
 
 pub(super) fn install(app: &mut App) {
-    app.register_type::<GalleryButton>().add_systems(
-        PostUpdate,
-        update_visuals
-            .before(bevy::ui::UiSystems::Prepare)
-            .run_if(in_state(GalleryPage::Button)),
-    );
+    app.register_type::<GalleryButton>()
+        .register_type::<GalleryButtonMarked>()
+        .add_systems(
+            PostUpdate,
+            update_visuals
+                .before(bevy::ui::UiSystems::Prepare)
+                .run_if(in_state(GalleryPage::Button)),
+        );
+}
+
+fn secondary_press(
+    event: On<PointerPress>,
+    mut buttons: Query<(&WidgetryEffectiveDisabled, &mut SecondaryGesture), With<GalleryButton>>,
+) {
+    if event.button != PointerButton::Secondary {
+        return;
+    }
+    if let Ok((disabled, mut gesture)) = buttons.get_mut(event.entity) {
+        gesture.0 = (!disabled.is_disabled()).then(|| SecondaryPress {
+            pointer: event.pointer.id,
+            target: event.pointer.target.clone(),
+            dragged: false,
+        });
+    }
+}
+
+fn secondary_drag(
+    event: On<PointerDragStart>,
+    mut gestures: Query<&mut SecondaryGesture, With<GalleryButton>>,
+) {
+    if event.button != PointerButton::Secondary {
+        return;
+    }
+    if let Ok(mut gesture) = gestures.get_mut(event.entity)
+        && let Some(press) = &mut gesture.0
+        && press.pointer == event.pointer.id
+        && press.target == event.pointer.target
+    {
+        press.dragged = true;
+    }
+}
+
+fn secondary_cancel(
+    event: On<PointerCancel>,
+    mut gestures: Query<&mut SecondaryGesture, With<GalleryButton>>,
+) {
+    if let Ok(mut gesture) = gestures.get_mut(event.entity)
+        && gesture.0.as_ref().is_some_and(|press| {
+            press.pointer == event.pointer.id && press.target == event.pointer.target
+        })
+    {
+        gesture.0 = None;
+    }
+}
+
+fn disabled_gesture(
+    event: On<Insert<WidgetryEffectiveDisabled>>,
+    mut buttons: Query<(&WidgetryEffectiveDisabled, &mut SecondaryGesture), With<GalleryButton>>,
+) {
+    if let Ok((disabled, mut gesture)) = buttons.get_mut(event.entity)
+        && disabled.is_disabled()
+    {
+        gesture.0 = None;
+    }
+}
+
+fn secondary_click(
+    event: On<PointerClick>,
+    mut buttons: Query<
+        (
+            &WidgetryEffectiveDisabled,
+            &mut SecondaryGesture,
+            &mut GalleryButtonMarked,
+        ),
+        With<GalleryButton>,
+    >,
+    mut commands: Commands,
+) {
+    if event.button != PointerButton::Secondary {
+        return;
+    }
+    let Ok((disabled, mut gesture, mut marked)) = buttons.get_mut(event.entity) else {
+        return;
+    };
+    if !gesture.0.as_ref().is_some_and(|press| {
+        press.pointer == event.pointer.id && press.target == event.pointer.target
+    }) {
+        return;
+    }
+    let Some(press) = gesture.0.take() else {
+        return;
+    };
+    if disabled.is_disabled() || press.dragged {
+        return;
+    }
+    marked.0 = !marked.0;
+    commands.trigger(GalleryButtonMarkedChanged {
+        entity: event.entity,
+        marked: marked.0,
+    });
+}
+
+fn marked_changed(
+    event: On<GalleryButtonMarkedChanged>,
+    mut buttons: Query<(&GalleryButtonMarked, &mut GalleryButton)>,
+) {
+    if let Ok((marked, mut button)) = buttons.get_mut(event.entity) {
+        button.mark_changes += 1;
+        info!(entity = ?event.entity, marked = marked.0, notified_marked = event.marked, changes = button.mark_changes, "切换 GalleryButton 标记");
+    }
 }
 
 fn activated(event: On<Activate>, mut buttons: Query<&mut GalleryButton>) {
@@ -183,6 +322,7 @@ type RootData = (
     Entity,
     &'static GalleryButton,
     &'static WidgetryButtonLoading,
+    &'static GalleryButtonMarked,
     &'static WidgetryEffectiveDisabled,
     &'static Hovered,
     Has<Pressed>,
@@ -196,12 +336,13 @@ fn update_visuals(
     mut roots: Query<RootData, Without<Dot>>,
     mut labels: Query<(&ChildOf, &mut Visibility, &mut TextColor), With<Label>>,
     mut busy: Query<(&ChildOf, &mut Visibility), (With<Busy>, Without<Label>)>,
+    mut stars: Query<(&ChildOf, &mut Visibility), (With<Star>, Without<Label>, Without<Busy>)>,
     ancestry: Query<&ChildOf>,
     mut dots: Query<(&ChildOf, &Dot, &mut UiTransform), Without<GalleryButton>>,
     mut status: Query<&mut Text, With<Status>>,
     mut redraw: MessageWriter<bevy::window::RequestRedraw>,
 ) {
-    for (root, button, loading, disabled, hovered, pressed, mut background, mut border) in
+    for (root, button, loading, marked, disabled, hovered, pressed, mut background, mut border) in
         &mut roots
     {
         let active = loading.is_active();
@@ -268,6 +409,15 @@ fn update_visuals(
                 });
             }
         }
+        for (parent, mut visibility) in &mut stars {
+            if parent.parent() == root {
+                visibility.set_if_neq(if marked.0 {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                });
+            }
+        }
         for (parent, dot, mut transform) in &mut dots {
             if ancestry
                 .get(parent.parent())
@@ -291,6 +441,19 @@ fn update_visuals(
             &[
                 ("count", button.activations.to_string()),
                 ("state", tr(*language, TextKey::Button(state)).to_owned()),
+                (
+                    "marked",
+                    tr(
+                        *language,
+                        TextKey::Button(if marked.0 {
+                            ButtonKey::CustomMarked
+                        } else {
+                            ButtonKey::CustomUnmarked
+                        }),
+                    )
+                    .to_owned(),
+                ),
+                ("changes", button.mark_changes.to_string()),
             ],
         );
         for mut output in &mut status {

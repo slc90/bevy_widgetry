@@ -324,6 +324,11 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Slider(super::SliderKey::Overrides) => {
             "通过公开 API 覆盖 Fill、Thumb 与焦点环颜色，清除后恢复当前主题。"
         }
+        TextKey::Button(ButtonKey::CustomMarkDescription) => {
+            "完整右键点击切换右上角星标；拖动、取消、禁用或加载时不标记。"
+        }
+        TextKey::Button(ButtonKey::CustomMarked) => "已标记",
+        TextKey::Button(ButtonKey::CustomUnmarked) => "未标记",
         TextKey::Button(ButtonKey::CustomTitle) => "GalleryButton · 自定义 BSN 外观",
         TextKey::Button(ButtonKey::CustomDescription) => {
             "独立按钮复用 Headless 输入和可选 Loading。可点击、按 Enter / Space，并叠加不同限制。"
@@ -333,7 +338,9 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Button(ButtonKey::CustomLocalDisabled) => "切换本地禁用",
         TextKey::Button(ButtonKey::CustomAncestorDisabled) => "切换祖先禁用",
         TextKey::Button(ButtonKey::CustomLoading) => "开始 / 结束加载",
-        TextKey::Button(ButtonKey::CustomStatus) => "激活次数：{count} · {state}",
+        TextKey::Button(ButtonKey::CustomStatus) => {
+            "激活次数：{count} · {state} · {marked} · 标记变化：{changes}"
+        }
         TextKey::Button(ButtonKey::CustomDisabled) => "已禁用",
         TextKey::Button(ButtonKey::CustomPressed) => "按下",
         TextKey::Button(ButtonKey::CustomHovered) => "悬停",

@@ -324,6 +324,9 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Slider(super::SliderKey::Overrides) => {
             "Override fill, thumb and focus-ring colors through the public API; clear to restore the current theme."
         }
+        TextKey::Button(ButtonKey::CustomMarkDescription) => "Right-click to toggle the corner star. Dragging, cancellation, Disabled, and Loading do not mark.",
+        TextKey::Button(ButtonKey::CustomMarked) => "Marked",
+        TextKey::Button(ButtonKey::CustomUnmarked) => "Unmarked",
         TextKey::Button(ButtonKey::CustomTitle) => "GalleryButton · custom BSN appearance",
         TextKey::Button(ButtonKey::CustomDescription) => "This independent button shares Headless input and optional Loading. Try click, Enter / Space, and combined restrictions.",
         TextKey::Button(ButtonKey::CustomAction) => "Gallery action",
@@ -331,7 +334,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Button(ButtonKey::CustomLocalDisabled) => "Toggle local disabled",
         TextKey::Button(ButtonKey::CustomAncestorDisabled) => "Toggle parent disabled",
         TextKey::Button(ButtonKey::CustomLoading) => "Start / finish loading",
-        TextKey::Button(ButtonKey::CustomStatus) => "Activations: {count} · {state}",
+        TextKey::Button(ButtonKey::CustomStatus) => "Activations: {count} · {state} · {marked} · Mark changes: {changes}",
         TextKey::Button(ButtonKey::CustomDisabled) => "Disabled",
         TextKey::Button(ButtonKey::CustomPressed) => "Pressed",
         TextKey::Button(ButtonKey::CustomHovered) => "Hovered",
