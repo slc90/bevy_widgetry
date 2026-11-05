@@ -508,6 +508,8 @@ Waveform 录制打开任务在重载或离页时请求取消，并由后台终�
 
 录制打开和重载失败保留文件与 Reader 的原诊断，并补充 path、实际 job_id 和请求 revision。停止本次打开、保留当前会话时记录同源处理 DEBUG；状态栏保存展示文字。结果通道提前关闭、Job 完成但没有交付 Source 使用独立类型诊断；正常 Missing、Pending 和协作取消不创建 ERROR。
 
+自动打开与用户重载的请求、实际任务提交和业务结果使用 INFO，携带 path、Revision、Origin 与可用 JobId；文件不存在明确记录未启动。加载成功只在最新版本的 Source 与元信息校验通过并提交后记录，取消、失败或放弃旧结果分别记录真实结果。替换/离页时的结果放弃不等于后台 Job 已取消；取消答复、旧结果排空与记录回收检查使用 DEBUG，并与同一 JobId/Revision 关联。普通播放与逐帧波形更新不增加加载日志。
+
 交付 Source 时若实际发送被取消，打开 Job 确认取消后结束为 Canceled；不会将该关闭路径误判为“完成但未交付 Source”。
 
 `JobDemo`上的反射`JobDemoState`提供当前选择、slow_b与各任务的真实执行/消费读数；操作按钮使用`JobStartIo`、`JobStartCpu`、`JobStartThread`、`JobStartFailure`、`JobStartLateComplete`、`JobSubscribeB`、`JobDropA`、`JobDropB`、`JobToggleSlowB`、`JobCancel`和`JobRemove`等稳定Name，每行有JobId组成的选择按钮/状态/进度条Name。任务或接收器仍需推进时在Last请求重绘，执行终结且消费完成后静止；页面文案支持中英文和既有主题样式。

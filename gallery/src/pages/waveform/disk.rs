@@ -80,6 +80,7 @@ pub(super) struct DiskReplay {
 struct OpenJob {
     id: JobId,
     revision: u64,
+    origin: OpenOrigin,
     receiver: JobReceiver<Weak<DiskWaveformSource>>,
     pending: Option<Weak<DiskWaveformSource>>,
     // Dropping an unread broadcast Item must not cancel its Reader while the channel lock is held.
@@ -90,6 +91,19 @@ struct OpenJob {
 struct DiskStatus;
 #[derive(Component)]
 struct Reload;
+
+#[derive(Clone, Copy, Debug)]
+enum OpenOrigin {
+    Automatic,
+    User,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum OpenStop {
+    Replaced,
+    PageLeft,
+    DeliveryFailed,
+}
 
 impl DiskReplay {
     pub(super) fn new(manager: JobManager) -> Self {
@@ -106,14 +120,16 @@ impl DiskReplay {
             state: LoadState::Missing,
             revision: 0,
         };
-        state.reload();
+        state.reload(OpenOrigin::Automatic);
         state
     }
-    fn reload(&mut self) {
+    fn reload(&mut self, origin: OpenOrigin) {
         self.revision = self.revision.wrapping_add(1);
-        self.cancel_open();
+        info!(path = %self.path.display(), revision = self.revision, ?origin, "请求打开本地 Waveform 录制文件");
+        self.cancel_open(OpenStop::Replaced);
         if !self.path.is_file() {
             self.state = LoadState::Missing;
+            info!(path = %self.path.display(), revision = self.revision, ?origin, outcome = "missing", "本地 Waveform 录制文件未找到，未启动打开任务");
             return;
         }
         let path = self.path.clone();
@@ -148,9 +164,11 @@ impl DiskReplay {
             },
         ) {
             Ok((id, receiver)) => {
+                info!(path = %self.path.display(), job_id = id.get(), revision = self.revision, ?origin, outcome = "submitted", "本地 Waveform 录制文件打开任务已提交");
                 self.task = Some(OpenJob {
                     id,
                     revision: self.revision,
+                    origin,
                     receiver,
                     pending: None,
                     owner,
@@ -162,38 +180,51 @@ impl DiskReplay {
                     None,
                     self.revision,
                 ));
+                info!(path = %self.path.display(), revision = self.revision, ?origin, outcome = "failed", "本地 Waveform 录制文件打开请求未提交");
                 self.reject(error, "提交失败");
             }
         }
     }
-    fn cancel_open(&mut self) {
+    fn cancel_open(&mut self, reason: OpenStop) {
         if let Some(mut task) = self.task.take() {
-            let _ = self.manager.cancel_if_present(task.id);
+            if !matches!(reason, OpenStop::DeliveryFailed) {
+                info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, ?reason, outcome = "discarded", "本地 Waveform 录制文件打开结果已放弃");
+            }
+            let cancel_result = self.manager.cancel_if_present(task.id);
+            debug!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, ?reason, ?cancel_result, "录制文件打开请求已转交后台收尾");
             let manager = self.manager.clone();
+            let path = self.path.clone();
             // This owner also runs during shutdown, when new managed jobs are rejected.
             bevy::tasks::IoTaskPool::get()
                 .spawn(async move {
-                    loop {
+                    let outcome = loop {
                         match task.receiver.recv().await {
                             Ok(JobRead::Finished(JobOutcome::Failed(error))) => {
                                 error.record_handled(
                                     "放弃已重载或离页的录制文件打开结果",
                                     "终止过期打开操作",
                                 );
-                                break;
+                                break "failed";
                             }
-                            Ok(JobRead::Finished(_) | JobRead::Closed) => break,
+                            Ok(JobRead::Finished(JobOutcome::Completed)) => break "completed",
+                            Ok(JobRead::Finished(JobOutcome::Canceled)) => break "canceled",
+                            Ok(JobRead::Closed) => break "closed",
                             Ok(JobRead::Item(_) | JobRead::Empty) => {}
                             Err(error) => error
                                 .record_handled("丢弃过期录制打开结果并继续收割", "回放会话已放弃"),
                         }
-                    }
-                    if let Err(error) = manager.remove_if_present(task.id) {
-                        error.record_handled(
-                            "保留无法移除的录制打开 Job 记录",
-                            "过期打开结果已放弃",
-                        );
-                    }
+                    };
+                    let removed = match manager.remove_if_present(task.id) {
+                        Ok(status) => status.is_some(),
+                        Err(error) => {
+                            error.record_handled(
+                                "保留无法移除的录制打开 Job 记录",
+                                "过期打开结果已放弃",
+                            );
+                            false
+                        }
+                    };
+                    debug!(path = %path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, ?reason, outcome, removed, "录制文件打开结果已排空并完成回收检查");
                     // Keep the strong source owner alive until the weak-item queue is drained.
                     drop(task);
                 })
@@ -226,7 +257,8 @@ impl DiskReplay {
                     task.id,
                     task.revision,
                 );
-                self.cancel_open();
+                info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, outcome = "failed", "本地 Waveform 录制文件打开结果交付失败");
+                self.cancel_open(OpenStop::DeliveryFailed);
                 self.reject(error, "结果通道提前关闭");
                 return None;
             }
@@ -236,7 +268,8 @@ impl DiskReplay {
                     Some(task.id),
                     task.revision,
                 ));
-                self.cancel_open();
+                info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, outcome = "failed", "本地 Waveform 录制文件打开结果交付失败");
+                self.cancel_open(OpenStop::DeliveryFailed);
                 self.revision = self.revision.wrapping_add(1);
                 self.reject(error, "结果交付失败");
                 return None;
@@ -247,6 +280,7 @@ impl DiskReplay {
             error.record_handled("保留 Job 记录并继续交付已打开的回放", "记录清理失败");
         }
         if task.revision != self.revision {
+            info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, outcome = "discarded", "本地 Waveform 录制文件打开结果已过期，未提交回放");
             if let JobOutcome::Failed(error) = result {
                 error.record_handled("放弃过期录制文件打开结果", "回放请求版本已改变");
             }
@@ -264,15 +298,14 @@ impl DiskReplay {
                                 .is_some_and(|owner| Arc::ptr_eq(owner, source))
                         })
                 else {
-                    self.reject(
-                        open_failure(
-                            OpenError::CompletedWithoutSource,
-                            &self.path,
-                            task.id,
-                            task.revision,
-                        ),
-                        "后台完成但未交付数据源",
+                    let failure = open_failure(
+                        OpenError::CompletedWithoutSource,
+                        &self.path,
+                        task.id,
+                        task.revision,
                     );
+                    info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, outcome = "failed", "本地 Waveform 录制文件打开未交付有效数据源");
+                    self.reject(failure, "后台完成但未交付数据源");
                     return None;
                 };
                 let details = source.metadata().and_then(|metadata| {
@@ -303,6 +336,7 @@ impl DiskReplay {
                 let (rate, channels, seconds) = match details {
                     Ok(details) => details,
                     Err(error) => {
+                        info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, outcome = "failed", "本地 Waveform 录制文件回放元信息无效");
                         self.reject(
                             error.with_context(open_frame(
                                 &self.path,
@@ -320,10 +354,11 @@ impl DiskReplay {
                     channels,
                     seconds,
                 };
-                info!(path = %self.path.display(), "本地 Waveform 回放记录加载完成");
+                info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, rate, channels, seconds, outcome = "loaded", "本地 Waveform 回放记录加载完成");
                 Some(source)
             }
             JobOutcome::Failed(error) => {
+                info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, outcome = "failed", "本地 Waveform 录制文件打开失败");
                 self.reject(
                     error.with_context(open_frame(&self.path, Some(task.id), task.revision)),
                     "后台打开失败",
@@ -332,6 +367,7 @@ impl DiskReplay {
             }
             JobOutcome::Canceled => {
                 self.failed("recording open canceled".into());
+                info!(path = %self.path.display(), job_id = task.id.get(), revision = task.revision, origin = ?task.origin, outcome = "canceled", "本地 Waveform 录制文件打开已取消");
                 None
             }
         }
@@ -364,7 +400,7 @@ impl DiskReplay {
 
 impl Drop for DiskReplay {
     fn drop(&mut self) {
-        self.cancel_open();
+        self.cancel_open(OpenStop::PageLeft);
     }
 }
 
@@ -395,8 +431,7 @@ pub(super) fn install(app: &mut App) {
                     bevy_widgetry::diagnostics::ErrorFrame::new("Waveform 重载按钮缺少页面数据源"),
                 )
             })?;
-            sources.disk.reload();
-            info!("请求重新加载本地 Waveform 回放记录");
+            sources.disk.reload(OpenOrigin::User);
             Ok(())
         },
     )
@@ -491,6 +526,7 @@ mod tests {
             .unwrap();
         let reader = ready.recv_timeout(Duration::from_secs(5)).unwrap();
         disk.task = Some(OpenJob {
+            origin: OpenOrigin::User,
             id,
             revision: 0,
             receiver,
@@ -517,6 +553,7 @@ mod tests {
                 })
                 .unwrap();
             disk.task = Some(OpenJob {
+                origin: OpenOrigin::User,
                 id,
                 revision: disk.revision,
                 receiver,
@@ -528,10 +565,26 @@ mod tests {
             }
             release.send(()).unwrap();
             wait(|| disk.manager.status(id).unwrap().state.is_finished());
-            let logs = LogCapture::default();
+            let logs = LogCapture::with_targets([
+                "bevy_widgetry",
+                "widget_gallery::pages::waveform::disk",
+            ]);
             assert!(logs.run(|| disk.poll()).is_none());
             assert!(matches!(disk.state, LoadState::Failed(_)));
             let records = logs.records();
+            let results: Vec<_> = records
+                .iter()
+                .filter(|record| record.level == bevy::log::Level::INFO)
+                .collect();
+            assert_eq!(results.len(), 1);
+            assert!(results[0].matches_field("job_id", &id.get().to_string()));
+            assert!(results[0].matches_field("revision", "0"));
+            assert!(results[0].matches_field("origin", "User"));
+            assert!(
+                results[0].matches_field("outcome", if cancel { "canceled" } else { "failed" })
+            );
+            assert!(logs.run(|| disk.poll()).is_none());
+            assert_eq!(logs.records().len(), records.len());
             let sources: Vec<_> = records
                 .iter()
                 .filter(|r| r.phase() == Some(DiagnosticPhase::Source))
@@ -580,6 +633,7 @@ mod tests {
             })
             .unwrap();
         disk.task = Some(OpenJob {
+            origin: OpenOrigin::User,
             id,
             revision: disk.revision,
             receiver,
@@ -614,7 +668,7 @@ mod tests {
         let path = directory.path().join("recording.widx");
         recording(&path);
         let mut disk = empty(path);
-        disk.reload();
+        disk.reload(OpenOrigin::User);
         let task = disk.task.as_ref().unwrap();
         wait(|| disk.manager.status(task.id).unwrap().state.is_finished());
         assert!(task.pending.is_none());
@@ -654,7 +708,7 @@ mod tests {
             let discarder = std::thread::spawn(move || {
                 discarding_barrier.wait();
                 if !leaving_page {
-                    disk.reload();
+                    disk.reload(OpenOrigin::User);
                     assert!(matches!(disk.state, LoadState::Missing));
                 }
                 drop(disk);
@@ -690,13 +744,31 @@ mod tests {
         let path = directory.path().join("recording.widx");
         recording(&path);
         let mut disk = empty(path);
-        disk.reload();
+        let logs = bevy_widgetry_test_utils::LogCapture::with_targets([
+            "widget_gallery::pages::waveform::disk",
+        ]);
+        logs.run(|| disk.reload(OpenOrigin::User));
         let id = disk.task.as_ref().unwrap().id;
+        let revision = disk.task.as_ref().unwrap().revision;
         wait(|| disk.manager.status(id).unwrap().state.is_finished());
-        assert!(disk.poll().is_none());
+        assert!(logs.run(|| disk.poll()).is_none());
         assert!(disk.source.is_none());
         assert!(matches!(disk.state, LoadState::Loading));
-        let source = disk.poll().unwrap();
+        assert!(
+            logs.records()
+                .iter()
+                .all(|record| !record.matches_field("outcome", "loaded"))
+        );
+        let source = logs.run(|| disk.poll()).unwrap();
+        let loaded: Vec<_> = logs
+            .records()
+            .into_iter()
+            .filter(|record| record.matches_field("outcome", "loaded"))
+            .collect();
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded[0].matches_field("job_id", &id.get().to_string()));
+        assert!(loaded[0].matches_field("revision", &revision.to_string()));
+        assert!(loaded[0].matches_field("origin", "User"));
         assert!(Arc::ptr_eq(disk.source.as_ref().unwrap(), &source));
         assert!(disk.manager.status(id).is_err());
         let reader = source.job_id();
@@ -704,11 +776,26 @@ mod tests {
         let invalid = directory.path().join("invalid.widx");
         std::fs::write(&invalid, "invalid recording").unwrap();
         disk.path = invalid;
-        disk.reload();
+        logs.run(|| disk.reload(OpenOrigin::User));
+        let failed_id = disk.task.as_ref().unwrap().id;
         wait(|| {
-            assert!(disk.poll().is_none());
+            assert!(logs.run(|| disk.poll()).is_none());
             !disk.loading()
         });
+        let failed: Vec<_> = logs
+            .records()
+            .into_iter()
+            .filter(|record| record.matches_field("outcome", "failed"))
+            .collect();
+        assert_eq!(failed.len(), 1);
+        assert!(failed[0].matches_field("job_id", &failed_id.get().to_string()));
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.matches_field("outcome", "loaded"))
+                .count(),
+            1
+        );
         assert!(matches!(disk.state, LoadState::Failed(_)));
         assert!(Arc::ptr_eq(disk.source.as_ref().unwrap(), &source));
         let manager = disk.manager.clone();
@@ -734,7 +821,24 @@ mod tests {
             disk.task.as_ref().unwrap().pending.is_some()
         });
         assert!(disk.source.is_none());
-        disk.reload();
+        let logs = bevy_widgetry_test_utils::LogCapture::with_targets([
+            "widget_gallery::pages::waveform::disk",
+        ]);
+        logs.run(|| disk.reload(OpenOrigin::User));
+        let discarded: Vec<_> = logs
+            .records()
+            .into_iter()
+            .filter(|record| record.matches_field("outcome", "discarded"))
+            .collect();
+        assert_eq!(discarded.len(), 1);
+        assert!(discarded[0].matches_field("job_id", &id.get().to_string()));
+        assert!(discarded[0].matches_field("reason", "Replaced"));
+        assert!(
+            logs.records()
+                .iter()
+                .all(|record| !record.matches_field("outcome", "canceled")
+                    && !record.matches_field("outcome", "loaded"))
+        );
         assert!(matches!(disk.state, LoadState::Missing));
         assert!(disk.task.is_none());
         assert!(disk.source.is_none());
@@ -798,6 +902,7 @@ mod tests {
                 })
                 .unwrap();
             disk.task = Some(OpenJob {
+                origin: OpenOrigin::User,
                 id,
                 revision: 0,
                 receiver,
@@ -809,7 +914,7 @@ mod tests {
             if leaving {
                 drop(disk);
             } else {
-                disk.reload();
+                disk.reload(OpenOrigin::User);
                 drop(disk);
             }
             assert_eq!(
