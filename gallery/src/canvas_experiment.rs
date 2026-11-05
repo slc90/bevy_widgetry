@@ -117,64 +117,100 @@ fn invalid_params(error: impl ToString) -> BrpError {
 
 fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     let request: Create = params(value)?;
-    // f32 represents every integer through 2^24; larger dimensions cannot retain pixel coordinates.
-    if request.width == 0
-        || request.height == 0
-        || request.width > 16_777_216
-        || request.height > 16_777_216
-    {
-        return Err(invalid_params("Dimensions must be in 1..=16777216"));
-    }
-    let root = exports_root();
-    std::fs::create_dir_all(&root).map_err(crate::diagnostics::response_error)?;
-    let timestamp = time::OffsetDateTime::now_utc().unix_timestamp_nanos();
-    let (id, directory) = (0u64..)
-        .find_map(|suffix| {
-            let id = format!("painting-{timestamp}-{suffix}");
-            let directory = root.join(&id);
-            match std::fs::create_dir(&directory) {
-                Ok(()) => Some(Ok((id, directory))),
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => None,
-                Err(error) => Some(Err(error)),
-            }
-        })
-        .ok_or_else(|| crate::diagnostics::response_error("No free session directory"))?
-        .map_err(crate::diagnostics::response_error)?;
-    let document = world
-        .spawn((CanvasDocument, Name::new(format!("PaintingDocument-{id}"))))
-        .id();
-    let mut session = Session {
-        document,
-        size: UVec2::new(request.width, request.height),
-        directory,
-        window: None,
-        shapes: BTreeMap::new(),
-        next_stage: 1,
-        dirty: true,
-        save_error: None,
-    };
-    if let Err(error) = open_window(world, &id, &mut session) {
-        world.despawn(document);
-        if let Err(cleanup) = std::fs::remove_dir(&session.directory) {
-            let failure = crate::diagnostics::failure(
-                crate::diagnostics::GalleryError::Operation(cleanup.into()),
-                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.cleanup")
-                    .field("path", session.directory.display()),
-            );
-            failure.record_handled("放弃清理绘画会话目录", "保留原始创建失败并返回错误");
+    info!(
+        operation = "create",
+        origin = "brp",
+        width = request.width,
+        height = request.height,
+        "请求创建绘画会话"
+    );
+    let result: BrpResult = (|| {
+        // f32 represents every integer through 2^24; larger dimensions cannot retain pixel coordinates.
+        if request.width == 0
+            || request.height == 0
+            || request.width > 16_777_216
+            || request.height > 16_777_216
+        {
+            return Err(invalid_params("Dimensions must be in 1..=16777216"));
         }
-        return Err(crate::diagnostics::bevy_response_error(error));
+        let root = exports_root();
+        std::fs::create_dir_all(&root).map_err(crate::diagnostics::response_error)?;
+        let timestamp = time::OffsetDateTime::now_utc().unix_timestamp_nanos();
+        let (id, directory) = (0u64..)
+            .find_map(|suffix| {
+                let id = format!("painting-{timestamp}-{suffix}");
+                let directory = root.join(&id);
+                match std::fs::create_dir(&directory) {
+                    Ok(()) => Some(Ok((id, directory))),
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => None,
+                    Err(error) => Some(Err(error)),
+                }
+            })
+            .ok_or_else(|| crate::diagnostics::response_error("No free session directory"))?
+            .map_err(crate::diagnostics::response_error)?;
+        let document = world
+            .spawn((CanvasDocument, Name::new(format!("PaintingDocument-{id}"))))
+            .id();
+        let mut session = Session {
+            document,
+            size: UVec2::new(request.width, request.height),
+            directory,
+            window: None,
+            shapes: BTreeMap::new(),
+            next_stage: 1,
+            dirty: true,
+            save_error: None,
+        };
+        if let Err(error) = open_window(world, &id, &mut session) {
+            world.despawn(document);
+            if let Err(cleanup) = std::fs::remove_dir(&session.directory) {
+                let failure = crate::diagnostics::failure(
+                    crate::diagnostics::GalleryError::Operation(cleanup.into()),
+                    bevy_widgetry::diagnostics::ErrorFrame::new("gallery.painting.cleanup")
+                        .field("path", session.directory.display()),
+                );
+                failure.record_handled("放弃清理绘画会话目录", "保留原始创建失败并返回错误");
+            }
+            return Err(crate::diagnostics::bevy_response_error(error));
+        }
+        storage::persist(world, &id, &mut session);
+        let response = describe(world, &id, &session)?;
+        world
+            .resource_mut::<Sessions>()
+            .0
+            .insert(id.clone(), session);
+        info!(session=id, operation="create", origin="brp", result="created",
+        saved=%response["persistence"]["saved"], error=?response["persistence"]["error"].as_str(), "绘画会话已创建");
+        Ok(response)
+    })();
+    if let Err(error) = &result {
+        info!(
+            operation = "create",
+            origin = "brp",
+            result = "failed",
+            code = error.code,
+            "绘画会话创建请求失败"
+        );
     }
-    storage::persist(world, &id, &mut session);
-    let response = describe(world, &id, &session)?;
-    world.resource_mut::<Sessions>().0.insert(id, session);
-    Ok(response)
+    result
 }
 
 fn open(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     let request: Identify = params(value)?;
-    world.resource_scope(|world, mut sessions: Mut<Sessions>| {
-        if !sessions.0.contains_key(&request.session) {
+    info!(
+        session = request.session,
+        operation = "open",
+        origin = "brp",
+        "请求打开绘画会话"
+    );
+    let result: BrpResult = world.resource_scope(|world, mut sessions: Mut<Sessions>| {
+        let loaded = !sessions.0.contains_key(&request.session);
+        let already_open = sessions
+            .0
+            .get(&request.session)
+            .and_then(|session| session.window)
+            .is_some_and(|window| world.get::<Window>(window.native).is_some());
+        if loaded {
             let mut session = storage::load(world, &request.session)?;
             if let Err(error) = open_window(world, &request.session, &mut session) {
                 world.despawn(session.document);
@@ -188,8 +224,29 @@ fn open(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
             .ok_or_else(|| invalid_params("Unknown session"))?;
         open_window(world, &request.session, session)
             .map_err(crate::diagnostics::bevy_response_error)?;
-        describe(world, &request.session, session)
-    })
+        let response = describe(world, &request.session, session)?;
+        let outcome = if loaded {
+            "loaded"
+        } else if already_open {
+            "already_open"
+        } else {
+            "opened"
+        };
+        info!(session=request.session, operation="open", origin="brp", result=outcome,
+            saved=!session.dirty, error=?session.save_error, "绘画会话打开结果");
+        Ok(response)
+    });
+    if let Err(error) = &result {
+        info!(
+            session = request.session,
+            operation = "open",
+            origin = "brp",
+            result = "failed",
+            code = error.code,
+            "绘画会话打开请求失败"
+        );
+    }
+    result
 }
 
 fn exports_root() -> PathBuf {
@@ -198,49 +255,69 @@ fn exports_root() -> PathBuf {
 
 fn restore(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     let request: Identify = params(value)?;
-    let mut loaded = storage::load(world, &request.session)?;
-    let existing = world
-        .resource::<Sessions>()
-        .0
-        .get(&request.session)
-        .and_then(|session| session.window)
-        .filter(|window| {
-            world.get::<Window>(window.native).is_some()
-                && world.get::<ClosingWindow>(window.native).is_none()
-        });
-    let opened = if let Some(window) = existing {
-        CanvasView::set_document_in_world(world, window.view, Some(loaded.document))
-            .map_err(|error| error.into_bevy_error())
-            .map(|_| {
-                loaded.window = Some(window);
-                if let Some(mut view) = world.get_mut::<ExperimentView>(window.view) {
-                    view.size = loaded.size;
-                    view.available = Vec2::ZERO;
-                }
-            })
-    } else {
-        open_window(world, &request.session, &mut loaded)
-    };
-    if let Err(error) = opened {
-        world.despawn(loaded.document);
-        return Err(crate::diagnostics::bevy_response_error(error));
-    }
-    let response = describe(world, &request.session, &loaded)?;
-    let next_native = loaded.window.map(|window| window.native);
-    if let Some(previous) = world
-        .resource_mut::<Sessions>()
-        .0
-        .insert(request.session.clone(), loaded)
-    {
-        if let Some(window) = previous.window
-            && Some(window.native) != next_native
-        {
-            destroy_window(world, window);
+    info!(
+        session = request.session,
+        operation = "restore",
+        origin = "brp",
+        "请求恢复绘画工作存档"
+    );
+    let result: BrpResult = (|| {
+        let mut loaded = storage::load(world, &request.session)?;
+        let existing = world
+            .resource::<Sessions>()
+            .0
+            .get(&request.session)
+            .and_then(|session| session.window)
+            .filter(|window| {
+                world.get::<Window>(window.native).is_some()
+                    && world.get::<ClosingWindow>(window.native).is_none()
+            });
+        let opened = if let Some(window) = existing {
+            CanvasView::set_document_in_world(world, window.view, Some(loaded.document))
+                .map_err(|error| error.into_bevy_error())
+                .map(|_| {
+                    loaded.window = Some(window);
+                    if let Some(mut view) = world.get_mut::<ExperimentView>(window.view) {
+                        view.size = loaded.size;
+                        view.available = Vec2::ZERO;
+                    }
+                })
+        } else {
+            open_window(world, &request.session, &mut loaded)
+        };
+        if let Err(error) = opened {
+            world.despawn(loaded.document);
+            return Err(crate::diagnostics::bevy_response_error(error));
         }
-        world.despawn(previous.document);
+        let response = describe(world, &request.session, &loaded)?;
+        let next_native = loaded.window.map(|window| window.native);
+        if let Some(previous) = world
+            .resource_mut::<Sessions>()
+            .0
+            .insert(request.session.clone(), loaded)
+        {
+            if let Some(window) = previous.window
+                && Some(window.native) != next_native
+            {
+                destroy_window(world, window);
+            }
+            world.despawn(previous.document);
+        }
+        info!(session = request.session, operation="restore", origin="brp", result="restored",
+        saved=%response["persistence"]["saved"], error=?response["persistence"]["error"].as_str(), "绘画工作存档已恢复");
+        Ok(response)
+    })();
+    if let Err(error) = &result {
+        info!(
+            session = request.session,
+            operation = "restore",
+            origin = "brp",
+            result = "failed",
+            code = error.code,
+            "绘画工作存档恢复请求失败"
+        );
     }
-    info!(session = request.session, "通过 BRP 恢复绘画工作存档");
-    Ok(response)
+    result
 }
 
 fn query(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
@@ -347,7 +424,14 @@ fn open_window(world: &mut World, id: &str, session: &mut Session) -> Result {
         view,
     });
     world.write_message(RequestRedraw);
-    info!(session = id, ?native, "通过 BRP 打开独立绘画窗口");
+    debug!(
+        session = id,
+        ?native,
+        ?root,
+        ?camera,
+        ?view,
+        "独立绘画窗口实体已创建"
+    );
     Ok(())
 }
 
@@ -372,6 +456,7 @@ fn close_windows(
                     world.despawn(entity);
                 }
             }
+            debug!(native=?window.native, "独立绘画窗口实体已回收");
         } else {
             if let Ok(mut native) = world.get_entity_mut(window.native) {
                 native.insert(ClosingWindow);
@@ -395,7 +480,7 @@ fn close_windows(
             {
                 destroy_window(world, window);
                 session.window = None;
-                info!(session = id, "关闭独立绘画窗口并保留会话");
+                debug!(session = id, native=?window.native, "已安排关闭独立绘画窗口并保留会话");
             }
         }
     });

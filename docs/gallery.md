@@ -336,6 +336,8 @@ geometry、paint、transform 使用对应已注册公开类型的 Bevy 反射 JS
 
 批次响应分别给出逐项操作结果和 `persistence: {saved,error}`。存盘失败时图形修改仍然生效，saved=false 并保留错误；`gallery/canvas_save {session}` 可重试完整保存并返回当前摘要。这里的保存状态只描述实验 BRP/显式保存路径，不自动监测手工编辑或任意 ECS 修改。恢复重新使用公开 CanvasDocument API 重建原始几何、Paint、Transform、层序与稳定 ID。`gallery/canvas_restore {session}` 显式从磁盘重载；只有校验和新会话构造全部成功，才替换当前会话。JSON 损坏、未知类型、非法几何或身份不匹配时，原文件与现有有效画面保留，不覆盖为空画作。
 
+会话创建、打开、恢复和显式保存以 INFO 记录请求与实际结果，包含 operation、origin="brp"、session 及真实 saved/error 摘要。重复打开活动窗口返回 already_open，从磁盘首次打开返回 loaded；创建与恢复成功只在会话已提交后记录。显式保存失败保留编辑状态，自动持久化不产生显式保存业务日志。窗口实体创建、安排关闭和实际回收使用 DEBUG，关闭仍保留 Document。
+
 同目录 `progress.md` 由 Codex 在有意义的阶段及暂停前主动写入，记录构图、已完成区域、明显不足和下一步；它是显式工作说明。继续工作时先读取 progress.md，再通过 open 恢复和局部查询继续编辑，不需要把完整 document.json 加入上下文。本实验不创建 operations.jsonl、独立 session.json 或每阶段完整 Document 备份；当前 JSON 是实验工作格式，不承诺成为 Canvas 正式落盘协议。
 
 `gallery/canvas_export_stage {session}` 为非空会话预留一个单调递增阶段编号，返回 `stage`、`files` 的绝对路径、像素尺寸、各文件状态和汇总 `status`。每阶段生成 `stages/stage_0001.svg` 与 `stage_0001_1x.png`、`stage_0001_2x.png`、`stage_0001_4x.png`；编号超过四位时继续自然增长。固定区域始终为初始化的 `(0,0,width,height)`，SVG 保留原尺寸与 viewBox，PNG 两轴分别乘 1、2、4，不受 View、窗口大小、DPI、选择或草稿影响。一次独占 World 调用内按原层序通过公开 CanvasDocument API 克隆一份私有冻结 Document，SVG 和随后依次提交的三个 PNG 都从它导出。返回后可继续绘画或恢复当前工作状态，而不改变该阶段四个结果；冻结 Document 在阶段完全收尾后释放，不产生每阶段 Document 磁盘备份。

@@ -19,12 +19,23 @@ struct Archive {
 
 pub(super) fn save(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     let request: Identify = params(value)?;
+    info!(
+        session = request.session,
+        operation = "save",
+        origin = "brp",
+        "请求保存绘画工作存档"
+    );
     world.resource_scope(|world, mut sessions: Mut<Sessions>| {
         let session = sessions
             .0
             .get_mut(&request.session)
-            .ok_or_else(|| invalid_params("Unknown session"))?;
+            .ok_or_else(|| {
+                info!(session=request.session, operation="save", origin="brp", result="rejected", "绘画工作存档保存请求被拒绝");
+                invalid_params("Unknown session")
+            })?;
         persist(world, &request.session, session);
+        info!(session=request.session, operation="save", origin="brp", saved=!session.dirty,
+            error=?session.save_error, result=if session.dirty { "failed" } else { "saved" }, "绘画工作存档保存结果");
         describe(world, &request.session, session)
     })
 }
@@ -189,6 +200,95 @@ fn load_from(world: &mut World, id: &str, directory: PathBuf) -> Result<Session,
 mod tests {
     use super::*;
     use std::os::windows::fs::OpenOptionsExt;
+
+    #[test]
+    fn explicit_save_logs_real_persistence_and_retains_edits_after_failure() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let mut world = World::new();
+        world.init_resource::<Sessions>();
+        let directory = tempfile::tempdir().unwrap();
+        let document = world.spawn(CanvasDocument).id();
+        world.resource_mut::<Sessions>().0.insert(
+            "painting-test".into(),
+            Session {
+                document,
+                size: UVec2::splat(10),
+                directory: directory.path().into(),
+                window: None,
+                shapes: BTreeMap::new(),
+                next_stage: 1,
+                dirty: true,
+                save_error: None,
+            },
+        );
+        let logs = LogCapture::with_targets([
+            "widget_gallery::canvas_experiment::storage",
+            "widget_gallery",
+            "bevy_widgetry",
+        ]);
+        let request = || In(Some(json!({"session":"painting-test"})));
+        logs.run(|| {
+            assert_eq!(
+                save(request(), &mut world).unwrap()["persistence"]["saved"],
+                true
+            );
+            let path = directory.path().join("document.json");
+            let previous = std::fs::read(&path).unwrap();
+            let locked = std::fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(&path)
+                .unwrap();
+            let response = save(request(), &mut world).unwrap();
+            assert_eq!(response["persistence"]["saved"], false);
+            assert!(response["persistence"]["error"].is_string());
+            assert!(world.get::<CanvasDocument>(document).is_some());
+            assert!(world.resource::<Sessions>().0["painting-test"].dirty);
+            drop(locked);
+            assert_eq!(std::fs::read(&path).unwrap(), previous);
+            assert_eq!(
+                save(request(), &mut world).unwrap()["persistence"]["saved"],
+                true
+            );
+            assert!(save(In(Some(json!({"session":"painting-unknown"}))), &mut world).is_err());
+        });
+        let records = logs.records();
+        for (outcome, count) in [("saved", 2), ("failed", 1), ("rejected", 1)] {
+            assert_eq!(
+                records
+                    .iter()
+                    .filter(|r| r.matches_field("result", outcome))
+                    .count(),
+                count
+            );
+        }
+        let failed = records
+            .iter()
+            .find(|r| r.matches_field("result", "failed"))
+            .unwrap();
+        assert!(failed.matches_field("saved", "false"));
+        assert!(failed.matches_field("origin", "brp"));
+        assert!(failed.matches_field("session", "painting-test"));
+        let source = records
+            .iter()
+            .find(|r| r.phase() == Some(DiagnosticPhase::Source))
+            .unwrap();
+        assert_eq!(
+            records
+                .iter()
+                .filter(|r| r.phase() == Some(DiagnosticPhase::Source))
+                .count(),
+            1
+        );
+        assert_eq!(
+            records
+                .iter()
+                .filter(|r| r.phase() == Some(DiagnosticPhase::Handled)
+                    && r.fields.get("error_id") == source.fields.get("error_id"))
+                .count(),
+            1
+        );
+    }
 
     #[test]
     fn failed_save_reports_session_and_path_and_keeps_the_previous_archive() {
