@@ -264,8 +264,9 @@ fn on_scale_factor_combo_box_changed(
             )
         })?;
     if window.resolution.scale_factor_override() != Some(scale) {
+        info!(setting = "scale_factor", requested = scale, previous = ?window.resolution.scale_factor_override(), "用户选择 Gallery 设置");
         window.resolution.set_scale_factor_override(Some(scale));
-        info!(scale_factor = scale, "切换窗口缩放");
+        debug!(setting = "scale_factor", applied = scale, window = ?scale_combo.target_window, "Gallery 设置已生效");
         config.scale_factor = scale;
         config.save(&config_file);
     }
@@ -292,8 +293,12 @@ fn on_theme_combo_box_changed(
         .ok_or_else(|| header_sync_error("主题选择器选中项失效"))?;
 
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        let previous = world.get_resource::<WidgetryThemeMode>().copied();
+        if previous != Some(mode) {
+            info!(setting = "theme", requested = ?mode, ?previous, "用户选择 Gallery 设置");
+        }
         if WidgetryThemeMode::set_in_world(world, mode).map_err(|error| error.into_bevy_error())? {
-            info!(?mode, "切换主题");
+            debug!(setting = "theme", applied = ?mode, "Gallery 设置已生效");
             world.resource_mut::<AppConfig>().theme = mode;
             world
                 .resource::<AppConfig>()
@@ -411,10 +416,81 @@ fn on_language_changed(
                 .field("id", format_args!("{:?}", id)),
         )
     })?;
+    if *language != selected {
+        info!(setting = "language", requested = ?selected, previous = ?*language, "用户选择 Gallery 设置");
+    }
     if language.set_if_neq(selected) {
-        info!(?selected, "切换 Gallery 语言");
+        debug!(setting = "language", applied = ?selected, "Gallery 设置已生效");
         config.language = selected;
         config.save(&config_file);
     }
     Ok(())
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
+
+    #[test]
+    fn missing_theme_reaches_the_command_error_handler_without_logging_success() {
+        let mut app = scene_app();
+        app.set_error_handler(ErrorCapture::handler());
+        app.register_widgetry_combo_box::<WidgetryThemeMode>()
+            .unwrap()
+            .add_observer(on_theme_combo_box_changed);
+        let selector = theme_selector(&mut app.world_mut().commands()).unwrap();
+        app.world_mut().flush();
+        let root = bevy_widgetry::scene::spawn_scene(app.world_mut(), selector).unwrap();
+        let source = app
+            .world()
+            .get::<WidgetryComboBox<WidgetryThemeMode>>(root)
+            .unwrap()
+            .source();
+        let selected = app
+            .world()
+            .get::<WidgetryListModel<WidgetryThemeMode>>(source)
+            .unwrap()
+            .id(1)
+            .unwrap();
+        app.world_mut().remove_resource::<WidgetryThemeMode>();
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::with_targets(["bevy_widgetry", "widget_gallery::header"]);
+        logs.run(|| {
+            errors.run(|| {
+                app.world_mut().trigger(ValueChange {
+                    source: root,
+                    value: Some(selected),
+                    is_final: true,
+                });
+                app.world_mut().flush();
+            });
+        });
+        let errors = errors.take_records();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            errors[0].error.severity(),
+            bevy::ecs::error::Severity::Error
+        );
+        let diagnostic = errors[0].managed().unwrap().diagnostics().next().unwrap();
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.matches_field("message", "用户选择 Gallery 设置"))
+                .count(),
+            1
+        );
+        assert!(logs.records().iter().all(|record| {
+            record
+                .fields
+                .get("message")
+                .is_none_or(|message| !message.contains("Gallery 设置已生效"))
+        }));
+    }
 }
