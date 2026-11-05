@@ -426,6 +426,10 @@ Native Window 移动、Resize 及需要原生 Cursor 行为的场景，不能仅
 
 GUI 自动验证的具体能力边界与操作要求遵循 `rules/gui-debugging.md`。
 
+## ScrollArea 示例
+
+切换自动内容高度按钮在实际更新后以单条 INFO 记录目标 Entity、新高度及更新数量；没有可更新内容时记录未变化结果。ScrollIntoView 按钮以 INFO 记录已排队的目标请求，无唯一目标时记录未提交结果；请求日志不表示布局和滚动已经完成。普通滚轮、Scrollbar 与布局同步不增加业务日志。
+
 ## Slider 示例
 
 Slider 演示在每次拖动结束时以 INFO 记录控件 Entity、真实 Completed / Cancelled 结果与最终值，值未改变的手势同样记录一次。取消保留实际值，不代表回滚或正式提交；连续 ValueChange 和未提供离散提交事件的键盘步进不写拖动结束日志。

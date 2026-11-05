@@ -240,18 +240,21 @@ fn into_view_button() -> impl Scene {
 fn toggle_auto_content(
     event: On<Activate>,
     triggers: Query<(), With<AutoTransitionTrigger>>,
-    mut contents: Query<&mut Node, With<AutoTransitionContent>>,
+    mut contents: Query<(Entity, &mut Node), With<AutoTransitionContent>>,
 ) {
     if !triggers.contains(event.entity) {
         return;
     }
-    for mut node in &mut contents {
+    let mut changes = Vec::new();
+    for (target, mut node) in &mut contents {
         node.height = if node.height == px(80) {
             px(290)
         } else {
             px(80)
         };
+        changes.push((target, node.height));
     }
+    info!(button = ?event.entity, updated = changes.len(), ?changes, unchanged = changes.is_empty(), "ScrollArea 示例内容高度切换结果");
 }
 
 fn trigger_scroll_into_view(
@@ -265,5 +268,16 @@ fn trigger_scroll_into_view(
     }
     if let Ok(target) = targets.single() {
         commands.trigger(WidgetryScrollIntoView { entity: target });
+        info!(
+            ?target,
+            outcome = "requested",
+            "请求将 ScrollArea 演示目标滚动到可见区域"
+        );
+    } else {
+        info!(
+            target_count = targets.iter().count(),
+            outcome = "not_submitted",
+            "ScrollArea 演示没有唯一可用目标，未提交滚动请求"
+        );
     }
 }
