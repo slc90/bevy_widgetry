@@ -11,9 +11,29 @@ image = { workspace = true, features = ["ico"] }
 tray-icon.workspace = true
 crossbeam-channel.workspace = true
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
 
-[lints]
-workspace = true
+[lints.rust]
+unsafe_code = "deny"
+warnings = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+dbg_macro = "deny"
+let_underscore_must_use = "deny"
+disallowed_macros = "deny"
+type_complexity = "allow"
+too_many_arguments = "allow"

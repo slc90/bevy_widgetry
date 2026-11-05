@@ -2341,6 +2341,7 @@ dependencies = [
  "crossbeam-channel",
  "image",
  "tray-icon",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

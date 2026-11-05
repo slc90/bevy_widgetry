@@ -83,7 +83,7 @@ Facade 为 25 个控件提供默认全部启用的独立可选依赖与 Feature�
 
 Job 控制能力经 Facade 默认关闭的 `job` Feature 导出，业务 crate 可直接依赖基础设施 job，不反向依赖 Facade。Job 直接依赖 diagnostics 的 Bevy 桥接，提交、访问和收发失败保留领域分类与统一诊断，由直接消费者在 ECS 边界显式转换。Gallery 显式启用该 Feature 并安装唯一 JobManagerPlugin，后台结果可唤醒 Reactive 主循环。
 
-Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、diagnostics 的 Bevy 桥接、内部日志、ICO 解码所需的 Image、tray-icon 与 Crossbeam Channel，不依赖 Window 或 Gallery，也不管理窗口。原生回调的诊断由实例收件箱无损保留，ECS 边界批量传播；Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
+Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、diagnostics 的 Bevy 桥接、内部日志、ICO 解码所需的 Image、tray-icon、Crossbeam Channel 和 windows-sys，不依赖 Window 或 Gallery，也不管理窗口。可选原生右键菜单使用宿主 Resource 描述，点击经实例隔离路由转为消息；私有 Windows FFI 在主线程原生菜单输入循环中消费关闭手势，unsafe 仅允许在私有 native Module。原生回调的诊断由实例收件箱无损保留，ECS 边界批量传播；Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
 
 Windows 空闲息屏与休眠抑制由独立的 [power_inhibit](crates/power_inhibit.md) crate 提供，经 Facade 默认关闭的 `power_inhibit` Feature 导出。它直接依赖 Bevy、diagnostics 的 Bevy 桥接、内部日志和 windows-sys，通过同步 Resource API 管理进程电源请求，不依赖 Window、Tray 或 Gallery。领域集合保留主操作、回滚和清理失败各自的原因与 origin，由调用方在执行边界转换。私有 FFI 使用标准库 OwnedHandle 管理句柄，新 crate 单独配置 unsafe lint，其他成员继续继承 Workspace 的 forbid。
 
@@ -113,7 +113,7 @@ Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活�
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识，包括 Kamuri 45 种动画的共享时序、热点与图集目录。 |
 | [theme](crates/theme.md) | 提供预定义 Theme、Widget 配色及 Theme 状态管理。 |
 | [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 状态及可选 Kamuri Cursor。 |
-| [tray](crates/tray.md) | 可选 Windows 常驻托盘图标、静态嵌入 ICO 与 Tooltip、主线程生命周期及唤醒反应式循环的左键单击通知。 |
+| [tray](crates/tray.md) | 可选 Windows 常驻托盘图标、静态嵌入 ICO 与 Tooltip、原生右键菜单、主线程生命周期及唤醒反应式循环的点击通知。 |
 | [power_inhibit](crates/power_inhibit.md) | 默认关闭的 Windows Display/System 电源请求、同步开关及 Resource RAII 清理。 |
 | [hold_button](crates/hold_button.md) | 提供独立长按确认、输入取消、圆形 Picking 与液面材质。 |
 | [toggle_button](crates/toggle_button.md) | 独立二态按钮，复用官方 Checkbox / Checked 输入与状态，提供持续选中样式和提交后通知。 |

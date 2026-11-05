@@ -1,5 +1,9 @@
-use crate::bridge::{self, Bridge, Registration, WidgetryTrayClick};
-use crate::{TrayError, TrayFailure};
+use crate::bridge::{
+    self, Bridge, MenuRegistration, Registration, WidgetryTrayClick, WidgetryTrayMenuClick,
+};
+use crate::menu::NativeMenu;
+use crate::native::MenuSession;
+use crate::{TrayError, TrayFailure, WidgetryTrayMenu};
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::winit::EventLoopProxyWrapper;
@@ -22,7 +26,10 @@ struct TrayOwner(Option<TrayInstance>);
 
 struct TrayInstance {
     _registration: Registration,
+    _menu_registration: Option<MenuRegistration>,
+    _session: Option<MenuSession>,
     _icon: TrayIcon,
+    _menu: Option<NativeMenu>,
     _bridge: std::sync::Arc<Bridge>,
 }
 
@@ -53,6 +60,7 @@ impl Plugin for WidgetryTrayPlugin {
         app.insert_resource(self.config.clone())
             .insert_non_send(TrayOwner::default())
             .add_message::<WidgetryTrayClick>()
+            .add_message::<WidgetryTrayMenuClick>()
             .add_systems(Startup, initialize)
             .add_systems(PreUpdate, bridge::forward_clicks)
             .add_systems(Last, release_on_exit);
@@ -63,16 +71,24 @@ impl Plugin for WidgetryTrayPlugin {
 fn initialize(
     _main_thread: NonSendMarker,
     config: Res<TrayConfig>,
+    menu: Option<Res<WidgetryTrayMenu>>,
     proxy: Option<Res<EventLoopProxyWrapper>>,
     mut owner: NonSendMut<TrayOwner>,
     mut commands: Commands,
 ) -> Result {
-    initialize_instance(&config, proxy.as_deref(), &mut owner, &mut commands)
-        .map_err(TrayFailure::into_bevy_error)
+    initialize_instance(
+        &config,
+        menu.as_deref(),
+        proxy.as_deref(),
+        &mut owner,
+        &mut commands,
+    )
+    .map_err(TrayFailure::into_bevy_error)
 }
 
 fn initialize_instance(
     config: &TrayConfig,
+    menu: Option<&WidgetryTrayMenu>,
     proxy: Option<&EventLoopProxyWrapper>,
     owner: &mut TrayOwner,
     commands: &mut Commands,
@@ -98,9 +114,18 @@ fn initialize_instance(
                 frame(),
             )
         })?;
-    let icon = TrayIconBuilder::new()
+    let menu = menu
+        .filter(|menu| !menu.entries().is_empty())
+        .map(NativeMenu::new)
+        .transpose()?;
+    let mut builder = TrayIconBuilder::new()
         .with_icon(native_icon)
         .with_tooltip(&config.tooltip)
+        .with_menu_on_left_click(false);
+    if let Some(menu) = &menu {
+        builder = builder.with_menu(Box::new(menu.root.clone()));
+    }
+    let icon = builder
         .build()
         .map_err(|source| TrayFailure::new(TrayError::Create { source }, frame()))?;
     // tray-icon keeps a helper window even if Shell registration fails.
@@ -121,9 +146,19 @@ fn initialize_instance(
             .map_err(|error| Box::new(error) as _)
     });
     let registration = Registration::new(icon.id().clone(), &bridge);
+    let session = menu
+        .as_ref()
+        .map(|_| MenuSession::new(&icon, &bridge))
+        .transpose()?;
+    let menu_registration = menu
+        .as_ref()
+        .map(|menu| MenuRegistration::new(&menu.routes, &bridge));
     owner.0 = Some(TrayInstance {
         _registration: registration,
+        _menu_registration: menu_registration,
+        _session: session,
         _icon: icon,
+        _menu: menu,
         _bridge: bridge,
     });
     commands.insert_resource(inbox);

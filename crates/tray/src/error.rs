@@ -31,6 +31,23 @@ pub enum TrayError {
         source: Box<dyn Error + Send + Sync>,
     },
     RouteLock,
+    MenuProjection {
+        detail: &'static str,
+    },
+    DuplicateMenuId {
+        id: String,
+    },
+    Menu {
+        source: tray_icon::menu::Error,
+    },
+    MenuOverflow {
+        id: String,
+        capacity: usize,
+    },
+    Native {
+        operation: &'static str,
+        source: std::io::Error,
+    },
 }
 
 impl fmt::Display for TrayError {
@@ -44,6 +61,11 @@ impl fmt::Display for TrayError {
             Self::ClickOverflow { .. } => "托盘点击队列已满，拒绝本次点击",
             Self::Wake { .. } => "托盘点击唤醒失败",
             Self::RouteLock => "托盘事件路由锁中毒",
+            Self::MenuProjection { .. } => "托盘原生菜单未应用期望结构或内容",
+            Self::DuplicateMenuId { .. } => "托盘菜单项 ID 重复",
+            Self::Menu { .. } => "托盘原生菜单创建失败",
+            Self::MenuOverflow { .. } => "托盘菜单队列已满，拒绝本次菜单激活",
+            Self::Native { .. } => "托盘原生菜单交互监听失败",
         })
     }
 }
@@ -55,6 +77,8 @@ impl Error for TrayError {
             Self::Rgba { source, .. } => Some(source),
             Self::Create { source } | Self::Register { source, .. } => Some(source),
             Self::Wake { source, .. } => Some(source.as_ref()),
+            Self::Menu { source } => Some(source),
+            Self::Native { source, .. } => Some(source),
             _ => None,
         }
     }
