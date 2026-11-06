@@ -8,7 +8,7 @@ use bevy::{
 use bevy_widgetry::theme::WidgetryTheme;
 use bevy_widgetry::{
     button::{WidgetryButton, WidgetryButtonHeadless},
-    combo_box::{WidgetryComboBoxHeadless as Combo, WidgetryComboBoxParts},
+    combo_box::{WidgetryComboBoxHeadless as Combo, WidgetryComboBoxParts, WidgetryComboBoxSearch},
     list_view::{
         WidgetryListModel, WidgetryListSelectionMode, WidgetryListView, WidgetryListViewRenderer,
     },
@@ -23,6 +23,8 @@ struct Controls {
 #[derive(Component, FromTemplate)]
 struct Label {
     root: Entity,
+    results: Entity,
+    empty: Entity,
 }
 
 pub(super) fn install(app: &mut App) {
@@ -51,25 +53,31 @@ pub(super) fn scene(source: Entity) -> impl Scene {
             Node {column_gap:px(12),align_items:AlignItems::Start} Children [
                 #Root @Combo::<ComboBoxDemoItem> {@source:source}
                 WidgetryComboBoxParts {trigger:#Trigger,popup:#Popup,list:#List}
+                WidgetryComboBoxSearch::<ComboBoxDemoItem> {field:#Search,matcher:{super::search_matcher()}}
                 Name::new("ComboCustomRoot") template(|_|Ok(ComboBoxDemo("Custom"))) on(super::on_selection_changed)
                 Node {width:px(280)} Children [
                     Node {width:percent(100)} Children [
                         #Trigger @WidgetryButtonHeadless Name::new("ComboCustomTrigger")
                         Node {width:percent(100),min_height:px(48),padding:UiRect::axes(px(16),px(10)),border:UiRect::all(px(2)),border_radius:BorderRadius::all(px(12)),align_items:AlignItems::Center}
                         BackgroundColor BorderColor
-                        Children [Label {root:#Root} Text("") WidgetryText Pickable::IGNORE]
+                        Children [Label {root:#Root,results:#Results,empty:#Empty} Text("") WidgetryText Pickable::IGNORE]
                     ]--
                     Node {position_type:PositionType::Absolute,width:percent(100),top:px(54)} Children [
                         #Popup Name::new("ComboCustomPopup") Visibility::Hidden GlobalZIndex(1000)
                         Node {width:percent(100),padding:UiRect::all(px(8)),border:UiRect::all(px(2)),border_radius:BorderRadius::all(px(12)),flex_direction:FlexDirection::Column,row_gap:px(8)}
                         BackgroundColor BorderColor Children [
                             @localized(TextKey::ComboBox(ComboBoxKey::CustomPopup)) WidgetryText--
-                            Node {width:percent(100),height:px(96)} Children [
+                            #Results Node {width:percent(100),height:px(96)} Name::new("ComboCustomResults") Children [
                                 #List @WidgetryListView::<ComboBoxDemoItem> {@source:source,@selection_mode:WidgetryListSelectionMode::Single,@item_height:32.0,@renderer:{WidgetryListViewRenderer::new(|item:&ComboBoxDemoItem| {
                                     let text=item.label.as_ref().map(|label|item_text(label.clone(),item.edits));
                                     bsn_list! {Node {align_items:AlignItems::Center} Children [@text]}
                                 })}}
                                 Name::new("ComboCustomList") Node {width:percent(100),height:percent(100)}
+                            ]--
+                            #Empty Node Name::new("ComboCustomEmpty") Children [@localized(TextKey::ComboBox(ComboBoxKey::NoResults)) WidgetryText]--
+                            Node {width:percent(100),padding:UiRect::top(px(8))} Children [
+                                #Search @bevy_widgetry::text_field::WidgetryTextField Name::new("ComboCustomSearch")
+                                Node {width:percent(100)}
                             ]
                         ]
                     ]
@@ -116,9 +124,9 @@ pub(super) fn refresh(world: &mut World) -> Result {
     let labels = world
         .query::<(Entity, &Label)>()
         .iter(world)
-        .map(|(entity, label)| (entity, label.root))
+        .map(|(entity, label)| (entity, label.root, label.results, label.empty))
         .collect::<Vec<_>>();
-    for (label, root) in labels {
+    for (label, root, results, empty) in labels {
         let open = Combo::<ComboBoxDemoItem>::is_open(world, root)
             .map_err(|error| error.into_bevy_error())?;
         let selected = Combo::<ComboBoxDemoItem>::selected_id(world, root)
@@ -173,6 +181,19 @@ pub(super) fn refresh(world: &mut World) -> Result {
             world.entity_mut(parts.trigger).insert(
                 bevy_widgetry_core::foreground::ResolvedForeground(colors.foreground),
             );
+        }
+        let state = WidgetryComboBoxSearch::<ComboBoxDemoItem>::state(world, root)
+            .map_err(|error| error.into_bevy_error())?;
+        for (entity, show) in [
+            (results, state.matching_items > 0),
+            (empty, state.matching_items == 0),
+        ] {
+            if let Some(mut node) = world.get_mut::<Node>(entity) {
+                let display = if show { Display::Flex } else { Display::None };
+                if node.display != display {
+                    node.display = display;
+                }
+            }
         }
         if let Some(mut visibility) = world.get_mut::<Visibility>(parts.popup) {
             visibility.set_if_neq(if open {
@@ -247,7 +268,19 @@ mod tests {
                 .before(bevy::input_focus::InputFocusSystems::Dispatch),
             );
         app.update();
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(parts.list));
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(
+                bevy_widgetry::text_field::WidgetryTextFieldHeadless::editor_entity(
+                    app.world(),
+                    app.world()
+                        .get::<WidgetryComboBoxSearch<ComboBoxDemoItem>>(combo)
+                        .unwrap()
+                        .field
+                )
+                .unwrap()
+            )
+        );
         let native = widgetry_window_target(app.world(), root).unwrap();
         bevy_widgetry_test_utils::press_key(&mut app, native, KeyCode::ArrowDown);
         bevy_widgetry_test_utils::press_key(&mut app, native, KeyCode::Enter);

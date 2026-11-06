@@ -25,10 +25,12 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
     source: Entity,
     item_height: f32,
     renderer: WidgetryListViewRenderer<T>,
-    search: bool,
-    search_prompt: crate::WidgetryComboBoxContent,
-    no_results: crate::WidgetryComboBoxContent,
+    search_content: Option<(
+        crate::WidgetryComboBoxContent,
+        crate::WidgetryComboBoxContent,
+    )>,
     list_reference: bevy::ecs::template::EntityTemplate,
+    search_reference: bevy::ecs::template::EntityTemplate,
 ) -> impl Scene {
     // Erase the composed ListView Scene type to bound stack usage when expanding nested Gallery Scenes.
     let list: Box<dyn Scene> = Box::new(bsn! {
@@ -37,9 +39,9 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
         TabIndex(-1)
         Node { width: percent(100), height: percent(100), border: UiRect::ZERO }
     });
-    let content: Box<dyn SceneList> = if search {
+    let content: Box<dyn SceneList> = if let Some((search_prompt, no_results)) = search_content {
         Box::new(bsn_list! {
-            crate::search::SearchField crate::search::SearchRuntime
+            @crate::combo_box::root_reference(search_reference)
             @bevy_widgetry_text_field::WidgetryTextField {
                 @children: {Some(Box::new(bsn_list! {
                     bevy_widgetry_text_field::WidgetryTextFieldPrefix
@@ -326,7 +328,9 @@ pub(crate) fn sync_geometry<T: Send + Sync + 'static>(world: &mut World) {
                 behavior.source(),
                 combo.item_height(),
                 combo.max_visible_items(),
-                combo.search().is_some(),
+                world
+                    .get::<crate::WidgetryComboBoxSearch<T>>(root)
+                    .is_some(),
             )
         })
         .collect::<Vec<_>>();

@@ -62,7 +62,7 @@ pub mod combo_box {
         WidgetryComboBoxFieldColorOverrides, WidgetryComboBoxFieldStateColorOverrides,
         WidgetryComboBoxHeadless, WidgetryComboBoxHeadlessProps, WidgetryComboBoxMatcher,
         WidgetryComboBoxParts, WidgetryComboBoxPlugin, WidgetryComboBoxPopupColorOverrides,
-        WidgetryComboBoxPopupStateColorOverrides, WidgetryComboBoxProps,
+        WidgetryComboBoxPopupStateColorOverrides, WidgetryComboBoxProps, WidgetryComboBoxSearch,
         WidgetryComboBoxSearchState, WidgetryListViewColorOverrides,
         WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
         WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,

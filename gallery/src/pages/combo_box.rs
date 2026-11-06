@@ -178,22 +178,24 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     content
 }
 
-fn combo(source: Entity, name: &'static str) -> impl Scene {
-    let search = matches!(name, "Search" | "Search Disabled").then(|| {
-        WidgetryComboBoxMatcher::new(|query: &str, item: &ComboBoxDemoItem| {
-            let query = query.to_lowercase();
-            item.label.as_ref().is_some_and(|label| {
-                [Language::English, Language::SimplifiedChinese]
-                    .into_iter()
-                    .any(|language| {
-                        label
-                            .display(language, item.edits)
-                            .to_lowercase()
-                            .contains(&query)
-                    })
-            })
+fn search_matcher() -> WidgetryComboBoxMatcher<ComboBoxDemoItem> {
+    WidgetryComboBoxMatcher::new(|query: &str, item: &ComboBoxDemoItem| {
+        let query = query.to_lowercase();
+        item.label.as_ref().is_some_and(|label| {
+            [Language::English, Language::SimplifiedChinese]
+                .into_iter()
+                .any(|language| {
+                    label
+                        .display(language, item.edits)
+                        .to_lowercase()
+                        .contains(&query)
+                })
         })
-    });
+    })
+}
+
+fn combo(source: Entity, name: &'static str) -> impl Scene {
+    let search = matches!(name, "Search" | "Search Disabled").then(search_matcher);
     bsn! {
         @WidgetryComboBox::<ComboBoxDemoItem> {
             @source: source,

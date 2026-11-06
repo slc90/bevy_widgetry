@@ -62,3 +62,5 @@
 Field 私有单元回归保护 Field / Icon 持续结构故障的重复观察、真实修复后一次恢复 INFO、再次故障新 ID，以及无虚假 handled DEBUG。直接返回错误的 System 在单线程测试 Schedule 中进入真实宿主 Handler。稳定配色工作量测试等待 Icon 实际 Image 就绪并消费结构变化后再计数，避免把异步素材构造混入 idle。
 
 `benches/owners.rs` 使用真实 Headless UI / Layout，固定 10 / 100 / 1000 个 ComboBox、每 Model 100 条数据，测 idle、仅一个实例丢失 Owner 后的修复、单 Field Hover 交替及单 Popup 的 0 / 64px 往返滚动；滚动时固定 8 个可见行，其余实例保持关闭。每次验证所有 Field / List 的归属与 Field 颜色，滚动时核对复用行 Index 和实际 Background / Text Foreground，以及实体数量稳定。该结果不代表原生 Present 或 60 FPS 验收。
+
+`search.rs` 还覆盖无默认Field/Popup标记的多层搜索绑定、独立TextField Headless/Editor、隐藏选择、重新打开、无结果继续编辑、Escape后同批确认、字素上限与ReadOnly，以及外来搜索字段拒绝不部分打开。

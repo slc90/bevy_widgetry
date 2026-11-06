@@ -75,6 +75,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
         );
         app.add_observer(crate::style::refresh_theme::<T>);
         app.add_observer(crate::search::on_key::<T>);
+        app.add_observer(crate::search::contain_keys::<T>);
         app.add_systems(
             PostUpdate,
             crate::search::sync::<T>.before(WidgetryUiSystems::Build),

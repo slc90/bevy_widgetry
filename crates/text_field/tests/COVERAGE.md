@@ -60,3 +60,5 @@ Native Clipboard、IME 与真实 OS Focus 仍存在 Headless 验证边界。
 
 
 `headless.rs` 使用独立HeadlessPlugin和无默认Frame的三层装饰树，验证Root/Editor双向绑定、完整字素初值/Setter、零上限、选择替换与IME预编辑/正式提交、ReadOnly选择及程序赋值、Disabled丢弃Edit/Paste、Root AcquireFocus/深层子控件自身Focus、根字体投影及Editor自有字体、真实Keyboard路由、默认Plugin共存不写自有颜色，以及跨Root共享/错误Owner/脱离实体树/失效Editor拒绝与queued执行时校验隔离。独立嵌套Editor的原生Windows Clipboard粘贴和只读复制复用真实Bevy Clipboard，完成后恢复原可读文本；OS输入法窗口与候选确认仍不由合成IME请求覆盖。
+
+`headless.rs` 的提前编辑入口回归保护独立Editor的字素上限、ReadOnly和Disabled队列阻断、不透明原生过滤器的明确错误及失败前正文保持。ComboBox组合回归负责提前编辑与过滤/确认输入顺序。

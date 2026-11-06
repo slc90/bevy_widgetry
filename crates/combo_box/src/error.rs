@@ -174,6 +174,10 @@ pub(crate) fn core(error: CoreFailure, root: Entity, operation: &'static str) ->
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ComboFault {
+    Binding {
+        entity: Entity,
+        part: ComboPart,
+    },
     Part {
         entity: Entity,
         part: ComboPart,
@@ -201,6 +205,7 @@ pub(crate) enum ComboFault {
 impl ComboFault {
     pub(crate) fn into_error<T>(self, root: Entity) -> ComboError {
         match self {
+            Self::Binding { entity, part } => ComboError::InvalidBinding { root, entity, part },
             Self::Part { entity, part } => ComboError::MissingPart { root, entity, part },
             Self::Source { source } => ComboError::InvalidSource {
                 root,

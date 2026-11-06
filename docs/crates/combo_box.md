@@ -58,5 +58,9 @@ Field、搜索、图标及自有配色的持续结构异常按实例和业务键
 - 使用前需要为具体 `T` 注册能力，不能只安装非泛型 Plugin。
 - Renderer 控制内容形态；ComboBox 不内建所有业务类型的选项展示。
 - 当前 Popup 与 Field 的生命周期和 Focus 行为取决于相应 Widget 的组合契约。
-- 外部自定义搜索区域尚未开放；默认可搜索 ComboBox 继续使用内建搜索组合。
+- 搜索编辑使用受控提前消费；绑定的 TextField 不支持不透明的官方 `EditableTextFilter`，该组合会明确报错。
 
+
+## 外部搜索组合
+
+在 Headless 根上组合不可变的 `WidgetryComboBoxSearch<T> { field, matcher }`；`field` 引用 Popup 子树中任意层级的公开 TextField Headless 根，可以使用默认 TextField 或自己的 Headless/Editor 结构。绑定不能属于其他 ComboBox。调用 `WidgetryComboBoxSearch::<T>::state(world, root)` 读取唯一 EditableText 查询正文、匹配数量及 Active，用于自己的无结果提示和布局；不会创建默认提示或修改外部容器尺寸。每次打开清查询并聚焦绑定编辑器，导航、确认、取消和禁用沿用同一生命周期。默认 `search` Props 只在构造时组合相同能力，不保存第二份 Matcher。

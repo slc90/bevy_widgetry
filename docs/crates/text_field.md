@@ -113,3 +113,5 @@ bsn! {
 
 
 [Gallery TextField 页面](../../gallery/src/pages/text_field.rs) 另提供应用自有搜索图标、多层装饰容器、独立提示/正文读数与清空按钮的自定义编辑和只读区域。外部 Style 只组合公开 Headless/Editor，程序预设和聚焦也使用同一根 API，没有隐藏默认输入框。
+
+复合控件需要在 UI Build 前消费输入时，可调用 `WidgetryTextFieldHeadless::apply_pending_edits_in_world(world, root)`。该入口沿用唯一 EditableText 和字素上限/只读/有效 Disabled 约束，后续官方阶段仍产生通知和布局；剪贴板等待保留队列。Bevy 不公开 `EditableTextFilter` 谓词，提前消费遇到该组件明确返回 `EarlyEditFilter`，不绕过过滤器。普通无上限输入的官方管线不受影响。

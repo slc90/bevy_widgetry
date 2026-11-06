@@ -406,3 +406,49 @@ fn native_clipboard_paste_and_readonly_copy_work_through_nested_bindings() {
             .unwrap();
     }
 }
+
+#[test]
+fn early_editing_preserves_limits_guards_and_rejects_opaque_filter() {
+    use bevy::text::{EditableTextFilter, TextEdit};
+    use bevy_widgetry_text_field::TextFieldError;
+    let mut app = support::editing_app();
+    app.add_plugins(WidgetryTextFieldHeadlessPlugin);
+    for readonly in [false, true] {
+        let root = nested(&mut app, "", Some(2), readonly);
+        app.update();
+        edit(&mut app, root, [TextEdit::Insert("e\u{301}中extra".into())]);
+        WidgetryTextFieldHeadless::apply_pending_edits_in_world(app.world_mut(), root).unwrap();
+        assert_eq!(
+            WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+            if readonly { "" } else { "e\u{301}中" }
+        );
+        app.world_mut()
+            .entity_mut(root)
+            .insert(bevy::ui::InteractionDisabled);
+        app.world_mut().flush();
+        edit(&mut app, root, [TextEdit::Insert("x".into())]);
+        WidgetryTextFieldHeadless::apply_pending_edits_in_world(app.world_mut(), root).unwrap();
+        assert!(
+            WidgetryTextFieldHeadless::editor(app.world(), root)
+                .unwrap()
+                .pending_edits
+                .is_empty()
+        );
+    }
+    let root = nested(&mut app, "", None, false);
+    app.update();
+    let editor = WidgetryTextFieldHeadless::editor_entity(app.world(), root).unwrap();
+    app.world_mut()
+        .entity_mut(editor)
+        .insert(EditableTextFilter::new(|ch| ch == 'a'));
+    edit(&mut app, root, [TextEdit::Insert("b".into())]);
+    let error =
+        WidgetryTextFieldHeadless::apply_pending_edits_in_world(app.world_mut(), root).unwrap_err();
+    assert!(
+        matches!(error.kind(),TextFieldError::EarlyEditFilter{root:actual,editor:actual_editor} if *actual==root&&*actual_editor==editor)
+    );
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+        ""
+    );
+}

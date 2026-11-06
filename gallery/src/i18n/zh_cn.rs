@@ -505,7 +505,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "三态 CheckBox",
         TextKey::ComboBox(ComboBoxKey::LocalSearch) => "本地搜索（共享数据）",
         TextKey::ComboBox(ComboBoxKey::CustomDescription) => {
-            "自定义卡片与装饰弹层：可选择、清空，按 Escape 或点击外部关闭。"
+            "自定义卡片与装饰弹层中的嵌套搜索：可过滤、选择、清空，按 Escape 或点击外部关闭。"
         }
         TextKey::ComboBox(ComboBoxKey::CustomPopup) => "选择一种水果",
         TextKey::ComboBox(ComboBoxKey::SearchPrompt) => "搜索",

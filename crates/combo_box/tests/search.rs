@@ -881,3 +881,117 @@ fn local_search_filters_one_projection_without_losing_hidden_selection() {
         2
     );
 }
+
+fn custom_search_fixture() -> Fixture {
+    custom_search_fixture_options(None, false)
+}
+
+fn custom_search_fixture_options(max: Option<usize>, read_only: bool) -> Fixture {
+    let mut f = fixture(4);
+    f.app.world_mut().despawn(f.root);
+    let source = f.source;
+    let root = bevy_widgetry_core::scene::spawn_scene(f.app.world_mut(), bsn! {
+        @WidgetryComboBoxHeadless::<String> {@source:source}
+        WidgetryComboBoxParts {trigger:#Trigger,popup:#Popup,list:#List}
+        WidgetryComboBoxSearch::<String> {field:#Search,matcher:{WidgetryComboBoxMatcher::new(|q:&str,item:&String|item.contains(q))}}
+        Children [Node Children [#Trigger @bevy_widgetry_button::WidgetryButtonHeadless]--
+            Node Children [#Popup Visibility::Hidden Node Children [
+                Node Children [#List @WidgetryListView::<String> {@source:source,@selection_mode:WidgetryListSelectionMode::Single,@renderer:{WidgetryListViewRenderer::new(|_:&String|bsn_list!{Node})}}]--
+                Node Children [#Search @WidgetryTextFieldHeadless {editor:#Editor,@read_only:read_only} Node {width:px(220)} Children [Node Children [#Editor @bevy_widgetry_text_field::WidgetryTextFieldEditor {root:#Search,@max_length:max}]]]
+            ]]]
+    }).unwrap();
+    let parts = *f.app.world().get::<WidgetryComboBoxParts>(root).unwrap();
+    let input = f
+        .app
+        .world()
+        .get::<WidgetryComboBoxSearch<String>>(root)
+        .unwrap()
+        .field;
+    f.root = root;
+    f.field = parts.trigger;
+    f.popup = parts.popup;
+    f.input = input;
+    f.list = parts.list;
+    f.app.update();
+    WidgetryComboBoxHeadless::<String>::open_in_world(f.app.world_mut(), root).unwrap();
+    f.app.update();
+    f
+}
+
+#[test]
+fn external_nested_search_uses_bound_text_field_and_keeps_hidden_selection() {
+    let mut f = custom_search_fixture();
+    WidgetryComboBoxHeadless::<String>::select_index(&mut f.app.world_mut().commands(), f.root, 1);
+    f.app.world_mut().flush();
+    let original = selected(&f);
+    key(&mut f, KeyCode::Digit3, Some("3"));
+    f.app.update();
+    let state = WidgetryComboBox::<String>::search_state(f.app.world(), f.root).unwrap();
+    assert_eq!(state.query, "3");
+    assert_eq!(state.matching_items, 1);
+    assert_eq!(selected(&f), original);
+    assert_eq!(
+        f.app.world().resource::<InputFocus>().get(),
+        Some(WidgetryTextFieldHeadless::editor_entity(f.app.world(), f.input).unwrap())
+    );
+    key(&mut f, KeyCode::Enter, None);
+    f.app.update();
+    assert!(!WidgetryComboBoxHeadless::<String>::is_open(f.app.world(), f.root).unwrap());
+    assert_ne!(selected(&f), original);
+    WidgetryComboBoxHeadless::<String>::open_in_world(f.app.world_mut(), f.root).unwrap();
+    f.app.update();
+    assert_eq!(
+        WidgetryComboBox::<String>::search_state(f.app.world(), f.root)
+            .unwrap()
+            .query,
+        ""
+    );
+}
+
+#[test]
+fn external_search_no_results_remains_editable_and_escape_ends_batch() {
+    let mut f = custom_search_fixture();
+    key(&mut f, KeyCode::KeyZ, Some("z"));
+    f.app.update();
+    assert_eq!(
+        WidgetryComboBox::<String>::search_state(f.app.world(), f.root)
+            .unwrap()
+            .matching_items,
+        0
+    );
+    key(&mut f, KeyCode::Backspace, None);
+    f.app.update();
+    assert_eq!(
+        WidgetryComboBox::<String>::search_state(f.app.world(), f.root)
+            .unwrap()
+            .matching_items,
+        4
+    );
+    key(&mut f, KeyCode::Escape, None);
+    key(&mut f, KeyCode::Enter, None);
+    f.app.update();
+    assert_eq!(selected(&f), None);
+    assert!(!WidgetryComboBoxHeadless::<String>::is_open(f.app.world(), f.root).unwrap());
+    assert_eq!(f.app.world().resource::<InputFocus>().get(), Some(f.field));
+}
+
+#[test]
+fn external_search_respects_text_field_grapheme_limit_and_read_only() {
+    for readonly in [false, true] {
+        let mut f = custom_search_fixture_options(Some(2), readonly);
+        key(&mut f, KeyCode::KeyA, Some("e\u{301}中extra"));
+        f.app.update();
+        let state = WidgetryComboBoxSearch::<String>::state(f.app.world(), f.root).unwrap();
+        assert_eq!(state.query, if readonly { "" } else { "e\u{301}中" });
+    }
+}
+
+#[test]
+fn external_search_rejects_foreign_field_without_opening_or_selecting() {
+    let mut f = custom_search_fixture();
+    WidgetryComboBoxHeadless::<String>::close_in_world(f.app.world_mut(), f.root).unwrap();
+    f.app.world_mut().entity_mut(f.input).remove::<ChildOf>();
+    assert!(WidgetryComboBoxHeadless::<String>::open_in_world(f.app.world_mut(), f.root).is_err());
+    assert!(!WidgetryComboBoxHeadless::<String>::is_open(f.app.world(), f.root).unwrap());
+    assert_eq!(selected(&f), None);
+}

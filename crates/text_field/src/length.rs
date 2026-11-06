@@ -189,63 +189,168 @@ pub(crate) fn apply_limited_edits(
             ));
             continue;
         }
-        let mut pending = std::collections::VecDeque::from(std::mem::take(&mut edit.pending_edits));
-        if let Some(mut read) = edit.pending_paste.take() {
-            match read.poll_result() {
-                Some(Ok(text)) => pending.push_front(TextEdit::Insert(text.into())),
-                Some(Err(error)) => abandon_paste(owner.root, entity, error),
-                None => {
-                    edit.pending_paste = Some(read);
-                    edit.pending_edits.extend(pending);
-                    continue;
-                }
-            }
-        }
-        while let Some(request) = pending.pop_front() {
-            // Preedit can start earlier in this same queue, after the keyboard observer's guard.
-            // Keep keyboard insertion/paste owned by the IME until its explicit commit.
-            if edit.is_composing() && matches!(request, TextEdit::Insert(_) | TextEdit::Paste) {
-                continue;
-            }
-            let request = match request {
-                TextEdit::Paste => {
-                    let mut read = clipboard.fetch_text();
-                    match read.poll_result() {
-                        Some(Ok(text)) => TextEdit::Insert(text.into()),
-                        Some(Err(error)) => {
-                            abandon_paste(owner.root, entity, error);
-                            continue;
-                        }
-                        None => {
-                            edit.pending_paste = Some(read);
-                            edit.pending_edits.extend(pending);
-                            break;
-                        }
-                    }
-                }
-                other => other,
-            };
-            let request = match request {
-                TextEdit::Insert(value) => {
-                    TextEdit::Insert(insertion_prefix(&edit, &value, max).into())
-                }
-                TextEdit::ImeCommit { value } => {
-                    // Parley removes preedit and restores the insertion point before an IME commit.
-                    edit.editor_mut()
-                        .driver(&mut fonts, &mut layout.0)
-                        .clear_compose();
-                    TextEdit::ImeCommit {
-                        value: insertion_prefix(&edit, &value, max).into(),
-                    }
-                }
-                other => other,
-            };
-            edit.queue_edit(request);
-            edit.apply_pending_edits(&mut fonts, &mut layout.0, &mut clipboard, |_| true);
-        }
+        apply_requests(
+            owner.root,
+            entity,
+            &mut edit,
+            Some(max),
+            &mut fonts,
+            &mut layout,
+            &mut clipboard,
+        );
         // The official apply_text_edits still observes the generation and emits TextEditChange.
     }
     failures.into_bevy_error().map_or(Ok(()), Err)
+}
+
+fn apply_requests(
+    root: Entity,
+    editor: Entity,
+    edit: &mut EditableText,
+    max: Option<usize>,
+    fonts: &mut FontCx,
+    layout: &mut LayoutCx,
+    clipboard: &mut Clipboard,
+) {
+    let mut pending = std::collections::VecDeque::from(std::mem::take(&mut edit.pending_edits));
+    if let Some(mut read) = edit.pending_paste.take() {
+        match read.poll_result() {
+            Some(Ok(text)) => pending.push_front(TextEdit::Insert(text.into())),
+            Some(Err(error)) => abandon_paste(root, editor, error),
+            None => {
+                edit.pending_paste = Some(read);
+                edit.pending_edits.extend(pending);
+                return;
+            }
+        }
+    }
+    while let Some(request) = pending.pop_front() {
+        // Preedit can start earlier in this same queue, after the keyboard observer's guard.
+        // Keep keyboard insertion/paste owned by the IME until its explicit commit.
+        if edit.is_composing() && matches!(request, TextEdit::Insert(_) | TextEdit::Paste) {
+            continue;
+        }
+        let request = match request {
+            TextEdit::Paste => {
+                let mut read = clipboard.fetch_text();
+                match read.poll_result() {
+                    Some(Ok(text)) => TextEdit::Insert(text.into()),
+                    Some(Err(error)) => {
+                        abandon_paste(root, editor, error);
+                        continue;
+                    }
+                    None => {
+                        edit.pending_paste = Some(read);
+                        edit.pending_edits.extend(pending);
+                        break;
+                    }
+                }
+            }
+            other => other,
+        };
+        let request = match request {
+            TextEdit::Insert(value) => TextEdit::Insert(
+                max.map_or(value.as_str(), |max| insertion_prefix(edit, &value, max))
+                    .into(),
+            ),
+            TextEdit::ImeCommit { value } => {
+                // Parley removes preedit and restores the insertion point before an IME commit.
+                edit.editor_mut()
+                    .driver(fonts, &mut layout.0)
+                    .clear_compose();
+                TextEdit::ImeCommit {
+                    value: max
+                        .map_or(value.as_str(), |max| insertion_prefix(edit, &value, max))
+                        .into(),
+                }
+            }
+            other => other,
+        };
+        edit.queue_edit(request);
+        edit.apply_pending_edits(fonts, &mut layout.0, clipboard, |_| true);
+    }
+}
+
+impl crate::WidgetryTextFieldHeadless {
+    /// Consumes queued edits early for composites that build their UI from the edited text.
+    /// Bevy's normal editing stage still emits its change notification and handles layout.
+    /// Opaque native character filters cannot be evaluated early and are rejected.
+    pub fn apply_pending_edits_in_world(
+        world: &mut World,
+        root: Entity,
+    ) -> Result<(), crate::TextFieldFailure> {
+        let editor = Self::editor_entity(world, root)?;
+        let max = Self::max_length(world, root)?;
+        if world.get::<bevy::ui::InteractionDisabled>(root).is_some()
+            || world.get::<bevy::ui::InteractionDisabled>(editor).is_some()
+        {
+            if let Some(mut edit) = world.get_mut::<EditableText>(editor) {
+                edit.pending_edits.clear();
+                edit.pending_paste = None;
+            }
+            return Ok(());
+        }
+        if world.get::<EditableTextFilter>(editor).is_some() {
+            return Err(failure(
+                TextFieldError::EarlyEditFilter { root, editor },
+                ErrorFrame::new("text_field.apply_pending_edits"),
+            ));
+        }
+        for (present, resource) in [
+            (world.contains_resource::<FontCx>(), "FontCx"),
+            (world.contains_resource::<LayoutCx>(), "LayoutCx"),
+            (world.contains_resource::<Clipboard>(), "Clipboard"),
+        ] {
+            if !present {
+                return Err(failure(
+                    TextFieldError::MissingResource { root, resource },
+                    ErrorFrame::new("text_field.apply_pending_edits").field("editor", editor),
+                ));
+            }
+        }
+        let read_only = Self::is_read_only(world, root)?;
+        world.resource_scope(|world, mut fonts: Mut<FontCx>| {
+            world.resource_scope(|world, mut layout: Mut<LayoutCx>| {
+                world.resource_scope(|world, mut clipboard: Mut<Clipboard>| {
+                    let mut edit = world.get_mut::<EditableText>(editor).ok_or_else(|| {
+                        missing(
+                            root,
+                            editor,
+                            "EditableText",
+                            "text_field.apply_pending_edits",
+                        )
+                    })?;
+                    if read_only {
+                        edit.pending_edits.retain(|edit| {
+                            !matches!(
+                                edit,
+                                TextEdit::Cut
+                                    | TextEdit::Paste
+                                    | TextEdit::Insert(_)
+                                    | TextEdit::Backspace
+                                    | TextEdit::BackspaceWord
+                                    | TextEdit::Delete
+                                    | TextEdit::DeleteWord
+                                    | TextEdit::ImeSetCompose { .. }
+                                    | TextEdit::ImeCommit { .. }
+                            )
+                        });
+                        edit.pending_paste = None;
+                    }
+                    apply_requests(
+                        root,
+                        editor,
+                        &mut edit,
+                        max,
+                        &mut fonts,
+                        &mut layout,
+                        &mut clipboard,
+                    );
+                    Ok(())
+                })
+            })
+        })
+    }
 }
 
 fn abandon_paste(root: Entity, editor: Entity, source: bevy::clipboard::ClipboardError) {

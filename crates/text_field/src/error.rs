@@ -7,6 +7,10 @@ pub type TextFieldFailure = WidgetryFailure<TextFieldError>;
 
 #[derive(Debug)]
 pub enum TextFieldError {
+    EarlyEditFilter {
+        root: Entity,
+        editor: Entity,
+    },
     InvalidRoot {
         root: Entity,
         expected: &'static str,
@@ -81,6 +85,9 @@ pub enum TextFieldError {
 impl fmt::Display for TextFieldError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::EarlyEditFilter { .. } => {
+                f.write_str("提前编辑不支持不透明的 EditableTextFilter")
+            }
             Self::InvalidRoot { .. } => f.write_str("TextField 根不存在或类型不匹配"),
             Self::MissingPart { component, .. } => write!(f, "TextField 缺失必需部件: {component}"),
             Self::MissingResource { resource, .. } => {

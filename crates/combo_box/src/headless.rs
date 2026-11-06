@@ -178,8 +178,11 @@ fn available<T: Send + Sync + 'static>(
         return false;
     }
     let searchable = world
-        .get::<crate::WidgetryComboBox<T>>(root)
-        .is_some_and(|combo| combo.search().is_some());
+        .get::<crate::WidgetryComboBoxSearch<T>>(root)
+        .is_some();
+    if searchable && crate::search::parts::<T>(world, root).is_err() {
+        return false;
+    }
     world
         .get::<bevy_widgetry_list_view::WidgetryListModel<T>>(combo.source())
         .is_some_and(|model| !model.is_empty() || searchable)
@@ -245,8 +248,15 @@ impl<T: Send + Sync + 'static> WidgetryComboBoxHeadless<T> {
         let (_, source) = crate::combo_box::update_list::<T>(world, root)?;
         let parts = parts(world, root)?;
         let searchable = world
-            .get::<crate::WidgetryComboBox<T>>(root)
-            .is_some_and(|combo| combo.search().is_some());
+            .get::<crate::WidgetryComboBoxSearch<T>>(root)
+            .is_some();
+        if searchable {
+            let (_, field, _) = crate::search::parts::<T>(world, root).map_err(|fault| {
+                crate::error::failure(fault.into_error::<T>(root), "combo_box.open_search")
+            })?;
+            bevy_widgetry_text_field::WidgetryTextFieldHeadless::editor_entity(world, field)
+                .map_err(|error| crate::error::text(error, root, "combo_box.open_search"))?;
+        }
         if [root, parts.trigger, parts.popup]
             .iter()
             .any(|entity| world.get::<InteractionDisabled>(*entity).is_some())

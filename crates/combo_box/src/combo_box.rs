@@ -20,7 +20,6 @@ pub struct WidgetryComboBox<T: Send + Sync + 'static> {
     max_visible_items: usize,
     renderer: WidgetryListViewRenderer<T>,
     placeholder: WidgetryComboBoxContent,
-    search: Option<crate::WidgetryComboBoxMatcher<T>>,
 }
 
 #[derive(Component, Default)]
@@ -283,10 +282,6 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
             .selected_id())
     }
 
-    pub fn search(&self) -> Option<&crate::WidgetryComboBoxMatcher<T>> {
-        self.search.as_ref()
-    }
-
     pub(crate) fn placeholder(&self) -> &WidgetryComboBoxContent {
         &self.placeholder
     }
@@ -310,13 +305,15 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         let search = props.search.is_some();
         let search_prompt = props.search_prompt;
         let no_results = props.no_results;
+        let search_content = search.then_some((search_prompt, no_results));
         bsn! {
             template(move |context| props.colors.clone().initial::<T>(context.entity.id()).map_err(ComboFailure::into_bevy_error))
             @crate::WidgetryComboBoxHeadless::<T> {@source:source}
             crate::WidgetryComboBoxParts {trigger:#Trigger,popup:#Popup,list:#List}
+            @crate::search::binding(props.search, #Search)
             WidgetryComboBox::<T> {
                 item_height: {props.item_height},
-                max_visible_items: {props.max_visible_items}, renderer: {props.renderer}, placeholder: {props.placeholder}, search: {props.search},
+                max_visible_items: {props.max_visible_items}, renderer: {props.renderer}, placeholder: {props.placeholder},
             }
             template(move |context| {
                 if max_visible_items == 0 || !height.is_finite() {
@@ -325,7 +322,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
                 Ok(ValidatedConfig)
             })
             Node { width: px(200) }
-            Children [#Trigger @field::scene()-- #Popup @popup::scene::<T>(source,item_height,renderer,search,search_prompt,no_results,#List)]
+            Children [#Trigger @field::scene()-- #Popup @popup::scene::<T>(source,item_height,renderer,search_content,#List,#Search)]
         }
     }
 }

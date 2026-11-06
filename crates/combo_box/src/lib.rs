@@ -12,7 +12,7 @@ mod field;
 mod popup;
 mod registration;
 mod search;
-pub use search::{WidgetryComboBoxMatcher, WidgetryComboBoxSearchState};
+pub use search::{WidgetryComboBoxMatcher, WidgetryComboBoxSearch, WidgetryComboBoxSearchState};
 
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::PopoverPlugin;
@@ -43,7 +43,6 @@ impl Plugin for WidgetryComboBoxPlugin {
         if !app.is_plugin_added::<PopoverPlugin>() {
             app.add_plugins(PopoverPlugin);
         }
-        app.add_observer(search::contain_keys);
         app.add_observer(field::own_dropdown_icon);
         widgetry_debug!("WidgetryComboBoxPlugin 注册完成");
     }
