@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use bevy::text::TextCursorStyle;
 use bevy_widgetry::{
     number_input::{
-        WidgetryNumberInputEditor, WidgetryNumberInputHeadless, WidgetryNumberInputStep,
+        WidgetryNumberInputEditor, WidgetryNumberInputHeadless, WidgetryNumberInputRepeat,
+        WidgetryNumberInputStep,
     },
     text::WidgetryText,
     text_field::{WidgetryTextFieldEditor, WidgetryTextFieldHeadless},
@@ -38,18 +39,21 @@ pub(super) fn scene() -> impl Scene {
                 ]]
             ]--
             Status {root:#Root} Name::new("NumberCustomStatus") Text::new("") WidgetryText--
-            @stepped_scene()
+            @stepped_scene(false)--
+            @stepped_scene(true)
         ]
     }
 }
 
-fn stepped_scene() -> impl Scene {
+fn stepped_scene(repeat: bool) -> impl Scene {
+    let repeat_up = repeat.then_some(bsn! {WidgetryNumberInputRepeat});
+    let repeat_down = repeat.then_some(bsn! {WidgetryNumberInputRepeat});
     bsn! {
         Node {flex_direction:FlexDirection::Column,row_gap:px(8)}
         Children [
-            @localized(TextKey::NumberInput(NumberInputKey::CustomStepping)) WidgetryText--
+            @localized(TextKey::NumberInput(if repeat {NumberInputKey::CustomRepeat} else {NumberInputKey::CustomStepping})) WidgetryText--
             #Root @WidgetryNumberInputHeadless<f64> {@value:{Some(10.0)},@min:{Some(0.0)},@max:{Some(100.0)},@step:5.0}
-            WidgetryNumberInputEditor {field:#Field} Name::new("NumberCustomStep") on(committed)
+            WidgetryNumberInputEditor {field:#Field} Name::new(if repeat {"NumberCustomRepeat"} else {"NumberCustomStep"}) on(committed)
             Node {width:px(300),padding:UiRect::all(px(12)),column_gap:px(8),align_items:AlignItems::Center,border:UiRect::bottom(px(3)),border_radius:BorderRadius::all(px(12))}
             BackgroundColor BorderColor
             Children [
@@ -57,17 +61,17 @@ fn stepped_scene() -> impl Scene {
                 Node {flex_grow:1.0,min_width:px(0)}
                 Children [Node {width:percent(100)} Children [
                     #Editor @WidgetryTextFieldEditor {root:#Field}
-                    Name::new("NumberCustomStepEditor") Node {width:percent(100),min_height:px(28)} TextFont {font_size:FontSize::Px(20.0)}
+                    Name::new(if repeat {"NumberCustomRepeatEditor"} else {"NumberCustomStepEditor"}) Node {width:percent(100),min_height:px(28)} TextFont {font_size:FontSize::Px(20.0)}
                 ]]--
                 Node {flex_direction:FlexDirection::Column,row_gap:px(4),width:px(36),flex_shrink:0.0}
                 Children [
-                    WidgetryNumberInputStep {root:#Root,increase:true} Name::new("NumberCustomIncrease")
+                    WidgetryNumberInputStep {root:#Root,increase:true} @{repeat_up} Name::new(if repeat {"NumberCustomRepeatIncrease"} else {"NumberCustomIncrease"})
                     template(|_|Ok(StepAppearance))
                     bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
                     bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
                     Node {width:percent(100),height:px(24),justify_content:JustifyContent::Center,align_items:AlignItems::Center,border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4))} BorderColor BackgroundColor
                     Children [Text::new("+") WidgetryText Pickable::IGNORE]--
-                    WidgetryNumberInputStep {root:#Root,increase:false} Name::new("NumberCustomDecrease")
+                    WidgetryNumberInputStep {root:#Root,increase:false} @{repeat_down} Name::new(if repeat {"NumberCustomRepeatDecrease"} else {"NumberCustomDecrease"})
                     template(|_|Ok(StepAppearance))
                     bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
                     bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
@@ -75,7 +79,7 @@ fn stepped_scene() -> impl Scene {
                     Children [Text::new("−") WidgetryText Pickable::IGNORE]
                 ]
             ]--
-            Status {root:#Root} Name::new("NumberCustomStepStatus") Text::new("") WidgetryText
+            Status {root:#Root} Name::new(if repeat {"NumberCustomRepeatStatus"} else {"NumberCustomStepStatus"}) Text::new("") WidgetryText
         ]
     }
 }

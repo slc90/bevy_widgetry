@@ -180,6 +180,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         },
         TextKey::Navigation(NavigationKey::NumberInput) => "NumberInput",
         TextKey::NumberInput(key) => match key {
+            super::NumberInputKey::CustomRepeat => "Custom NumberInput · hold either button to repeat · 400ms delay, 100ms interval",
             super::NumberInputKey::CustomStepping => "Custom NumberInput · step 5 · separate buttons on the right · single step on press",
             super::NumberInputKey::CustomEditing => "Custom NumberInput · editor only · Enter commits, Esc restores",
             super::NumberInputKey::CustomDraftStatus => "Official: {value} · draft: {draft}",

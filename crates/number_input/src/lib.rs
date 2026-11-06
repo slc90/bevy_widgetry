@@ -14,6 +14,7 @@ pub use input::WidgetryNumberInputStep;
 mod layout;
 mod number;
 mod repeating;
+pub use repeating::WidgetryNumberInputRepeat;
 mod style;
 mod value;
 
@@ -36,6 +37,7 @@ impl Plugin for WidgetryNumberInputHeadlessPlugin {
             app.add_plugins(bevy::ui_widgets::ButtonPlugin);
         }
         input::install_focus(app);
+        repeating::install(app);
         macro_rules! register {
             ($($t:ty),+ $(,)?) => {$(
                 app.register_type::<value::State<$t>>();
@@ -60,7 +62,6 @@ impl Plugin for WidgetryNumberInputPlugin {
         }
         layout::install(app);
         style::install(app);
-        repeating::install(app);
         widgetry_debug!("WidgetryNumberInputPlugin 注册完成");
     }
 }

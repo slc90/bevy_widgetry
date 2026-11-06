@@ -22,7 +22,7 @@ NumberInput / SpinBox 共用 `WidgetryNumberInput<T>`，正式值始终以原始
 
 安装 `WidgetryNumberInputPlugin` 会自动安装组合所需的 TextField Plugin。内嵌 TextField 使用官方编辑器处理光标、选择、剪贴板与 IME；根实体保持唯一正式数值及公开 API 身份。草稿允许空串、负号或任意临时文字，键入期间不改变正式值。
 
-仅复用行为时安装 `WidgetryNumberInputHeadlessPlugin`，它注册全部支持类型的编辑与步进，并安装 TextField Headless 和原生 Button 输入，不安装 NumberInput 或 TextField 的默认 Style。默认 Plugin 自动组合它与原有视觉层及长按，不要求应用重复注册。
+仅复用行为时安装 `WidgetryNumberInputHeadlessPlugin`，它注册全部支持类型的编辑、步进与可选 Repeat 计时，并安装 TextField Headless 和原生 Button 输入，不安装 NumberInput 或 TextField 的默认 Style。默认 Plugin 自动组合它与原有视觉层，不要求应用重复注册。
 
 Enter 仅提交合法草稿；非法草稿保留。键盘焦点离开控件时，合法草稿提交，非法草稿恢复正式值文本。Esc 丢弃草稿、恢复正式文本并保留编辑焦点。鼠标移出不触发提交。合法同值不发数值通知。
 
@@ -42,7 +42,7 @@ Enter 仅提交合法草稿；非法草稿保留。键盘焦点离开控件时�
 
 在任意触发器上通过 BSN 挂载不可变的 `WidgetryNumberInputStep { root, increase }`，将其 `Activate` 关联到唯一数值根。关联不创建按钮或默认样式；可组合原生 `Button + ActivateOnPress + WidgetryPointerPressed + Hovered` 保留按下单步，也可使用触发器自己的公开输入能力。触发器可以位于数值根外、只有一个，或多个方向指向同一根；获取焦点时会转到绑定 Editor，避免先失焦提交草稿。不同原类型根共用同一调度入口，仍按各自 T 运算。失效关联在实际执行时通过宿主错误通道报告。
 
-没有按钮的 Headless 编辑器也支持上下方向键。外部触发器在本阶段只执行单步；默认按钮继续组合既有长按。
+没有按钮的 Headless 编辑器也支持上下方向键。外部触发器默认只执行单步，可以再组合 `WidgetryNumberInputRepeat`；默认按钮始终组合两者。
 
 可聚焦的外部触发器会将 `AcquireFocus.focused_entity` 一并重定向到 Editor，避免原生 TabIndex Observer 覆盖焦点。IME 守卫区分实际组词与普通清理：活动组合态或非空待处理预编辑阻止步进，空的清理请求照常处理，不丢弃用户动作。
 
@@ -55,6 +55,10 @@ Enter 仅提交合法草稿；非法草稿保留。键盘焦点离开控件时�
 例如 `0..10, step=3` 可达 `0→3→6→9→10`，反向从 `10→7→4→1→0`。鼠标滚轮不改变数值，也不截断父 ScrollArea 滚动。Disabled 阻止用户步进，合法程序化 Setter 仍可执行。
 
 按住按钮立即步进一次，持续约 400ms 后开始每约 100ms 重复一次。计时使用实时时间，不受游戏时间暂停影响；掉帧后每帧最多尝试一次，不追补积压周期。按住期间请求后续帧，支持 Reactive 桌面调度。每次复用单步提交路径，端点同值不通知也不禁用按钮。释放、Pointer 取消或有效 Disabled 会停止计时，恢复可用后需重新按下；同帧释放后重按同样重新等待 400ms。
+
+`WidgetryNumberInputRepeat` 是可选能力标记，计时与取消状态由私有 Component 保存，应用不写入 deadline。它自动要求共享 `WidgetryPointerPressed` 会话跟踪；触发器仍负责按下时的首步（例如原生 Button + ActivateOnPress），Repeat 只产生后续 Activate，不额外执行首步。未组合标记的触发器保持单步，不持续请求帧。
+
+根外触发器也受其数值根、TextField 和 Editor 的有效 Disabled 及根 ReadOnly 约束；丢失 Step 关联、根或 Editor 后停止请求帧。被取消后，重新启用、恢复关联或在旧按住会话中重新插入 Repeat 标记都不会续接旧计时，必须重新按下。禁用事件当场取消计时，覆盖下一 Tick 前先禁用再启用的情况。
 
 连续真实变化可能每秒通知约十次；昂贵的消费方工作可自行合并或延迟处理，再用公开 `value()` 查询最新值。
 

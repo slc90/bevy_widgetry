@@ -1,5 +1,7 @@
 # NumberInput 覆盖模型
 
+`custom_repeat.rs` 只安装 Headless Plugin，以根外原生触发器和公开 Repeat 标记验证首步/400ms等待/100ms间隔、长空闲后的新按下、掉帧不追补、释放/取消/根销毁后不再请求帧、只读守卫、根及Editor禁用后的旧会话取消（包括同Tick前禁用再启用、首次按下的首步通知中禁用再启用）、丢失/恢复Step关联与旧按住中重新插入Repeat标记不能续接。默认布局/Native窗口焦点/多Pointer/同帧重按的既有回归继续由 `repeating.rs` 负责。
+
 `custom_step.rs` 通过只安装 Headless Plugin 的外部多层 Editor 与根外单按钮，覆盖公开直接/排队步进、合法/非法草稿合并、端点静默、真实 Picking 按下单步和释放不加步、焦点保留、方向键重复、ReadOnly/根及 Editor Disabled/待处理 IME 守卫、程序设置权限、失效触发器宿主 Error Severity，以及 f64/u128 混合根的精确调度与通知归属。默认原类型饱和、全部布局/长按/样式回归继续由原文件负责。
 
 带 TabIndex、释放时激活的外部触发器还验证 AcquireFocus 事件目标重定向；在全局重定向之后运行真实原生 tab-focus Observer，保护 Observer 顺序变化时的 Editor 焦点与草稿单次合并，按下不提前提交、释放只通知最终步进结果。

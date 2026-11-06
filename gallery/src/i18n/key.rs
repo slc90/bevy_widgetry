@@ -181,6 +181,7 @@ pub(crate) enum NumberInputKey {
     Description,
     CustomEditing,
     CustomStepping,
+    CustomRepeat,
     CustomDraftStatus,
     Signed,
     Unsigned,

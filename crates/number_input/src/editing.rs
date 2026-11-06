@@ -79,7 +79,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
         Children [
             #NumberInputDecrease WidgetryNumberInputStep {root:#NumberInputRoot,increase:false}
             @{disabled_button}
-            crate::repeating::Repeat
+            crate::WidgetryNumberInputRepeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
             Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::right(px(1)),border_radius:BorderRadius::left(px(3))}
@@ -92,7 +92,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             Node {flex_grow:1.0,flex_basis:px(0),min_width:px(60)}--
             #NumberInputIncrease WidgetryNumberInputStep {root:#NumberInputRoot,increase:true}
             @{disabled_increase}
-            crate::repeating::Repeat
+            crate::WidgetryNumberInputRepeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
             Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::left(px(1)),border_radius:BorderRadius::right(px(3))}
