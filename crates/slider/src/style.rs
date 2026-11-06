@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{
     WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps, colors::ColorState,
-    input::DragState, value::WidgetrySliderState,
+    value::WidgetrySliderState,
 };
 use bevy::{
     ecs::entity::EntityHashSet,
@@ -76,9 +76,8 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
     bsn! {
         template(move |context| validate_dimensions(&props).map(|()| StyleDiagnostics::default()).map_err(|error| error.with_context(ErrorFrame::new("slider.initialize").field("root", context.entity.id())).into_bevy_error()))
         @crate::WidgetrySliderHeadless { @min: {value_props.min}, @max: {value_props.max}, @step: {value_props.step}, @value: {value_props.value} }
-        template(move |_| Ok(crate::slider::LinearOrientation(orientation)))
+        crate::WidgetrySliderLinear {track:#SliderTrack,thumb:#SliderThumb,orientation:orientation}
         template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
-        template(|_| Ok(DragState::default()))
         Parts { track: #SliderTrack, fill: #SliderFill, thumb: #SliderThumb }
         bevy::input_focus::tab_navigation::TabIndex(0) Hovered(false)
         Node {
@@ -132,7 +131,7 @@ fn update(
                 Changed<WidgetrySliderState>,
                 Changed<ColorState>,
                 Changed<Hovered>,
-                Changed<DragState>,
+                Changed<crate::input::DragState>,
                 Changed<Pressed>,
                 Changed<InteractionDisabled>,
             )>,
@@ -145,7 +144,7 @@ fn update(
         (
             Entity,
             &WidgetrySliderState,
-            &crate::slider::LinearOrientation,
+            &crate::WidgetrySliderLinear,
             &Parts,
             &ColorState,
             Option<&Hovered>,
@@ -194,7 +193,7 @@ fn update(
             fill.set_if_neq(BackgroundColor(color.fill));
             thumb.set_if_neq(BackgroundColor(color.thumb));
             let percentage = ratio(state) * 100.0;
-            let vertical = orientation.0 == WidgetrySliderOrientation::Vertical;
+            let vertical = orientation.orientation == WidgetrySliderOrientation::Vertical;
             let fill_length = if vertical {
                 fill_node.height
             } else {

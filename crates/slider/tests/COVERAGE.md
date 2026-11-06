@@ -40,6 +40,11 @@
 - 非法尺寸构造失败和预约实体清理。
 - 颜色 Commands 执行时校验及错误传播；失败不覆盖原有局部配色，清除恢复默认覆盖配置。
 
-`diagnostics.rs` 覆盖所有数值配置拒绝类别及原始浮点位、共享 origin / 源头一次 ERROR / 无完整栈、Scene 边界及宿主递送、Core 颜色原因与状态 / 字段、合法端点和同值无日志。样式验证多个损坏 Root 的完整聚合、持续失败身份复用和恢复 INFO。`input.rs` Unit Test 区分布局等待 / 目标销毁和缺失自有 SliderState / Parts，原有真实输入集成测试继续保护取消、Clamp 和手势通知。
+`diagnostics.rs` 覆盖所有数值配置拒绝类别及原始浮点位、共享 origin / 源头一次 ERROR / 无完整栈、Scene 边界及宿主递送、Core 颜色原因与状态 / 字段、合法端点和同值无日志。样式验证多个损坏 Root 的完整聚合、持续失败身份复用和恢复 INFO。`input.rs` Unit Test 区分布局等待 / 目标销毁和缺失自有 SliderState / 线性绑定，原有真实输入集成测试继续保护取消、Clamp 和手势通知。
 
-输入 Unit Test 还验证活动手势中丢失 Parts / SliderState 时，先清除 DragState、Pressed 和 Pointer Capture，再向宿主传播原诊断（单个源头 ERROR）。Parts 丢失仍提供当前真实值的 Cancelled；State 丢失时不能伪造终止值。
+输入 Unit Test 还验证活动手势中丢失 线性绑定 / SliderState 时，先清除 DragState、Pressed 和 Pointer Capture，再向宿主传播原诊断（单个源头 ERROR）。绑定丢失仍提供当前真实值的 Cancelled；State 丢失时不能伪造终止值。
+
+
+`interaction.rs` 从库外实现策略及每次手势 session，不安装默认 Style、不创建 Track/Thumb。覆盖真实 Picking 抓取偏移与非 final 提交、实例隔离、同值手势、开始拒绝、Wait 后续接、显式 Cancel、方向步进反转、W/S 键位替换与键盘中断、Disabled 程序设置、错误后先清理再发送真实 Cancelled、原始外部错误类型/source及单次源头ERROR。默认 `input.rs` / `style.rs` 继续保护线性 Scale/viewport/抓取/生命周期/配色尺寸契约。
+
+`input.rs` 还验证容差内合法步进初值的 Thumb Press、零位移 Move 和 Release 保留原始 f32 位且不发 ValueChange。

@@ -72,8 +72,6 @@ impl WidgetrySlider {
     }
 }
 
-#[derive(Component, Clone, Copy)]
-pub(crate) struct LinearOrientation(pub(crate) WidgetrySliderOrientation);
 impl WidgetrySlider {
     pub fn orientation(
         world: &World,
@@ -86,8 +84,8 @@ impl WidgetrySlider {
             ));
         }
         world
-            .get::<LinearOrientation>(entity)
-            .map(|state| state.0)
-            .ok_or_else(|| crate::error::missing(entity, entity, "LinearOrientation"))
+            .get::<crate::WidgetrySliderLinear>(entity)
+            .map(|state| state.orientation)
+            .ok_or_else(|| crate::error::missing(entity, entity, "WidgetrySliderLinear"))
     }
 }

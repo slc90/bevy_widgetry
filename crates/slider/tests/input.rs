@@ -800,3 +800,38 @@ fn explicit_visible_overrides_hidden_ancestors_without_overriding_disabled_or_di
         assert!((value(&app, root) - 7.1).abs() < 0.0001);
     }
 }
+
+#[test]
+fn unmoved_stepped_thumb_preserves_an_initial_value_within_numeric_tolerance() {
+    for id in pointer_ids() {
+        let (mut app, root, _, mut at) = fixture(id, false, true);
+        let initial = f32::from_bits(3.0_f32.to_bits() + 1);
+        WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, initial).unwrap();
+        app.world_mut().resource_mut::<Changes>().0.clear();
+        app.world_mut().resource_mut::<Lifecycle>().0.clear();
+        update(&mut app);
+        moved(&mut app, id, &mut at, axis(false, initial));
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Press(PointerButton::Primary),
+        );
+        moved(&mut app, id, &mut at, axis(false, initial));
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Release(PointerButton::Primary),
+        );
+        assert_eq!(value(&app, root).to_bits(), initial.to_bits());
+        assert!(app.world().resource::<Changes>().0.is_empty());
+        assert_eq!(
+            app.world().resource::<Lifecycle>().0,
+            [
+                Notice::Start(initial),
+                Notice::End(initial, SliderDragOutcome::Completed)
+            ]
+        );
+    }
+}

@@ -19,11 +19,21 @@
 
 查询、程序化设置与颜色 API 返回 `SliderFailure`（`WidgetryFailure<SliderError>`）。`WidgetrySliderHeadless::set_value_in_world(&mut World, entity, value)` 返回 `Result<bool, SliderFailure>`：真实变化 `Ok(true)`，合法同值 `Ok(false)`，无效目标、缺少状态、非法数值返回领域失败。失败不改值、不发事件。
 
-数值失败保存 `SliderNumericConfig { min, max, step, value }` 原始 `f32` 配置，`SliderValueRejection` 区分非有限范围、逆序范围、非有限跨度、非法步长、越界数值与不可达数值。尺寸错误保存轨道厚度、Thumb 直径及无效字段；目标和结构错误保存 Root、部件与缺失类型。颜色失败保留 Core 原因与状态 / 字段上下文。源头一次 ERROR 保存原始回溯，传播不重复记录，Template / Command / System 边界显式转为 `Severity::Error` 并保留原始 ID。样式按结构业务键保存持续诊断，聚合多个 Root，恢复时记录 INFO。正常布局等待、Pointer 取消、Disabled、Clamp 与合法同值不产生错误；输入位置投影中缺失自有 State / Parts 属于真实结构失败。
+数值失败保存 `SliderNumericConfig { min, max, step, value }` 原始 `f32` 配置，`SliderValueRejection` 区分非有限范围、逆序范围、非有限跨度、非法步长、越界数值与不可达数值。尺寸错误保存轨道厚度、Thumb 直径及无效字段；目标和结构错误保存 Root、部件与缺失类型。颜色失败保留 Core 原因与状态 / 字段上下文。源头一次 ERROR 保存原始回溯，传播不重复记录，Template / Command / System 边界显式转为 `Severity::Error` 并保留原始 ID。样式按结构业务键保存持续诊断，聚合多个 Root，恢复时记录 INFO。正常布局等待、Pointer 取消、Disabled、Clamp 与合法同值不产生错误；输入位置投影中缺失自有 State / 线性绑定 属于真实结构失败。
 
 `WidgetrySliderHeadless::set_value(&mut Commands, entity, value)` 仅排队，在命令实际执行时校验、提交与通知；失败传给宿主 Error Handler。程序化写入允许修改 Disabled Slider。
 
 每次真实变化先提交状态，再触发以 Slider 根实体为 `source` 的 Bevy `ValueChange<f32>`。初始化和同值不发事件。程序化操作一次完成，`is_final = true`。通知仅保证数值状态已提交，不保证其他 Observer 或未来的视觉同步顺序。
+
+## 可替换交互策略
+
+独立 `WidgetrySliderInteractionPlugin` 安装数值、Core UI 和输入生命周期，不安装默认样式。以 BSN 在 `@WidgetrySliderHeadless` 同根插入 `WidgetrySliderInteraction::new(strategy)` 即可使用库外策略；该组件确保 Node、Hovered 和内部手势状态，键盘导航可按需设置原生 TabIndex。应用可同时组合不同策略实例，不需要默认 Slider 身份或 Track / Thumb。
+
+`SliderInteractionStrategy::begin(&World, SliderPointerInput)` 读取布局、实例配置及当前只读数值，返回 `None` 拒绝/等待开始，或 `SliderInteractionStart { position, drag }`。`position` 为连续数值坐标，库负责 Clamp、方向锚点、步进和真实提交。每次手势的 `Box<dyn SliderDragStrategy>` 独立保存抓取偏移和轨迹历史；其 `project` 返回 `SliderProjection::Position`、`Wait`（保留捕获且不改值）或 `Cancel`（正常取消）。策略不可写 World，不直接提交 value 或控制 Capture。
+
+`SliderInteractionStrategy::key` 返回 `SliderDirection::Increase / Decrease`，由库按一步或跨度 1% 提交；默认 `None` 保留冒泡。只读 World 支持读取应用自己的实例组件；跨 Move 的可变轨迹放在手势 session。策略失败返回 `SliderFailure`，可用 `SliderError::Strategy { root, source }` 保留库外原因。非有限投影保存原始 f64 的 `InvalidPosition`，失败先清理捕获、Pressed 和 session，再传播同一诊断；状态不存在时不伪造结束值。
+
+默认 `WidgetrySliderLinear { track, thumb, orientation }` 是公开线性绑定，其 required 交互组件选择内置线性策略。绑定可指向应用自有节点，不依赖私有 Style Parts。布局尚未产生时等待，绑定实体或 Node 丢失明确报错。默认控件自动组合该绑定；默认样式仍只写自己的 Parts、颜色和焦点环。
 
 ## 用户输入
 
@@ -39,7 +49,7 @@
 
 `SliderDragEnded { entity, value, outcome }` 在清除活动手势、释放自身捕获与移除 Pressed 后发送，提供终止时已提交值。Primary Release / 正常 DragEnd 为 `SliderDragOutcome::Completed`；Cancel、不可用、失焦、Pointer / Capture 丢失及键盘打断为 `Cancelled`。多条终止入口只能结算一次，无移动也有完整 Start/End。取消保留当前值，不自动回滚。键盘及程序化操作本身不合成手势通知，`ValueChange::is_final` 也不表示手势结束。实体树销毁后不能保证向已销毁根发送事件，消费方须在销毁/换会话时清除自身暂存状态。
 
-拖动期间内部 Parts / State 损坏也先清理手势和捕获，再传播原始诊断。Parts 缺失时仍能发送真实值的 Cancelled；State 已丢失则不伪造 Ended 的数值，错误上下文记录已执行的清理。
+拖动期间策略绑定 / State 损坏也先清理手势和捕获，再传播原始诊断。绑定缺失时仍能发送真实值的 Cancelled；State 已丢失则不伪造 Ended 的数值，错误上下文记录已执行的清理。
 
 ## 样式与尺寸
 
@@ -58,3 +68,5 @@ Normal / Hovered / Pressed / Disabled 使用当前 Theme 的 `slider` 配色。�
 [Gallery Slider 页面](../../gallery/src/pages/slider.rs) 展示连续、步进、垂直、Disabled 及自定义尺寸。数值 Text 由 Gallery 在控件外组合并监听 `ValueChange<f32>` 更新，不属于 Slider 内部结构。离开页面销毁临时状态，再次进入采用各示例的初始值。页面支持现有 Theme、语言、Scale Factor 和配色对照机制。
 
 页面另有只组合 Headless 与应用 Text 的独立数值读数，显示当前值、范围、步长及提交次数，提供合法预设和禁用期间程序设置。它没有默认 Slider 标记或 Track/Thumb，不提供点击或拖动输入。
+
+页面还提供独立弧形实例：只组合公开数值和交互策略，用应用自有圆弧点、手柄及读数绘制。会话保存角度切口连续性和抓取偏移；W / S 为应用自定义键位，可聚焦、禁用和在禁用期间设为 50。它没有默认线性绑定或隐藏的默认部件。

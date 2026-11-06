@@ -20,13 +20,14 @@ impl Gesture {
 
     pub(crate) fn advance(&mut self, state: &WidgetrySliderState, position: f64) -> f32 {
         let movement = position - self.previous_position;
-        if movement != 0.0 {
-            if self.direction != 0.0 && movement.signum() != self.direction {
-                self.anchor_value = f64::from(state.value);
-                self.anchor_position = self.previous_position;
-            }
-            self.direction = movement.signum();
+        if movement == 0.0 {
+            return state.value;
         }
+        if self.direction != 0.0 && movement.signum() != self.direction {
+            self.anchor_value = f64::from(state.value);
+            self.anchor_position = self.previous_position;
+        }
+        self.direction = movement.signum();
         self.previous_position = position;
         // Keep endpoint identity when subtracting a large negative anchor loses a small max.
         if position <= f64::from(state.min) {

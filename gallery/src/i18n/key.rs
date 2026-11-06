@@ -236,6 +236,11 @@ pub(crate) enum SplitterKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SliderKey {
+    ArcDescription,
+    ArcFocus,
+    ArcDisabled,
+    ArcPreset,
+    ArcValue,
     NumericDescription,
     NumericMin,
     NumericFour,

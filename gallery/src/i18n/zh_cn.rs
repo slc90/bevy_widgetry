@@ -329,6 +329,13 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             "覆盖组级已选背景，并局部覆盖中间 Option；其他字段继续跟随主题。"
         }
         TextKey::Navigation(NavigationKey::Slider) => "Slider",
+        TextKey::Slider(super::SliderKey::ArcDescription) => {
+            "外部弧形策略：拖动圆弧，聚焦后 W / S 调整"
+        }
+        TextKey::Slider(super::SliderKey::ArcDisabled) => "切换圆弧禁用",
+        TextKey::Slider(super::SliderKey::ArcFocus) => "聚焦圆弧（W / S）",
+        TextKey::Slider(super::SliderKey::ArcPreset) => "圆弧设为 50",
+        TextKey::Slider(super::SliderKey::ArcValue) => "{value}",
         TextKey::Slider(super::SliderKey::NumericDescription) => {
             "独立数值读数 · 范围 0..10，步长 3，数值 4 从最大端可达；预设通过公开 API 设置。"
         }

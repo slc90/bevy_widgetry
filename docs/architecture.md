@@ -128,7 +128,7 @@ Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活�
 | [button](crates/button.md) | 提供 Button、LinkButton 控件及其交互、URL 打开与外观行为。 |
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
 | [progress_bar](crates/progress_bar.md) | 提供只读展示进度的状态、BSN 初始化、同步 / 延迟更新及水平轨道与主题样式。 |
-| [slider](crates/slider.md) | 提供 Slider 单值状态、输入、主题样式、尺寸配置与程序化更新。 |
+| [slider](crates/slider.md) | 提供独立 Slider 单值状态、可替换交互策略与生命周期、默认线性绑定和主题样式、尺寸配置与程序化更新。 |
 | [number_input](crates/number_input.md) | 提供原类型泛型数值状态、TextField 延迟编辑、按钮/方向键步进与长按、只读限制、三段布局与统一主题反馈；直接依赖 core、text_field、theme 与内部日志。 |
 | [splitter](crates/splitter.md) | 提供 BSN 双 Pane 组合、唯一比例状态、受原生约束限制的主轴布局、Handle 拖动与主题细线样式；直接依赖 core、theme。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |

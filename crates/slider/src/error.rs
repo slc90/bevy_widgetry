@@ -34,6 +34,14 @@ pub enum SliderError {
         thumb_diameter: f32,
         field: &'static str,
     },
+    InvalidPosition {
+        root: Entity,
+        position: f64,
+    },
+    Strategy {
+        root: Entity,
+        source: Box<dyn Error + Send + Sync>,
+    },
     InvalidRoot {
         root: Entity,
     },
@@ -72,6 +80,8 @@ impl fmt::Display for SliderError {
             Self::InvalidDimensions { .. } => {
                 f.write_str("Slider dimensions must be finite and positive")
             }
+            Self::InvalidPosition { .. } => f.write_str("Slider 策略返回非有限位置"),
+            Self::Strategy { .. } => f.write_str("Slider 交互策略失败"),
             Self::InvalidRoot { .. } => f.write_str("Slider 根不存在或类型不匹配"),
             Self::MissingPart { component, .. } => write!(f, "Slider 缺失必需部件: {component}"),
             Self::VisualStructure { .. } => f.write_str("Slider 样式内部结构失效"),
@@ -84,6 +94,7 @@ impl Error for SliderError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Core { source } => Some(source),
+            Self::Strategy { source, .. } => Some(source.as_ref()),
             Self::VisualStructure { source, .. } => Some(source),
             _ => None,
         }
