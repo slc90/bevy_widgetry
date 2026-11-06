@@ -15,12 +15,14 @@ mod registration;
 mod style;
 mod text_field;
 
-pub use auto_size::AutoSize;
+pub use auto_size::{AutoSize, WidgetryTextFieldAutoSize, WidgetryTextFieldAutoSizeProps};
 pub use headless::{
     WidgetryTextFieldEditor, WidgetryTextFieldEditorProps, WidgetryTextFieldHeadless,
     WidgetryTextFieldHeadlessProps,
 };
-pub use registration::{WidgetryTextFieldHeadlessPlugin, WidgetryTextFieldPlugin};
+pub use registration::{
+    WidgetryTextFieldAutoSizePlugin, WidgetryTextFieldHeadlessPlugin, WidgetryTextFieldPlugin,
+};
 pub use text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPrefix, WidgetryTextFieldSuffix,
 };

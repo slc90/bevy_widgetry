@@ -135,7 +135,7 @@ Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活�
 | [segmented](crates/segmented.md) | 提供独立严格单选分段控件的横向 / 竖向输入、动态选项维护和浮块式主题外观。 |
 | [collapsible](crates/collapsible.md) | BSN 常驻 Header/Content、唯一 Expanded 与同步/延迟状态 API。 |
 | [tabs](crates/tabs.md) | 固定 Header / Content 配对、唯一选择、常驻页面切换、方向导航、经典主题外观及标签栏 Auto 滚动。 |
-| [text_field](crates/text_field.md) | 提供独立 TextField Root/Editor 绑定、官方编辑状态与输入约束，以及默认 TextField / ReadOnlyTextField 组合样式。 |
+| [text_field](crates/text_field.md) | 提供独立 TextField Root/Editor 绑定、官方编辑状态与输入约束、可选 AutoSize 布局适配，以及默认 TextField / ReadOnlyTextField 组合样式。 |
 | [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示、选择及可选本地搜索；搜索输入组合 text_field，结果组合 list_view。 |
 | [tooltip](crates/tooltip.md) | 依赖 Core、Theme、Diagnostics 和内部日志，提供 Tooltip 的内容展示、交互触发、Popup 失败批量传播与持续异常诊断。 |
 | [scroll_area](crates/scroll_area.md) | 提供可滚动内容区域及 Scrollbar 交互。 |

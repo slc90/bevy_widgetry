@@ -34,7 +34,7 @@
 - Tree 的 View Selection API 直接使用业务 Entity，通过 Facade 构造的内部列表不依赖中间 ListModel。
 - Pressed Cleanup 不清除非 Owner 的程序化 Pressed。
 - 插件装配不覆盖宿主的 Font 策略。
-- TextField 的根内容 API、内部编辑实体、Prefix/Suffix 公共类型及编辑区域 Cursor 仍能通过 Facade 正确组合。
+- TextField 的根内容 API、公开 Root/Editor 绑定、独立可选 AutoSize Plugin、Prefix/Suffix 公共类型及编辑区域 Cursor 仍能通过 Facade 正确组合。
 - 单独 / 组合控件安装复用已有基础 UI Plugin；CheckBox、RadioGroup、Tooltip 的注册完成日志各只记录一次。
 
 ## Couplings

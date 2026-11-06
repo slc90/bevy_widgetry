@@ -69,6 +69,9 @@ fn root_reference(reference: bevy::ecs::template::EntityTemplate) -> impl Scene 
 }
 
 fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) -> impl Scene {
+    let auto_size = props
+        .auto_size
+        .map(|rows| crate::auto_size::configuration_scene(props.multiline, rows));
     let value = crate::length::truncate(&props.value, props.max_length).to_owned();
     let mut editable = if value.is_empty() {
         EditableText::default()
@@ -108,7 +111,7 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
     };
     bsn! {
         @root_reference(#TextFieldRoot)
-        template(move |context| crate::auto_size::Configuration::new(props.multiline, props.auto_size).map_err(|error| error.with_context(bevy_widgetry_diagnostics::ErrorFrame::new("text_field.initialize").field("root", context.entity.id())).into_bevy_error()))
+        @{auto_size}
         TextFieldBase
         @crate::WidgetryTextFieldHeadless {editor:#TextFieldEditor,@read_only:read_only}
         Parts { editor: #TextFieldEditor, frame: #TextFieldFrame }

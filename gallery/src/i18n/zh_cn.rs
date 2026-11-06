@@ -902,6 +902,12 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::CheckBox(CheckBoxKey::OnlyCheckedNormalMark0F766EMovePointer) => {
             "仅 checked.normal.mark=#0F766E；Checked 后移开 pointer，Hover/Disabled 仍取 Theme。"
         }
+        TextKey::TextField(TextFieldKey::AutoSizeDescription) => "自适应笔记：随正文伸缩至 2–5 行",
+        TextKey::TextField(TextFieldKey::AutoSizeHint) => {
+            "输入或载入长笔记，再切换宽度。高装饰与编辑区各自保持高度；超出的正文在编辑区内滚动。"
+        }
+        TextKey::TextField(TextFieldKey::AutoSizeWidth) => "窄 / 宽",
+        TextKey::TextField(TextFieldKey::AutoSizeFill) => "载入长笔记",
         TextKey::TextField(TextFieldKey::CustomDescription) => {
             "自定义搜索：独立 Headless 与多层嵌套编辑器"
         }

@@ -53,6 +53,8 @@
 
 ## 覆盖边界
 
+`auto_size.rs` 同时覆盖默认与可选独立 AutoSize：无默认 Frame 的任意层级 Editor、固定自定义根几何/较高装饰、行数夹取和清空回缩、宽度/字体/行高变化与 IME 预编辑排版、主题变化保留正文和选区、未启用的 Headless 保持固定行数，以及失效祖先链/错误 Owner/单行冲突的多根聚合、持续去重与恢复。AutoSize Unit Test 保护 FontCx/LayoutCx 缺失时的领域类型、原始诊断和宿主传播，恢复资源不替换 Editor。默认固定根高度冲突、恢复和再次冲突继续由原有 Integration Test 保护。
+
 Native Clipboard、IME 与真实 OS Focus 仍存在 Headless 验证边界。
 
 

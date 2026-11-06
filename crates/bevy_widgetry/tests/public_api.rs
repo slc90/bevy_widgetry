@@ -1231,3 +1231,30 @@ fn independent_text_field_bindings_are_available_through_facade() {
     );
     assert!(app.world().get::<WidgetryTextField>(root).is_none());
 }
+
+#[test]
+fn independent_auto_size_is_composable_through_facade() {
+    use bevy_widgetry::text_field::{
+        AutoSize, WidgetryTextFieldAutoSize, WidgetryTextFieldAutoSizePlugin,
+        WidgetryTextFieldEditor,
+    };
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryTextFieldAutoSizePlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            #Root @WidgetryTextFieldHeadless {editor:#Editor}
+            @WidgetryTextFieldAutoSize {@rows:{AutoSize {min_rows:1,max_rows:4}}}
+            Children [Node Children [#Editor @WidgetryTextFieldEditor {root:#Root,@multiline:true}]]
+        })
+        .unwrap()
+        .id();
+    app.update();
+    assert_eq!(
+        WidgetryTextFieldHeadless::editor(app.world(), root)
+            .unwrap()
+            .visible_lines,
+        Some(1.0)
+    );
+    assert!(app.world().get::<WidgetryTextField>(root).is_none());
+}

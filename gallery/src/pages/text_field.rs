@@ -46,6 +46,7 @@ fn toggle_auto_width(
     Ok(())
 }
 
+mod auto_size;
 mod custom;
 
 pub(crate) struct TextFieldDemoPlugin;
@@ -53,6 +54,7 @@ pub(crate) struct TextFieldDemoPlugin;
 impl Plugin for TextFieldDemoPlugin {
     fn build(&self, app: &mut App) {
         custom::install(app);
+        auto_size::install(app);
         app.add_systems(OnEnter(GalleryPage::TextField), enter)
             .add_systems(OnExit(GalleryPage::TextField), exit);
     }
@@ -70,6 +72,7 @@ fn exit(world: &mut World) -> Result {
 pub(crate) fn scene() -> impl SceneList {
     bsn_list! {
         @custom::scene()--
+        @auto_size::scene()--
         @WidgetryTextField { @value: {("Single line").to_owned()}, @show_count: true }
             Node { margin: UiRect::bottom(px(16)) }
         --

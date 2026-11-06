@@ -898,6 +898,10 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::CheckBox(CheckBoxKey::OnlyCheckedNormalMark0F766EMovePointer) => {
             "Only checked.normal.mark=#0F766E; move pointer away after Checked, Hover/Disabled still use Theme."
         }
+        TextKey::TextField(TextFieldKey::AutoSizeDescription) => "Adaptive notes · grows from 2 to 5 lines",
+        TextKey::TextField(TextFieldKey::AutoSizeHint) => "Type or load a longer note, then change its width. The tall decoration stays independent of the text height; extra lines scroll inside the editor.",
+        TextKey::TextField(TextFieldKey::AutoSizeWidth) => "Narrow / wide",
+        TextKey::TextField(TextFieldKey::AutoSizeFill) => "Load a long note",
         TextKey::TextField(TextFieldKey::CustomDescription) => "Custom search · independent Headless and nested Editor",
         TextKey::TextField(TextFieldKey::CustomHint) => "Type, select and paste · limit 16 graphemes. The icon and hint belong to the application.",
         TextKey::TextField(TextFieldKey::CustomReadOnlyHint) => "Read-only · select and copy. Programmatic clear and presets remain available.",

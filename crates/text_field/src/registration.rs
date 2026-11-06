@@ -7,6 +7,22 @@ use bevy_widgetry_theme::WidgetryThemePlugin;
 
 pub struct WidgetryTextFieldPlugin;
 pub struct WidgetryTextFieldHeadlessPlugin;
+pub struct WidgetryTextFieldAutoSizePlugin;
+
+impl Plugin for WidgetryTextFieldAutoSizePlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryTextFieldHeadlessPlugin>() {
+            app.add_plugins(WidgetryTextFieldHeadlessPlugin);
+        }
+        app.add_systems(
+            PostUpdate,
+            auto_size::resize_editors
+                .after(EditableTextSystems)
+                .before(bevy::ui::UiSystems::PostLayout),
+        );
+        widgetry_debug!("WidgetryTextFieldAutoSizePlugin 注册完成");
+    }
+}
 
 impl Plugin for WidgetryTextFieldHeadlessPlugin {
     fn build(&self, app: &mut App) {
@@ -56,8 +72,8 @@ impl Plugin for WidgetryTextFieldHeadlessPlugin {
 }
 impl Plugin for WidgetryTextFieldPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<WidgetryTextFieldHeadlessPlugin>() {
-            app.add_plugins(WidgetryTextFieldHeadlessPlugin);
+        if !app.is_plugin_added::<WidgetryTextFieldAutoSizePlugin>() {
+            app.add_plugins(WidgetryTextFieldAutoSizePlugin);
         }
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
@@ -72,9 +88,8 @@ impl Plugin for WidgetryTextFieldPlugin {
         );
         app.add_systems(
             PostUpdate,
-            (auto_size::resize_editors, count::sync_count)
-                .chain()
-                .after(EditableTextSystems)
+            count::sync_count
+                .after(auto_size::resize_editors)
                 .before(bevy::ui::UiSystems::PostLayout),
         );
         app.add_systems(

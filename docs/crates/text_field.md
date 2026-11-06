@@ -61,7 +61,13 @@ Workspace 内部组合控件可通过 `internal::frame(&World, root)` 定位现�
 
 `multiline` 决定是否允许输入换行，与 `auto_size: Option<AutoSize>` 的高度策略独立。`auto_size=None` 保持固定多行或单行的原有高度语义；`Some(AutoSize::default())` 默认按 2–6 行伸缩，可自定义 `min_rows` / `max_rows`。必须启用 multiline 且满足 `1 <= min_rows <= max_rows`，否则 Scene 创建明确失败。配置仅在构造时确定。
 
-AutoSize 从 Parley 最新排版读取视觉行数（包括软换行与预编辑排版），夹取后设置内部编辑器的 `visible_lines`，高度由 Bevy 官方 ContentSize 确定。文本、宽度、槽宽、字体及行高改变后按正常帧更新收敛；超过最大行数沿用官方 viewport 滚动。只管理真实编辑区域，计数行和槽自身高度不计入编辑行数，较高槽不会拉伸编辑器。开启时根 `Node.height` 必须为 Auto；固定高度冲突首次发生时交给宿主 Error Handler，持续冲突不重复报告。恢复 Auto 时记录一次 Info 并继续伸缩，恢复后再次冲突会重新报告。
+AutoSize 从 Parley 最新排版读取视觉行数（包括软换行与预编辑排版），夹取后设置真实编辑器的 `visible_lines`，高度由 Bevy 官方 ContentSize 确定。文本、宽度、槽宽、字体及行高改变后按正常帧更新收敛；超过最大行数沿用官方 viewport 滚动。只管理真实编辑区域，计数行和槽自身高度不计入编辑行数，较高槽不会拉伸编辑器。默认完整 Style 开启时根 `Node.height` 必须为 Auto；固定高度冲突首次发生时交给宿主 Error Handler，持续冲突不重复报告。恢复 Auto 时记录一次恢复日志并继续伸缩，恢复后再次冲突会重新报告。
+
+自定义根可组合 `@WidgetryTextFieldAutoSize { @rows: {AutoSize { min_rows: 2, max_rows: 5 }} }`，独立 `WidgetryTextFieldAutoSizePlugin` 自动确保 Headless Plugin，负责官方编辑完成后的自动高度测量，不安装默认 TextField Style。默认 Plugin 自动确保此可选适配 Plugin，默认 `auto_size` Props 也构造同一能力。未选择 AutoSize 的根不携带适配状态，也不被自动高度系统遍历或改写。
+
+适配器通过公开 Headless 绑定验证 Editor、Owner 和祖先链，不要求默认 Frame、Count 或 Hint。`rows` 仅在构造时初始化，非法行数在 Scene 创建时失败；自定义 Editor 的 `multiline` 以真实 `EditableText.allow_newlines` 为准，在运行测量时验证并报告领域错误。缺少必要排版资源、失效映射或错误 Owner 同样交给宿主，持续失败不重复报告，恢复后继续工作。
+
+自定义布局只把 Editor 的 `visible_lines` 交给适配器；根与装饰的 `Node` 几何完全由应用决定，不要求自定义根高度为 Auto，也不会被适配器修改。为让官方 ContentSize 决定编辑高度，应让 Editor 自身 `Node.height` 为 Auto、避免父容器 Stretch 把它拉高，例如父布局 `align_items: AlignItems::Center`、Editor `align_self: AlignSelf::Center`。父级固定高度或更高的装饰仍可保留，外部提示不参与视觉行数测量。
 
 提示是 TextField 的普通字符串语义数据，不是任意 Children 或输入框内部 Placeholder；当前只在构造时配置，提示节点的 `Text` 持久保存文案，没有第二份 Props State。优先按词换行，连续英文、URL或标识符超过可用宽度时按字符断行。节点不接受拾取或焦点，其文字不进入正文、选择、长度限制或字素计数，也不参与 AutoSize 的编辑行数测量。Root 总高度包含 Frame、可选 Count 和 HintText 各自的高度。
 
