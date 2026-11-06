@@ -2,6 +2,7 @@ mod custom;
 mod hold;
 mod hold_bar;
 mod link_card;
+mod radio_mixed;
 mod toggle;
 mod toggle_tag;
 use crate::assets::GalleryIcon;
@@ -27,6 +28,7 @@ impl Plugin for ButtonDemoPlugin {
         custom::install(app);
         link_card::install(app);
         toggle_tag::install(app);
+        radio_mixed::install(app);
         app.add_systems(OnEnter(GalleryPage::Button), enter)
             .add_systems(OnExit(GalleryPage::Button), exit)
             .add_systems(
@@ -95,7 +97,8 @@ pub(crate) fn scene() -> impl Scene {
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText--
                     @WidgetryRadioGroup InteractionDisabled
                     Children [@radio_option(TextKey::Common(CommonKey::Apple))-- @radio_option(TextKey::Common(CommonKey::Banana))-- @radio_option(TextKey::Common(CommonKey::Orange))]
-                ]
+                ]--
+            @radio_mixed::scene()
         ]
     }
 }

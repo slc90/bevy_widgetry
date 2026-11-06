@@ -5,7 +5,8 @@ use bevy::ui::Checked;
 use bevy_widgetry_core::{color::WidgetryStyleOwner, diagnostics::CoreError};
 use bevy_widgetry_radio_group::{
     RadioGroupError, RadioGroupFailure, WidgetryRadioGroup, WidgetryRadioGroupColorOverrides,
-    WidgetryRadioGroupPlugin, WidgetryRadioOption, WidgetryRadioOptionColorOverrides,
+    WidgetryRadioGroupHeadless, WidgetryRadioGroupPlugin, WidgetryRadioOption,
+    WidgetryRadioOptionColorOverrides,
 };
 use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
 use std::error::Error;
@@ -68,7 +69,7 @@ fn independent_selection_requests_and_color_commands_keep_typed_identity_at_the_
     let logs = LogCapture::default();
     let errors = ErrorCapture::default();
     for _ in 0..2 {
-        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), group, 10);
+        WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), group, 10);
     }
     WidgetryRadioGroupColorOverrides::clear(&mut app.world_mut().commands(), stale);
     WidgetryRadioOptionColorOverrides::clear(&mut app.world_mut().commands(), stale);

@@ -39,7 +39,7 @@ use bevy_widgetry::message_box::{
     WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent, widgetry_message_box,
 };
 use bevy_widgetry::radio_group::{
-    WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
+    WidgetryRadioGroup, WidgetryRadioGroupHeadless, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::scroll_area::{
@@ -411,7 +411,7 @@ fn radio_group_scene_api_is_usable() {
         @WidgetryRadioGroup
         Children [@WidgetryRadioOption Children [Text("Low") bevy_widgetry_core::text::WidgetryText]-- @WidgetryRadioOption Children [Text("High") bevy_widgetry_core::text::WidgetryText]]
     }).unwrap().id();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
     let children = app.world().get::<Children>(root).unwrap();

@@ -4,18 +4,22 @@
 
 提供可动态增删互斥选项的 `WidgetryRadioGroup` / `WidgetryRadioOption`，适合模式切换与单选设置。
 
+`WidgetryRadioGroupHeadless` / `WidgetryRadioOptionHeadless` 与独立 `WidgetryRadioGroupHeadlessPlugin` 提供不带默认布局和部件的单选行为。Group 保留原生 `RadioGroup` 与 `TabIndex(-1)`，Option 保留原生 `RadioButton`、Hover 和 PointerPressed；应用可直接绘制卡片或图片。默认 Group / Option 在同一 Root 上组合相应 Headless，默认 Plugin 自动安装行为插件。
+
 ## 当前设计思路
 
 RadioGroup 管理直接 Children 选项集合，使用 Bevy 官方 `Checked` 作为唯一选择状态。控件由 BSN 构造，不为重复 UI 内容另建平行构造方式。动态添加可通过 BSN 创建携带 `ChildOf(group)` 的 Option，删除可使用正常 ECS Despawn；不提供专用增删或重排 API。
 
 Option 配色只响应 Checked、Hover、有效 Disabled、父 / 子颜色覆盖、主题和必要的部件生命周期变化。单 Option 输入只刷新对应项，Group 颜色变化刷新本组，稳定状态不重复解析全部选项。移除 Hover 按未悬停处理；Indicator / Dot 构造、延后挂接和输出修复在首次有效颜色阶段重新刷新。Group Focus 继续只使用既有容器样式，不为 Option 增加新的视觉状态。
 
+默认与自定义 Group / Option 可以混合组合，成员仍须直接挂在 Group 下。默认样式仅处理默认身份，不写入自定义 Option 的颜色或部件；默认 Option 位于纯 Headless Group 下时直接使用 Theme 和 Option 局部覆盖。带默认 Group 身份的父级仍必须具有默认颜色配置，缺失时保留样式错误诊断。
+
 ## 主要功能
 
 - 初始化时选择第一项。
 - Pointer 点击选项使 Group 获得 Focus，有焦点时使用方向键切换；Tab / Shift+Tab 遍历跳过 Group。
-- 用户选择通过 Group Source 上的 `ValueChange<usize>` 通知。
-- `set_selected` 按 Index 进行程序化选择。
+- 用户选择提交原生 Checked 后，通过 Group Source 上的 `ValueChange<usize>` 通知。
+- `WidgetryRadioGroupHeadless::set_selected` 按 Index 进行程序化选择。
 - Root Disabled 继承到选项，Theme / Focus / Hover / Pressed 更新外观。
 
 ## 行为与状态契约

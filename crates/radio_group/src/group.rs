@@ -1,4 +1,4 @@
-use crate::WidgetryRadioOption;
+use crate::WidgetryRadioOptionHeadless;
 use crate::{
     RadioGroupError, RadioGroupFailure,
     error::{collect, core, failure},
@@ -16,9 +16,39 @@ use bevy_widgetry_diagnostics::{
 use std::sync::Arc;
 
 #[derive(SceneComponent, Default, Clone)]
+#[require(Node, RadioGroup, TabIndex(-1), GroupDiagnostics)]
+pub struct WidgetryRadioGroupHeadless;
+
+impl WidgetryRadioGroupHeadless {
+    fn scene() -> impl Scene {
+        bsn! {}
+    }
+    pub fn set_selected(commands: &mut Commands, entity: Entity, selected: usize) {
+        commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+            let (children, target) = selection_target(world, entity, selected)
+                .map_err(|error| error.into_bevy_error())?;
+            initialize_group(world, entity).map_err(|error| error.into_bevy_error())?;
+            if world.get::<Checked>(target).is_some() {
+                return Ok(());
+            }
+            Initialized::select(world, &children, target).map_err(|error| {
+                core(
+                    error,
+                    ErrorFrame::new("radio_group.select")
+                        .field("group", entity)
+                        .field("index", selected),
+                )
+                .into_bevy_error()
+            })?;
+            Ok(())
+        });
+    }
+}
+
+#[derive(SceneComponent, Default, Clone)]
 #[scene(crate::WidgetryRadioGroupProps)]
 #[require(
-    GroupDiagnostics,
+    WidgetryRadioGroupHeadless,
     crate::group_style::StyleDiagnostics,
     crate::colors::ColorState
 )]
@@ -55,11 +85,11 @@ pub(crate) fn install(app: &mut App) {
         .add_observer(on_parent_discarded);
     let world = app.world_mut();
     let groups = world
-        .query_filtered::<Entity, With<WidgetryRadioGroup>>()
+        .query_filtered::<Entity, With<WidgetryRadioGroupHeadless>>()
         .iter(world)
         .collect::<EntityHashSet>();
     let options = world
-        .query_filtered::<Entity, With<WidgetryRadioOption>>()
+        .query_filtered::<Entity, With<WidgetryRadioOptionHeadless>>()
         .iter(world)
         .collect::<EntityHashSet>();
     let mut changes = world.resource_mut::<StructureChanges>();
@@ -75,7 +105,7 @@ fn invalidate_group(entity: Entity, children: &Query<&Children>, changes: &mut S
 }
 
 fn on_group_inserted(
-    event: On<Insert<WidgetryRadioGroup>>,
+    event: On<Insert<WidgetryRadioGroupHeadless>>,
     children: Query<&Children>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -83,7 +113,7 @@ fn on_group_inserted(
 }
 
 fn on_group_removed(
-    event: On<Remove<WidgetryRadioGroup>>,
+    event: On<Remove<WidgetryRadioGroupHeadless>>,
     children: Query<&Children>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -99,7 +129,7 @@ fn invalidate_option(entity: Entity, parents: &Query<&ChildOf>, changes: &mut St
 }
 
 fn on_option_inserted(
-    event: On<Insert<WidgetryRadioOption>>,
+    event: On<Insert<WidgetryRadioOptionHeadless>>,
     parents: Query<&ChildOf>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -107,7 +137,7 @@ fn on_option_inserted(
 }
 
 fn on_option_removed(
-    event: On<Remove<WidgetryRadioOption>>,
+    event: On<Remove<WidgetryRadioOptionHeadless>>,
     parents: Query<&ChildOf>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -116,8 +146,8 @@ fn on_option_removed(
 
 fn invalidate_parent(
     entity: Entity,
-    parents: &Query<(Has<WidgetryRadioOption>, &ChildOf)>,
-    groups: &Query<(), With<WidgetryRadioGroup>>,
+    parents: &Query<(Has<WidgetryRadioOptionHeadless>, &ChildOf)>,
+    groups: &Query<(), With<WidgetryRadioGroupHeadless>>,
     changes: &mut StructureChanges,
 ) {
     if let Ok((option, parent)) = parents.get(entity) {
@@ -132,8 +162,8 @@ fn invalidate_parent(
 
 fn on_parent_inserted(
     event: On<Insert<ChildOf>>,
-    parents: Query<(Has<WidgetryRadioOption>, &ChildOf)>,
-    groups: Query<(), With<WidgetryRadioGroup>>,
+    parents: Query<(Has<WidgetryRadioOptionHeadless>, &ChildOf)>,
+    groups: Query<(), With<WidgetryRadioGroupHeadless>>,
     mut changes: ResMut<StructureChanges>,
 ) {
     invalidate_parent(event.entity, &parents, &groups, &mut changes);
@@ -141,8 +171,8 @@ fn on_parent_inserted(
 
 fn on_parent_discarded(
     event: On<Discard<ChildOf>>,
-    parents: Query<(Has<WidgetryRadioOption>, &ChildOf)>,
-    groups: Query<(), With<WidgetryRadioGroup>>,
+    parents: Query<(Has<WidgetryRadioOptionHeadless>, &ChildOf)>,
+    groups: Query<(), With<WidgetryRadioGroupHeadless>>,
     checked: Query<(), With<Checked>>,
     mut initialized: Query<&mut Initialized>,
     mut changes: ResMut<StructureChanges>,
@@ -159,19 +189,29 @@ fn on_parent_discarded(
 
 pub(crate) fn handle_value_change(
     event: On<ValueChange<Entity>>,
-    groups: Query<&Children, With<WidgetryRadioGroup>>,
+    headless: Query<&Children, With<WidgetryRadioGroupHeadless>>,
+    options: Query<(), With<WidgetryRadioOptionHeadless>>,
+    groups: Query<&Children, With<RadioGroup>>,
+    radios: Query<Entity, With<bevy::ui_widgets::RadioButton>>,
     mut commands: Commands,
 ) {
-    let Ok(children) = groups.get(event.source) else {
+    let Ok(children) = headless.get(event.source) else {
         return;
     };
-    if let Some(index) = children.iter().position(|child| child == event.value) {
-        commands.trigger(ValueChange {
-            source: event.source,
-            value: index,
-            is_final: event.is_final,
-        });
+    if children.iter().any(|child| !options.contains(child)) {
+        return;
     }
+    let Some(index) = children.iter().position(|child| child == event.value) else {
+        return;
+    };
+    let source = event.source;
+    let is_final = event.is_final;
+    bevy::ui_widgets::radio_self_update(event, groups, radios, commands.reborrow());
+    commands.trigger(ValueChange {
+        source,
+        value: index,
+        is_final,
+    });
 }
 
 pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
@@ -186,7 +226,7 @@ pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
     };
     let mut batch = DiagnosticBatch::default();
     for root in roots {
-        if world.get::<WidgetryRadioGroup>(root).is_none() {
+        if world.get::<WidgetryRadioGroupHeadless>(root).is_none() {
             continue;
         }
         #[cfg(test)]
@@ -196,7 +236,7 @@ pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
         collect(&mut batch, initialize_group(world, root));
     }
     for option in options {
-        if world.get::<WidgetryRadioOption>(option).is_none() {
+        if world.get::<WidgetryRadioOptionHeadless>(option).is_none() {
             continue;
         }
         let parent = world.get::<ChildOf>(option).map(ChildOf::parent);
@@ -209,7 +249,7 @@ pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
                 .field("option", option)
                 .field("parent", format_args!("{parent:?}"))
         };
-        if parent.is_some_and(|parent| world.get::<WidgetryRadioGroup>(parent).is_some()) {
+        if parent.is_some_and(|parent| world.get::<WidgetryRadioGroupHeadless>(parent).is_some()) {
             if let Some(mut diagnostics) = world.get_mut::<OwnershipDiagnostics>(option) {
                 diagnostics.0.recover(frame);
             }
@@ -251,7 +291,7 @@ fn initialize_group(world: &mut World, root: Entity) -> Result<(), WidgetryEcsEr
     } else {
         children
             .iter()
-            .find(|child| world.get::<WidgetryRadioOption>(**child).is_none())
+            .find(|child| world.get::<WidgetryRadioOptionHeadless>(**child).is_none())
             .map(|child| {
                 (
                     GroupFailureKey::Child(*child),
@@ -289,32 +329,10 @@ fn initialize_group(world: &mut World, root: Entity) -> Result<(), WidgetryEcsEr
 }
 
 impl WidgetryRadioGroup {
-    pub fn set_selected(commands: &mut Commands, entity: Entity, selected: usize) {
-        commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-            let (children, target) = selection_target(world, entity, selected)
-                .map_err(|error| error.into_bevy_error())?;
-            initialize_group(world, entity).map_err(|error| error.into_bevy_error())?;
-            if world.get::<Checked>(target).is_some() {
-                return Ok(());
-            }
-            Initialized::select(world, &children, target).map_err(|error| {
-                core(
-                    error,
-                    ErrorFrame::new("radio_group.select")
-                        .field("group", entity)
-                        .field("index", selected),
-                )
-                .into_bevy_error()
-            })?;
-            Ok(())
-        });
-    }
-
     fn scene(props: crate::WidgetryRadioGroupProps) -> impl Scene {
         bsn! {
             template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
-            RadioGroup
-            TabIndex(-1)
+            @WidgetryRadioGroupHeadless
             Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
@@ -343,7 +361,7 @@ fn selection_target(
                 .field("index", index),
         )
     };
-    if world.get::<WidgetryRadioGroup>(root).is_none() {
+    if world.get::<WidgetryRadioGroupHeadless>(root).is_none() {
         return Err(invalid(RadioGroupError::InvalidTarget {
             entity: root,
             widget: "RadioGroup",
@@ -354,7 +372,7 @@ fn selection_target(
         .filter(|children| !children.is_empty())
         .ok_or_else(|| invalid(RadioGroupError::EmptyGroup { group: root }))?;
     for &option in children {
-        if world.get::<WidgetryRadioOption>(option).is_none() {
+        if world.get::<WidgetryRadioOptionHeadless>(option).is_none() {
             return Err(invalid(RadioGroupError::InvalidChild {
                 group: root,
                 option,
@@ -375,6 +393,7 @@ fn selection_target(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+    use crate::WidgetryRadioOption;
     use bevy_widgetry_test_utils::{ErrorCapture, scene_app};
 
     #[test]
@@ -417,19 +436,21 @@ mod tests {
         }
         initialize(app.world_mut()).unwrap();
         let root = roots[0];
-        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+        WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
         app.world_mut().flush();
         std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
         app.world_mut()
             .entity_mut(root)
-            .remove::<WidgetryRadioGroup>();
+            .remove::<WidgetryRadioGroupHeadless>();
         assert_eq!(
             initialize(app.world_mut()).unwrap_err().severity(),
             bevy::ecs::error::Severity::Error
         );
         let checked = std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
         assert_eq!((checked.groups_checked, checked.options_checked), (0, 3));
-        app.world_mut().entity_mut(root).insert(WidgetryRadioGroup);
+        app.world_mut()
+            .entity_mut(root)
+            .insert(WidgetryRadioGroupHeadless);
         initialize(app.world_mut()).unwrap();
         let checked = std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
         assert_eq!((checked.groups_checked, checked.options_checked), (1, 3));
@@ -478,9 +499,9 @@ mod tests {
             if invalid_structure {
                 app.world_mut()
                     .entity_mut(children[0])
-                    .remove::<WidgetryRadioOption>();
+                    .remove::<WidgetryRadioOptionHeadless>();
             }
-            WidgetryRadioGroup::set_selected(
+            WidgetryRadioGroupHeadless::set_selected(
                 &mut app.world_mut().commands(),
                 root,
                 if invalid_structure { 1 } else { 2 },

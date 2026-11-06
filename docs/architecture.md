@@ -67,6 +67,8 @@ CheckBox 直接使用 Diagnostics 保留二态/三态的领域错误与 mark/col
 
 RadioGroup 直接使用 Diagnostics 保存 Group/Option 归属、选择和样式诊断；选择历史与 Checked 修复继续复用 Core，结构和配色仍由各自的变更集合驱动。
 
+RadioGroup 的独立 Headless Plugin 管理原生 Group / Option 输入、严格直接成员和 Checked 修复；默认 Plugin 组合行为并安装默认样式。默认选项与自定义选项可混合，默认选项在纯 Headless 父级下以 Theme 作为配色来源。
+
 各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
 
 公共错误载体位于独立的 [diagnostics](crates/diagnostics.md) crate，直接依赖轻量 internal_log；internal_log 的生产依赖只有 Tracing。其默认组合不依赖 Core、Bevy ECS 或渲染栈，可用于 Job、原生平台能力及构建期工具。默认关闭的 `bevy` Feature 只增加 Bevy ECS 的边界适配；Facade 显式启用并经 `diagnostics` 模块重导出。载体提供领域失败、共享 origin、原始线程回溯及传播上下文，不安装宿主处理器。

@@ -15,7 +15,8 @@ use bevy::ui_widgets::{RadioButton, RadioGroup};
 use bevy::window::PrimaryWindow;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_radio_group::{
-    WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
+    WidgetryRadioGroup, WidgetryRadioGroupHeadless, WidgetryRadioGroupPlugin, WidgetryRadioOption,
+    WidgetryRadioOptionHeadless,
 };
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_click, primary_press,
@@ -146,7 +147,7 @@ fn dynamic_removal_selects_the_next_surviving_neighbor_silently() {
         let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
         let other = app.world_mut().spawn_scene(group_scene()).unwrap().id();
         app.update();
-        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, selected);
+        WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, selected);
         app.world_mut().flush();
         let options = app.world().get::<Children>(root).unwrap().to_vec();
         app.world_mut().despawn(options[selected]);
@@ -167,7 +168,7 @@ fn dynamic_addition_preserves_checked_identity_and_does_not_rewrite_it() {
     let mut app = app();
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     let options = app.world().get::<Children>(root).unwrap().to_vec();
     let tick = app
@@ -210,7 +211,7 @@ fn dynamic_batched_removal_uses_old_order_and_can_choose_disabled_neighbor() {
         .unwrap()
         .id();
     app.update();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     let options = app.world().get::<Children>(root).unwrap().to_vec();
     for option in &options[..3] {
@@ -277,7 +278,7 @@ fn dynamic_queued_selection_resolves_index_after_removal() {
     app.update();
     let first = app.world().get::<Children>(root).unwrap()[0];
     app.world_mut().commands().entity(first).despawn();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
     assert_selected(&app, root, 1);
@@ -289,7 +290,7 @@ fn dynamic_temporary_checked_addition_does_not_replace_removed_selection_history
     let mut app = app();
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     let selected = app.world().get::<Children>(root).unwrap()[1];
     app.world_mut().despawn(selected);
@@ -339,7 +340,7 @@ fn dynamic_empty_recovery_resets_selection_when_reusing_old_options() {
     let mut app = app();
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     let options = app.world().get::<Children>(root).unwrap().to_vec();
     for &option in &options {
@@ -372,7 +373,7 @@ fn dynamic_detach_uses_surviving_successor_after_earlier_items_are_removed() {
         .unwrap()
         .id();
     app.update();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 2);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 2);
     app.world_mut().flush();
     let options = app.world().get::<Children>(root).unwrap().to_vec();
     app.world_mut().despawn(options[0]);
@@ -473,7 +474,7 @@ fn programmatic_selection_is_silent_and_same_value_preserves_tick() {
     let mut app = app();
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 2);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 2);
     app.world_mut().flush();
     assert_selected(&app, root, 2);
     let option = app.world().get::<Children>(root).unwrap()[2];
@@ -484,7 +485,7 @@ fn programmatic_selection_is_silent_and_same_value_preserves_tick() {
         .unwrap()
         .last_changed();
     for (entity, index) in [(root, 2), (root, 2)] {
-        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), entity, index);
+        WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), entity, index);
         app.world_mut().flush();
         app.update();
         assert_selected(&app, root, 2);
@@ -505,7 +506,7 @@ fn programmatic_selection_is_silent_and_same_value_preserves_tick() {
 fn selection_before_first_update_is_preserved() {
     let mut app = app();
     let root = app.world_mut().commands().spawn_scene(group_scene()).id();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 2);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 2);
     app.world_mut().flush();
     app.update();
     assert_selected(&app, root, 2);
@@ -580,7 +581,7 @@ fn invalid_programmatic_initialization_reaches_command_handler() {
         .unwrap()
         .id();
     let child = app.world().get::<Children>(root).unwrap()[0];
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 0);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 0);
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
     errors.run(|| logs.run(|| app.world_mut().flush()));
@@ -614,7 +615,7 @@ fn disabled_inherits_into_options_and_content_and_allows_programmatic_selection(
     app.world_mut().trigger(primary_click(options[2]));
     app.world_mut().flush();
     assert_selected(&app, root, 0);
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     assert_selected(&app, root, 1);
     assert!(app.world().resource::<Changes>().indices.is_empty());
@@ -882,7 +883,7 @@ fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
             (false, true, true),
             (false, false, false),
         ] {
-            WidgetryRadioGroup::set_selected(
+            WidgetryRadioGroupHeadless::set_selected(
                 &mut app.world_mut().commands(),
                 root,
                 usize::from(checked),
@@ -943,7 +944,7 @@ fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
             );
         }
     }
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
     switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_DARK_THEME);
@@ -989,7 +990,7 @@ fn parent_and_local_palette_changes_and_clears_refresh_options_independently() {
     local.unchecked.normal.foreground = Some(local_color);
     WidgetryRadioOptionColorOverrides::set_in_world(app.world_mut(), options[1], local).unwrap();
     app.update();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
     assert_selected(&app, root, 1);
@@ -1145,7 +1146,7 @@ fn single_option_is_stable_for_repeated_selection() {
     let label = app.world().get::<Children>(option).unwrap()[1];
     for _ in 0..2 {
         app.world_mut().trigger(primary_click(label));
-        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 0);
+        WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 0);
         app.world_mut().flush();
         assert_selected(&app, root, 0);
     }
@@ -1172,7 +1173,7 @@ fn independent_groups_isolate_selection_and_notifications() {
     app.world_mut().flush();
     assert_selected(&app, a, 2);
     assert_selected(&app, b, 0);
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), b, 2);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), b, 2);
     app.world_mut().flush();
     assert_selected(&app, a, 2);
     assert_selected(&app, b, 2);
@@ -1180,7 +1181,7 @@ fn independent_groups_isolate_selection_and_notifications() {
     app.world_mut().flush();
     assert_selected(&app, a, 2);
     assert_selected(&app, b, 1);
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), a, 0);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), a, 0);
     app.world_mut().flush();
     assert_selected(&app, a, 0);
     assert_selected(&app, b, 1);
@@ -1202,7 +1203,7 @@ fn queued_selection_keeps_last_valid_value_after_rejection() {
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
     for index in [1, 2, usize::MAX] {
-        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, index);
+        WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, index);
     }
     assert_selected(&app, root, 0);
     let errors = ErrorCapture::default();
@@ -1243,7 +1244,7 @@ fn invalid_selection_is_rejected_at_execution_without_partial_changes() {
             let logs = LogCapture::default();
             errors.run(|| {
                 logs.run(|| {
-                    WidgetryRadioGroup::set_selected(
+                    WidgetryRadioGroupHeadless::set_selected(
                         &mut app.world_mut().commands(),
                         entity,
                         index,
@@ -1257,7 +1258,7 @@ fn invalid_selection_is_rejected_at_execution_without_partial_changes() {
                         2 => {
                             app.world_mut()
                                 .entity_mut(root)
-                                .remove::<WidgetryRadioGroup>();
+                                .remove::<WidgetryRadioGroupHeadless>();
                         }
                         3 => {
                             app.world_mut().entity_mut(root).detach_all_children();
@@ -1265,11 +1266,15 @@ fn invalid_selection_is_rejected_at_execution_without_partial_changes() {
                         4 => {
                             app.world_mut()
                                 .entity_mut(options[2])
-                                .remove::<WidgetryRadioOption>();
+                                .remove::<WidgetryRadioOptionHeadless>();
                         }
                         _ => {}
                     }
-                    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), healthy, 2);
+                    WidgetryRadioGroupHeadless::set_selected(
+                        &mut app.world_mut().commands(),
+                        healthy,
+                        2,
+                    );
                     app.world_mut().flush();
                 })
             });
@@ -1322,7 +1327,7 @@ fn programmatic_initialization_recovers_previous_structure_failure() {
             Children [@WidgetryRadioOption-- @WidgetryRadioOption]
         })
         .unwrap();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     errors.run(|| {
         logs.run(|| {
             app.world_mut().flush();
@@ -1449,7 +1454,7 @@ fn initialized_group_revalidates_option_markers_without_resetting_selection() {
     });
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     let option = app.world().get::<Children>(root).unwrap()[2];
     let errors = ErrorCapture::default();
@@ -1457,7 +1462,7 @@ fn initialized_group_revalidates_option_markers_without_resetting_selection() {
     for round in 0..2 {
         app.world_mut()
             .entity_mut(option)
-            .remove::<WidgetryRadioOption>();
+            .remove::<WidgetryRadioOptionHeadless>();
         errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
         let failures = errors.take();
         assert_eq!(failures.len(), 1);
@@ -1471,7 +1476,7 @@ fn initialized_group_revalidates_option_markers_without_resetting_selection() {
         assert!(errors.take().is_empty());
         app.world_mut()
             .entity_mut(option)
-            .insert(WidgetryRadioOption);
+            .insert(WidgetryRadioOptionHeadless);
         errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
         assert!(errors.take().is_empty());
         assert_selected(&app, root, 1);
@@ -1537,7 +1542,7 @@ fn parent_replacement_marker_loss_and_despawn_follow_structure_lifecycle() {
     assert_selected(&app, root, 0);
     app.world_mut()
         .entity_mut(root)
-        .remove::<WidgetryRadioGroup>();
+        .remove::<WidgetryRadioGroupHeadless>();
     errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
     let failures = errors.take();
     assert_eq!(failures.len(), 1);

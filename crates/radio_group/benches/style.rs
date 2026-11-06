@@ -2,8 +2,8 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_radio_group::{
-    WidgetryRadioGroup, WidgetryRadioGroupColorOverrides, WidgetryRadioGroupPlugin,
-    WidgetryRadioOption,
+    WidgetryRadioGroup, WidgetryRadioGroupColorOverrides, WidgetryRadioGroupHeadless,
+    WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app};
 
@@ -103,7 +103,7 @@ fn main() -> Result {
                             };
                         }
                         "select_one" => {
-                            WidgetryRadioGroup::set_selected(
+                            WidgetryRadioGroupHeadless::set_selected(
                                 &mut fixture.app.world_mut().commands(),
                                 fixture.root,
                                 usize::from(active),

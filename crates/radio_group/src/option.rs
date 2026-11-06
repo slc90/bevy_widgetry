@@ -4,11 +4,27 @@ use bevy::ui_widgets::RadioButton;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 
 #[derive(SceneComponent, Default, Clone)]
+#[require(
+    Node,
+    RadioButton,
+    Hovered,
+    bevy_widgetry_core::pointer::WidgetryPointerPressed,
+    crate::group::OwnershipDiagnostics
+)]
+pub struct WidgetryRadioOptionHeadless;
+
+impl WidgetryRadioOptionHeadless {
+    fn scene() -> impl Scene {
+        bsn! {}
+    }
+}
+
+#[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryRadioOptionProps)]
 #[require(
     crate::colors::OptionColorState,
     crate::option_style::StyleDiagnostics,
-    crate::group::OwnershipDiagnostics
+    WidgetryRadioOptionHeadless
 )]
 pub struct WidgetryRadioOption;
 
@@ -27,10 +43,8 @@ impl WidgetryRadioOption {
     fn scene(props: WidgetryRadioOptionProps) -> impl Scene {
         bsn! {
             template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
-            RadioButton
+            @WidgetryRadioOptionHeadless
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            bevy_widgetry_core::pointer::WidgetryPointerPressed
-            Hovered(false)
             Node {
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,

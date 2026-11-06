@@ -56,11 +56,12 @@ fn removed_style_input(
             BorderColor,
             ResolvedForeground,
             crate::WidgetryRadioGroup,
+            crate::WidgetryRadioGroupHeadless,
         )>,
     >,
     parents: Query<&ChildOf>,
     options: Query<(), With<WidgetryRadioOption>>,
-    groups: Query<&Children, With<crate::WidgetryRadioGroup>>,
+    groups: Query<&Children, With<crate::WidgetryRadioGroupHeadless>>,
     mut changes: ResMut<StyleChanges>,
 ) {
     queue_option(event.entity, &parents, &options, &mut changes);
@@ -91,9 +92,10 @@ pub(crate) fn collect_changes(
     groups: Query<
         &Children,
         (
-            With<crate::WidgetryRadioGroup>,
+            With<crate::WidgetryRadioGroupHeadless>,
             Or<(
                 Added<crate::WidgetryRadioGroup>,
+                Added<crate::WidgetryRadioGroupHeadless>,
                 Changed<crate::colors::ColorState>,
             )>,
         ),
@@ -156,7 +158,7 @@ fn apply(
     colors: &WidgetryRadioGroupColors,
     (option, parent, local, children, hovered, checked, disabled, foreground, mut diagnostics): <OptionStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
     groups: &Query<&crate::colors::ColorState, With<crate::WidgetryRadioGroup>>,
-    valid_groups: &Query<(), With<crate::WidgetryRadioGroup>>,
+    valid_groups: &Query<Has<crate::WidgetryRadioGroup>, With<crate::WidgetryRadioGroupHeadless>>,
     indicators: &mut Query<IndicatorData, IndicatorFilter>,
     dots: &mut Query<Option<&mut BackgroundColor>, DotFilter>,
 ) -> Result<(), WidgetryEcsError> {
@@ -168,20 +170,21 @@ fn apply(
         let query_error = |entity, part, source| {
             StyleIssue::query(Some(group), Some(option), entity, part, source)
         };
-        let overrides = groups.get(group).map_err(|source| {
-            query_error(
-                group,
-                if valid_groups.contains(group) {
-                    "group.ColorState"
-                } else {
-                    "group.WidgetryRadioGroup"
-                },
-                source,
+        let styled = valid_groups
+            .get(group)
+            .map_err(|source| query_error(group, "group.WidgetryRadioGroupHeadless", source))?;
+        let overrides = if styled {
+            Some(
+                groups
+                    .get(group)
+                    .map_err(|source| query_error(group, "group.ColorState", source))?,
             )
-        })?;
+        } else {
+            None
+        };
         let local = local.ok_or_else(|| missing(option, "OptionColorState"))?;
         let mut foreground = foreground.ok_or_else(|| missing(option, "ResolvedForeground"))?;
-        let colors = overrides.0.resolve(colors);
+        let colors = overrides.map_or(*colors, |overrides| overrides.0.resolve(colors));
         let option_colors = local.0.resolve(&colors.option);
         let option_colors = if checked {
             option_colors.checked
@@ -234,7 +237,7 @@ pub(crate) fn update_changed(
     mut changes: ResMut<StyleChanges>,
     mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,
     groups: Query<&crate::colors::ColorState, With<crate::WidgetryRadioGroup>>,
-    valid_groups: Query<(), With<crate::WidgetryRadioGroup>>,
+    valid_groups: Query<Has<crate::WidgetryRadioGroup>, With<crate::WidgetryRadioGroupHeadless>>,
     mut indicators: Query<IndicatorData, IndicatorFilter>,
     mut dots: Query<Option<&mut BackgroundColor>, DotFilter>,
 ) -> Result {
@@ -262,7 +265,7 @@ pub(crate) fn refresh_theme(
     mode: Res<WidgetryTheme>,
     mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,
     groups: Query<&crate::colors::ColorState, With<crate::WidgetryRadioGroup>>,
-    valid_groups: Query<(), With<crate::WidgetryRadioGroup>>,
+    valid_groups: Query<Has<crate::WidgetryRadioGroup>, With<crate::WidgetryRadioGroupHeadless>>,
     mut indicators: Query<IndicatorData, IndicatorFilter>,
     mut dots: Query<Option<&mut BackgroundColor>, DotFilter>,
 ) -> Result {
@@ -409,18 +412,18 @@ mod tests {
                 assert!(logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled).is_empty());
             }
             app.world_mut().entity_mut(root).insert(crate::colors::ColorState::default());
-            app.world_mut().entity_mut(root).remove::<crate::WidgetryRadioGroup>();
+            app.world_mut().entity_mut(root).remove::<crate::WidgetryRadioGroupHeadless>();
             app.world_mut().run_schedule(StyleProbe);
             let changed = errors.take_records();
             assert_eq!(changed.len(), 1);
             let diagnostics: Vec<_> = changed[0].managed().unwrap().diagnostics().collect();
             assert_eq!(diagnostics.len(), 2);
             for diagnostic in diagnostics {
-                assert!(matches!(diagnostic.source().unwrap().downcast_ref::<RadioGroupError>(), Some(RadioGroupError::Query { part: "group.WidgetryRadioGroup", .. })));
+                assert!(matches!(diagnostic.source().unwrap().downcast_ref::<RadioGroupError>(), Some(RadioGroupError::Query { part: "group.WidgetryRadioGroupHeadless", .. })));
                 assert!(!ids.contains(diagnostic.origin().id()));
                 assert_eq!(logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source).len(), 1);
             }
-            app.world_mut().entity_mut(root).insert(crate::WidgetryRadioGroup);
+            app.world_mut().entity_mut(root).insert(crate::WidgetryRadioGroupHeadless);
             app.world_mut().run_schedule(StyleProbe);
             assert!(errors.take_records().is_empty());
             assert_eq!(logs.records().iter().filter(|record| record.matches_field("phase", "recovered")).count(), 2);

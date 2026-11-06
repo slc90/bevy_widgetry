@@ -4,7 +4,8 @@ use bevy::prelude::*;
 use bevy::ui::Checked;
 use bevy_widgetry_radio_group::RadioGroupError;
 use bevy_widgetry_radio_group::{
-    WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
+    WidgetryRadioGroup, WidgetryRadioGroupHeadless, WidgetryRadioGroupPlugin, WidgetryRadioOption,
+    WidgetryRadioOptionHeadless,
 };
 use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
 
@@ -88,12 +89,14 @@ fn every_invalid_group_and_option_reaches_the_host_without_polling_or_recreating
             app.world_mut().run_schedule(PreUpdate);
             assert!(errors.take_records().is_empty());
             for root in &groups {
-                app.world_mut().entity_mut(*root).insert(WidgetryRadioGroup);
+                app.world_mut()
+                    .entity_mut(*root)
+                    .insert(WidgetryRadioGroupHeadless);
             }
             for option in &options {
                 app.world_mut()
                     .entity_mut(*option)
-                    .insert(WidgetryRadioOption);
+                    .insert(WidgetryRadioOptionHeadless);
             }
             app.world_mut().run_schedule(PreUpdate);
             let records = errors.take_records();

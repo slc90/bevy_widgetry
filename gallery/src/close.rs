@@ -10,7 +10,7 @@ use bevy::window::{PrimaryWindow, RequestRedraw, WindowCloseRequested};
 use bevy::winit::WINIT_WINDOWS;
 use bevy_widgetry::{
     button::WidgetryButton,
-    radio_group::{WidgetryRadioGroup, WidgetryRadioOption},
+    radio_group::{WidgetryRadioGroup, WidgetryRadioGroupHeadless, WidgetryRadioOption},
     scene::WidgetrySceneCommandsExt,
     text::WidgetryText,
     tray::{WidgetryTrayClick, WidgetryTrayPlugin},
@@ -157,7 +157,7 @@ fn open_confirmation(world: &mut World, parent: Entity) -> Result {
                 bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 关闭确认缺少选项组"),
             )
         })?;
-    WidgetryRadioGroup::set_selected(&mut world.commands(), choices, 1);
+    WidgetryRadioGroupHeadless::set_selected(&mut world.commands(), choices, 1);
     world.flush();
     debug!(?parent, ?root, "Gallery 关闭确认窗口已构造");
     Ok(())

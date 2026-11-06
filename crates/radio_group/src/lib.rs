@@ -12,16 +12,16 @@ use bevy::input_focus::InputFocusSystems;
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
-use bevy::ui_widgets::{RadioGroupPlugin, radio_self_update};
+use bevy::ui_widgets::RadioGroupPlugin;
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
 use bevy_widgetry_internal_log::widgetry_debug;
 pub use error::{RadioGroupError, RadioGroupFailure};
-pub use group::WidgetryRadioGroup;
-pub use option::{WidgetryRadioOption, WidgetryRadioOptionProps};
+pub use group::{WidgetryRadioGroup, WidgetryRadioGroupHeadless};
+pub use option::{WidgetryRadioOption, WidgetryRadioOptionHeadless, WidgetryRadioOptionProps};
 
-pub struct WidgetryRadioGroupPlugin;
+pub struct WidgetryRadioGroupHeadlessPlugin;
 
-impl Plugin for WidgetryRadioGroupPlugin {
+impl Plugin for WidgetryRadioGroupHeadlessPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);
@@ -32,21 +32,30 @@ impl Plugin for WidgetryRadioGroupPlugin {
         if !app.is_plugin_added::<TabNavigationPlugin>() {
             app.add_plugins(TabNavigationPlugin);
         }
-        if !app.is_plugin_added::<WidgetryThemePlugin>() {
-            app.add_plugins(WidgetryThemePlugin);
-        }
         group::install(app);
-        option_style::install(app);
-        app.add_observer(radio_self_update)
-            .add_observer(group::handle_value_change)
-            .add_observer(group_style::refresh_theme)
-            .add_observer(option_style::refresh_theme);
-        app.add_systems(
+        app.add_observer(group::handle_value_change).add_systems(
             PreUpdate,
             group::initialize
                 .before(InputFocusSystems::Dispatch)
                 .before(PickingSystems::Hover),
         );
+        widgetry_debug!("WidgetryRadioGroupHeadlessPlugin 注册完成");
+    }
+}
+
+pub struct WidgetryRadioGroupPlugin;
+
+impl Plugin for WidgetryRadioGroupPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryRadioGroupHeadlessPlugin>() {
+            app.add_plugins(WidgetryRadioGroupHeadlessPlugin);
+        }
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
+        }
+        option_style::install(app);
+        app.add_observer(group_style::refresh_theme)
+            .add_observer(option_style::refresh_theme);
         app.add_systems(
             PostUpdate,
             (

@@ -6,6 +6,7 @@
 
 - 动态 Option 集合、有效非空 / 空集合错误与恢复、当前 Selected Index、Group Focus / Disabled。
 - 各 Option Checked 和交互 / Theme 配色。
+- 独立 Headless、默认 Group / 自定义 Option、自定义 Group / 默认 Option，以及混合成员。
 
 ## Stimuli
 
@@ -27,6 +28,8 @@
 
 - 一个 Group 恰有一个 Checked；不同 Group 的选择相互独立。
 - 程序更新静默；来自用户的通知与实际选择一致。
+- 用户 Index 通知时 Checked 已提交；Mouse / Custom Pointer 均可聚焦 Headless Group 并交给原生键盘处理。
+- 默认样式不修改自定义 Option 的颜色或 Children；纯 Headless 父级下的默认 Option 回退 Theme，默认父级缺失颜色配置仍报错。
 - 非法程序请求在队列执行时以 Severity::Error 传播并记录 Root / Index ERROR，不部分修改 Checked 或初始化状态，不阻止同批有效操作。
 - Theme / Layout Patch 不改变选项顺序与业务状态。
 - 父 / 子颜色覆盖更新与清除遵守局部优先级，选择更新后前景传播至实际 Label；其他 Group 不受影响，Focus 转移不改变 Option 调色语义或产生业务通知。

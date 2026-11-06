@@ -432,6 +432,19 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Common(CommonKey::Normal) => "正常",
         TextKey::Common(CommonKey::Disabled) => "禁用",
         TextKey::Button(ButtonKey::RadioButton) => "Radio Button",
+        TextKey::Button(ButtonKey::RadioMixedDescription) => {
+            "默认圆点、卡片与图片共同互斥；可添加卡片、删除当前项，或程序选择。"
+        }
+        TextKey::Button(ButtonKey::RadioMixedDefault) => "默认圆点",
+        TextKey::Button(ButtonKey::RadioMixedCard) => "卡片 {number}",
+        TextKey::Button(ButtonKey::RadioMixedImage) => "图片选项",
+        TextKey::Button(ButtonKey::RadioMixedAdd) => "添加卡片",
+        TextKey::Button(ButtonKey::RadioMixedRemove) => "删除当前项",
+        TextKey::Button(ButtonKey::RadioMixedNext) => "程序选择下一项",
+        TextKey::Button(ButtonKey::RadioMixedDisabled) => "切换组禁用",
+        TextKey::Button(ButtonKey::RadioMixedStatus) => {
+            "索引 {index} / {count} 项 · 用户选择 {changes} 次"
+        }
         TextKey::Button(ButtonKey::Horizontal) => "横向",
         TextKey::Button(ButtonKey::Grid) => "网格",
         TextKey::Common(CommonKey::Text) => "文本",
