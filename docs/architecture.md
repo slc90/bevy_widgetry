@@ -51,7 +51,7 @@ crates/
 └── test_utils/
 ```
 
-Button 直接依赖 Diagnostics 的统一诊断和 Cursor 的公开 `WidgetryCursorLoading` 声明，Cursor 不依赖 Button；可组合 Headless、可选 Loading 状态与默认 Style（含 Spinner 和 Wait 声明）实现归属 Button，Disabled 理由组合继续由 Core 管理。
+Button 直接依赖 Diagnostics 的统一诊断和 Cursor 的公开 `WidgetryCursorLoading` 声明，Cursor 不依赖 Button；可组合 Headless、可选 Loading 状态与默认 Style（含 Spinner 和 Wait 声明）实现归属 Button，Disabled 理由组合继续由 Core 管理。 LinkButton 同根组合 Button Headless、可选 OpenUrl 能力与链接专属 Style；URL 校验、受控状态 API 和原生浏览器请求归属 OpenUrl，默认文字与四态配色归属链接 Style。
 
 ToggleButton 直接使用 Diagnostics 的领域诊断、持续异常状态和批量错误桥接，选中状态继续采用官方 Checked。
 

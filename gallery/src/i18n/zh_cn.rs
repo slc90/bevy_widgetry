@@ -385,6 +385,14 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             "通过默认浏览器打开 HTTP / HTTPS 地址。悬停和按下时显示下划线，禁用时无法打开。"
         }
         TextKey::Button(ButtonKey::SwitchUrl) => "切换 URL",
+        TextKey::Button(ButtonKey::LinkCardAction) => "打开 Bevy 指南",
+        TextKey::Button(ButtonKey::LinkCardDescription) => {
+            "自定义链接卡片：点击或按 Enter / Space 打开。更换目标不会打开浏览器。"
+        }
+        TextKey::Button(ButtonKey::LinkCardSwitch) => "切换卡片目标",
+        TextKey::Button(ButtonKey::LinkCardLearn) => "学习指南",
+        TextKey::Button(ButtonKey::LinkCardQuickStart) => "快速入门",
+        TextKey::Button(ButtonKey::LinkCardStatus) => "目标：{destination} · 激活：{count}",
         TextKey::Button(ButtonKey::ProgrammaticUrl) => {
             "在百度和 Google 地址间切换，不会启动浏览器；只有激活链接才打开当前地址。"
         }

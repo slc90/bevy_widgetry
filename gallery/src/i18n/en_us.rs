@@ -381,6 +381,12 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             "Open an HTTP / HTTPS URL in the default browser. Hover or press to underline; disabled links cannot open."
         }
         TextKey::Button(ButtonKey::SwitchUrl) => "Switch URL",
+        TextKey::Button(ButtonKey::LinkCardAction) => "Open the Bevy guide",
+        TextKey::Button(ButtonKey::LinkCardDescription) => "Custom link card: click or press Enter / Space to open. Changing its destination does not open a browser.",
+        TextKey::Button(ButtonKey::LinkCardSwitch) => "Switch card destination",
+        TextKey::Button(ButtonKey::LinkCardLearn) => "Learn",
+        TextKey::Button(ButtonKey::LinkCardQuickStart) => "Quick Start",
+        TextKey::Button(ButtonKey::LinkCardStatus) => "Destination: {destination} · Activations: {count}",
         TextKey::Button(ButtonKey::ProgrammaticUrl) => {
             "Switch between Baidu and Google without opening a browser. Only activating the link opens its current URL."
         }

@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-普通 Button 通过 `WidgetryButtonHeadless` 提供官方 `Activate` 事件、主键输入、键盘输入和无障碍 Button 角色，默认 `WidgetryButton` 组合此能力与外观。LinkButton 保留 Bevy 原生 Button。普通 Button 的内容、尺寸与布局由调用方提供；LinkButton 自行维护 URL 文字，调用方可设置根 Node 的布局。
+普通 Button 通过 `WidgetryButtonHeadless` 提供官方 `Activate` 事件、主键输入、键盘输入和无障碍 Button 角色，默认 `WidgetryButton` 组合此能力与外观。`WidgetryOpenUrl` 在同根复用 Headless 输入并持有 URL，默认 LinkButton 组合 OpenUrl 与链接 Style。普通 Button 的内容、尺寸与布局由调用方提供；LinkButton 自行维护 URL 文字，调用方可设置根 Node 的布局。
 
 ## 主要功能
 
@@ -54,7 +54,9 @@ LinkButton 构造示例：
 bsn! { @WidgetryLinkButton { @url: {"https://bevy.org".to_owned()} } }
 ```
 
-URL 保存在内部持久 Component 中，Props 仅用于初始化。通过 `WidgetryLinkButton::url(world, entity)` 查询原文；`set_url_in_world(world, entity, url)` 同步更新 URL 和内部文字，返回 `Result<bool, LinkButtonFailure>`；`set_url(commands, entity, url)` 在命令执行时校验和更新。同值设置返回 `Ok(false)` 且不写入状态。程序化修改不触发浏览器或 `Activate`，URL 属于展示与跳转配置，不另发状态变化事件。
+URL 由独立 `WidgetryOpenUrl` 能力持有，Props 仅用于初始化。通过 `WidgetryOpenUrl::url(world, entity)` 或只读 `WidgetryOpenUrlState::url()` 查询原文；`WidgetryOpenUrl::set_url_in_world(world, entity, url)` 同步提交 URL，返回 `Result<bool, OpenUrlFailure>`；`set_url(commands, entity, url)` 在命令执行时校验和提交。同值返回 `Ok(false)`，不替换状态。程序化修改不触发浏览器或 `Activate`，不另发业务变化事件。
+
+Setter 不查找或修改默认文字，也不要求默认 Style 或 ComputedNode；必要的 OpenUrl、Headless、Node 和 URL 状态仍须存在。默认 Style 在 Materialize 阶段将已提交 URL 投影到文字，变化提交不保证文字已经同步。文字缺失独立产生 `LinkButtonError::MissingPart`，不撤销 URL 提交。
 
 `WidgetryLinkButtonColorOverrides` 提供 `normal`、`hovered`、`pressed`、`disabled` 四个可选颜色；支持 Props `@colors` 初始化，以及 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 运行期 API。未覆盖的颜色随当前主题变化。
 
@@ -62,15 +64,15 @@ URL 保存在内部持久 Component 中，Props 仅用于初始化。通过 `Wid
 
 Theme 或颜色覆盖变更后，按控件当前状态解析外观。普通 Press/Release 及被禁用的输入不应凭空产生业务操作；构造时由 BSN 和对应 Plugin 提供必要基础能力。
 
-LinkButton 仅接受包含主机的完整 `http://` / `https://` 地址（Scheme 不区分大小写），允许 Unicode、查询参数、Fragment、合法端口及 IPv6。拒绝空白、控制字符、反斜杠、非法地址或非 HTTP(S) Scheme。URL 原文不会被解析器规范化后替换。LinkButton 的 URL 与颜色 World API 返回 `LinkButtonFailure = WidgetryFailure<LinkButtonError>`。`InvalidUrl` 保留根、输入原文与 `LinkUrlRejection`：不安全字符、非完整地址、不支持的 Scheme、缺少主机、原始 `url::ParseError` 或 `SyntaxViolation`；`InvalidTarget` 与 `MissingPart` 区分非法目标和内部结构损坏。非法覆盖颜色保留 CoreError 的真实 source、原始 origin 和颜色字段。修改失败保留旧配置和文字；正常同值静默。Command、Scene Template 和 Theme 查询边界显式转为 `Severity::Error`，保留同一诊断，不在传播时重复源头日志。BSN 校验失败通过 Scene 错误路径传播并清理新建根，延迟构造应使用 Widgetry Scene 错误适配。
+LinkButton 仅接受包含主机的完整 `http://` / `https://` 地址（Scheme 不区分大小写），允许 Unicode、查询参数、Fragment、合法端口及 IPv6。拒绝空白、控制字符、反斜杠、非法地址或非 HTTP(S) Scheme。URL 原文不会被解析器规范化后替换。URL API 返回 `OpenUrlFailure = WidgetryFailure<OpenUrlError>`；默认 Style 与颜色 API 继续返回 `LinkButtonFailure = WidgetryFailure<LinkButtonError>`。`InvalidUrl` 保留根、输入原文与 `OpenUrlRejection`：不安全字符、非完整地址、不支持的 Scheme、缺少主机、原始 `url::ParseError` 或 `SyntaxViolation`；`InvalidTarget` 与 `MissingPart` 区分非法目标和内部结构损坏。非法覆盖颜色保留 CoreError 的真实 source、原始 origin 和颜色字段。URL 校验失败保留已提交 URL 和现有文字，颜色校验失败保留旧覆盖；正常同值静默。Command、Scene Template 和 Theme 查询边界显式转为 `Severity::Error`，保留同一诊断，不在传播时重复源头日志。BSN 校验失败通过 Scene 错误路径传播并清理新建根，延迟构造应使用 Widgetry Scene 错误适配。
 
-LinkButton 内部 `Activate` Observer 在非 Disabled 时将当前 URL 交给 Windows `ShellExecuteExW` 的 `open` 操作。原生失败以 `OpenBrowser` 保留请求根、URL 及 `winsafe::co::ERROR`，源头记录一次 ERROR；激活 Owner 安全放弃当前请求后，以同一错误 ID 记录处理 DEBUG，并释放诊断，不重试、不发送失败事件、不弹窗，也不监测网页加载结果。Command 执行时再次检查目标与 Disabled；已删除或禁用视为正常取消，不调用 opener、不产生错误。
+OpenUrl 能力的 `Activate` Observer 在非 Disabled 时将当前 URL 交给 Windows `ShellExecuteExW` 的 `open` 操作。原生失败以 `OpenBrowser` 保留请求根、URL 及 `winsafe::co::ERROR`，源头记录一次 ERROR；激活 Owner 安全放弃当前请求后，以同一错误 ID 记录处理 DEBUG，并释放诊断，不重试、不发送失败事件、不弹窗，也不监测网页加载结果。Command 执行时再次检查目标与 Disabled；已删除或禁用视为正常取消，不调用 opener、不产生错误。命令执行时读取当前 URL，不捕获过时的构造或激活时快照。必要 BrowserOpener 资源缺失显式报告 `OpenUrlError::MissingResource`，不主动 panic。
 
 ## 已知限制
 
 - 普通 Button 的业务动作由应用 Observer 实现，标签和 Icon 由外部内容提供。
 - LinkButton 的内部文字和 Hierarchy 由控件维护，调用方不应直接修改或替换。
-- Bevy 官方 Button 激活契约仍然适用。
+- LinkButton 与外部链接使用同一 Headless 主键/键盘输入，不额外挂 Bevy 原生 Button；副键不激活。OpenUrl 也会对代码显式触发的 Activate 执行 Disabled 检查。
 
 
 ## 自定义外观的基础入口
@@ -89,3 +91,19 @@ WidgetryButtonLoading::set(&mut commands, root, true);
 ```
 
 Loading API 不查找或要求 Content、Spinner、默认颜色或 StyleOwner。Getter / Setter 不要求 `ComputedNode` 或布局完成，仍校验 Headless 与 Node，真实状态变化还预检 Core Disabled 运行资源。它只负责状态和独立禁用理由，并在这些行为提交后通知；外部 Style 应在初始化和 Component 改变时读取当前 `is_active()`，自行决定内容和动画。通知不保证视觉子树已经同步。Loading Setter 不写入或清除 Cursor 声明。默认 Style 负责原有内容快照、隐藏与还原、圆环动画、主题颜色及 Wait 声明；外部 Style 可在呈现阶段按当前 Loading 插入或移除 Facade `cursor::WidgetryCursorLoading`，或选择其他反馈。该组件是可自由插入/移除的展示声明，不是 Loading 状态或 Disabled 权威，最终仍由唯一 Cursor writer 协调。默认视觉损坏不会撤回 Loading 的行为提交，也不成为外部组合的前置条件。不支持运行期替换整套 Style。
+
+
+## 可选 URL 激活与外部 Style
+
+`WidgetryOpenUrl`、`WidgetryOpenUrlProps`、只读 `WidgetryOpenUrlState` 及 OpenUrl 诊断类型从 Button crate 和 Facade `button` 模块公开，仍由 `WidgetryButtonPlugin` 安装。该 Scene 能力同根要求 `WidgetryButtonHeadless`，不添加默认文字、背景、边框、光标、Loading 或额外布局层。外部可显式组合相同 Headless，不会生成第二套输入。
+
+```rust
+bsn! {
+    @WidgetryButtonHeadless
+    @WidgetryOpenUrl { @url: {"https://bevy.org/learn/".to_owned()} }
+    Node { width: px(240), height: px(72) }
+    Children [Text("Open help")]
+}
+```
+
+应用用 `Query<&WidgetryOpenUrlState>` 读取 URL，或通过 `Changed<WidgetryOpenUrlState>` 驱动自己的展示。字段私有且组件不可变，不以直接替换、移除该组件更新 URL。外部 Style 完全决定内容与 Cursor 声明，可以只显示图标或卡片。默认 LinkButton 仍显示原始 URL，不能用默认 Style 的内部 Text 替换业务状态。不支持运行期拆除并替换整套 Style。

@@ -9,14 +9,18 @@ mod link_colors;
 mod link_error;
 mod loading;
 mod loading_style;
+mod open_url;
+mod open_url_error;
 mod style;
 pub use colors::*;
 pub use error::{ButtonError, ButtonFailure};
 pub use headless::WidgetryButtonHeadless;
 pub use link::{WidgetryLinkButton, WidgetryLinkButtonProps};
 pub use link_colors::WidgetryLinkButtonColorOverrides;
-pub use link_error::{LinkButtonError, LinkButtonFailure, LinkUrlRejection};
+pub use link_error::{LinkButtonError, LinkButtonFailure};
 pub use loading::{WidgetryButtonLoading, WidgetryButtonLoadingChanged};
+pub use open_url::{WidgetryOpenUrl, WidgetryOpenUrlProps, WidgetryOpenUrlState};
+pub use open_url_error::{OpenUrlError, OpenUrlFailure, OpenUrlRejection};
 
 pub use style::{WidgetryButton, WidgetryButtonPlugin, WidgetryButtonProps};
 

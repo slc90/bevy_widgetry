@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy::text::Underline;
 use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_button::WidgetryLinkButtonColorOverrides;
-use bevy_widgetry_button::{WidgetryButtonPlugin, WidgetryLinkButton};
+use bevy_widgetry_button::{WidgetryButtonPlugin, WidgetryLinkButton, WidgetryOpenUrl};
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_test_utils::scene_app;
 use bevy_widgetry_theme::WidgetryTheme;
@@ -22,6 +22,38 @@ fn text(world: &World, root: Entity) -> Entity {
 }
 
 #[test]
+fn url_commit_is_independent_of_default_text_and_style_projects_later() {
+    let mut app = app();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryLinkButton { @url: {"https://example.com".to_owned()} }
+        })
+        .unwrap()
+        .id();
+    let label = text(app.world(), root);
+    assert!(WidgetryOpenUrl::set_url_in_world(app.world_mut(), root, "https://bevy.org").unwrap());
+    assert_eq!(
+        app.world().get::<Text>(label).unwrap().0,
+        "https://example.com"
+    );
+    app.update();
+    assert_eq!(
+        app.world().get::<Text>(label).unwrap().0,
+        "https://bevy.org"
+    );
+    app.world_mut().despawn(label);
+    assert!(
+        WidgetryOpenUrl::set_url_in_world(app.world_mut(), root, "https://example.org/help")
+            .unwrap()
+    );
+    assert_eq!(
+        WidgetryOpenUrl::url(app.world(), root).unwrap(),
+        "https://example.org/help"
+    );
+}
+
+#[test]
 fn url_updates_preserve_original_text_and_reject_invalid_input_atomically() {
     let mut app = app();
     let original = "HTTPS://Example.com/原文?q=%20#Top";
@@ -32,12 +64,9 @@ fn url_updates_preserve_original_text_and_reject_invalid_input_atomically() {
         .id();
     app.update();
     let label = text(app.world(), root);
-    assert_eq!(
-        WidgetryLinkButton::url(app.world(), root).unwrap(),
-        original
-    );
+    assert_eq!(WidgetryOpenUrl::url(app.world(), root).unwrap(), original);
     assert_eq!(app.world().get::<Text>(label).unwrap().0, original);
-    assert!(!WidgetryLinkButton::set_url_in_world(app.world_mut(), root, original).unwrap());
+    assert!(!WidgetryOpenUrl::set_url_in_world(app.world_mut(), root, original).unwrap());
     for invalid in [
         "",
         "example.com",
@@ -53,39 +82,32 @@ fn url_updates_preserve_original_text_and_reject_invalid_input_atomically() {
         "https://example.com/%",
         "https://example.com/%GG",
     ] {
-        let error =
-            WidgetryLinkButton::set_url_in_world(app.world_mut(), root, invalid).unwrap_err();
+        let error = WidgetryOpenUrl::set_url_in_world(app.world_mut(), root, invalid).unwrap_err();
         assert!(matches!(
             error.kind(),
-            bevy_widgetry_button::LinkButtonError::InvalidUrl { .. }
+            bevy_widgetry_button::OpenUrlError::InvalidUrl { .. }
         ));
-        assert_eq!(
-            WidgetryLinkButton::url(app.world(), root).unwrap(),
-            original
-        );
+        assert_eq!(WidgetryOpenUrl::url(app.world(), root).unwrap(), original);
         assert_eq!(app.world().get::<Text>(label).unwrap().0, original);
     }
     assert!(
-        WidgetryLinkButton::set_url_in_world(
-            app.world_mut(),
-            root,
-            "http://localhost:8080/a?b=1&c=2"
-        )
-        .unwrap()
+        WidgetryOpenUrl::set_url_in_world(app.world_mut(), root, "http://localhost:8080/a?b=1&c=2")
+            .unwrap()
     );
+    app.update();
     assert_eq!(
         app.world().get::<Text>(label).unwrap().0,
         "http://localhost:8080/a?b=1&c=2"
     );
     assert_eq!(
-        WidgetryLinkButton::url(app.world(), root).unwrap(),
+        WidgetryOpenUrl::url(app.world(), root).unwrap(),
         app.world().get::<Text>(label).unwrap().0
     );
     let wrong = app.world_mut().spawn(Node::default()).id();
-    assert!(WidgetryLinkButton::url(app.world(), wrong).is_err());
-    assert!(WidgetryLinkButton::set_url_in_world(app.world_mut(), wrong, original).is_err());
+    assert!(WidgetryOpenUrl::url(app.world(), wrong).is_err());
+    assert!(WidgetryOpenUrl::set_url_in_world(app.world_mut(), wrong, original).is_err());
     app.world_mut().despawn(root);
-    assert!(WidgetryLinkButton::set_url_in_world(app.world_mut(), root, original).is_err());
+    assert!(WidgetryOpenUrl::set_url_in_world(app.world_mut(), root, original).is_err());
 }
 
 #[test]
@@ -97,20 +119,25 @@ fn queued_setter_commits_when_commands_are_applied() {
         .unwrap()
         .id();
     let mut queue = bevy::ecs::world::CommandQueue::default();
-    WidgetryLinkButton::set_url(
+    WidgetryOpenUrl::set_url(
         &mut Commands::new(&mut queue, app.world()),
         root,
         "https://www.google.com",
     );
     assert_eq!(
-        WidgetryLinkButton::url(app.world(), root).unwrap(),
+        WidgetryOpenUrl::url(app.world(), root).unwrap(),
         "https://www.baidu.com"
     );
     queue.apply(app.world_mut());
     assert_eq!(
-        WidgetryLinkButton::url(app.world(), root).unwrap(),
+        WidgetryOpenUrl::url(app.world(), root).unwrap(),
         "https://www.google.com"
     );
+    assert_eq!(
+        app.world().get::<Text>(text(app.world(), root)).unwrap().0,
+        "https://www.baidu.com"
+    );
+    app.update();
     assert_eq!(
         app.world().get::<Text>(text(app.world(), root)).unwrap().0,
         "https://www.google.com"
@@ -153,10 +180,7 @@ fn long_url_wraps_without_truncating_content() {
     );
     assert_eq!(app.world().get::<Text>(label).unwrap().0, original);
     assert!(app.world().get::<ComputedNode>(label).unwrap().size().x <= 120.5);
-    assert_eq!(
-        WidgetryLinkButton::url(app.world(), root).unwrap(),
-        original
-    );
+    assert_eq!(WidgetryOpenUrl::url(app.world(), root).unwrap(), original);
 }
 
 #[test]
@@ -222,7 +246,7 @@ fn inherited_disabled_states_themes_and_overrides_preserve_url_and_layout() {
             assert_eq!(app.world().get::<Node>(root).unwrap().width, px(160));
             assert_eq!(
                 app.world().get::<Text>(label).unwrap().0,
-                WidgetryLinkButton::url(app.world(), root).unwrap()
+                WidgetryOpenUrl::url(app.world(), root).unwrap()
             );
         }
     }
@@ -289,7 +313,7 @@ fn deferred_errors_reach_host_handler_and_invalid_scenes_are_cleaned() {
                 bsn! { @WidgetryLinkButton { @url: {"file:///C:/secret".to_owned()} } },
             )
             .id();
-        WidgetryLinkButton::set_url(&mut app.world_mut().commands(), root, "https://");
+        WidgetryOpenUrl::set_url(&mut app.world_mut().commands(), root, "https://");
         errors.run(|| app.world_mut().flush());
         let captured = errors.take();
         assert_eq!(captured.len(), 2);
@@ -306,7 +330,7 @@ fn deferred_errors_reach_host_handler_and_invalid_scenes_are_cleaned() {
         assert!(app.world().get_entity(invalid_root).is_err());
         assert_eq!(app.world().entities().len(), count);
         assert_eq!(
-            WidgetryLinkButton::url(app.world(), root).unwrap(),
+            WidgetryOpenUrl::url(app.world(), root).unwrap(),
             "https://example.com"
         );
         assert_eq!(

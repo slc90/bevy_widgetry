@@ -1,5 +1,6 @@
 mod custom;
 mod hold;
+mod link_card;
 mod toggle;
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
@@ -10,7 +11,7 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry::{
-    button::{WidgetryButton, WidgetryButtonLoading, WidgetryLinkButton},
+    button::{WidgetryButton, WidgetryButtonLoading, WidgetryLinkButton, WidgetryOpenUrl},
     icon::WidgetryIcon,
     radio_group::{WidgetryRadioGroup, WidgetryRadioOption},
 };
@@ -21,6 +22,7 @@ impl Plugin for ButtonDemoPlugin {
     fn build(&self, app: &mut App) {
         hold::install(app);
         custom::install(app);
+        link_card::install(app);
         app.add_systems(OnEnter(GalleryPage::Button), enter)
             .add_systems(OnExit(GalleryPage::Button), exit)
             .add_systems(
@@ -187,7 +189,8 @@ fn link_examples() -> impl Scene {
             @localized(TextKey::Button(ButtonKey::ProgrammaticUrl)) bevy_widgetry::text::WidgetryText--
             @WidgetryLinkButton { @url: {"https://www.baidu.com".to_owned()} }
                 template(|_| Ok(SwitchableLink)) Name("LinkButtonSwitchable") on(on_link_activated)--
-            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Button(ButtonKey::SwitchUrl)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Name("LinkButtonSwitchUrl") on(switch_url)
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Button(ButtonKey::SwitchUrl)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Name("LinkButtonSwitchUrl") on(switch_url)--
+            @link_card::scene()
 
         ]
     }
@@ -205,7 +208,7 @@ fn switch_url(
         )
     })?;
     commands.queue(move |world: &mut World| -> Result {
-        let next = if WidgetryLinkButton::url(world, entity)
+        let next = if WidgetryOpenUrl::url(world, entity)
             .map_err(|error| error.into_bevy_error())?
             == "https://www.baidu.com"
         {
@@ -213,7 +216,7 @@ fn switch_url(
         } else {
             "https://www.baidu.com"
         };
-        WidgetryLinkButton::set_url_in_world(world, entity, next)
+        WidgetryOpenUrl::set_url_in_world(world, entity, next)
             .map_err(|error| error.into_bevy_error())?;
         info!(?entity, url = next, "程序化切换 LinkButton URL");
         Ok(())
@@ -226,7 +229,7 @@ fn on_link_activated(event: On<Activate>, mut commands: Commands) {
     commands.queue(move |world: &mut World| -> Result {
         if world.get::<InteractionDisabled>(entity).is_none() {
             let url =
-                WidgetryLinkButton::url(world, entity).map_err(|error| error.into_bevy_error())?;
+                WidgetryOpenUrl::url(world, entity).map_err(|error| error.into_bevy_error())?;
             info!(?entity, url, "激活 LinkButton，发起系统浏览器请求");
         }
         Ok(())

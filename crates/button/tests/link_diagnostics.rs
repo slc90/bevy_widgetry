@@ -2,8 +2,8 @@
 
 use bevy::prelude::*;
 use bevy_widgetry_button::{
-    LinkButtonError, LinkButtonFailure, LinkUrlRejection, WidgetryButtonPlugin, WidgetryLinkButton,
-    WidgetryLinkButtonColorOverrides,
+    LinkButtonError, LinkButtonFailure, OpenUrlError, OpenUrlFailure, OpenUrlRejection,
+    WidgetryButtonPlugin, WidgetryLinkButton, WidgetryLinkButtonColorOverrides, WidgetryOpenUrl,
 };
 use bevy_widgetry_core::diagnostics::CoreError;
 use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
@@ -36,9 +36,9 @@ fn invalid_urls_keep_rejection_parser_source_and_original_state() {
     ] {
         let logs = LogCapture::default();
         logs.run(|| {
-            let failure: LinkButtonFailure =
-                WidgetryLinkButton::set_url_in_world(app.world_mut(), root, raw).unwrap_err();
-            let LinkButtonError::InvalidUrl {
+            let failure: OpenUrlFailure =
+                WidgetryOpenUrl::set_url_in_world(app.world_mut(), root, raw).unwrap_err();
+            let OpenUrlError::InvalidUrl {
                 root: target,
                 url,
                 reason,
@@ -50,18 +50,18 @@ fn invalid_urls_keep_rejection_parser_source_and_original_state() {
             assert_eq!(url, raw);
             assert!(matches!(
                 (expected, reason),
-                ("unsafe", LinkUrlRejection::UnsafeCharacters)
-                    | ("incomplete", LinkUrlRejection::Incomplete)
-                    | ("scheme", LinkUrlRejection::UnsupportedScheme)
-                    | ("host", LinkUrlRejection::MissingHost)
-                    | ("parse", LinkUrlRejection::Parse(_))
-                    | ("syntax", LinkUrlRejection::Syntax(_))
+                ("unsafe", OpenUrlRejection::UnsafeCharacters)
+                    | ("incomplete", OpenUrlRejection::Incomplete)
+                    | ("scheme", OpenUrlRejection::UnsupportedScheme)
+                    | ("host", OpenUrlRejection::MissingHost)
+                    | ("parse", OpenUrlRejection::Parse(_))
+                    | ("syntax", OpenUrlRejection::Syntax(_))
             ));
             if expected == "parse" {
                 assert!(reason.source().unwrap().is::<url::ParseError>());
             }
             assert_eq!(
-                WidgetryLinkButton::url(app.world(), root).unwrap(),
+                WidgetryOpenUrl::url(app.world(), root).unwrap(),
                 "https://example.com"
             );
             let label = app.world().get::<Children>(root).unwrap()[0];
@@ -134,7 +134,7 @@ fn actual_url_and_color_commands_preserve_domain_identity_at_the_host() {
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
     app.set_error_handler(ErrorCapture::handler());
-    WidgetryLinkButton::set_url(
+    WidgetryOpenUrl::set_url(
         &mut app.world_mut().commands(),
         root,
         "https://example.com:99999",
@@ -143,7 +143,7 @@ fn actual_url_and_color_commands_preserve_domain_identity_at_the_host() {
     logs.run(|| errors.run(|| app.world_mut().flush()));
     let records = errors.take_records();
     assert_eq!(records.len(), 2);
-    for record in records {
+    for (index, record) in records.into_iter().enumerate() {
         assert_eq!(record.error.severity(), bevy::ecs::error::Severity::Error);
         let diagnostic = record
             .error
@@ -152,7 +152,11 @@ fn actual_url_and_color_commands_preserve_domain_identity_at_the_host() {
             .diagnostics()
             .next()
             .unwrap();
-        assert!(diagnostic.source().unwrap().is::<LinkButtonError>());
+        if index == 0 {
+            assert!(diagnostic.source().unwrap().is::<OpenUrlError>());
+        } else {
+            assert!(diagnostic.source().unwrap().is::<LinkButtonError>());
+        }
         assert_eq!(
             logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
                 .len(),
@@ -190,16 +194,17 @@ fn initial_url_and_color_failures_keep_the_original_diagnostic_and_clean_the_roo
             .unwrap_err();
             let diagnostic = error.diagnostics().diagnostics().next().unwrap();
             let mut source: &(dyn Error + 'static) = diagnostic;
-            while !source.is::<LinkButtonFailure>() {
+            while !source.is::<LinkButtonFailure>() && !source.is::<OpenUrlFailure>() {
                 source = source.source().unwrap();
             }
-            let failure = source.downcast_ref::<LinkButtonFailure>().unwrap();
-            assert!(std::sync::Arc::ptr_eq(
-                failure.origin(),
-                diagnostic.origin()
-            ));
+            let origin = if invalid_color {
+                source.downcast_ref::<LinkButtonFailure>().unwrap().origin()
+            } else {
+                source.downcast_ref::<OpenUrlFailure>().unwrap().origin()
+            };
+            assert!(std::sync::Arc::ptr_eq(origin, diagnostic.origin()));
             assert_eq!(
-                logs.diagnostic_records(failure.origin().id(), DiagnosticPhase::Source)
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
                     .len(),
                 1
             );

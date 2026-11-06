@@ -40,7 +40,9 @@
 - `diagnostics.rs`：无效目标与托管 Owner 的领域分类，Core 颜色真实 source/origin 及 root/state/field，真实 Command 的共享源头与 Error Severity；托管输出缺失保留 Query source 和已有输出，非法初始颜色经 Scene 保留身份并清理根，正常 loading/disabled/同值颜色请求静默。Loading Unit Test 覆盖 Core disabled 运行资源不可用时保留行为状态及原始诊断。默认 Style Unit Test 覆盖视觉损坏独立报告且不阻止 Loading 提交，开始/结束仍更新 Wait 声明而不残留。
 - `link_diagnostics.rs`：URL 拒绝分类、原始 parser source 与输入原文，失败后 URL/文字不变；Core 颜色 source/origin/字段及转换保真；真实 URL/颜色 Command 的 Error Severity、源头 ID 和纯传播无 handled；初始 URL/颜色失败的 Scene 同源身份与根清理。
 - `loading.rs`：无 ComputedNode / 默认部件时的同步 / Commands 提交、外部 Cursor 声明独立性、同值、变化通知与无效目标的宿主错误传播；本地 / 祖先 / 其他内部理由的恢复顺序；默认 Button 和无默认 Style 的 Headless + Loading 在真实 Picking 鼠标与 Keyboard Dispatch 下的 Activate、Focus 和默认 Wait / 外部显式声明 / NotAllowed / Pointer；显式 Activate 边界；Content 子元素 Visibility 与布局占位；三套内置主题 / 颜色覆盖、遮罩共享与 Spinner 动画停止。
-- `link_button.rs`：URL 原文与文字同步、合法同值、非法输入（含百分号转义）的原子拒绝、World / Commands 时机、无效目标、Scene 失败清理与宿主错误传播；三套内置主题、Hovered / Pressed 下划线、父级 Disabled 继承、覆盖与清除；使用内建字体的真实 UI Layout 保护长 URL 自动换行与非零宽度。
-- `link.rs` Unit Test 在私有系统调用边界注入真实 Win32 错误类型，验证官方 Pointer Activation 请求当前 URL、程序化修改不打开、继承禁用及显式 Activate Guard、恢复激活；每次打开失败只产生同 ID 的一次源头 ERROR 和实际放弃后的 DEBUG，不泄漏为未处理、不重试。成功请求与排队在前的禁用/删除取消保持静默；内部 URL/文字/颜色部件缺失分类并拒绝部分提交。不验证浏览器网页加载。
+- `link_button.rs`：URL 原文提交与 Style 后续文字投影、无文字仍可提交、合法同值、非法输入（含百分号转义）的原子拒绝、World / Commands 时机、无效目标、Scene 失败清理与宿主错误传播；三套内置主题、Hovered / Pressed 下划线、父级 Disabled 继承、覆盖与清除；使用内建字体的真实 UI Layout 保护长 URL 自动换行与非零宽度。
+- `open_url.rs` Integration Test：公开 Headless/OpenUrl 同根组合，缺 ComputedNode/默认子树仍可同步和排队更新，应用标签不被覆盖；Unicode/IPv6/端口原文保留，同值不改状态，setter 不产生 Activate；缺必要能力和非法 queued 更新拒绝并保留原 URL。
+- `open_url.rs` Unit Test 在私有 opener 边界验证默认与外部链接的真实 Mouse Picking、主/副键、Focus、Enter/Space 各打开一次，继承禁用与显式 Activate Guard；连续 queued 更新使用执行时 URL，前置禁用/删除正常取消。原生 Win32 失败保留真实 source/origin，每次源头 ERROR 一次且放弃后关联 DEBUG 一次，无重试/宿主泄漏；缺运行资源与状态分类明确。不访问真实网页。
+- `link.rs` Unit Test 覆盖默认文字损坏不阻断 URL 提交，多个损坏根的 Style 失败在 ECS 边界聚合，以及缺颜色状态仍为默认 Style 错误。
 - 源码 Unit Test 保护更局部的样式优先级规则。
 - `optional_loading.rs`：无默认 Style 的 Headless + Loading 通过公开 API 同步/排队提交，通知看到已提交状态和有效禁用；无 Loading、缺失 Headless/Loading 的明确拒绝及 Command Error Severity，无默认视觉树仍可阻断和恢复输入，并保持本地/祖先/其他内部理由独立。

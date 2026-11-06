@@ -231,6 +231,7 @@ impl Plugin for WidgetryButtonPlugin {
         }
         app.add_observer(refresh_button_theme);
         crate::headless::install(app);
+        crate::open_url::install(app);
         crate::link::install(app);
         crate::loading::install(app);
         crate::loading_style::install(app);
