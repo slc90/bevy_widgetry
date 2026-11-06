@@ -222,6 +222,7 @@ pub mod check_box {
         WidgetryCheckBoxHeadless, WidgetryCheckBoxHeadlessPlugin,
         WidgetryCheckBoxInteractionColorOverrides, WidgetryCheckBoxPlugin, WidgetryCheckBoxProps,
         WidgetryCheckBoxStateColorOverrides, WidgetryCheckState, WidgetryTriStateCheckbox,
+        WidgetryTriStateCheckboxHeadless, WidgetryTriStateCheckboxHeadlessPlugin,
     };
 }
 

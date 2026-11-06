@@ -1,6 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::prelude::*;
+use bevy_widgetry_check_box::WidgetryTriStateCheckboxHeadless;
 use bevy_widgetry_check_box::{
     CheckBoxError, CheckBoxFailure, WidgetryCheckBox, WidgetryCheckBoxColorOverrides,
     WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
@@ -56,7 +57,7 @@ fn queued_state_and_color_failures_keep_domain_identity_at_the_host() {
     app.set_error_handler(ErrorCapture::handler());
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
-    WidgetryTriStateCheckbox::set_state(
+    WidgetryTriStateCheckboxHeadless::set_state(
         &mut app.world_mut().commands(),
         stale,
         WidgetryCheckState::Checked,

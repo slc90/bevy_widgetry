@@ -61,6 +61,8 @@ ToggleButton 的 Headless/独立 HeadlessPlugin 组合官方 Checkbox 输入与�
 
 CheckBox 二态 Headless/独立 HeadlessPlugin 复用官方 Checkbox、Checked 和自更新 Observer；默认 Plugin 组合这套行为与原有二态/三态 Indicator、颜色及 Icon 管理。只安装二态行为不要求默认 Icon/Indicator，默认样式结构诊断继续按默认控件身份执行。
 
+三态 CheckBox 的 Headless/独立 Plugin 持有唯一 WidgetryCheckState、原有输入与 Commands Set/Cycle、提交后 ValueChange 和无障碍同步，独立于默认颜色阶段装配。二态与三态分别维护原有权威，默认 Style 继续共享 Indicator；Facade 导出两套 Headless 能力。
+
 CheckBox 直接使用 Diagnostics 保留二态/三态的领域错误与 mark/colors 持续异常，批量失败完整传播到宿主。
 
 RadioGroup 直接使用 Diagnostics 保存 Group/Option 归属、选择和样式诊断；选择历史与 Checked 修复继续复用 Core，结构和配色仍由各自的变更集合驱动。

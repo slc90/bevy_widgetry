@@ -467,7 +467,9 @@ pub fn apply_owned_checkbox_colors(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use crate::{WidgetryCheckBoxPlugin, WidgetryTriStateCheckbox};
+    use crate::{
+        WidgetryCheckBoxPlugin, WidgetryTriStateCheckbox, WidgetryTriStateCheckboxHeadless,
+    };
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
 
     #[test]
@@ -714,7 +716,11 @@ mod tests {
                 BuiltinIcon::CheckboxIndeterminate,
             ),
         ] {
-            WidgetryTriStateCheckbox::set_state(&mut app.world_mut().commands(), root, state);
+            WidgetryTriStateCheckboxHeadless::set_state(
+                &mut app.world_mut().commands(),
+                root,
+                state,
+            );
             app.update();
             assert_eq!(
                 app.world()
@@ -730,7 +736,7 @@ mod tests {
                 mark
             );
         }
-        WidgetryTriStateCheckbox::set_state(
+        WidgetryTriStateCheckboxHeadless::set_state(
             &mut app.world_mut().commands(),
             root,
             WidgetryCheckState::Unchecked,

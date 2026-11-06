@@ -450,6 +450,13 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::CheckBox(CheckBoxKey::Checked) => "已勾选",
         TextKey::CheckBox(CheckBoxKey::Indeterminate) => "不确定",
         TextKey::CheckBox(CheckBoxKey::TriState) => "三态",
+        TextKey::CheckBox(CheckBoxKey::TriSymbolDescription) => {
+            "三态符号：点击、Enter / Space 或指定状态；同值静默，禁用时仍可程序设置。"
+        }
+        TextKey::CheckBox(CheckBoxKey::TriSymbolCycle) => "循环状态",
+        TextKey::CheckBox(CheckBoxKey::TriSymbolFocus) => "聚焦符号",
+        TextKey::CheckBox(CheckBoxKey::TriSymbolDisabled) => "切换符号禁用",
+        TextKey::CheckBox(CheckBoxKey::TriSymbolStatus) => "{state} · 已提交通知 {count} 次",
         TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "三态 CheckBox",
         TextKey::ComboBox(ComboBoxKey::LocalSearch) => "本地搜索（共享数据）",
         TextKey::ComboBox(ComboBoxKey::SearchPrompt) => "搜索",

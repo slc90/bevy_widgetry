@@ -14,7 +14,10 @@ use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_internal_log::widgetry_debug;
 pub use checkbox::{WidgetryCheckBox, WidgetryCheckBoxHeadless, WidgetryCheckBoxHeadlessPlugin};
 pub use error::{CheckBoxError, CheckBoxFailure};
-pub use tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
+pub use tri_state::{
+    WidgetryCheckState, WidgetryTriStateCheckbox, WidgetryTriStateCheckboxHeadless,
+    WidgetryTriStateCheckboxHeadlessPlugin,
+};
 
 pub struct WidgetryCheckBoxPlugin;
 
@@ -22,6 +25,9 @@ impl Plugin for WidgetryCheckBoxPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<WidgetryCheckBoxHeadlessPlugin>() {
             app.add_plugins(WidgetryCheckBoxHeadlessPlugin);
+        }
+        if !app.is_plugin_added::<WidgetryTriStateCheckboxHeadlessPlugin>() {
+            app.add_plugins(WidgetryTriStateCheckboxHeadlessPlugin);
         }
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
@@ -32,14 +38,8 @@ impl Plugin for WidgetryCheckBoxPlugin {
         if !app.is_plugin_added::<WidgetryIconPlugin>() {
             app.add_plugins(WidgetryIconPlugin);
         }
-        app.add_observer(tri_state::on_press)
-            .add_observer(indicator::own_mark)
+        app.add_observer(indicator::own_mark)
             .add_observer(style::refresh_theme)
-            .add_observer(tri_state::on_click)
-            .add_observer(tri_state::on_release)
-            .add_observer(tri_state::on_drag_end)
-            .add_observer(tri_state::on_cancel)
-            .add_observer(tri_state::on_key)
             .add_systems(
                 PostUpdate,
                 style::update_mark_geometry
@@ -48,11 +48,7 @@ impl Plugin for WidgetryCheckBoxPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (
-                    tri_state::sync_accessibility,
-                    style::update_changed,
-                    style::update_removed,
-                )
+                (style::update_changed, style::update_removed)
                     .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
             );
         widgetry_debug!("WidgetryCheckBoxPlugin 注册完成");

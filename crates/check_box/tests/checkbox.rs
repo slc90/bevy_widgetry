@@ -15,6 +15,7 @@ use bevy::ui::{Checked, InteractionDisabled, Pressed};
 use bevy::ui_widgets::{ActivateOnPress, Checkbox, ValueChange};
 use bevy::window::PrimaryWindow;
 use bevy_widgetry_asset::BuiltinIcon;
+use bevy_widgetry_check_box::WidgetryTriStateCheckboxHeadless;
 use bevy_widgetry_check_box::{
     WidgetryCheckBox, WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
 };
@@ -72,12 +73,12 @@ fn missing_indicator_reaches_system_error_handler() {
     app.edit_schedule(PostUpdate, |schedule| {
         schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
     });
-    WidgetryTriStateCheckbox::set_state(
+    WidgetryTriStateCheckboxHeadless::set_state(
         &mut app.world_mut().commands(),
         root,
         WidgetryCheckState::Checked,
     );
-    WidgetryTriStateCheckbox::set_state(
+    WidgetryTriStateCheckboxHeadless::set_state(
         &mut app.world_mut().commands(),
         healthy,
         WidgetryCheckState::Checked,
@@ -134,7 +135,7 @@ fn tri_app() -> (App, Entity) {
 fn programmatic_change_notifies_committed_state_once() {
     let (mut app, entity) = tri_app();
     for _ in 0..2 {
-        WidgetryTriStateCheckbox::set_state(
+        WidgetryTriStateCheckboxHeadless::set_state(
             &mut app.world_mut().commands(),
             entity,
             WidgetryCheckState::Checked,
@@ -160,12 +161,12 @@ fn tri_state_programmatic_cycle() {
         WidgetryCheckState::Indeterminate,
         WidgetryCheckState::Unchecked,
     ] {
-        WidgetryTriStateCheckbox::cycle_state(&mut app.world_mut().commands(), entity);
+        WidgetryTriStateCheckboxHeadless::cycle_state(&mut app.world_mut().commands(), entity);
         app.world_mut().flush();
         app.update();
         assert_projection(&app, entity, expected);
     }
-    WidgetryTriStateCheckbox::set_state(
+    WidgetryTriStateCheckboxHeadless::set_state(
         &mut app.world_mut().commands(),
         entity,
         WidgetryCheckState::Unchecked,
@@ -265,7 +266,7 @@ fn tri_state_click_and_disabled() {
         app.world().get::<WidgetryCheckState>(entity),
         Some(&WidgetryCheckState::Unchecked)
     );
-    WidgetryTriStateCheckbox::set_state(
+    WidgetryTriStateCheckboxHeadless::set_state(
         &mut app.world_mut().commands(),
         entity,
         WidgetryCheckState::Indeterminate,
@@ -312,7 +313,7 @@ fn tri_state_accessibility_tracks_programmatic_state() {
         .0;
     assert_eq!(node.role(), Role::CheckBox);
     assert_eq!(node.toggled(), Some(Toggled::False));
-    WidgetryTriStateCheckbox::set_state(
+    WidgetryTriStateCheckboxHeadless::set_state(
         &mut app.world_mut().commands(),
         entity,
         WidgetryCheckState::Indeterminate,
@@ -349,7 +350,7 @@ fn mark_entity_is_stable_across_states() {
         WidgetryCheckState::Indeterminate,
         WidgetryCheckState::Unchecked,
     ] {
-        WidgetryTriStateCheckbox::set_state(&mut app.world_mut().commands(), entity, state);
+        WidgetryTriStateCheckboxHeadless::set_state(&mut app.world_mut().commands(), entity, state);
         app.update();
         assert_eq!(
             app.world()
@@ -591,7 +592,7 @@ fn queued_programmatic_actions_use_execution_state() {
         WidgetryCheckState::Indeterminate,
         WidgetryCheckState::Unchecked,
     ] {
-        WidgetryTriStateCheckbox::cycle_state(&mut app.world_mut().commands(), root);
+        WidgetryTriStateCheckboxHeadless::cycle_state(&mut app.world_mut().commands(), root);
         app.world_mut().commands().queue(move |world: &mut World| {
             assert_eq!(world.get::<WidgetryCheckState>(root), Some(&expected));
         });
@@ -599,12 +600,12 @@ fn queued_programmatic_actions_use_execution_state() {
     app.world_mut().flush();
     app.update();
     assert_projection(&app, root, WidgetryCheckState::Unchecked);
-    WidgetryTriStateCheckbox::set_state(
+    WidgetryTriStateCheckboxHeadless::set_state(
         &mut app.world_mut().commands(),
         root,
         WidgetryCheckState::Checked,
     );
-    WidgetryTriStateCheckbox::cycle_state(&mut app.world_mut().commands(), root);
+    WidgetryTriStateCheckboxHeadless::cycle_state(&mut app.world_mut().commands(), root);
     app.world_mut().flush();
     app.update();
     assert_projection(&app, root, WidgetryCheckState::Indeterminate);
@@ -643,12 +644,12 @@ fn invalid_queued_targets_report_errors_without_changes() {
     {
         let mut commands = Commands::new(&mut queue, app.world());
         for entity in [bare, missing, deleted, Entity::PLACEHOLDER] {
-            WidgetryTriStateCheckbox::set_state(
+            WidgetryTriStateCheckboxHeadless::set_state(
                 &mut commands,
                 entity,
                 WidgetryCheckState::Indeterminate,
             );
-            WidgetryTriStateCheckbox::cycle_state(&mut commands, entity);
+            WidgetryTriStateCheckboxHeadless::cycle_state(&mut commands, entity);
         }
     }
     app.world_mut().despawn(deleted);
@@ -775,7 +776,7 @@ fn loaded_mark_projection_tracks_states_and_disabled() {
                 .entity_mut(root)
                 .remove::<InteractionDisabled>();
         }
-        WidgetryTriStateCheckbox::set_state(&mut app.world_mut().commands(), root, state);
+        WidgetryTriStateCheckboxHeadless::set_state(&mut app.world_mut().commands(), root, state);
         app.update();
         assert_projection(&app, root, state);
         let expected_label = match state {
@@ -873,7 +874,7 @@ fn materialized_indeterminate_checkbox_consumes_ready_glyph_and_colors_in_same_f
                         Children [Text("late label") bevy_widgetry_core::text::WidgetryText]
                     })
                     .id();
-                WidgetryTriStateCheckbox::set_state(
+                WidgetryTriStateCheckboxHeadless::set_state(
                     &mut commands,
                     root,
                     WidgetryCheckState::Indeterminate,

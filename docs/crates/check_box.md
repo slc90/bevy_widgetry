@@ -20,6 +20,8 @@ bsn! {
 
 `WidgetryCheckBoxPlugin` 自动安装二态 HeadlessPlugin，并保留默认二态/三态 Style。默认二态控件在原根组合同一行为，不增加布局层。自更新 Observer 只处理具备 Headless 身份的官方 `ValueChange<bool>` 请求，且只安装一次；不接管其他原生 Checkbox。外部无需默认 Indicator 即可使用输入，即使 App 同时安装默认 Style，也不会接受默认结构检查或被改写颜色。
 
+三态可独立安装 `WidgetryTriStateCheckboxHeadlessPlugin`，以 `@WidgetryTriStateCheckboxHeadless` 组合外部 Node/Children。它拥有原有 Pointer / Space / Enter / ActivateOnPress 输入、Pressed 清理、Commands Set/Cycle 与无障碍同步；不安装默认 Indicator 或 Icon Plugin。默认 `WidgetryTriStateCheckbox` 在原根组合该行为，完整 `WidgetryCheckBoxPlugin` 自动确保两种 HeadlessPlugin，默认颜色与布局仍由默认 Style 负责。
+
 ## 主要功能
 
 - 二态 Checked / Unchecked 显示与输入。
@@ -31,6 +33,10 @@ bsn! {
 ## 行为与状态契约
 
 三态默认 Unchecked；其真实状态改变时先提交再发送 `ValueChange`，同值不通知。`Commands` 操作在真正执行时才更新。Disabled 阻止用户操作，但不阻止合约允许的程序化设置。二态仍遵循官方 `Checked` 的使用方式。
+
+三态只读查询 `WidgetryCheckState`，通过 `WidgetryTriStateCheckboxHeadless::set_state` / `cycle_state` 排队操作；执行时以 Headless 身份及状态存在性校验，不依赖默认 Style。原默认控件类型不保留旧方法兼容层。状态是受控不可变组件，不通过运行期直接替换来代替这些 API，也不插入官方 Checked 表达任一种三态值。初始化不发送通知；`ValueChange<WidgetryCheckState>` 保持提交后语义，与二态的 bool 输入请求不同。
+
+三态 CheckBox 角色和 False / True / Mixed 的 toggled 同步由 HeadlessPlugin 独立执行，不依赖默认 Style 的 Colors 注册。已有状态后挂载 Headless 或新增 AccessibilityNode 时，同样初始化辅助状态，不额外发送选择通知。Gallery 的自有几何符号演示三态循环、指定状态、键盘及禁用期间程序设置。
 
 二态的 `ValueChange<bool>` 保持官方输入请求语义，不是 Widgetry 提交后通知；不承诺该请求的多个 Observer 执行顺序。Checked 是唯一状态，调用方可以直接用 BSN / World / Commands 增删；这些直接操作不产生输入请求。Disabled 阻止用户输入，不阻止原生 Checked 写入。Gallery 的自定义开关通过公开 Headless、原生 Checked 和自有 Track/Thumb 展示这些差异。
 

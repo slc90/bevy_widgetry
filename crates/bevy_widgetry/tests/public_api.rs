@@ -23,6 +23,7 @@ use bevy_widgetry::button::{WidgetryButton, WidgetryButtonLoadingChanged, Widget
 use bevy_widgetry::button::{WidgetryButtonHeadless, WidgetryButtonLoading};
 use bevy_widgetry::check_box::{
     WidgetryCheckBox, WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
+    WidgetryTriStateCheckboxHeadless,
 };
 use bevy_widgetry::combo_box::{
     WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxPlugin, WidgetryComboBoxProps,
@@ -802,12 +803,12 @@ fn check_box_scene_api_is_usable() {
         .spawn_scene(bsn! { @WidgetryTriStateCheckbox })
         .unwrap()
         .id();
-    WidgetryTriStateCheckbox::set_state(
+    WidgetryTriStateCheckboxHeadless::set_state(
         &mut app.world_mut().commands(),
         tri,
         WidgetryCheckState::Checked,
     );
-    WidgetryTriStateCheckbox::cycle_state(&mut app.world_mut().commands(), tri);
+    WidgetryTriStateCheckboxHeadless::cycle_state(&mut app.world_mut().commands(), tri);
     app.world_mut().flush();
     app.update();
     assert!(app.world().get::<WidgetryCheckBox>(binary).is_some());

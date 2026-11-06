@@ -28,8 +28,60 @@ pub enum WidgetryCheckState {
 }
 
 #[derive(SceneComponent, Default, Clone)]
+#[require(Node, WidgetryCheckState, AccessibilityNode(accesskit::Node::new(Role::CheckBox)), Hovered, bevy_widgetry_core::pointer::WidgetryPointerPressed, TabIndex(-1))]
+pub struct WidgetryTriStateCheckboxHeadless;
+
+impl WidgetryTriStateCheckboxHeadless {
+    fn scene() -> impl Scene {
+        bsn! {}
+    }
+
+    pub fn set_state(commands: &mut Commands, entity: Entity, state: WidgetryCheckState) {
+        commands.queue(move |world: &mut World| {
+            write_state(world, entity, Some(state)).map_err(|error| error.into_bevy_error())
+        });
+    }
+
+    pub fn cycle_state(commands: &mut Commands, entity: Entity) {
+        commands.queue(move |world: &mut World| {
+            write_state(world, entity, None).map_err(|error| error.into_bevy_error())
+        });
+    }
+}
+
+pub struct WidgetryTriStateCheckboxHeadlessPlugin;
+
+impl Plugin for WidgetryTriStateCheckboxHeadlessPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
+            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
+        }
+        app.register_type::<WidgetryCheckState>()
+            .add_observer(on_press)
+            .add_observer(on_click)
+            .add_observer(on_release)
+            .add_observer(on_drag_end)
+            .add_observer(on_cancel)
+            .add_observer(on_key)
+            .add_systems(
+                PostUpdate,
+                sync_accessibility
+                    .after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled)
+                    .before(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
+            );
+        bevy_widgetry_internal_log::widgetry_debug!(
+            "WidgetryTriStateCheckboxHeadlessPlugin 注册完成"
+        );
+    }
+}
+
+#[derive(SceneComponent, Default, Clone)]
 #[scene(crate::WidgetryCheckBoxProps)]
-#[require(crate::style::StyleDiagnostics, crate::colors::ColorState)]
+#[require(
+    WidgetryTriStateCheckboxHeadless,
+    crate::style::StyleDiagnostics,
+    crate::colors::ColorState
+)]
 pub struct WidgetryTriStateCheckbox;
 
 fn next_check_state(state: WidgetryCheckState) -> WidgetryCheckState {
@@ -45,7 +97,10 @@ fn write_state(
     entity: Entity,
     target: Option<WidgetryCheckState>,
 ) -> Result<(), CheckBoxFailure> {
-    if world.get::<WidgetryTriStateCheckbox>(entity).is_none() {
+    if world
+        .get::<WidgetryTriStateCheckboxHeadless>(entity)
+        .is_none()
+    {
         return Err(failure(
             CheckBoxError::InvalidTarget { root: entity },
             "check_box.write_state",
@@ -76,7 +131,7 @@ fn write_state(
     Ok(())
 }
 
-pub(crate) fn on_press(
+fn on_press(
     mut event: On<PointerPress>,
     query: Query<
         (
@@ -85,7 +140,7 @@ pub(crate) fn on_press(
             Has<Pressed>,
             Has<ActivateOnPress>,
         ),
-        With<WidgetryTriStateCheckbox>,
+        With<WidgetryTriStateCheckboxHeadless>,
     >,
     focus: Option<ResMut<InputFocus>>,
     focus_visible: Option<ResMut<InputFocusVisible>>,
@@ -104,16 +159,19 @@ pub(crate) fn on_press(
     if !disabled && !pressed {
         commands.entity(event.entity).insert(Pressed);
         if activate_on_press {
-            WidgetryTriStateCheckbox::cycle_state(&mut commands, event.entity);
+            WidgetryTriStateCheckboxHeadless::cycle_state(&mut commands, event.entity);
         }
     }
 }
 
-pub(crate) fn on_click(
+fn on_click(
     mut event: On<PointerClick>,
     query: Query<
         (&WidgetryCheckState, Has<InteractionDisabled>),
-        (With<WidgetryTriStateCheckbox>, Without<ActivateOnPress>),
+        (
+            With<WidgetryTriStateCheckboxHeadless>,
+            Without<ActivateOnPress>,
+        ),
     >,
     mut commands: Commands,
 ) {
@@ -122,13 +180,13 @@ pub(crate) fn on_click(
     };
     event.propagate(false);
     if !disabled {
-        WidgetryTriStateCheckbox::cycle_state(&mut commands, event.entity);
+        WidgetryTriStateCheckboxHeadless::cycle_state(&mut commands, event.entity);
     }
 }
 
-pub(crate) fn on_release(
+fn on_release(
     mut event: On<PointerRelease>,
-    query: Query<(), With<WidgetryTriStateCheckbox>>,
+    query: Query<(), With<WidgetryTriStateCheckboxHeadless>>,
     mut commands: Commands,
 ) {
     if query.contains(event.entity) {
@@ -137,9 +195,9 @@ pub(crate) fn on_release(
     }
 }
 
-pub(crate) fn on_drag_end(
+fn on_drag_end(
     mut event: On<PointerDragEnd>,
-    query: Query<(), With<WidgetryTriStateCheckbox>>,
+    query: Query<(), With<WidgetryTriStateCheckboxHeadless>>,
     mut commands: Commands,
 ) {
     if query.contains(event.entity) {
@@ -148,9 +206,9 @@ pub(crate) fn on_drag_end(
     }
 }
 
-pub(crate) fn on_cancel(
+fn on_cancel(
     mut event: On<PointerCancel>,
-    query: Query<(), With<WidgetryTriStateCheckbox>>,
+    query: Query<(), With<WidgetryTriStateCheckboxHeadless>>,
     mut commands: Commands,
 ) {
     if query.contains(event.entity) {
@@ -159,11 +217,14 @@ pub(crate) fn on_cancel(
     }
 }
 
-pub(crate) fn on_key(
+fn on_key(
     mut event: On<FocusedInput<KeyboardInput>>,
     query: Query<
         &WidgetryCheckState,
-        (With<WidgetryTriStateCheckbox>, Without<InteractionDisabled>),
+        (
+            With<WidgetryTriStateCheckboxHeadless>,
+            Without<InteractionDisabled>,
+        ),
     >,
     mut commands: Commands,
 ) {
@@ -176,12 +237,22 @@ pub(crate) fn on_key(
         && matches!(input.key_code, KeyCode::Enter | KeyCode::Space)
     {
         event.propagate(false);
-        WidgetryTriStateCheckbox::cycle_state(&mut commands, event.focused_entity);
+        WidgetryTriStateCheckboxHeadless::cycle_state(&mut commands, event.focused_entity);
     }
 }
 
-pub(crate) fn sync_accessibility(
-    mut query: Query<(&WidgetryCheckState, &mut AccessibilityNode), Changed<WidgetryCheckState>>,
+fn sync_accessibility(
+    mut query: Query<
+        (&WidgetryCheckState, &mut AccessibilityNode),
+        (
+            With<WidgetryTriStateCheckboxHeadless>,
+            Or<(
+                Changed<WidgetryCheckState>,
+                Added<AccessibilityNode>,
+                Added<WidgetryTriStateCheckboxHeadless>,
+            )>,
+        ),
+    >,
 ) {
     for (state, mut node) in &mut query {
         node.set_toggled(match state {
@@ -196,30 +267,14 @@ impl WidgetryTriStateCheckbox {
     fn scene(props: crate::WidgetryCheckBoxProps) -> impl Scene {
         bsn! {
             template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
-            template(|_| Ok(WidgetryCheckState::Unchecked))
-            template(|_| Ok(AccessibilityNode(accesskit::Node::new(Role::CheckBox))))
-            Hovered(false)
+            @WidgetryTriStateCheckboxHeadless
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            bevy_widgetry_core::pointer::WidgetryPointerPressed
-            TabIndex(-1)
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6), min_height: px(24) }
             BackgroundColor
             BorderColor
             template(|_| Ok(ResolvedForeground::default()))
             Children [@checkbox_indicator_scene()]
         }
-    }
-
-    pub fn set_state(commands: &mut Commands, entity: Entity, state: WidgetryCheckState) {
-        commands.queue(move |world: &mut World| {
-            write_state(world, entity, Some(state)).map_err(|error| error.into_bevy_error())
-        });
-    }
-
-    pub fn cycle_state(commands: &mut Commands, entity: Entity) {
-        commands.queue(move |world: &mut World| {
-            write_state(world, entity, None).map_err(|error| error.into_bevy_error())
-        });
     }
 }
 

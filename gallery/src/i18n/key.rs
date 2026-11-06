@@ -373,6 +373,11 @@ pub(crate) enum ButtonKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CheckBoxKey {
+    TriSymbolDescription,
+    TriSymbolCycle,
+    TriSymbolFocus,
+    TriSymbolDisabled,
+    TriSymbolStatus,
     SwitchDescription,
     SwitchFocus,
     SwitchDisabled,

@@ -1,4 +1,6 @@
+use bevy_widgetry::check_box::WidgetryTriStateCheckboxHeadless;
 mod switch;
+mod tri_symbol;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::CheckBoxKey;
 use crate::i18n::{CommonKey, NavigationKey};
@@ -34,9 +36,10 @@ pub(crate) fn scene() -> impl Scene {
             ]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
                 @localized(TextKey::CheckBox(CheckBoxKey::TriState)) bevy_widgetry::text::WidgetryText--
-                @WidgetryTriStateCheckbox on(on_tri_state_change) Children [@localized(TextKey::CheckBox(CheckBoxKey::TriStateCheckBox)) bevy_widgetry::text::WidgetryText]
+                @WidgetryTriStateCheckbox Name("TriStateCheckBoxNormalDemo") on(on_tri_state_change) Children [@localized(TextKey::CheckBox(CheckBoxKey::TriStateCheckBox)) bevy_widgetry::text::WidgetryText]
             ]--
-            @switch::scene()
+            @switch::scene()--
+            @tri_symbol::scene()
         ]
     }
 }
@@ -54,7 +57,7 @@ fn initialize_disabled_indeterminate(
     mut commands: Commands,
 ) {
     for entity in &query {
-        WidgetryTriStateCheckbox::set_state(
+        WidgetryTriStateCheckboxHeadless::set_state(
             &mut commands,
             entity,
             WidgetryCheckState::Indeterminate,
@@ -65,6 +68,7 @@ fn initialize_disabled_indeterminate(
 impl Plugin for CheckBoxDemoPlugin {
     fn build(&self, app: &mut App) {
         switch::install(app);
+        tri_symbol::install(app);
         app.add_systems(OnEnter(GalleryPage::CheckBox), enter)
             .add_systems(OnExit(GalleryPage::CheckBox), exit)
             .add_systems(
