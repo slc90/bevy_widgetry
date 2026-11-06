@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -271,88 +270,6 @@ pub const PINK_DREAM: WidgetryCheckBoxColors = WidgetryCheckBoxColors {
             border: pink_dream::DISABLED_BORDER,
             foreground: pink_dream::DISABLED_TEXT,
             mark: pink_dream::DISABLED_TEXT,
-        },
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryCheckBoxColors = WidgetryCheckBoxColors {
-    unchecked: WidgetryCheckBoxInteractionColors {
-        normal: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::TRANSPARENT,
-        },
-        hovered: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::HOVER_SURFACE,
-            border: kamuri_violet::PRIMARY_HOVER,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::TRANSPARENT,
-        },
-        pressed: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::PRESSED_SURFACE,
-            border: kamuri_violet::PRIMARY_PRESSED,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::TRANSPARENT,
-        },
-        disabled: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::DISABLED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-            mark: kamuri_violet::TRANSPARENT,
-        },
-    },
-    checked: WidgetryCheckBoxInteractionColors {
-        normal: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::PRIMARY,
-            border: kamuri_violet::PRIMARY,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::INVERSE_TEXT,
-        },
-        hovered: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::PRIMARY_HOVER,
-            border: kamuri_violet::PRIMARY_HOVER,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::INVERSE_TEXT,
-        },
-        pressed: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::PRIMARY_PRESSED,
-            border: kamuri_violet::PRIMARY_PRESSED,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::INVERSE_TEXT,
-        },
-        disabled: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::DISABLED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-            mark: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    indeterminate: WidgetryCheckBoxInteractionColors {
-        normal: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::PRIMARY,
-            border: kamuri_violet::PRIMARY,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::INVERSE_TEXT,
-        },
-        hovered: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::PRIMARY_HOVER,
-            border: kamuri_violet::PRIMARY_HOVER,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::INVERSE_TEXT,
-        },
-        pressed: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::PRIMARY_PRESSED,
-            border: kamuri_violet::PRIMARY_PRESSED,
-            foreground: kamuri_violet::TEXT,
-            mark: kamuri_violet::INVERSE_TEXT,
-        },
-        disabled: WidgetryCheckBoxStateColors {
-            background: kamuri_violet::DISABLED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-            mark: kamuri_violet::DISABLED_TEXT,
         },
     },
 };

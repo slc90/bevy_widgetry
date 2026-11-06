@@ -2,8 +2,7 @@ use crate::button::WidgetryButtonColors;
 use crate::check_box::WidgetryCheckBoxColors;
 use crate::combo_box::WidgetryComboBoxColors;
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -262,67 +261,6 @@ pub const PINK_DREAM: WidgetryFileDialogColors = WidgetryFileDialogColors {
     confirmation: crate::message_box::PINK_DREAM,
 };
 
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryFileDialogColors = WidgetryFileDialogColors {
-    window: crate::window::KAMURI_VIOLET,
-    body: WidgetryFileDialogBodyColors {
-        normal: WidgetryFileDialogBodyStateColors {
-            background: kamuri_violet::WINDOW_BACKGROUND,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryFileDialogBodyStateColors {
-            background: kamuri_violet::WINDOW_BACKGROUND,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    entry: WidgetryFileDialogEntryColors {
-        normal: WidgetryFileDialogEntryStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        selected: WidgetryFileDialogEntryStateColors {
-            background: kamuri_violet::SELECTED_SURFACE,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryFileDialogEntryStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-        active_border: kamuri_violet::FOCUS_BORDER,
-        disabled_active_border: kamuri_violet::TRANSPARENT,
-    },
-    status: WidgetryFileDialogStatusColors {
-        normal: WidgetryFileDialogStatusStateColors {
-            foreground: kamuri_violet::SECONDARY_TEXT,
-        },
-        disabled: WidgetryFileDialogStatusStateColors {
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    sidebar_button: crate::button::KAMURI_VIOLET,
-    toolbar_button: crate::button::KAMURI_VIOLET,
-    accept_button: crate::button::KAMURI_VIOLET,
-    cancel_button: crate::button::KAMURI_VIOLET,
-    folder_create_button: crate::button::KAMURI_VIOLET,
-    folder_cancel_button: crate::button::KAMURI_VIOLET,
-    overwrite_accept_button: crate::button::KAMURI_VIOLET,
-    overwrite_cancel_button: crate::button::KAMURI_VIOLET,
-    path_field: crate::text_field::KAMURI_VIOLET,
-    search_field: crate::text_field::KAMURI_VIOLET,
-    filename_field: crate::text_field::KAMURI_VIOLET,
-    folder_name_field: crate::text_field::KAMURI_VIOLET,
-    filter: crate::combo_box::KAMURI_VIOLET,
-    sort: crate::combo_box::KAMURI_VIOLET,
-    hidden_option: crate::check_box::KAMURI_VIOLET,
-    system_option: crate::check_box::KAMURI_VIOLET,
-    sidebar_scroll: crate::scroll_area::KAMURI_VIOLET,
-    entries_scroll: crate::scroll_area::KAMURI_VIOLET,
-    confirmation: crate::message_box::KAMURI_VIOLET,
-};
-
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -357,58 +295,6 @@ mod tests {
         assert_eq!(PINK_DREAM.sidebar_scroll, crate::scroll_area::PINK_DREAM);
         assert_eq!(PINK_DREAM.entries_scroll, crate::scroll_area::PINK_DREAM);
         assert_eq!(PINK_DREAM.confirmation, crate::message_box::PINK_DREAM);
-    }
-
-    #[cfg(feature = "kamuri_violet")]
-    #[test]
-    fn kamuri_violet_reuses_widget_colors() {
-        assert_eq!(KAMURI_VIOLET.window, crate::window::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.sidebar_button, crate::button::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.toolbar_button, crate::button::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.accept_button, crate::button::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.cancel_button, crate::button::KAMURI_VIOLET);
-        assert_eq!(
-            KAMURI_VIOLET.folder_create_button,
-            crate::button::KAMURI_VIOLET
-        );
-        assert_eq!(
-            KAMURI_VIOLET.folder_cancel_button,
-            crate::button::KAMURI_VIOLET
-        );
-        assert_eq!(
-            KAMURI_VIOLET.overwrite_accept_button,
-            crate::button::KAMURI_VIOLET
-        );
-        assert_eq!(
-            KAMURI_VIOLET.overwrite_cancel_button,
-            crate::button::KAMURI_VIOLET
-        );
-        assert_eq!(KAMURI_VIOLET.path_field, crate::text_field::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.search_field, crate::text_field::KAMURI_VIOLET);
-        assert_eq!(
-            KAMURI_VIOLET.filename_field,
-            crate::text_field::KAMURI_VIOLET
-        );
-        assert_eq!(
-            KAMURI_VIOLET.folder_name_field,
-            crate::text_field::KAMURI_VIOLET
-        );
-        assert_eq!(KAMURI_VIOLET.filter, crate::combo_box::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.sort, crate::combo_box::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.hidden_option, crate::check_box::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.system_option, crate::check_box::KAMURI_VIOLET);
-        assert_eq!(
-            KAMURI_VIOLET.sidebar_scroll,
-            crate::scroll_area::KAMURI_VIOLET
-        );
-        assert_eq!(
-            KAMURI_VIOLET.entries_scroll,
-            crate::scroll_area::KAMURI_VIOLET
-        );
-        assert_eq!(
-            KAMURI_VIOLET.confirmation,
-            crate::message_box::KAMURI_VIOLET
-        );
     }
 
     #[cfg(feature = "light")]

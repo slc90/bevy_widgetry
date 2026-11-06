@@ -2,27 +2,27 @@
 
 ## 功能概述
 
-提供 Widgetry 的完整配色数据、内置预设，以及各 Widget / 组合部件的完整颜色数据与全局主题切换能力。默认只编译 Dark；Light、Pink Dream、Kamuri Violet 分别通过默认关闭的 `light`、`pink_dream`、`kamuri_violet` Feature 开启。
+提供 Widgetry 的完整配色数据、内置预设，以及各 Widget / 组合部件的完整颜色数据与全局主题切换能力。默认只编译 Dark；Light 和 Pink Dream 分别通过默认关闭的 `light`、`pink_dream` Feature 开启。Kamuri Violet 的完整数据由 Gallery 使用公开 Colors 类型定义，通过相同 Setter 应用。
 
 ## 当前设计思路
 
 Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 的样式更新。当前 `WidgetryTheme` Resource 保存完整配色，是唯一主题状态。每个消费者从它和自身状态选择颜色输出；外部可复制任一预设、修改字段，再通过相同 Setter 应用。Theme 仅包含颜色，不管理布局、尺寸或动画。
 
-每个可选主题控制整套公开常量、各控件的配色常量与公共色值。关闭时这些 API 不存在，不在运行时回退 Dark；`WidgetryTheme` 的完整字段结构保持稳定。Facade 转发三个同名 Feature，Gallery 显式启用全部主题，三个开关可以独立组合，且与 `kamuri_cursor` 无关。Cargo Feature 在依赖图中累加，精简构建需使用独立调用方验证。
+每个可选主题控制整套公开常量、各控件的配色常量与公共色值。关闭时这些 API 不存在，不在运行时回退 Dark；`WidgetryTheme` 的完整字段结构保持稳定。Facade 转发两个同名 Feature，两个开关可以独立组合，且与 `kamuri_cursor` 无关；Gallery 自行定义 Kamuri Violet，并显式启用另外两个预设。Cargo Feature 在依赖图中累加，精简构建需使用独立调用方验证。
 
 ## 主要功能
 
-- Dark、Light、Pink Dream、Kamuri Violet 四套内置预设，以及外部定义的完整配色。
+- Dark、Light、Pink Dream 三套内置预设，以及外部定义的完整配色；Gallery 提供保留原色值的 Kamuri Violet。
 - 为 Text、Icon、Button、LinkButton、CheckBox、ComboBox、Tooltip、ScrollArea、ListView、Tree、Table、Window、Dialog、Waveform 等提供 Colors Type。
-- `WidgetryTheme::link_button` 提供独立的 Normal、Hovered、Pressed、Disabled 前景颜色，四套主题均有完整定义。
-- `WidgetryTheme::text_field.hint_warning` 提供常显提示的黄色警告语义，四套主题分别配置；其显示不因 TextField Disabled 而变灰。
-- NumberInput 组合复用 `text_field` 的可编辑/只读外框与文本配色，以及 `button` 的局部交互配色；四种主题均同步更新整个组合。
+- `WidgetryTheme::link_button` 提供独立的 Normal、Hovered、Pressed、Disabled 前景颜色，各套配色均有完整定义。
+- `WidgetryTheme::text_field.hint_warning` 提供常显提示的黄色警告语义，各套配色分别配置；其显示不因 TextField Disabled 而变灰。
+- NumberInput 组合复用 `text_field` 的可编辑/只读外框与文本配色，以及 `button` 的局部交互配色；完整主题配色均同步更新整个组合。
 - 提供 World 和 Commands 主题切换入口，以及 `WidgetryThemeChanged` 通知。
-- `WidgetryTheme::progress_bar` 为四套主题提供无交互态的 Track、Fill、Border 配色，ProgressBar 支持逐字段局部覆盖。
-- `WidgetryTheme::slider` 为四套主题定义 Normal / Hovered / Pressed / Disabled 的 Track、Fill、Thumb 和焦点环颜色，Slider 局部覆盖可按状态覆盖各字段。
-- `WidgetryTheme::splitter` 为四套主题定义 Normal / Hovered / Dragging / Disabled 的 Handle 线条颜色，Splitter 支持逐状态局部覆盖。
+- `WidgetryTheme::progress_bar` 为各套配色提供无交互态的 Track、Fill、Border 配色，ProgressBar 支持逐字段局部覆盖。
+- `WidgetryTheme::slider` 为各套配色定义 Normal / Hovered / Pressed / Disabled 的 Track、Fill、Thumb 和焦点环颜色，Slider 局部覆盖可按状态覆盖各字段。
+- `WidgetryTheme::splitter` 为各套配色定义 Normal / Hovered / Dragging / Disabled 的 Handle 线条颜色，Splitter 支持逐状态局部覆盖。
 - `WidgetryTheme::segmented` 提供容器 Normal / Focused / Disabled 背景与边框、Option Checked / Unchecked 下 Normal / Hovered / Disabled 的背景与前景。
-- `WidgetryTheme::tabs` 提供标签栏、内容框与分隔线颜色，Header Selected / Unselected 的 Normal / Hovered / Pressed / Disabled 背景、边框、前景及焦点边框；四套主题均保留选中禁用的区别。
+- `WidgetryTheme::tabs` 提供标签栏、内容框与分隔线颜色，Header Selected / Unselected 的 Normal / Hovered / Pressed / Disabled 背景、边框、前景及焦点边框；各套配色均保留选中禁用的区别。
 - Waveform 配色包含起始 Channel Palette 与 Disabled Palette。
 
 ## 行为与状态契约
@@ -41,4 +41,4 @@ Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 
 - 本 crate 的预设配色、全部预设转移通过源码 Unit Test 验证；`tests/runtime_theme.rs` 覆盖公开自定义配色、连续切换、queued 与同值静默、提交后通知及非法嵌套颜色的原子拒绝；`test_utils::theme` 单测补充同步与 queued 的领域类型、source/origin、原始回溯、源头一次 ERROR、无处理 DEBUG、执行时缺资源与真实宿主 Error Severity，以及辅助切换的正常无日志。
 
 
-HoldButton 使用独立的 `hold_button: WidgetryHoldButtonColors`：Normal / Hovered / Pressed / Disabled 各含 background、liquid、wave、border、foreground，另有 success_border。四套 Theme 均提供浅底、深色液体与固定前景色。
+HoldButton 使用独立的 `hold_button: WidgetryHoldButtonColors`：Normal / Hovered / Pressed / Disabled 各含 background、liquid、wave、border、foreground，另有 success_border。各套配色 均提供浅底、深色液体与固定前景色。

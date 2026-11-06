@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -275,87 +274,6 @@ pub const PINK_DREAM: WidgetryTextFieldColors = WidgetryTextFieldColors {
     },
 };
 
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryTextFieldColors = WidgetryTextFieldColors {
-    hint_warning: Color::srgb_u8(116, 91, 0),
-    editable: WidgetryTextFieldInteractionColors {
-        normal: WidgetryTextFieldStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-            caret: kamuri_violet::TEXT,
-            selection_background: kamuri_violet::SELECTION_BACKGROUND,
-            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
-            selection_foreground: kamuri_violet::TEXT,
-        },
-        hovered: WidgetryTextFieldStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::PRIMARY_HOVER,
-            foreground: kamuri_violet::TEXT,
-            caret: kamuri_violet::TEXT,
-            selection_background: kamuri_violet::SELECTION_BACKGROUND,
-            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
-            selection_foreground: kamuri_violet::TEXT,
-        },
-        focused: WidgetryTextFieldStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::FOCUS_BORDER,
-            foreground: kamuri_violet::TEXT,
-            caret: kamuri_violet::TEXT,
-            selection_background: kamuri_violet::SELECTION_BACKGROUND,
-            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
-            selection_foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryTextFieldStateColors {
-            background: kamuri_violet::DISABLED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-            caret: kamuri_violet::DISABLED_TEXT,
-            selection_background: kamuri_violet::SELECTION_BACKGROUND,
-            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
-            selection_foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    read_only: WidgetryTextFieldInteractionColors {
-        normal: WidgetryTextFieldStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-            caret: kamuri_violet::TEXT,
-            selection_background: kamuri_violet::SELECTION_BACKGROUND,
-            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
-            selection_foreground: kamuri_violet::TEXT,
-        },
-        hovered: WidgetryTextFieldStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::PRIMARY_HOVER,
-            foreground: kamuri_violet::TEXT,
-            caret: kamuri_violet::TEXT,
-            selection_background: kamuri_violet::SELECTION_BACKGROUND,
-            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
-            selection_foreground: kamuri_violet::TEXT,
-        },
-        focused: WidgetryTextFieldStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::FOCUS_BORDER,
-            foreground: kamuri_violet::TEXT,
-            caret: kamuri_violet::TEXT,
-            selection_background: kamuri_violet::SELECTION_BACKGROUND,
-            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
-            selection_foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryTextFieldStateColors {
-            background: kamuri_violet::DISABLED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-            caret: kamuri_violet::DISABLED_TEXT,
-            selection_background: kamuri_violet::SELECTION_BACKGROUND,
-            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
-            selection_foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-};
-
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -373,8 +291,6 @@ mod tests {
             (LIGHT, light::WINDOW_BACKGROUND),
             #[cfg(feature = "pink_dream")]
             (PINK_DREAM, pink_dream::WINDOW_BACKGROUND),
-            #[cfg(feature = "kamuri_violet")]
-            (KAMURI_VIOLET, kamuri_violet::WINDOW_BACKGROUND),
         ];
         for (theme, background) in palettes {
             for surface in [

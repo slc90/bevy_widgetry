@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -248,74 +247,6 @@ pub const PINK_DREAM: WidgetryComboBoxColors = WidgetryComboBoxColors {
     },
 };
 
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryComboBoxColors = WidgetryComboBoxColors {
-    field: WidgetryComboBoxFieldColors {
-        normal: WidgetryComboBoxFieldStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-            indicator_foreground: kamuri_violet::TERTIARY_TEXT,
-        },
-        hovered: WidgetryComboBoxFieldStateColors {
-            background: kamuri_violet::HOVER_SURFACE,
-            border: kamuri_violet::PRIMARY_HOVER,
-            foreground: kamuri_violet::TEXT,
-            indicator_foreground: kamuri_violet::TERTIARY_TEXT,
-        },
-        pressed: WidgetryComboBoxFieldStateColors {
-            background: kamuri_violet::PRESSED_SURFACE,
-            border: kamuri_violet::PRIMARY_PRESSED,
-            foreground: kamuri_violet::TEXT,
-            indicator_foreground: kamuri_violet::TERTIARY_TEXT,
-        },
-        open: WidgetryComboBoxFieldStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::FOCUS_BORDER,
-            foreground: kamuri_violet::TEXT,
-            indicator_foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryComboBoxFieldStateColors {
-            background: kamuri_violet::DISABLED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-            indicator_foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    popup: WidgetryComboBoxPopupColors {
-        normal: WidgetryComboBoxPopupStateColors {
-            background: kamuri_violet::ELEVATED_SURFACE,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryComboBoxPopupStateColors {
-            background: kamuri_violet::ELEVATED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    list: crate::list_view::WidgetryListViewColors {
-        container: crate::list_view::WidgetryListViewContainerColors {
-            normal: crate::list_view::WidgetryListViewContainerStateColors {
-                background: kamuri_violet::ELEVATED_SURFACE,
-                border: kamuri_violet::BORDER,
-                foreground: kamuri_violet::TEXT,
-            },
-            focused: crate::list_view::WidgetryListViewContainerStateColors {
-                background: kamuri_violet::ELEVATED_SURFACE,
-                border: kamuri_violet::FOCUS_BORDER,
-                foreground: kamuri_violet::TEXT,
-            },
-            disabled: crate::list_view::WidgetryListViewContainerStateColors {
-                background: kamuri_violet::ELEVATED_SURFACE,
-                border: kamuri_violet::DISABLED_BORDER,
-                foreground: kamuri_violet::DISABLED_TEXT,
-            },
-        },
-        item: crate::list_view::KAMURI_VIOLET.item,
-    },
-};
-
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -325,15 +256,6 @@ mod tests {
     #[test]
     fn pink_dream_reuses_widget_colors() {
         assert_eq!(PINK_DREAM.list.item, crate::list_view::PINK_DREAM.item);
-    }
-
-    #[cfg(feature = "kamuri_violet")]
-    #[test]
-    fn kamuri_violet_reuses_widget_colors() {
-        assert_eq!(
-            KAMURI_VIOLET.list.item,
-            crate::list_view::KAMURI_VIOLET.item
-        );
     }
 
     #[cfg(feature = "light")]

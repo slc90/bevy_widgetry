@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -84,22 +83,6 @@ const PINK_DREAM_DISABLED_PALETTE: &[Color] = &[
     Color::srgb_u8(228, 222, 225),
 ];
 
-#[cfg(feature = "kamuri_violet")]
-const KAMURI_VIOLET_NORMAL_PALETTE: &[Color] = &[
-    Color::srgb_u8(110, 78, 163),
-    Color::srgb_u8(169, 83, 135),
-    Color::srgb_u8(54, 117, 132),
-    Color::srgb_u8(153, 113, 47),
-];
-
-#[cfg(feature = "kamuri_violet")]
-const KAMURI_VIOLET_DISABLED_PALETTE: &[Color] = &[
-    Color::srgb_u8(174, 164, 189),
-    Color::srgb_u8(190, 182, 201),
-    Color::srgb_u8(208, 202, 217),
-    Color::srgb_u8(223, 218, 231),
-];
-
 #[cfg(feature = "pink_dream")]
 pub const PINK_DREAM: WidgetryWaveformColors = WidgetryWaveformColors {
     normal: WidgetryWaveformStateColors {
@@ -109,18 +92,6 @@ pub const PINK_DREAM: WidgetryWaveformColors = WidgetryWaveformColors {
     disabled: WidgetryWaveformStateColors {
         background: pink_dream::DISABLED_SURFACE,
         palette: PINK_DREAM_DISABLED_PALETTE,
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryWaveformColors = WidgetryWaveformColors {
-    normal: WidgetryWaveformStateColors {
-        background: kamuri_violet::SURFACE,
-        palette: KAMURI_VIOLET_NORMAL_PALETTE,
-    },
-    disabled: WidgetryWaveformStateColors {
-        background: kamuri_violet::DISABLED_SURFACE,
-        palette: KAMURI_VIOLET_DISABLED_PALETTE,
     },
 };
 

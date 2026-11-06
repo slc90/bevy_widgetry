@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -102,34 +101,6 @@ pub const PINK_DREAM: WidgetrySliderColors = WidgetrySliderColors {
         track: pink_dream::DISABLED_BORDER,
         fill: pink_dream::DISABLED_TEXT,
         thumb: pink_dream::DISABLED_TEXT,
-        focus_ring: Color::NONE,
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetrySliderColors = WidgetrySliderColors {
-    normal: WidgetrySliderStateColors {
-        track: kamuri_violet::BORDER,
-        fill: kamuri_violet::PRIMARY,
-        thumb: kamuri_violet::PRIMARY,
-        focus_ring: kamuri_violet::PRIMARY,
-    },
-    hovered: WidgetrySliderStateColors {
-        track: kamuri_violet::BORDER,
-        fill: kamuri_violet::PRIMARY_HOVER,
-        thumb: kamuri_violet::PRIMARY_HOVER,
-        focus_ring: kamuri_violet::PRIMARY_HOVER,
-    },
-    pressed: WidgetrySliderStateColors {
-        track: kamuri_violet::BORDER,
-        fill: kamuri_violet::PRIMARY_PRESSED,
-        thumb: kamuri_violet::PRIMARY_PRESSED,
-        focus_ring: kamuri_violet::PRIMARY_PRESSED,
-    },
-    disabled: WidgetrySliderStateColors {
-        track: kamuri_violet::DISABLED_BORDER,
-        fill: kamuri_violet::DISABLED_TEXT,
-        thumb: kamuri_violet::DISABLED_TEXT,
         focus_ring: Color::NONE,
     },
 };

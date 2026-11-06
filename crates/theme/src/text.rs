@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -44,16 +43,6 @@ pub const PINK_DREAM: WidgetryTextColors = WidgetryTextColors {
     },
     disabled: WidgetryTextStateColors {
         foreground: pink_dream::DISABLED_TEXT,
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryTextColors = WidgetryTextColors {
-    normal: WidgetryTextStateColors {
-        foreground: kamuri_violet::TEXT,
-    },
-    disabled: WidgetryTextStateColors {
-        foreground: kamuri_violet::DISABLED_TEXT,
     },
 };
 

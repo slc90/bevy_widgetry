@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -34,11 +33,4 @@ pub const PINK_DREAM: WidgetrySplitterColors = WidgetrySplitterColors {
     hovered: pink_dream::PRIMARY_HOVER,
     dragging: pink_dream::PRIMARY,
     disabled: pink_dream::SUBTLE_BORDER,
-};
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetrySplitterColors = WidgetrySplitterColors {
-    normal: kamuri_violet::BORDER,
-    hovered: kamuri_violet::PRIMARY_HOVER,
-    dragging: kamuri_violet::PRIMARY,
-    disabled: kamuri_violet::SUBTLE_BORDER,
 };

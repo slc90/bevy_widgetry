@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -191,56 +190,6 @@ pub const PINK_DREAM: WidgetryListViewColors = WidgetryListViewColors {
         },
         active_border: pink_dream::FOCUS_BORDER,
         disabled_active_border: pink_dream::TRANSPARENT,
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryListViewColors = WidgetryListViewColors {
-    container: WidgetryListViewContainerColors {
-        normal: WidgetryListViewContainerStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-        },
-        focused: WidgetryListViewContainerStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::FOCUS_BORDER,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryListViewContainerStateColors {
-            background: kamuri_violet::DISABLED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    item: WidgetryListViewItemColors {
-        normal: WidgetryListViewItemStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        hovered: WidgetryListViewItemStateColors {
-            background: kamuri_violet::HOVER_SURFACE,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        pressed: WidgetryListViewItemStateColors {
-            background: kamuri_violet::PRESSED_SURFACE,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        selected: WidgetryListViewItemStateColors {
-            background: kamuri_violet::SELECTED_SURFACE,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryListViewItemStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-        active_border: kamuri_violet::FOCUS_BORDER,
-        disabled_active_border: kamuri_violet::TRANSPARENT,
     },
 };
 

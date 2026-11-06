@@ -169,7 +169,6 @@ fn inherited_disabled_states_themes_and_overrides_preserve_url_and_layout() {
         bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
         bevy_widgetry_theme::WIDGETRY_DARK_THEME,
         bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         for (hovered, pressed, disabled) in [

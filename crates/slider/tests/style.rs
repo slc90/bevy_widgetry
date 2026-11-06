@@ -248,7 +248,6 @@ fn themes_overrides_and_interaction_feedback_preserve_geometry() {
         bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
         bevy_widgetry_theme::WIDGETRY_DARK_THEME,
         bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         frames(&mut app);
@@ -274,7 +273,7 @@ fn themes_overrides_and_interaction_feedback_preserve_geometry() {
     }
     WidgetrySliderColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
     frames(&mut app);
-    let colors = bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME.slider;
+    let colors = bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME.slider;
     moved(&mut app, &mut at, original_center);
     assert_eq!(
         app.world().get::<BackgroundColor>(thumb).unwrap().0,

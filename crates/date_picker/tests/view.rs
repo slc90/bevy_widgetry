@@ -57,7 +57,6 @@ fn clear_label_uses_normal_foreground_only_while_available() {
         bevy_widgetry_theme::WIDGETRY_DARK_THEME,
         bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
         bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
@@ -212,7 +211,6 @@ fn arrows_same_value_ancestor_disabled_and_color_overrides_remain_independent() 
         bevy_widgetry_theme::WIDGETRY_DARK_THEME,
         bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
         bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
@@ -226,7 +224,7 @@ fn arrows_same_value_ancestor_disabled_and_color_overrides_remain_independent() 
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME
             .date_picker
             .background
     );

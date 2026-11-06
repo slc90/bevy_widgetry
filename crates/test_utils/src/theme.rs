@@ -179,8 +179,6 @@ mod tests {
             bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
             #[cfg(feature = "pink_dream")]
             bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-            #[cfg(feature = "kamuri_violet")]
-            bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
         ];
         let logs = LogCapture::default();
         logs.run(|| {

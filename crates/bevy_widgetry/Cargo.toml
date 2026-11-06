@@ -8,7 +8,6 @@ edition.workspace = true
 kamuri_cursor = ["bevy_widgetry_cursor/kamuri_cursor"]
 light = ["bevy_widgetry_theme/light"]
 pink_dream = ["bevy_widgetry_theme/pink_dream"]
-kamuri_violet = ["bevy_widgetry_theme/kamuri_violet"]
 default = [
   "canvas",
   "button",

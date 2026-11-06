@@ -14,7 +14,7 @@
 
 日期视图原位显示星期标题和固定 6×7 网格，顶部箭头按月浏览，底部「清空」在有值时可用，文字使用普通前景色；无选择或有效 Disabled 时使用禁用文字色。邻月有效日期可选择，越界日期无 Hover/Pressed 反馈。根或祖先有效 Disabled 阻止鼠标日期、翻月和清空操作。
 
-四套 Theme 的 `date_picker` 配色提供普通、邻月、禁用文字及中性选中/Hover/Pressed 背景。`colors` Props 初始化 `WidgetryDatePickerColorOverrides`，其 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 支持合法局部覆盖与恢复主题。颜色变化不修改日期状态。
+Theme 的 `date_picker` 配色提供普通、邻月、禁用文字及中性选中/Hover/Pressed 背景。`colors` Props 初始化 `WidgetryDatePickerColorOverrides`，其 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 支持合法局部覆盖与恢复主题。颜色变化不修改日期状态。
 
 点击日期视图标题进入 3×4 月份视图，再点击年份标题进入每页连续 12 年的 3×4 年份视图。月份箭头按年、年份箭头按 12 年翻动候选；选择年份返回月份视图，确认月份才通过显示月份 API 提交并返回日期视图。候选浏览不改变业务状态、不发变化通知；高亮只表示已提交的显示年月，与选中日期独立。
 

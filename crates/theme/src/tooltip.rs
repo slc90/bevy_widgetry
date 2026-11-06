@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -52,17 +51,6 @@ pub const PINK_DREAM: WidgetryTooltipColors = WidgetryTooltipColors {
             background: pink_dream::TOOLTIP_BACKGROUND,
             border: pink_dream::TRANSPARENT,
             foreground: pink_dream::INVERSE_TEXT,
-        },
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryTooltipColors = WidgetryTooltipColors {
-    popup: WidgetryTooltipPopupColors {
-        normal: WidgetryTooltipStateColors {
-            background: kamuri_violet::TOOLTIP_BACKGROUND,
-            border: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::INVERSE_TEXT,
         },
     },
 };

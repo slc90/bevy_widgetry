@@ -133,7 +133,6 @@ fn theme_group_and_local_overrides_have_fieldwise_priority() {
         bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
         bevy_widgetry_theme::WIDGETRY_DARK_THEME,
         bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
@@ -165,7 +164,7 @@ fn theme_group_and_local_overrides_have_fieldwise_priority() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(options[0]).unwrap().0,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME
             .segmented
             .option
             .checked

@@ -14,7 +14,6 @@ bevy_widgetry = { path = "../crates/bevy_widgetry", features = [
   "kamuri_cursor",
   "light",
   "pink_dream",
-  "kamuri_violet",
   "tray",
   "job",
   "power_inhibit",

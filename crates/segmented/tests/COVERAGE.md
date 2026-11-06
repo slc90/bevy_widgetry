@@ -26,10 +26,10 @@
 - `group.rs` Unit Test：稳定结构不重复校验、受影响组局部维护、后装 Plugin 和无效初始化请求。
 - 共享选择历史的连续 / 批量删除、临时 Checked 项与复用原 Option 清空恢复，同时由 RadioGroup 的实际集成回归保护。
 
-- `style.rs`：同帧高亮转移、Focus / Hover / Disabled 叠加与恢复、四套主题、组与局部字段覆盖、无效颜色和托管拒绝、真实 UI 布局及外部内容独立颜色。
+- `style.rs`：同帧高亮转移、Focus / Hover / Disabled 叠加与恢复、三套内置主题、组与局部字段覆盖、无效颜色和托管拒绝、真实 UI 布局及外部内容独立颜色。
 - Style Unit Test：局部工作量与稳定帧零工作、托管输出缺失诊断及重插恢复。
 
-- `layout.rs`：自然宽度 / 水平等宽的真实 ComputedNode 尺寸、非文本内容、固定与 intrinsic 容器、动态追加、Theme / Checked / Disabled 不改变模式、Node 覆盖优先；Vertical 等宽不转等高、四套主题 / 焦点 / Disabled 保持。
+- `layout.rs`：自然宽度 / 水平等宽的真实 ComputedNode 尺寸、非文本内容、固定与 intrinsic 容器、动态追加、Theme / Checked / Disabled 不改变模式、Node 覆盖优先；Vertical 等宽不转等高、三套内置主题 / 焦点 / Disabled 保持。
 
 - `headless.rs` 还覆盖取消旧 Checked 的生命周期 Observer 删除新目标后的真实用户提交失败：保留 Core EntityAccess/原 origin，仅一条源头 ERROR，不发虚假 ValueChange。
 

@@ -48,7 +48,6 @@ fn themes_refresh_the_shared_shell_and_owned_children_without_touching_drafts() 
         custom,
         bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
         bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
         bevy_widgetry_theme::WIDGETRY_DARK_THEME,
     ] {
         WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();

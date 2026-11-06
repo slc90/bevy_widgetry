@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -231,69 +230,6 @@ pub const PINK_DREAM: WidgetryRadioGroupColors = WidgetryRadioGroupColors {
                 border: pink_dream::DISABLED_BORDER,
                 foreground: pink_dream::DISABLED_TEXT,
                 dot: pink_dream::DISABLED_TEXT,
-            },
-        },
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryRadioGroupColors = WidgetryRadioGroupColors {
-    container: WidgetryRadioGroupContainerColors {
-        normal: WidgetryRadioGroupContainerStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-        },
-        focused: WidgetryRadioGroupContainerStateColors {
-            background: kamuri_violet::SURFACE,
-            border: kamuri_violet::FOCUS_BORDER,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryRadioGroupContainerStateColors {
-            background: kamuri_violet::DISABLED_SURFACE,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    option: WidgetryRadioOptionColors {
-        unchecked: WidgetryRadioOptionInteractionColors {
-            normal: WidgetryRadioOptionStateColors {
-                background: kamuri_violet::SURFACE,
-                border: kamuri_violet::BORDER,
-                foreground: kamuri_violet::TEXT,
-                dot: kamuri_violet::TRANSPARENT,
-            },
-            hovered: WidgetryRadioOptionStateColors {
-                background: kamuri_violet::SURFACE,
-                border: kamuri_violet::PRIMARY_HOVER,
-                foreground: kamuri_violet::TEXT,
-                dot: kamuri_violet::TRANSPARENT,
-            },
-            disabled: WidgetryRadioOptionStateColors {
-                background: kamuri_violet::DISABLED_SURFACE,
-                border: kamuri_violet::DISABLED_BORDER,
-                foreground: kamuri_violet::DISABLED_TEXT,
-                dot: kamuri_violet::TRANSPARENT,
-            },
-        },
-        checked: WidgetryRadioOptionInteractionColors {
-            normal: WidgetryRadioOptionStateColors {
-                background: kamuri_violet::SURFACE,
-                border: kamuri_violet::PRIMARY,
-                foreground: kamuri_violet::TEXT,
-                dot: kamuri_violet::PRIMARY,
-            },
-            hovered: WidgetryRadioOptionStateColors {
-                background: kamuri_violet::SURFACE,
-                border: kamuri_violet::PRIMARY_HOVER,
-                foreground: kamuri_violet::TEXT,
-                dot: kamuri_violet::PRIMARY_HOVER,
-            },
-            disabled: WidgetryRadioOptionStateColors {
-                background: kamuri_violet::DISABLED_SURFACE,
-                border: kamuri_violet::DISABLED_BORDER,
-                foreground: kamuri_violet::DISABLED_TEXT,
-                dot: kamuri_violet::DISABLED_TEXT,
             },
         },
     },

@@ -265,7 +265,7 @@ fn indeterminate_adapts_to_layout_scale_theme_and_partial_colors() {
         (1.0, bevy_widgetry_theme::WIDGETRY_DARK_THEME),
         (1.25, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME),
         (1.5, bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME),
-        (2.0, bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME),
+        (2.0, bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME),
     ] {
         app.insert_resource(UiScale(scale)).insert_resource(mode);
         app.world_mut().get_mut::<Node>(bar).unwrap().width = px(420);

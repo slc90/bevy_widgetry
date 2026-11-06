@@ -91,34 +91,3 @@ pub(crate) mod pink_dream {
     pub const TRANSPARENT: Color = Color::NONE;
     pub const IMAGE_TINT: Color = Color::srgb_u8(255, 255, 255);
 }
-
-#[cfg(feature = "kamuri_violet")]
-pub(crate) mod kamuri_violet {
-    use super::Color;
-    pub const WINDOW_BACKGROUND: Color = Color::srgb_u8(227, 217, 241);
-    pub const SURFACE: Color = Color::srgb_u8(240, 232, 250);
-    pub const ELEVATED_SURFACE: Color = Color::srgb_u8(247, 242, 253);
-    pub const HOVER_SURFACE: Color = Color::srgb_u8(232, 221, 246);
-    pub const PRESSED_SURFACE: Color = Color::srgb_u8(219, 203, 236);
-    pub const DISABLED_SURFACE: Color = Color::srgb_u8(232, 224, 240);
-    pub const BORDER: Color = Color::srgb_u8(216, 205, 228);
-    pub const SUBTLE_BORDER: Color = Color::srgb_u8(238, 231, 245);
-    pub const DISABLED_BORDER: Color = Color::srgb_u8(231, 223, 240);
-    pub const TEXT: Color = Color::srgb_u8(61, 49, 74);
-    pub const SECONDARY_TEXT: Color = Color::srgb_u8(106, 89, 119);
-    pub const TERTIARY_TEXT: Color = Color::srgb_u8(154, 140, 166);
-    pub const DISABLED_TEXT: Color = Color::srgb_u8(181, 169, 193);
-    pub const INVERSE_TEXT: Color = Color::srgb_u8(255, 255, 255);
-    pub const PRIMARY: Color = Color::srgb_u8(140, 107, 193);
-    pub const PRIMARY_HOVER: Color = Color::srgb_u8(161, 129, 210);
-    pub const PRIMARY_PRESSED: Color = Color::srgb_u8(110, 78, 163);
-    pub const FOCUS_BORDER: Color = Color::srgb_u8(140, 107, 193);
-    pub const SELECTED_SURFACE: Color = Color::srgb_u8(223, 210, 242);
-    pub const SELECTION_BACKGROUND: Color = Color::srgb_u8(217, 202, 239);
-    pub const UNFOCUSED_SELECTION_BACKGROUND: Color = Color::srgb_u8(232, 224, 240);
-    pub const TOOLTIP_BACKGROUND: Color = Color::srgb_u8(74, 58, 95);
-    pub const DANGER_HOVER: Color = Color::srgb_u8(155, 92, 134);
-    pub const DANGER_PRESSED: Color = Color::srgb_u8(122, 69, 107);
-    pub const TRANSPARENT: Color = Color::NONE;
-    pub const IMAGE_TINT: Color = Color::srgb_u8(255, 255, 255);
-}

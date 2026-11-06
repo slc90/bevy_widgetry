@@ -8,7 +8,6 @@ edition.workspace = true
 default = []
 light = []
 pink_dream = []
-kamuri_violet = []
 
 [dependencies]
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }

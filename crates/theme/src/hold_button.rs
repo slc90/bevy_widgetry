@@ -115,36 +115,3 @@ pub const PINK_DREAM: WidgetryHoldButtonColors = WidgetryHoldButtonColors {
     },
     success_border: Color::srgb_u8(245, 171, 212),
 };
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryHoldButtonColors = WidgetryHoldButtonColors {
-    normal: WidgetryHoldButtonStateColors {
-        background: Color::srgb_u8(240, 232, 250),
-        liquid: Color::srgb_u8(140, 110, 179),
-        wave: Color::srgb_u8(180, 155, 210),
-        border: Color::srgb_u8(174, 148, 201),
-        foreground: Color::srgb_u8(48, 31, 66),
-    },
-    hovered: WidgetryHoldButtonStateColors {
-        background: Color::srgb_u8(247, 239, 255),
-        liquid: Color::srgb_u8(140, 110, 179),
-        wave: Color::srgb_u8(180, 155, 210),
-        border: Color::srgb_u8(181, 155, 208),
-        foreground: Color::srgb_u8(48, 31, 66),
-    },
-    pressed: WidgetryHoldButtonStateColors {
-        background: Color::srgb_u8(232, 224, 242),
-        liquid: Color::srgb_u8(140, 110, 179),
-        wave: Color::srgb_u8(180, 155, 210),
-        border: Color::srgb_u8(166, 140, 193),
-        foreground: Color::srgb_u8(48, 31, 66),
-    },
-    disabled: WidgetryHoldButtonStateColors {
-        background: Color::srgb_u8(240, 232, 250),
-        liquid: Color::srgb_u8(190, 171, 214),
-        wave: Color::srgb_u8(210, 194, 230),
-        border: Color::srgb_u8(207, 190, 226),
-        foreground: Color::srgb_u8(144, 132, 158),
-    },
-    success_border: Color::srgb_u8(211, 183, 252),
-};

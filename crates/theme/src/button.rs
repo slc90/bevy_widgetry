@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -90,30 +89,6 @@ pub const PINK_DREAM: WidgetryButtonColors = WidgetryButtonColors {
         background: pink_dream::DISABLED_SURFACE,
         border: pink_dream::DISABLED_BORDER,
         foreground: pink_dream::DISABLED_TEXT,
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryButtonColors = WidgetryButtonColors {
-    normal: WidgetryButtonStateColors {
-        background: kamuri_violet::SURFACE,
-        border: kamuri_violet::BORDER,
-        foreground: kamuri_violet::TEXT,
-    },
-    hovered: WidgetryButtonStateColors {
-        background: kamuri_violet::HOVER_SURFACE,
-        border: kamuri_violet::PRIMARY_HOVER,
-        foreground: kamuri_violet::TEXT,
-    },
-    pressed: WidgetryButtonStateColors {
-        background: kamuri_violet::PRESSED_SURFACE,
-        border: kamuri_violet::PRIMARY_PRESSED,
-        foreground: kamuri_violet::TEXT,
-    },
-    disabled: WidgetryButtonStateColors {
-        background: kamuri_violet::DISABLED_SURFACE,
-        border: kamuri_violet::DISABLED_BORDER,
-        foreground: kamuri_violet::DISABLED_TEXT,
     },
 };
 

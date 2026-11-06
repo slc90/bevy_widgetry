@@ -122,7 +122,6 @@ fn all_themes_follow_real_hover_drag_disabled_and_restore_without_geometry_chang
             bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
             bevy_widgetry_theme::WIDGETRY_DARK_THEME,
             bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-            bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
         ] {
             app.insert_resource(mode);
             let outside = Location {

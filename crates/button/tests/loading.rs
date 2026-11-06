@@ -269,7 +269,6 @@ fn spinner_uses_normal_foreground_and_shared_masks_and_stops_when_loading_ends()
         bevy_widgetry_theme::WIDGETRY_DARK_THEME,
         bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
         bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
@@ -312,7 +311,7 @@ fn spinner_uses_normal_foreground_and_shared_masks_and_stops_when_loading_ends()
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(button).unwrap().0,
-        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME
             .button
             .disabled
             .background

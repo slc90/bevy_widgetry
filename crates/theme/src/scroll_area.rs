@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -193,58 +192,6 @@ pub const PINK_DREAM: WidgetryScrollAreaColors = WidgetryScrollAreaColors {
             },
             disabled: WidgetryScrollThumbStateColors {
                 background: pink_dream::DISABLED_BORDER,
-            },
-        },
-    },
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryScrollAreaColors = WidgetryScrollAreaColors {
-    horizontal: WidgetryScrollAxisColors {
-        track: WidgetryScrollTrackColors {
-            normal: WidgetryScrollTrackStateColors {
-                background: kamuri_violet::TRANSPARENT,
-            },
-            disabled: WidgetryScrollTrackStateColors {
-                background: kamuri_violet::TRANSPARENT,
-            },
-        },
-        thumb: WidgetryScrollThumbColors {
-            normal: WidgetryScrollThumbStateColors {
-                background: kamuri_violet::BORDER,
-            },
-            hovered: WidgetryScrollThumbStateColors {
-                background: kamuri_violet::PRIMARY_HOVER,
-            },
-            dragged: WidgetryScrollThumbStateColors {
-                background: kamuri_violet::PRIMARY_PRESSED,
-            },
-            disabled: WidgetryScrollThumbStateColors {
-                background: kamuri_violet::DISABLED_BORDER,
-            },
-        },
-    },
-    vertical: WidgetryScrollAxisColors {
-        track: WidgetryScrollTrackColors {
-            normal: WidgetryScrollTrackStateColors {
-                background: kamuri_violet::TRANSPARENT,
-            },
-            disabled: WidgetryScrollTrackStateColors {
-                background: kamuri_violet::TRANSPARENT,
-            },
-        },
-        thumb: WidgetryScrollThumbColors {
-            normal: WidgetryScrollThumbStateColors {
-                background: kamuri_violet::BORDER,
-            },
-            hovered: WidgetryScrollThumbStateColors {
-                background: kamuri_violet::PRIMARY_HOVER,
-            },
-            dragged: WidgetryScrollThumbStateColors {
-                background: kamuri_violet::PRIMARY_PRESSED,
-            },
-            disabled: WidgetryScrollThumbStateColors {
-                background: kamuri_violet::DISABLED_BORDER,
             },
         },
     },

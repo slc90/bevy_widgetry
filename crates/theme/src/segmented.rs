@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -135,17 +134,6 @@ pub const PINK_DREAM: WidgetrySegmentedColors = colors(
     pink_dream::DISABLED_TEXT,
     pink_dream::FOCUS_BORDER,
 );
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetrySegmentedColors = colors(
-    kamuri_violet::HOVER_SURFACE,
-    kamuri_violet::ELEVATED_SURFACE,
-    kamuri_violet::PRESSED_SURFACE,
-    kamuri_violet::DISABLED_SURFACE,
-    kamuri_violet::PRESSED_SURFACE,
-    kamuri_violet::TEXT,
-    kamuri_violet::DISABLED_TEXT,
-    kamuri_violet::FOCUS_BORDER,
-);
 
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
@@ -160,8 +148,6 @@ mod tests {
             LIGHT,
             #[cfg(feature = "pink_dream")]
             PINK_DREAM,
-            #[cfg(feature = "kamuri_violet")]
-            KAMURI_VIOLET,
         ];
         for palette in palettes {
             assert_ne!(

@@ -119,35 +119,6 @@ pub const WIDGETRY_PINK_DREAM_THEME: WidgetryTheme = WidgetryTheme {
     waveform: crate::waveform::PINK_DREAM,
 };
 
-#[cfg(feature = "kamuri_violet")]
-pub const WIDGETRY_KAMURI_VIOLET_THEME: WidgetryTheme = WidgetryTheme {
-    text: crate::text::KAMURI_VIOLET,
-    icon: crate::icon::KAMURI_VIOLET,
-    button: crate::button::KAMURI_VIOLET,
-    hold_button: crate::hold_button::KAMURI_VIOLET,
-    link_button: crate::link_button::KAMURI_VIOLET,
-    check_box: crate::check_box::KAMURI_VIOLET,
-    radio_group: crate::radio_group::KAMURI_VIOLET,
-    segmented: crate::segmented::KAMURI_VIOLET,
-    tabs: crate::tabs::KAMURI_VIOLET,
-    collapsible: crate::collapsible::KAMURI_VIOLET,
-    date_picker: crate::date_picker::KAMURI_VIOLET,
-    slider: crate::slider::KAMURI_VIOLET,
-    splitter: crate::splitter::KAMURI_VIOLET,
-    progress_bar: crate::progress_bar::KAMURI_VIOLET,
-    text_field: crate::text_field::KAMURI_VIOLET,
-    combo_box: crate::combo_box::KAMURI_VIOLET,
-    scroll_area: crate::scroll_area::KAMURI_VIOLET,
-    list_view: crate::list_view::KAMURI_VIOLET,
-    tree: crate::tree::KAMURI_VIOLET,
-    table: crate::table::KAMURI_VIOLET,
-    tooltip: crate::tooltip::KAMURI_VIOLET,
-    window: crate::window::KAMURI_VIOLET,
-    message_box: crate::message_box::KAMURI_VIOLET,
-    file_dialog: crate::file_dialog::KAMURI_VIOLET,
-    waveform: crate::waveform::KAMURI_VIOLET,
-};
-
 #[derive(Event, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WidgetryThemeChanged;
 
@@ -234,8 +205,6 @@ mod tests {
             WIDGETRY_LIGHT_THEME,
             #[cfg(feature = "pink_dream")]
             WIDGETRY_PINK_DREAM_THEME,
-            #[cfg(feature = "kamuri_violet")]
-            WIDGETRY_KAMURI_VIOLET_THEME,
         ]
     }
 
@@ -307,14 +276,12 @@ mod tests {
         }
     }
 
-    #[cfg(any(feature = "pink_dream", feature = "kamuri_violet"))]
+    #[cfg(feature = "pink_dream")]
     #[test]
     fn new_theme_marks_focus_and_danger_icons_have_non_text_contrast() {
         let themes = [
             #[cfg(feature = "pink_dream")]
             &WIDGETRY_PINK_DREAM_THEME,
-            #[cfg(feature = "kamuri_violet")]
-            &WIDGETRY_KAMURI_VIOLET_THEME,
         ];
         for theme in themes {
             for state in [theme.check_box.checked, theme.check_box.indeterminate] {

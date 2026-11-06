@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -290,89 +289,6 @@ pub const PINK_DREAM: WidgetryWindowColors = WidgetryWindowColors {
         },
     },
     image_tint: pink_dream::IMAGE_TINT,
-};
-
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryWindowColors = WidgetryWindowColors {
-    frame: WidgetryWindowSurfaceColors {
-        normal: WidgetryWindowStateColors {
-            background: kamuri_violet::WINDOW_BACKGROUND,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryWindowStateColors {
-            background: kamuri_violet::WINDOW_BACKGROUND,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    title_bar: WidgetryWindowSurfaceColors {
-        normal: WidgetryWindowStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            border: kamuri_violet::BORDER,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryWindowStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            border: kamuri_violet::DISABLED_BORDER,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    minimize: WidgetryWindowButtonColors {
-        normal: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        hovered: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::HOVER_SURFACE,
-            foreground: kamuri_violet::TEXT,
-        },
-        pressed: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::PRESSED_SURFACE,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    maximize: WidgetryWindowButtonColors {
-        normal: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        hovered: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::HOVER_SURFACE,
-            foreground: kamuri_violet::TEXT,
-        },
-        pressed: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::PRESSED_SURFACE,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    close: WidgetryWindowButtonColors {
-        normal: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::TEXT,
-        },
-        hovered: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::DANGER_HOVER,
-            foreground: kamuri_violet::INVERSE_TEXT,
-        },
-        pressed: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::DANGER_PRESSED,
-            foreground: kamuri_violet::INVERSE_TEXT,
-        },
-        disabled: WidgetryWindowButtonStateColors {
-            background: kamuri_violet::TRANSPARENT,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    image_tint: kamuri_violet::IMAGE_TINT,
 };
 
 #[cfg(test)]

@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -33,5 +32,3 @@ palette!(LIGHT, light);
 palette!(DARK, dark);
 #[cfg(feature = "pink_dream")]
 palette!(PINK_DREAM, pink_dream);
-#[cfg(feature = "kamuri_violet")]
-palette!(KAMURI_VIOLET, kamuri_violet);

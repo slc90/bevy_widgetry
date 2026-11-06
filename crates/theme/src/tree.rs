@@ -1,6 +1,5 @@
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -192,58 +191,6 @@ pub const PINK_DREAM: WidgetryTreeColors = WidgetryTreeColors {
     },
 };
 
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryTreeColors = WidgetryTreeColors {
-    container: crate::list_view::KAMURI_VIOLET.container,
-    item: crate::list_view::KAMURI_VIOLET.item,
-    expander: WidgetryTreeExpanderColors {
-        collapsed: WidgetryTreeExpanderInteractionColors {
-            normal: WidgetryTreeExpanderStateColors {
-                background: kamuri_violet::TRANSPARENT,
-                border: kamuri_violet::TRANSPARENT,
-                foreground: kamuri_violet::TEXT,
-            },
-            hovered: WidgetryTreeExpanderStateColors {
-                background: kamuri_violet::HOVER_SURFACE,
-                border: kamuri_violet::TRANSPARENT,
-                foreground: kamuri_violet::TEXT,
-            },
-            pressed: WidgetryTreeExpanderStateColors {
-                background: kamuri_violet::PRESSED_SURFACE,
-                border: kamuri_violet::TRANSPARENT,
-                foreground: kamuri_violet::TEXT,
-            },
-            disabled: WidgetryTreeExpanderStateColors {
-                background: kamuri_violet::TRANSPARENT,
-                border: kamuri_violet::TRANSPARENT,
-                foreground: kamuri_violet::DISABLED_TEXT,
-            },
-        },
-        expanded: WidgetryTreeExpanderInteractionColors {
-            normal: WidgetryTreeExpanderStateColors {
-                background: kamuri_violet::TRANSPARENT,
-                border: kamuri_violet::TRANSPARENT,
-                foreground: kamuri_violet::TEXT,
-            },
-            hovered: WidgetryTreeExpanderStateColors {
-                background: kamuri_violet::HOVER_SURFACE,
-                border: kamuri_violet::TRANSPARENT,
-                foreground: kamuri_violet::TEXT,
-            },
-            pressed: WidgetryTreeExpanderStateColors {
-                background: kamuri_violet::PRESSED_SURFACE,
-                border: kamuri_violet::TRANSPARENT,
-                foreground: kamuri_violet::TEXT,
-            },
-            disabled: WidgetryTreeExpanderStateColors {
-                background: kamuri_violet::TRANSPARENT,
-                border: kamuri_violet::TRANSPARENT,
-                foreground: kamuri_violet::DISABLED_TEXT,
-            },
-        },
-    },
-};
-
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -254,16 +201,6 @@ mod tests {
     fn pink_dream_reuses_widget_colors() {
         assert_eq!(PINK_DREAM.container, crate::list_view::PINK_DREAM.container);
         assert_eq!(PINK_DREAM.item, crate::list_view::PINK_DREAM.item);
-    }
-
-    #[cfg(feature = "kamuri_violet")]
-    #[test]
-    fn kamuri_violet_reuses_widget_colors() {
-        assert_eq!(
-            KAMURI_VIOLET.container,
-            crate::list_view::KAMURI_VIOLET.container
-        );
-        assert_eq!(KAMURI_VIOLET.item, crate::list_view::KAMURI_VIOLET.item);
     }
 
     #[cfg(feature = "light")]

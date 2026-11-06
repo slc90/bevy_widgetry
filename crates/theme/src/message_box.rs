@@ -1,7 +1,6 @@
 use crate::button::WidgetryButtonColors;
 use crate::common::dark;
-#[cfg(feature = "kamuri_violet")]
-use crate::common::kamuri_violet;
+
 #[cfg(feature = "light")]
 use crate::common::light;
 #[cfg(feature = "pink_dream")]
@@ -75,22 +74,6 @@ pub const PINK_DREAM: WidgetryMessageBoxColors = WidgetryMessageBoxColors {
     action_button: crate::button::PINK_DREAM,
 };
 
-#[cfg(feature = "kamuri_violet")]
-pub const KAMURI_VIOLET: WidgetryMessageBoxColors = WidgetryMessageBoxColors {
-    window: crate::window::KAMURI_VIOLET,
-    body: WidgetryMessageBoxBodyColors {
-        normal: WidgetryMessageBoxBodyStateColors {
-            background: kamuri_violet::ELEVATED_SURFACE,
-            foreground: kamuri_violet::TEXT,
-        },
-        disabled: WidgetryMessageBoxBodyStateColors {
-            background: kamuri_violet::ELEVATED_SURFACE,
-            foreground: kamuri_violet::DISABLED_TEXT,
-        },
-    },
-    action_button: crate::button::KAMURI_VIOLET,
-};
-
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -101,13 +84,6 @@ mod tests {
     fn pink_dream_reuses_widget_colors() {
         assert_eq!(PINK_DREAM.window, crate::window::PINK_DREAM);
         assert_eq!(PINK_DREAM.action_button, crate::button::PINK_DREAM);
-    }
-
-    #[cfg(feature = "kamuri_violet")]
-    #[test]
-    fn kamuri_violet_reuses_widget_colors() {
-        assert_eq!(KAMURI_VIOLET.window, crate::window::KAMURI_VIOLET);
-        assert_eq!(KAMURI_VIOLET.action_button, crate::button::KAMURI_VIOLET);
     }
 
     #[cfg(feature = "light")]
