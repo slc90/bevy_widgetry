@@ -9,9 +9,4 @@ mod theme;
 
 pub use coordination::WidgetryCursorPlugin;
 pub use lease::CursorLease;
-pub use theme::{WidgetryCursorHint, WidgetryCursorTheme};
-
-pub mod internal {
-    #[derive(bevy::prelude::Component)]
-    pub struct LoadingCursor;
-}
+pub use theme::{WidgetryCursorHint, WidgetryCursorLoading, WidgetryCursorTheme};

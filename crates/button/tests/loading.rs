@@ -17,6 +17,75 @@ fn fixture() -> (App, Entity) {
 }
 
 #[test]
+fn headless_loading_does_not_require_layout_or_default_visual_parts() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryButtonPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @bevy_widgetry_button::WidgetryButtonHeadless WidgetryButtonLoading::default()
+        })
+        .unwrap()
+        .id();
+    app.world_mut().entity_mut(root).remove::<ComputedNode>();
+    assert!(
+        !WidgetryButtonLoading::get(app.world(), root)
+            .unwrap()
+            .is_active()
+    );
+    assert!(WidgetryButtonLoading::set_in_world(app.world_mut(), root, true).unwrap());
+    assert!(app.world().get::<InteractionDisabled>(root).is_some());
+    assert!(app.world().get::<Children>(root).is_none());
+    assert_eq!(
+        app.world().get::<BackgroundColor>(root).unwrap().0,
+        Color::NONE
+    );
+    assert!(
+        app.world()
+            .get::<bevy_widgetry_cursor::WidgetryCursorLoading>(root)
+            .is_none()
+    );
+    WidgetryButtonLoading::set(&mut app.world_mut().commands(), root, false);
+    app.world_mut().flush();
+    assert!(
+        !WidgetryButtonLoading::get(app.world(), root)
+            .unwrap()
+            .is_active()
+    );
+    assert!(app.world().get::<InteractionDisabled>(root).is_none());
+}
+
+#[test]
+fn loading_leaves_external_cursor_feedback_under_style_control() {
+    use bevy_widgetry_cursor::WidgetryCursorLoading;
+    let mut app = scene_app();
+    app.add_plugins(WidgetryButtonPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @bevy_widgetry_button::WidgetryButtonHeadless WidgetryButtonLoading::default()
+        })
+        .unwrap()
+        .id();
+    for declared in [false, true] {
+        if declared {
+            app.world_mut()
+                .entity_mut(root)
+                .insert(WidgetryCursorLoading);
+        }
+        for active in [true, true, false, false] {
+            WidgetryButtonLoading::set_in_world(app.world_mut(), root, active).unwrap();
+            app.update();
+            assert_eq!(
+                app.world().get::<WidgetryCursorLoading>(root).is_some(),
+                declared
+            );
+            assert!(app.world().get::<Children>(root).is_none());
+        }
+    }
+}
+
+#[test]
 fn loading_commits_synchronously_and_queued_calls_wait_for_flush() {
     let (mut app, button) = fixture();
     assert!(
@@ -390,8 +459,30 @@ fn real_pointer_and_keyboard_inputs_stop_activating_but_explicit_activate_remain
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
         assert_eq!(
             app.world().get::<CursorIcon>(window),
-            Some(&CursorIcon::System(SystemCursorIcon::Wait))
+            Some(&CursorIcon::System(if custom {
+                SystemCursorIcon::NotAllowed
+            } else {
+                SystemCursorIcon::Wait
+            }))
         );
+        if custom {
+            app.world_mut()
+                .entity_mut(button)
+                .insert(bevy_widgetry_cursor::WidgetryCursorLoading);
+            app.update();
+            assert_eq!(
+                app.world().get::<CursorIcon>(window),
+                Some(&CursorIcon::System(SystemCursorIcon::Wait))
+            );
+            app.world_mut()
+                .entity_mut(button)
+                .remove::<bevy_widgetry_cursor::WidgetryCursorLoading>();
+            app.update();
+            assert_eq!(
+                app.world().get::<CursorIcon>(window),
+                Some(&CursorIcon::System(SystemCursorIcon::NotAllowed))
+            );
+        }
         app.world_mut().trigger(Activate { entity: button });
         assert_eq!(app.world().resource::<Activations>().0, [button, button]);
         WidgetryButtonLoading::set_in_world(app.world_mut(), button, false).unwrap();

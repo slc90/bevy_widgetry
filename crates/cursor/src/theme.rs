@@ -9,6 +9,10 @@ pub enum WidgetryCursorTheme {
     Kamuri,
 }
 
+#[derive(Component, Default, Clone, Copy, Debug, Reflect)]
+#[reflect(Component, Default)]
+pub struct WidgetryCursorLoading;
+
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 pub enum WidgetryCursorHint {

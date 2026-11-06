@@ -36,13 +36,13 @@ bsn! {
 
 Loading 默认 `false`，不提供初始化 Prop。业务使用 `Query<&WidgetryButtonLoading>` 的 `is_active()` 或 `WidgetryButtonLoading::get(world, root)` 查询，以 `WidgetryButtonLoading::set_in_world` 同步更新，或用 `WidgetryButtonLoading::set` 在 Commands 实际执行时提交。合法同值返回 `Ok(false)`，实际改变返回 `Ok(true)`；无效目标返回 Error，排队错误交由宿主 Handler。`WidgetryButtonLoadingChanged { entity, loading }` 仅在状态实际改变并提交后发出。业务自行负责任务启动、成功、失败及取消后的 Loading 收尾。
 
-普通 Button 的 loading 和颜色 World API 返回 `ButtonFailure = WidgetryFailure<ButtonError>`。`InvalidTarget` 保留无效根，`MissingPart` 区分 Headless、Loading、Node 与 ComputedNode 能力缺失；默认 Style 的 Content、Spinner 及其必需组件损坏在 Style 系统边界单独报告，`ManagedColors` 保留内部颜色的 Owner；托管颜色输出失败保留缺失组件列表和真实 Query source。Core disabled/颜色失败保留原 CoreError、origin、source 与首次回溯，仅附 Button 操作、根、颜色状态与字段上下文。Command、Scene Template 和 Theme Observer 的边界显式转为 Error Severity，不在传播时重记源头或 handled。
+普通 Button 的 loading 和颜色 World API 返回 `ButtonFailure = WidgetryFailure<ButtonError>`。`InvalidTarget` 保留无效根，`MissingPart` 区分 Headless、Loading 与 Node 等能力缺失；默认 Style 的 Content、Spinner 及其必需组件损坏在 Style 系统边界单独报告，`ManagedColors` 保留内部颜色的 Owner；托管颜色输出失败保留缺失组件列表和真实 Query source。Core disabled/颜色失败保留原 CoreError、origin、source 与首次回溯，仅附 Button 操作、根、颜色状态与字段上下文。Command、Scene Template 和 Theme Observer 的边界显式转为 Error Severity，不在传播时重记源头或 handled。
 
-`WidgetryButtonColorOverrides` 的 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 支持四态背景、边框及前景色覆盖。非法颜色、托管颜色写入或结构缺失保留原配置；初始覆盖校验经 Scene 失败清理路径传播。Loading 在真实状态变化前预检 Core disabled 目标，缺少运行资源时保留光标与 Loading 状态；合法同值请求仍直接返回未变化。正常 Spinner 资产等待不构造错误。
+`WidgetryButtonColorOverrides` 的 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 支持四态背景、边框及前景色覆盖。非法颜色、托管颜色写入或结构缺失保留原配置；初始覆盖校验经 Scene 失败清理路径传播。Loading 在真实状态变化前预检 Core disabled 目标，缺少运行资源时保留 Loading 状态与现有 Style 声明；合法同值请求仍直接返回未变化。正常 Spinner 资产等待不构造错误。
 
 Loading 以独立内部理由参与有效 Disabled，阻止正常鼠标、Enter 和 Space 生成新的 Activate；结束时只撤销自身理由，保留本地、祖先及其他内部禁用。直接由代码 trigger 的 Activate 不经过输入禁用检查；Commands 生效前也不提供任务并发保护。Loading 不主动修改 Focus 或默认 `TabIndex(-1)`。
 
-默认 Style 读取持久 Loading Component，在渲染前隐藏自己的 Content 包装层，并压缩该层的渲染变换以覆盖显式 Visible 子元素；不改 Layout 占位、业务实体、子元素 Visibility 或原有变换，结束后恢复包装层。Spinner 为无 Picking 的绝对居中层，遮罩在运行时生成并共享，颜色随 Theme / Button 覆盖变化，非 Loading 时停止旋转。Loading 光标使用 Wait 并优先于 Disabled 的 NotAllowed，最终图像由独立 Cursor Theme 决定。LinkButton 不提供 Loading。
+默认 Style 读取持久 Loading Component，在渲染前隐藏自己的 Content 包装层，并压缩该层的渲染变换以覆盖显式 Visible 子元素；不改 Layout 占位、业务实体、子元素 Visibility 或原有变换，结束后恢复包装层。Spinner 为无 Picking 的绝对居中层，遮罩在运行时生成并共享，颜色随 Theme / Button 覆盖变化，非 Loading 时停止旋转。默认 Style 通过公开 `WidgetryCursorLoading` 声明 Wait 并优先于 Disabled 的 NotAllowed，最终图像由独立 Cursor Theme 决定。LinkButton 不提供 Loading。
 
 两种控件均由 `WidgetryButtonPlugin` 安装，复用 Widgetry Cursor、字体、前景色传播及 Disabled 继承。
 
@@ -88,4 +88,4 @@ bsn! { @WidgetryButtonHeadless WidgetryButtonLoading::default() Node { width: px
 WidgetryButtonLoading::set(&mut commands, root, true);
 ```
 
-Loading API 不查找或要求 Content、Spinner、默认颜色或 StyleOwner。它只负责状态、独立禁用理由、忙碌光标，并在这些行为提交后通知；外部 Style 应在初始化和 Component 改变时读取当前 `is_active()`，自行决定内容和动画。通知不保证视觉子树已经同步。默认 Style 负责原有内容快照、隐藏与还原、圆环动画和主题颜色；默认视觉损坏不会撤回 Loading 的行为提交，也不成为外部组合的前置条件。不支持运行期替换整套 Style。
+Loading API 不查找或要求 Content、Spinner、默认颜色或 StyleOwner。Getter / Setter 不要求 `ComputedNode` 或布局完成，仍校验 Headless 与 Node，真实状态变化还预检 Core Disabled 运行资源。它只负责状态和独立禁用理由，并在这些行为提交后通知；外部 Style 应在初始化和 Component 改变时读取当前 `is_active()`，自行决定内容和动画。通知不保证视觉子树已经同步。Loading Setter 不写入或清除 Cursor 声明。默认 Style 负责原有内容快照、隐藏与还原、圆环动画、主题颜色及 Wait 声明；外部 Style 可在呈现阶段按当前 Loading 插入或移除 Facade `cursor::WidgetryCursorLoading`，或选择其他反馈。该组件是可自由插入/移除的展示声明，不是 Loading 状态或 Disabled 权威，最终仍由唯一 Cursor writer 协调。默认视觉损坏不会撤回 Loading 的行为提交，也不成为外部组合的前置条件。不支持运行期替换整套 Style。

@@ -52,6 +52,8 @@ SVG Loader 在读取/解析源头创建一次诊断，显式转换到 Bevy 的 L
 
 存在 Bevy 默认 Mouse writer 时，Core 使用保持其移动/按键/滚轮语义的有序适配替换它，在 Winit 的失焦事件位置产生 `PointerAction::Cancel`。Cancel 后发送三键 Release 同步官方 `PointerPressState`，已清除的 click/drag 状态不会产生松手 Activate。同批次的后续新按下能建立独立会话，外部丢失 Release 也不会吞掉重新进入后的第一次按下。失焦帧使用本帧真实 Backend Hit 按相同 Layer/Depth/Pickable 规则保留 Mouse 命中，避免 Bevy 的整帧 Cancel 过滤丢弃前后按下。Custom/Touch 输入源不替换；宿主自行替换的 Mouse writer 不接管。原生 Button 接受的鼠标键均保留其原有 owner 语义。
 
+Disabled 将具有 `Node` 或 `ComputedNode` 的实体识别为受管理 UI。基础 Node 不要求布局缓存就能继承、组合内部理由及查询有效状态；仅有 ComputedNode 的原生自定义布局（例如 ScrollbarThumb）继续参与投影。两类组件的加入/移除均刷新 UI 投影生命周期。
+
 内部限制可通过 `set_intrinsic_disabled_for<R>` 按理由类型独立设置和撤销；已有 `set_intrinsic_disabled` 使用独立默认理由。所有内部理由按 OR 组合，撤销其中一项不会解除其他理由。
 
 `validate_intrinsic_disabled_target(&World, entity)` 提供不修改状态的目标与运行资源预检，返回同一 CoreFailure 分类与真实实体访问 source；复合控件可在提交自身表现前确认 disabled 投影可执行。实际 setter 复用该校验，仍在原执行时机组合理由并刷新投影。

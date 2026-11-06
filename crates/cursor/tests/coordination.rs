@@ -84,6 +84,28 @@ fn hover(app: &mut App, window: Entity, camera: Entity, entity: Entity) {
 }
 
 #[test]
+fn loading_cursor_is_an_explicit_declaration_without_a_second_cursor_component() {
+    let (mut app, window, camera) = fixture();
+    let root = app
+        .world_mut()
+        .spawn(bevy_widgetry_cursor::WidgetryCursorLoading)
+        .id();
+    hover(&mut app, window, camera, root);
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::Wait))
+    );
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<bevy_widgetry_cursor::WidgetryCursorLoading>();
+    hover(&mut app, window, camera, root);
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::Default))
+    );
+}
+
+#[test]
 fn hover_inherits_nearest_declaration_and_explicit_default() {
     let (mut app, window, camera) = fixture();
     let parent = app
@@ -137,7 +159,7 @@ fn loading_wait_overrides_disabled_even_for_a_hit_on_descendant_content() {
         .spawn((
             ChildOf(ancestor),
             EntityCursor::System(SystemCursorIcon::Pointer),
-            bevy_widgetry_cursor::internal::LoadingCursor,
+            bevy_widgetry_cursor::WidgetryCursorLoading,
         ))
         .id();
     let child = app
@@ -155,7 +177,7 @@ fn loading_wait_overrides_disabled_even_for_a_hit_on_descendant_content() {
     );
     app.world_mut()
         .entity_mut(owner)
-        .remove::<bevy_widgetry_cursor::internal::LoadingCursor>();
+        .remove::<bevy_widgetry_cursor::WidgetryCursorLoading>();
     hover(&mut app, window, camera, child);
     assert_eq!(
         app.world().get::<CursorIcon>(window),

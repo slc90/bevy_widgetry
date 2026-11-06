@@ -2,7 +2,7 @@ use crate::lease::{CursorLease, LeaseMode};
 #[cfg(feature = "kamuri_cursor")]
 use crate::presentation::Presentation;
 use crate::theme::CursorIntent;
-use crate::{WidgetryCursorHint, WidgetryCursorTheme};
+use crate::{WidgetryCursorHint, WidgetryCursorLoading, WidgetryCursorTheme};
 use bevy::{
     camera::NormalizedRenderTarget,
     ecs::entity::{EntityHashMap, EntityHashSet},
@@ -40,6 +40,7 @@ impl Plugin for WidgetryCursorPlugin {
         app.init_resource::<WidgetryCursorTheme>()
             .register_type::<WidgetryCursorTheme>()
             .register_type::<WidgetryCursorHint>()
+            .register_type::<WidgetryCursorLoading>()
             .insert_resource(CursorWriterEnabled(true))
             .add_message::<PointerInput>()
             .add_message::<PointerHits>()
@@ -99,7 +100,7 @@ fn coordinate(
             Option<&EntityCursor>,
             Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
-            Has<crate::internal::LoadingCursor>,
+            Has<WidgetryCursorLoading>,
         ),
         Without<Window>,
     >,
@@ -267,7 +268,7 @@ fn disabled_owner(
             Option<&EntityCursor>,
             Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
-            Has<crate::internal::LoadingCursor>,
+            Has<WidgetryCursorLoading>,
         ),
         Without<Window>,
     >,
@@ -294,7 +295,7 @@ fn resolve(
             Option<&EntityCursor>,
             Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
-            Has<crate::internal::LoadingCursor>,
+            Has<WidgetryCursorLoading>,
         ),
         Without<Window>,
     >,
@@ -312,15 +313,17 @@ fn resolve(
                 .or_else(|| hint.copied().map(CursorIntent::Hint));
         }
         let Some(parent) = parent else {
-            return declaration.map(|cursor| {
-                if loading {
-                    CursorIntent::System(SystemCursorIcon::Wait)
-                } else if disabled {
-                    CursorIntent::System(SystemCursorIcon::NotAllowed)
-                } else {
-                    cursor
-                }
-            });
+            return if loading {
+                Some(CursorIntent::System(SystemCursorIcon::Wait))
+            } else {
+                declaration.map(|cursor| {
+                    if disabled {
+                        CursorIntent::System(SystemCursorIcon::NotAllowed)
+                    } else {
+                        cursor
+                    }
+                })
+            };
         };
         entity = parent.parent();
     }

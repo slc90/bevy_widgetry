@@ -18,6 +18,79 @@ fn assert_disabled(world: &World, entity: Entity, disabled: bool) {
 }
 
 #[test]
+fn disabled_uses_node_identity_without_computed_layout() {
+    use bevy_widgetry_core::disabled::set_intrinsic_disabled_for;
+    struct Loading;
+    struct Model;
+    let mut app = App::new();
+    let parent = app
+        .world_mut()
+        .spawn((Node::default(), InteractionDisabled))
+        .id();
+    let child = app
+        .world_mut()
+        .spawn((Node::default(), ChildOf(parent)))
+        .id();
+    for entity in [parent, child] {
+        app.world_mut().entity_mut(entity).remove::<ComputedNode>();
+    }
+    app.add_plugins(WidgetryUiPlugin);
+    assert_disabled(app.world(), child, true);
+    app.world_mut()
+        .entity_mut(parent)
+        .remove::<InteractionDisabled>();
+    assert_disabled(app.world(), child, false);
+    set_intrinsic_disabled_for::<Loading>(app.world_mut(), child, true).unwrap();
+    set_intrinsic_disabled_for::<Model>(app.world_mut(), child, true).unwrap();
+    set_intrinsic_disabled_for::<Loading>(app.world_mut(), child, false).unwrap();
+    assert_disabled(app.world(), child, true);
+    set_intrinsic_disabled_for::<Model>(app.world_mut(), child, false).unwrap();
+    assert_disabled(app.world(), child, false);
+    app.world_mut()
+        .entity_mut(child)
+        .insert(InteractionDisabled);
+    app.world_mut().entity_mut(child).remove::<Node>();
+    app.world_mut().entity_mut(child).remove::<ComputedNode>();
+    assert!(
+        app.world()
+            .get::<WidgetryEffectiveDisabled>(child)
+            .is_none()
+    );
+    app.world_mut().entity_mut(child).insert(Node::default());
+    app.world_mut().entity_mut(child).remove::<ComputedNode>();
+    assert_disabled(app.world(), child, true);
+    app.world_mut()
+        .entity_mut(child)
+        .remove::<InteractionDisabled>();
+    assert_disabled(app.world(), child, false);
+}
+
+#[test]
+fn computed_ui_without_node_still_receives_disabled_projection() {
+    let mut app = App::new();
+    let entity = app
+        .world_mut()
+        .spawn((ComputedNode::default(), InteractionDisabled))
+        .id();
+    app.add_plugins(WidgetryUiPlugin);
+    assert!(app.world().get::<Node>(entity).is_none());
+    assert_disabled(app.world(), entity, true);
+    set_intrinsic_disabled(app.world_mut(), entity, true).unwrap();
+    app.world_mut()
+        .entity_mut(entity)
+        .remove::<InteractionDisabled>();
+    assert_disabled(app.world(), entity, true);
+    set_intrinsic_disabled(app.world_mut(), entity, false).unwrap();
+    assert_disabled(app.world(), entity, false);
+    app.world_mut().entity_mut(entity).remove::<ComputedNode>();
+    assert!(
+        app.world()
+            .get::<WidgetryEffectiveDisabled>(entity)
+            .is_none()
+    );
+}
+
+#[test]
 fn ancestor_request_projects_through_layout_after_flush_and_restores_child() {
     let mut app = scene_app();
     if !app.is_plugin_added::<WidgetryUiPlugin>() {

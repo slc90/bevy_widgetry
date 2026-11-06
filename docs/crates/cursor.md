@@ -13,12 +13,14 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 ## 主要功能
 
 - 解析最近祖先 `EntityCursor`，以及 `WidgetryCursorHint` 的十一种扩展业务语义。
-- 有效 Disabled 情况可展示 NotAllowed，Button Loading 的内部标记优先展示 Wait，并在遮挡、失效或生命周期变化时重新计算 Cursor。
+- 有效 Disabled 情况可展示 NotAllowed，公开 `WidgetryCursorLoading` 声明优先展示 Wait，并在遮挡、失效或生命周期变化时重新计算 Cursor。
 - System Theme 使用系统样式；Kamuri 提供 34 种系统语义与 11 种扩展样式，共 45 项。
 - Kamuri 的全部 45 种语义均持续循环动画，统一 80×80 RGBA 帧画布，各自定义帧数、速率与热点。
 - Drag Lease 支持 Owner 失效、Cancel、Release 和失焦后的清理。
 
 ## 行为与状态契约
+
+`WidgetryCursorLoading` 可单独挂在命中实体或其祖先上，不要求同实体另有 Cursor 声明。它表达 Style 选择的忙碌反馈，优先于祖先 Disabled 的 NotAllowed 与普通声明；移除后重新解析最近声明。该组件不禁用输入，也不修改业务 Loading 状态。默认 Button Style 及 Gallery 外部 Style 分别按自己的 Loading 维护该声明。
 
 只有 `PointerId::Mouse` 影响 OS Cursor；Custom 与 Touch 不取得 Lease。最近有效声明优先，同一 Entity 上官方 `EntityCursor` 优先于扩展 Hint。动画进入新语义时从首帧开始，同一语义内持续显示不重启；Native 操作、失焦或离开语义时停止。未加载图集时先使用静态后备帧，再退回语义对应的 System Cursor。调用方自定义 `EntityCursor::Custom` 图像保持不变。
 

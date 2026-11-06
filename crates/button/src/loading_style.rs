@@ -95,6 +95,16 @@ fn sync_presentation(world: &mut World) -> Result {
 }
 
 fn present(world: &mut World, root: Entity, active: bool) -> Result<(), ButtonFailure> {
+    {
+        let mut entity = world
+            .get_entity_mut(root)
+            .map_err(|_| failure(ButtonError::InvalidTarget { root }, "button.loading_style"))?;
+        if active {
+            entity.insert(bevy_widgetry_cursor::WidgetryCursorLoading);
+        } else {
+            entity.remove::<bevy_widgetry_cursor::WidgetryCursorLoading>();
+        }
+    }
     let parts = parts(world, root)?;
     let presentation = if active {
         let visibility = *world
@@ -299,6 +309,11 @@ mod tests {
             errors.run(|| app.update());
             let records = errors.take_records();
             assert_eq!(records.len(), 1);
+            assert!(
+                app.world()
+                    .get::<bevy_widgetry_cursor::WidgetryCursorLoading>(root)
+                    .is_some()
+            );
             let error = records[0]
                 .error
                 .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
@@ -306,6 +321,14 @@ mod tests {
             assert!(
                 matches!(error.diagnostics().next().unwrap().source().unwrap().downcast_ref::<ButtonError>().unwrap(), ButtonError::MissingPart { root: target, part } if *target == root && *part == missing)
             );
+            WidgetryButtonLoading::set_in_world(app.world_mut(), root, false).unwrap();
+            errors.run(|| app.update());
+            assert!(
+                app.world()
+                    .get::<bevy_widgetry_cursor::WidgetryCursorLoading>(root)
+                    .is_none()
+            );
+            assert_eq!(errors.take_records().len(), 1);
         }
     }
 }

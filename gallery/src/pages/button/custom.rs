@@ -10,6 +10,7 @@ use bevy::{
 };
 use bevy_widgetry::{
     button::{WidgetryButton, WidgetryButtonHeadless, WidgetryButtonLoading},
+    cursor::WidgetryCursorLoading,
     disabled::WidgetryEffectiveDisabled,
     text::WidgetryText,
 };
@@ -321,7 +322,7 @@ fn operate(
 type RootData = (
     Entity,
     &'static GalleryButton,
-    &'static WidgetryButtonLoading,
+    Ref<'static, WidgetryButtonLoading>,
     &'static GalleryButtonMarked,
     &'static WidgetryEffectiveDisabled,
     &'static Hovered,
@@ -332,6 +333,7 @@ type RootData = (
 
 fn update_visuals(
     time: Res<Time>,
+    mut commands: Commands,
     language: Res<Language>,
     mut roots: Query<RootData, Without<Dot>>,
     mut labels: Query<(&ChildOf, &mut Visibility, &mut TextColor), With<Label>>,
@@ -346,6 +348,13 @@ fn update_visuals(
         &mut roots
     {
         let active = loading.is_active();
+        if loading.is_changed() {
+            if active {
+                commands.entity(root).try_insert(WidgetryCursorLoading);
+            } else {
+                commands.entity(root).try_remove::<WidgetryCursorLoading>();
+            }
+        }
         let state = if active {
             ButtonKey::CustomWorking
         } else if disabled.is_disabled() {

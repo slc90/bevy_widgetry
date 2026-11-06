@@ -3,7 +3,6 @@ use crate::{
     error::{core, failure},
 };
 use bevy::prelude::*;
-use bevy_widgetry_cursor::internal::LoadingCursor;
 
 #[derive(Component, Default, Clone, Debug, Reflect)]
 #[component(immutable)]
@@ -41,9 +40,6 @@ impl WidgetryButtonLoading {
         if world.get::<Node>(entity).is_none() {
             return Err(missing(entity, "Node"));
         }
-        if world.get::<ComputedNode>(entity).is_none() {
-            return Err(missing(entity, "ComputedNode"));
-        }
         world
             .get::<Self>(entity)
             .ok_or_else(|| missing(entity, "WidgetryButtonLoading"))
@@ -60,11 +56,6 @@ impl WidgetryButtonLoading {
         bevy_widgetry_core::disabled::validate_intrinsic_disabled_target(world, entity)
             .map_err(|error| core(error, entity, "button.set_loading.disabled"))?;
         world.entity_mut(entity).insert(Self(active));
-        if active {
-            world.entity_mut(entity).insert(LoadingCursor);
-        } else {
-            world.entity_mut(entity).remove::<LoadingCursor>();
-        }
         bevy_widgetry_core::disabled::set_intrinsic_disabled_for::<Self>(world, entity, active)
             .map_err(|error| core(error, entity, "button.set_loading.disabled"))?;
         world.trigger(WidgetryButtonLoadingChanged {
@@ -92,6 +83,7 @@ pub(crate) fn install(app: &mut App) {
 mod tests {
     use super::*;
     use bevy_widgetry_core::diagnostics::CoreError;
+    use bevy_widgetry_cursor::WidgetryCursorLoading;
     use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
     use std::error::Error;
 
@@ -135,7 +127,7 @@ mod tests {
                 .unwrap()
                 .is_active()
         );
-        assert!(app.world().get::<LoadingCursor>(root).is_none());
+        assert!(app.world().get::<WidgetryCursorLoading>(root).is_none());
         assert!(
             app.world()
                 .get::<bevy::ui::InteractionDisabled>(root)

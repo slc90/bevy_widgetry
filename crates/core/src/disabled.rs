@@ -4,7 +4,7 @@ use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::input_focus::InputFocusSystems;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, InteractionDisabled, UiSystems};
+use bevy::ui::{ComputedNode, InteractionDisabled, Node, UiSystems};
 use bevy::ui_widgets::ScrollArea;
 
 #[derive(Component, Reflect, Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -74,7 +74,7 @@ pub(crate) fn install(app: &mut App) {
         .add_systems(PostUpdate, reconcile.in_set(WidgetryUiSystems::Disabled));
     let world = app.world_mut();
     let nodes = world
-        .query_filtered::<Entity, With<ComputedNode>>()
+        .query_filtered::<Entity, Or<(With<Node>, With<ComputedNode>)>>()
         .iter(world)
         .collect::<Vec<_>>();
     world.resource_mut::<DisabledRuntime>().dirty.extend(nodes);
@@ -221,7 +221,7 @@ fn on_remove(
 }
 
 fn on_ui_added(
-    event: On<Add<ComputedNode>>,
+    event: On<Add<(Node, ComputedNode)>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -229,7 +229,7 @@ fn on_ui_added(
 }
 
 fn on_ui_removed(
-    event: On<Remove<ComputedNode>>,
+    event: On<Remove<(Node, ComputedNode)>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -238,7 +238,7 @@ fn on_ui_removed(
 
 fn on_parent_inserted(
     event: On<Insert<ChildOf>>,
-    nodes: Query<(), With<ComputedNode>>,
+    nodes: Query<(), Or<(With<Node>, With<ComputedNode>)>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -249,7 +249,7 @@ fn on_parent_inserted(
 
 fn on_parent_removed(
     event: On<Remove<ChildOf>>,
-    nodes: Query<(), With<ComputedNode>>,
+    nodes: Query<(), Or<(With<Node>, With<ComputedNode>)>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -262,7 +262,7 @@ fn on_parent_removed(
 // Suspend only the wheel marker and preserve ScrollPosition and layout so disabled views still allow programmatic scrolling.
 fn on_wheel_added(
     event: On<Add<ScrollArea>>,
-    nodes: Query<&WidgetryEffectiveDisabled, With<ComputedNode>>,
+    nodes: Query<&WidgetryEffectiveDisabled, Or<(With<Node>, With<ComputedNode>)>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -275,7 +275,7 @@ fn on_wheel_added(
 }
 
 fn on_despawn(
-    event: On<Despawn<(ComputedNode, ChildOf, Children, InteractionDisabled)>>,
+    event: On<Despawn<(Node, ComputedNode, ChildOf, Children, InteractionDisabled)>>,
     mut runtime: ResMut<DisabledRuntime>,
 ) {
     runtime.local.remove(&event.entity);
@@ -361,7 +361,8 @@ fn project(world: &mut World, entity: Entity, disabled: bool) {
     if !world.entities().contains(entity) {
         return;
     }
-    if world.get::<ComputedNode>(entity).is_some()
+    let is_ui = world.get::<Node>(entity).is_some() || world.get::<ComputedNode>(entity).is_some();
+    if is_ui
         && world
             .get::<WidgetryEffectiveDisabled>(entity)
             .is_none_or(|state| state.0 != disabled)
@@ -369,9 +370,7 @@ fn project(world: &mut World, entity: Entity, disabled: bool) {
         world
             .entity_mut(entity)
             .insert(WidgetryEffectiveDisabled(disabled));
-    } else if world.get::<ComputedNode>(entity).is_none()
-        && world.get::<WidgetryEffectiveDisabled>(entity).is_some()
-    {
+    } else if !is_ui && world.get::<WidgetryEffectiveDisabled>(entity).is_some() {
         world
             .entity_mut(entity)
             .remove::<WidgetryEffectiveDisabled>();
@@ -444,7 +443,9 @@ fn reconcile(world: &mut World) {
             }
             let mut needed = EntityHashSet::default();
             for &entity in tree.iter().rev() {
-                if world.get::<ComputedNode>(entity).is_some() {
+                if world.get::<Node>(entity).is_some()
+                    || world.get::<ComputedNode>(entity).is_some()
+                {
                     needed.insert(entity);
                 }
                 if needed.contains(&entity)

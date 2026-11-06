@@ -50,7 +50,7 @@
 - `default_font.rs`：默认字体策略。
 - `content_colors.rs`：Foreground / Text / Theme / Disabled。
 - `state_diagnostics.rs`：无效颜色原值与嵌套 Template 的同源身份；Text/Disabled 合法同值和重复无日志；失效 Entity/缺失 DisabledRuntime 的同步及真实 queued 失败、原生访问 source；选择集合/初始多选分类，以及失效 Root/选项/非法目标在拒绝前不更改有效 Checked。
-- `effective_disabled.rs`、`disabled_input.rs`：有效 Disabled 及官方输入阻止。
+- `effective_disabled.rs`、`disabled_input.rs`：有效 Disabled 及官方输入阻止；无 ComputedNode 时按 Node 身份继承与撤销内部理由，仅有 ComputedNode 的原生 UI 仍参与投影，两类 UI 身份移除/重建后的有效状态生命周期。
 - `pointer.rs`：有效多 Pointer Hover 投影。
 - `icon_diagnostics.rs`：同步独立请求的领域分类/目标/路径/源头身份，以及嵌套 Template 与真实 queued 边界的类型保真。
 - `icon.rs`：初始路径校验、非空路径未加载时的构造、公开 Icon API、真实 Loader、倍率下的物理分辨率与逻辑布局，以及颜色 / 生命周期。Icon 源码 Unit Test 保护 1.0/1.25/1.5/2.0 倍率往返、无 max_size 的固有尺寸、多相机隔离、UiScale 只合成一次与同规格缓存复用。

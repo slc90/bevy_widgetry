@@ -377,12 +377,12 @@ fn animation_obeys_native_lease_drag_capture_disabled_loading_and_window_lifecyc
     );
     app.world_mut()
         .entity_mut(target)
-        .insert(bevy_widgetry_cursor::internal::LoadingCursor);
+        .insert(bevy_widgetry_cursor::WidgetryCursorLoading);
     tick(&mut app, window, camera, target, 0);
     assert_eq!(animation_frame(&app, window, Animation::Wait), Some(0));
     app.world_mut().entity_mut(target).remove::<(
         bevy::ui::InteractionDisabled,
-        bevy_widgetry_cursor::internal::LoadingCursor,
+        bevy_widgetry_cursor::WidgetryCursorLoading,
     )>();
     let captured = app.world_mut().spawn(WidgetryCursorHint::ReadOnly).id();
     app.world_mut().resource_mut::<PointerCaptureMap>().capture(
