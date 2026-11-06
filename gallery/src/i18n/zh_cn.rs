@@ -364,6 +364,13 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Button(ButtonKey::ToggleButton) => "切换按钮",
         TextKey::Button(ButtonKey::ToggleProgrammatic) => "程序化选中 / 取消",
         TextKey::Button(ButtonKey::HoldTitle) => "长按确认 · 64 / 112 / 160 px",
+        TextKey::Button(ButtonKey::HoldBarDescription) => {
+            "条形确认：按住 3 秒完成，松开衰减，再按续接；F6 禁用并取消。"
+        }
+        TextKey::Button(ButtonKey::HoldBarAction) => "按住确认",
+        TextKey::Button(ButtonKey::HoldBarFocus) => "聚焦条形按钮（Enter / Space）",
+        TextKey::Button(ButtonKey::HoldBarDisable) => "切换条形按钮禁用 (F6)",
+        TextKey::Button(ButtonKey::HoldBarStatus) => "充能 {progress}% · 已确认 {count} 次",
         TextKey::Button(ButtonKey::HoldDescription) => {
             "按住 3 秒确认，提前松开在 1.2 秒内衰减。Enter / Space；按 F7 切换本地禁用、F8 父级禁用、F9 显示。"
         }

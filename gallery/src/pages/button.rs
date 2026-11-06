@@ -1,5 +1,6 @@
 mod custom;
 mod hold;
+mod hold_bar;
 mod link_card;
 mod toggle;
 use crate::assets::GalleryIcon;
@@ -21,6 +22,7 @@ pub(crate) struct ButtonDemoPlugin;
 impl Plugin for ButtonDemoPlugin {
     fn build(&self, app: &mut App) {
         hold::install(app);
+        hold_bar::install(app);
         custom::install(app);
         link_card::install(app);
         app.add_systems(OnEnter(GalleryPage::Button), enter)
@@ -64,6 +66,7 @@ pub(crate) fn scene() -> impl Scene {
             @custom::scene()--
             @toggle::scene()--
             @hold::scene()--
+            @hold_bar::scene()--
             @link_examples()--
             @loading_example()--
             @localized(TextKey::Button(ButtonKey::RadioButton)) bevy_widgetry::text::WidgetryText--

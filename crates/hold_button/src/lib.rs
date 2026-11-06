@@ -8,4 +8,8 @@ mod style;
 
 pub use colors::{WidgetryHoldButtonColorOverrides, WidgetryHoldButtonStateColorOverrides};
 pub use error::{HoldButtonError, HoldButtonFailure};
+pub use headless::{
+    WidgetryHoldButtonHeadless, WidgetryHoldButtonHeadlessPlugin, WidgetryHoldButtonHeadlessProps,
+    WidgetryHoldButtonProgress, WidgetryHoldButtonState, WidgetryHoldButtonSystems,
+};
 pub use style::{WidgetryHoldButton, WidgetryHoldButtonPlugin, WidgetryHoldButtonProps};

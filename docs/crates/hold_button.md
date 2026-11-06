@@ -12,7 +12,21 @@ bsn! {
 }
 ```
 
-Props 包含直径（默认 112px，必须为有限正数）、`charge_duration`（默认 3 秒）、`decay_duration`（默认 1.2 秒）、`colors`、`content` 容器 Patch 与 `children`。时长为 `Duration`；零充能时长在有效按下后的计时更新立即成功，零衰减时长立即清零。Props 仅负责初始化，运行时输入归属、成功锁存与进度由内部 ECS Component 保存；进度不作为公共 API 导出。
+Props 包含直径（默认 112px，必须为有限正数）、`charge_duration`（默认 3 秒）、`decay_duration`（默认 1.2 秒）、`colors`、`content` 容器 Patch 与 `children`。时长为 `Duration`；零充能时长在有效按下后的计时更新立即成功，零衰减时长立即清零。Props 仅负责初始化，运行时输入归属、成功锁存与进度由行为层维护。
+
+外部 Style 安装 `WidgetryHoldButtonHeadlessPlugin`，用 BSN 同根组合 `WidgetryHoldButtonHeadless` 与自有 Node/Children。Headless Props 只有 `charge_duration`、`decay_duration`，默认值与默认控件相同；不创建默认材质、内容或颜色，不要求 Shader Asset 资源。默认 `WidgetryHoldButtonPlugin` 自动安装 HeadlessPlugin，两种 Style 共用同一行为路径。
+
+```rust
+bsn! {
+    @WidgetryHoldButtonHeadless { @charge_duration: Duration::from_secs(3) }
+    Node { width: px(300), height: px(60) }
+    on(confirm)
+}
+```
+
+`WidgetryHoldButtonProgress::value()` 只读返回 0–1 充能值；`WidgetryHoldButtonState` 的 `is_holding()`、`has_succeeded()`、`success_count()` 查询当前输入尝试、成功锁存和累计成功次数。状态字段不公开，应用不直接替换或移除这些托管状态；自有业务计数由应用 Observer 管理。不能同根组合普通 `WidgetryButtonHeadless`，否则普通点击会绕过长按阈值。
+
+Headless 根据真实 Picking 命中与离开取消，不假定圆形尺寸，矩形角落可以正常开始充能。交互 Children 的 Picking 规则由外部 Style 自行安排。行为层在充能、衰减和进度收尾期间请求重绘，Reactive 模式不依赖默认液体动画推进；静止空值/满值停止计时唤醒。外部 Style 可以在 PostUpdate 的 `WidgetryHoldButtonSystems::Update` 之后读取本帧进度。默认 Style 额外负责自身波浪和成功闪光的重绘。
 
 鼠标左键必须从圆形范围内按下；Enter / Space 要求控件获得 Focus，默认 `TabIndex(-1)`。控件不附加原生 Button，短按不产生 Activate。一个输入来源独占一次尝试，按键重复与其他持续按住的来源不能自动接管。
 

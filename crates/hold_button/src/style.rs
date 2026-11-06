@@ -1,19 +1,18 @@
 use crate::{
     colors::ColorState,
-    headless::{ChargeProgress, HoldState, Timing},
+    headless::{
+        WidgetryHoldButtonHeadless, WidgetryHoldButtonHeadlessPlugin, WidgetryHoldButtonProgress,
+        WidgetryHoldButtonState,
+    },
 };
 use bevy::ecs::entity::EntityHashMap;
-use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::shader::ShaderRef;
 use bevy::ui::InteractionDisabled;
 use bevy::window::RequestRedraw;
-use bevy_widgetry_core::{
-    foreground::ResolvedForeground,
-    ui::{WidgetryUiPlugin, WidgetryUiSystems},
-};
+use bevy_widgetry_core::{foreground::ResolvedForeground, ui::WidgetryUiSystems};
 use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState},
@@ -25,7 +24,7 @@ use std::time::Duration;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryHoldButtonProps)]
-#[require(HoldState, ChargeProgress, Timing, ColorState, SuccessFlash)]
+#[require(ColorState, SuccessFlash)]
 pub struct WidgetryHoldButton;
 
 pub struct WidgetryHoldButtonProps {
@@ -67,10 +66,8 @@ impl WidgetryHoldButton {
                 }
                 colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error())
             })
-            template(move |_| Ok(Timing { charge: charge_duration, decay: decay_duration }))
-            template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::Button))))
+            @WidgetryHoldButtonHeadless { @charge_duration: charge_duration, @decay_duration: decay_duration }
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Hovered(false) TabIndex(-1)
             Node { width: px(diameter), height: px(diameter), aspect_ratio: {Some(1.0)}, flex_shrink: 0.0, border_radius: BorderRadius::MAX, align_items: AlignItems::Center, justify_content: JustifyContent::Center }
             template(|_| Ok(ResolvedForeground::default()))
             Children [
@@ -115,8 +112,8 @@ impl UiMaterial for HoldMaterial {
 pub struct WidgetryHoldButtonPlugin;
 impl Plugin for WidgetryHoldButtonPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<WidgetryUiPlugin>() {
-            app.add_plugins(WidgetryUiPlugin);
+        if !app.is_plugin_added::<WidgetryHoldButtonHeadlessPlugin>() {
+            app.add_plugins(WidgetryHoldButtonHeadlessPlugin);
         }
         if !app.is_plugin_added::<bevy_widgetry_asset::WidgetryAssetPlugin>() {
             app.add_plugins(bevy_widgetry_asset::WidgetryAssetPlugin);
@@ -135,7 +132,6 @@ impl Plugin for WidgetryHoldButtonPlugin {
                 PostUpdate,
                 update_shadows.after(WidgetryUiSystems::ContentColors),
             );
-        crate::headless::install(app);
         widgetry_debug!("WidgetryHoldButtonPlugin 注册完成");
     }
 }
@@ -206,8 +202,8 @@ fn update_material(
     mut query: Query<
         (
             Entity,
-            Ref<ChargeProgress>,
-            &HoldState,
+            Ref<WidgetryHoldButtonProgress>,
+            &WidgetryHoldButtonState,
             &ColorState,
             &Hovered,
             Has<InteractionDisabled>,
@@ -223,8 +219,8 @@ fn update_material(
     roots: Query<
         (
             Entity,
-            Has<ChargeProgress>,
-            Has<HoldState>,
+            Has<WidgetryHoldButtonProgress>,
+            Has<WidgetryHoldButtonState>,
             Has<ColorState>,
             Has<Hovered>,
             Has<ComputedNode>,
@@ -256,8 +252,8 @@ fn update_material(
             Ok(item) => item,
             Err(source) => {
                 let missing: Vec<_> = [
-                    ("ChargeProgress", progress),
-                    ("HoldState", state),
+                    ("WidgetryHoldButtonProgress", progress),
+                    ("WidgetryHoldButtonState", state),
                     ("ColorState", overrides),
                     ("Hovered", hovered),
                     ("ComputedNode", node),
@@ -289,7 +285,7 @@ fn update_material(
         let colors = overrides.0.resolve(&theme.hold_button);
         let colors_state = if disabled {
             colors.disabled
-        } else if state.owner_is_active() {
+        } else if state.is_holding() {
             colors.pressed
         } else if hovered.0 {
             colors.hovered
@@ -423,7 +419,11 @@ mod tests {
             .remove(handle.id())
             .unwrap();
         app.world_mut().entity_mut(b).remove::<ResolvedForeground>();
-        let successes = app.world().get::<HoldState>(a).unwrap().successes;
+        let successes = app
+            .world()
+            .get::<WidgetryHoldButtonState>(a)
+            .unwrap()
+            .successes;
         app.set_error_handler(ErrorCapture::handler());
         app.edit_schedule(PostUpdate, |schedule| {
             schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
@@ -493,7 +493,10 @@ mod tests {
                 assert_eq!(ids[0], ids[1]);
                 assert_ne!(ids[0][0], ids[0][1]);
                 assert_eq!(
-                    app.world().get::<HoldState>(a).unwrap().successes,
+                    app.world()
+                        .get::<WidgetryHoldButtonState>(a)
+                        .unwrap()
+                        .successes,
                     successes
                 );
                 app.world_mut()
@@ -595,7 +598,7 @@ mod tests {
     fn success_flash_expires_and_idle_does_not_redraw_or_rewrite_material() {
         let (mut app, root) = fixture();
         app.world_mut()
-            .get_mut::<HoldState>(root)
+            .get_mut::<WidgetryHoldButtonState>(root)
             .unwrap()
             .successes = 1;
         app.update();

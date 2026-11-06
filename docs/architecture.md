@@ -55,7 +55,7 @@ Button 直接依赖 Diagnostics 的统一诊断和 Cursor 的公开 `WidgetryCur
 
 ToggleButton 直接使用 Diagnostics 的领域诊断、持续异常状态和批量错误桥接，选中状态继续采用官方 Checked。
 
-HoldButton 直接使用 Diagnostics 保存构造、颜色及已拥有材质/渲染结构失败，长按计时与输入状态机仍归属自身 Headless 实现。
+HoldButton 直接使用 Diagnostics 保存构造、颜色及已拥有材质/渲染结构失败。公开 Headless 与独立 HeadlessPlugin 拥有长按输入、计时、只读进度/尝试状态及行为重绘请求；默认 Style 同根组合 Headless，独立管理圆形材质、内容阴影与视觉动画，不作为外部长按行为的依赖。
 
 CheckBox 直接使用 Diagnostics 保留二态/三态的领域错误与 mark/colors 持续异常，批量失败完整传播到宿主。
 

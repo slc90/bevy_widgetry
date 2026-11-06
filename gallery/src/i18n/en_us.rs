@@ -358,6 +358,11 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Button(ButtonKey::ToggleButton) => "Toggle",
         TextKey::Button(ButtonKey::ToggleProgrammatic) => "Set / clear selected",
         TextKey::Button(ButtonKey::HoldTitle) => "Hold to confirm · 64 / 112 / 160 px",
+        TextKey::Button(ButtonKey::HoldBarDescription) => "Bar confirmation: hold for 3 s, release to decay, press again to resume. F6 cancels by disabling.",
+        TextKey::Button(ButtonKey::HoldBarAction) => "Hold to confirm",
+        TextKey::Button(ButtonKey::HoldBarFocus) => "Focus bar (Enter / Space)",
+        TextKey::Button(ButtonKey::HoldBarDisable) => "Toggle bar disabled (F6)",
+        TextKey::Button(ButtonKey::HoldBarStatus) => "Charge {progress}% · Confirmed {count}",
         TextKey::Button(ButtonKey::HoldDescription) => {
             "Hold for 3 s; early release decays over 1.2 s. Enter / Space; F7 local disabled, F8 parent disabled, F9 visibility."
         }

@@ -14,12 +14,58 @@ use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use std::time::Duration;
 
+#[derive(SceneComponent, Default, Clone)]
+#[scene(WidgetryHoldButtonHeadlessProps)]
+#[require(Node, bevy::picking::hover::Hovered, bevy::input_focus::tab_navigation::TabIndex(-1), bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::Button)), WidgetryHoldButtonState, WidgetryHoldButtonProgress, Timing)]
+pub struct WidgetryHoldButtonHeadless;
+
+#[derive(Clone)]
+pub struct WidgetryHoldButtonHeadlessProps {
+    pub charge_duration: Duration,
+    pub decay_duration: Duration,
+}
+impl Default for WidgetryHoldButtonHeadlessProps {
+    fn default() -> Self {
+        Self {
+            charge_duration: Duration::from_secs(3),
+            decay_duration: Duration::from_millis(1200),
+        }
+    }
+}
+impl WidgetryHoldButtonHeadless {
+    fn scene(props: WidgetryHoldButtonHeadlessProps) -> impl Scene {
+        bsn! { template(move |_| Ok(Timing { charge: props.charge_duration, decay: props.decay_duration })) }
+    }
+}
+
+pub struct WidgetryHoldButtonHeadlessPlugin;
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WidgetryHoldButtonSystems {
+    Update,
+}
+impl Plugin for WidgetryHoldButtonHeadlessPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
+            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
+        }
+        install(app);
+        bevy_widgetry_internal_log::widgetry_debug!("WidgetryHoldButtonHeadlessPlugin 注册完成");
+    }
+}
+
 #[derive(Component, Default, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
-pub(crate) struct ChargeProgress(pub(crate) f32);
+pub struct WidgetryHoldButtonProgress(pub(crate) f32);
+
+impl WidgetryHoldButtonProgress {
+    pub fn value(&self) -> f32 {
+        self.0
+    }
+}
 
 #[derive(Component, Default, Clone)]
-pub(crate) struct HoldState {
+pub struct WidgetryHoldButtonState {
     owner: Option<InputSource>,
     succeeded: bool,
     pub(crate) successes: u64,
@@ -68,17 +114,18 @@ pub(crate) struct Timing {
 
 impl Default for Timing {
     fn default() -> Self {
+        let defaults = WidgetryHoldButtonHeadlessProps::default();
         Self {
-            charge: Duration::from_secs(3),
-            decay: Duration::from_millis(1200),
+            charge: defaults.charge_duration,
+            decay: defaults.decay_duration,
         }
     }
 }
 
-impl HoldState {
+impl WidgetryHoldButtonState {
     fn advance_to(
         &mut self,
-        progress: &mut ChargeProgress,
+        progress: &mut WidgetryHoldButtonProgress,
         timing: &Timing,
         now: Duration,
     ) -> bool {
@@ -86,10 +133,21 @@ impl HoldState {
         self.updated_at = now;
         self.advance(progress, timing, dt.as_secs_f32())
     }
-    pub(crate) fn owner_is_active(&self) -> bool {
+    pub fn is_holding(&self) -> bool {
         self.owner.is_some()
     }
-    fn advance(&mut self, progress: &mut ChargeProgress, timing: &Timing, dt: f32) -> bool {
+    pub fn has_succeeded(&self) -> bool {
+        self.succeeded
+    }
+    pub fn success_count(&self) -> u64 {
+        self.successes
+    }
+    fn advance(
+        &mut self,
+        progress: &mut WidgetryHoldButtonProgress,
+        timing: &Timing,
+        dt: f32,
+    ) -> bool {
         if self.owner.is_some() {
             if !self.succeeded {
                 progress.0 = if timing.charge.is_zero() {
@@ -114,7 +172,7 @@ impl HoldState {
         false
     }
 
-    fn end(&mut self, progress: &mut ChargeProgress) {
+    fn end(&mut self, progress: &mut WidgetryHoldButtonProgress) {
         self.owner = None;
         if self.succeeded {
             progress.0 = 0.0;
@@ -125,8 +183,8 @@ impl HoldState {
 
 fn finish_attempt(
     entity: Entity,
-    state: &mut HoldState,
-    progress: &mut ChargeProgress,
+    state: &mut WidgetryHoldButtonState,
+    progress: &mut WidgetryHoldButtonProgress,
     timing: &Timing,
     now: Duration,
     nodes: &Availability,
@@ -147,9 +205,10 @@ fn finish_attempt(
 }
 
 pub(crate) fn install(app: &mut App) {
-    app.add_message::<PointerInput>()
+    app.add_message::<bevy::window::RequestRedraw>()
+        .add_message::<PointerInput>()
         .add_message::<KeyboardInput>()
-        .register_type::<ChargeProgress>()
+        .register_type::<WidgetryHoldButtonProgress>()
         .add_observer(pointer_press)
         .add_observer(key_input)
         .add_observer(pointer_out)
@@ -164,7 +223,8 @@ pub(crate) fn install(app: &mut App) {
         )
         .add_systems(
             PostUpdate,
-            tick.after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled)
+            tick.in_set(WidgetryHoldButtonSystems::Update)
+                .after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled)
                 .before(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
 }
@@ -179,11 +239,11 @@ fn interrupted(
     mut controls: Query<
         (
             Entity,
-            &mut HoldState,
-            &mut ChargeProgress,
+            &mut WidgetryHoldButtonState,
+            &mut WidgetryHoldButtonProgress,
             Option<&bevy_widgetry_core::disabled::WidgetryEffectiveDisabled>,
         ),
-        With<crate::WidgetryHoldButton>,
+        With<WidgetryHoldButtonHeadless>,
     >,
     nodes: Availability,
     mut commands: Commands,
@@ -194,7 +254,7 @@ fn interrupted(
                 || !available(entity, &nodes))
         {
             state.end(&mut progress);
-            progress.set_if_neq(ChargeProgress(0.0));
+            progress.set_if_neq(WidgetryHoldButtonProgress(0.0));
             commands.entity(entity).remove::<Pressed>();
         }
     }
@@ -203,8 +263,12 @@ fn interrupted(
 fn pointer_release(
     event: On<bevy::picking::events::PointerRelease>,
     mut controls: Query<
-        (&mut HoldState, &mut ChargeProgress, &Timing),
-        With<crate::WidgetryHoldButton>,
+        (
+            &mut WidgetryHoldButtonState,
+            &mut WidgetryHoldButtonProgress,
+            &Timing,
+        ),
+        With<WidgetryHoldButtonHeadless>,
     >,
     clock: HoldClock,
     nodes: Availability,
@@ -231,8 +295,12 @@ fn pointer_release(
 fn pointer_out(
     event: On<bevy::picking::events::PointerOut>,
     mut controls: Query<
-        (&mut HoldState, &mut ChargeProgress, &Timing),
-        With<crate::WidgetryHoldButton>,
+        (
+            &mut WidgetryHoldButtonState,
+            &mut WidgetryHoldButtonProgress,
+            &Timing,
+        ),
+        With<WidgetryHoldButtonHeadless>,
     >,
     clock: HoldClock,
     nodes: Availability,
@@ -258,8 +326,12 @@ fn pointer_out(
 fn focus_lost(
     event: On<bevy::input_focus::FocusLost>,
     mut controls: Query<
-        (&mut HoldState, &mut ChargeProgress, &Timing),
-        With<crate::WidgetryHoldButton>,
+        (
+            &mut WidgetryHoldButtonState,
+            &mut WidgetryHoldButtonProgress,
+            &Timing,
+        ),
+        With<WidgetryHoldButtonHeadless>,
     >,
     clock: HoldClock,
     nodes: Availability,
@@ -301,8 +373,12 @@ fn available(entity: Entity, nodes: &Availability) -> bool {
 fn pointer_press(
     mut event: On<PointerPress>,
     mut controls: Query<
-        (&mut HoldState, &mut ChargeProgress, &Timing),
-        With<crate::WidgetryHoldButton>,
+        (
+            &mut WidgetryHoldButtonState,
+            &mut WidgetryHoldButtonProgress,
+            &Timing,
+        ),
+        With<WidgetryHoldButtonHeadless>,
     >,
     clock: HoldClock,
     nodes: Availability,
@@ -330,8 +406,12 @@ fn key_input(
     mut event: On<FocusedInput<KeyboardInput>>,
     focus: Res<InputFocus>,
     mut controls: Query<
-        (&mut HoldState, &mut ChargeProgress, &Timing),
-        With<crate::WidgetryHoldButton>,
+        (
+            &mut WidgetryHoldButtonState,
+            &mut WidgetryHoldButtonProgress,
+            &Timing,
+        ),
+        With<WidgetryHoldButtonHeadless>,
     >,
     clock: HoldClock,
     nodes: Availability,
@@ -371,8 +451,13 @@ fn key_input(
 
 fn cancel_inputs(
     mut controls: Query<
-        (Entity, &mut HoldState, &mut ChargeProgress, &Timing),
-        With<crate::WidgetryHoldButton>,
+        (
+            Entity,
+            &mut WidgetryHoldButtonState,
+            &mut WidgetryHoldButtonProgress,
+            &Timing,
+        ),
+        With<WidgetryHoldButtonHeadless>,
     >,
     nodes: Availability,
     focus: Res<InputFocus>,
@@ -391,7 +476,7 @@ fn cancel_inputs(
                 continue;
             }
             state.end(&mut progress);
-            progress.set_if_neq(ChargeProgress(0.0));
+            progress.set_if_neq(WidgetryHoldButtonProgress(0.0));
             commands.entity(entity).remove::<Pressed>();
             continue;
         }
@@ -446,11 +531,17 @@ fn tick(
     clock: HoldClock,
     focus: Res<InputFocus>,
     mut controls: Query<
-        (Entity, &mut HoldState, &mut ChargeProgress, &Timing),
-        With<crate::WidgetryHoldButton>,
+        (
+            Entity,
+            &mut WidgetryHoldButtonState,
+            &mut WidgetryHoldButtonProgress,
+            &Timing,
+        ),
+        With<WidgetryHoldButtonHeadless>,
     >,
     nodes: Availability,
     mut commands: Commands,
+    mut redraw: MessageWriter<bevy::window::RequestRedraw>,
 ) {
     for (entity, mut state, mut progress, timing) in &mut controls {
         if !available(entity, &nodes) {
@@ -458,8 +549,15 @@ fn tick(
                 continue;
             }
             state.end(&mut progress);
-            progress.set_if_neq(ChargeProgress(0.0));
+            progress.set_if_neq(WidgetryHoldButtonProgress(0.0));
             commands.entity(entity).remove::<Pressed>();
+            redraw.write(bevy::window::RequestRedraw);
+            continue;
+        }
+        if state.owner.is_none() && progress.0 == 0.0 || state.succeeded {
+            if progress.is_changed() {
+                redraw.write(bevy::window::RequestRedraw);
+            }
             continue;
         }
         let mut next = *progress;
@@ -473,12 +571,19 @@ fn tick(
                 &nodes,
                 &mut commands,
             );
+            redraw.write(bevy::window::RequestRedraw);
             continue;
         }
         let activated = state.advance_to(&mut next, timing, clock.now());
         progress.set_if_neq(next);
         if activated {
             commands.trigger(bevy::ui_widgets::Activate { entity });
+        }
+        if progress.is_changed()
+            || state.owner.is_some() && !state.succeeded
+            || state.owner.is_none() && progress.0 > 0.0
+        {
+            redraw.write(bevy::window::RequestRedraw);
         }
     }
 }
@@ -494,9 +599,8 @@ mod tests {
 
     fn fixture() -> (App, Entity, Entity) {
         let mut app = scene_app();
-        app.init_asset::<bevy::shader::Shader>();
         add_keyboard_dispatch(&mut app);
-        app.add_plugins(crate::WidgetryHoldButtonPlugin)
+        app.add_plugins(WidgetryHoldButtonHeadlessPlugin)
             .init_resource::<Count>();
         app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
             Duration::from_millis(100),
@@ -510,7 +614,7 @@ mod tests {
             .id();
         let root = app
             .world_mut()
-            .spawn_scene(bsn! { @crate::WidgetryHoldButton })
+            .spawn_scene(bsn! { @WidgetryHoldButtonHeadless })
             .unwrap()
             .id();
         app.update();
@@ -541,7 +645,51 @@ mod tests {
         }
     }
     fn progress(app: &App, root: Entity) -> f32 {
-        app.world().get::<ChargeProgress>(root).unwrap().0
+        app.world()
+            .get::<WidgetryHoldButtonProgress>(root)
+            .unwrap()
+            .0
+    }
+
+    #[test]
+    fn headless_charge_and_decay_continue_without_the_default_style() {
+        let (mut app, root, window) = fixture();
+        app.world_mut()
+            .resource_mut::<Messages<bevy::window::RequestRedraw>>()
+            .clear();
+        key(
+            &mut app,
+            window,
+            KeyCode::Enter,
+            ButtonState::Pressed,
+            false,
+        );
+        app.update();
+        assert!(progress(&app, root) > 0.0);
+        assert!(
+            !app.world()
+                .resource::<Messages<bevy::window::RequestRedraw>>()
+                .is_empty()
+        );
+        key(
+            &mut app,
+            window,
+            KeyCode::Enter,
+            ButtonState::Released,
+            false,
+        );
+        assert!(progress(&app, root) > 0.0);
+        frames(&mut app, 20);
+        assert_eq!(progress(&app, root), 0.0);
+        app.world_mut()
+            .resource_mut::<Messages<bevy::window::RequestRedraw>>()
+            .clear();
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Messages<bevy::window::RequestRedraw>>()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -592,7 +740,13 @@ mod tests {
         );
         assert_eq!(app.world().resource::<Count>().0, 1);
         assert_eq!(progress(&app, root), 0.0);
-        assert_eq!(app.world().get::<HoldState>(root).unwrap().successes, 1);
+        assert_eq!(
+            app.world()
+                .get::<WidgetryHoldButtonState>(root)
+                .unwrap()
+                .successes,
+            1
+        );
         app.update();
         assert_eq!(app.world().resource::<Count>().0, 1);
     }
@@ -811,11 +965,11 @@ mod tests {
 
     #[test]
     fn partial_release_decays_at_fixed_rate_and_repress_resumes() {
-        let mut s = HoldState {
+        let mut s = WidgetryHoldButtonState {
             owner: Some(InputSource::Key(KeyCode::Enter, Entity::PLACEHOLDER)),
             ..default()
         };
-        let mut p = ChargeProgress::default();
+        let mut p = WidgetryHoldButtonProgress::default();
         let t = Timing::default();
         assert!(!s.advance(&mut p, &t, 1.8));
         assert!((p.0 - 0.6).abs() < 0.00001);
@@ -835,8 +989,8 @@ mod tests {
 
     #[test]
     fn decay_clamps_and_zero_durations_finish_immediately() {
-        let mut s = HoldState::default();
-        let mut p = ChargeProgress(0.2);
+        let mut s = WidgetryHoldButtonState::default();
+        let mut p = WidgetryHoldButtonProgress(0.2);
         let t = Timing {
             charge: Duration::ZERO,
             decay: Duration::ZERO,
