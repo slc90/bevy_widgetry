@@ -11,6 +11,7 @@ use bevy::{
     ui::{InteractionDisabled, Pressed},
     ui_widgets::ValueChange,
 };
+use bevy_widgetry_slider::WidgetrySliderHeadless;
 use bevy_widgetry_slider::{
     SliderDragEnded, SliderDragOutcome, SliderDragStarted, WidgetrySlider,
     WidgetrySliderOrientation, WidgetrySliderPlugin,
@@ -48,7 +49,7 @@ fn fixture(id: PointerId, vertical: bool, stepped: bool) -> (App, Entity, Entity
     app.add_observer(
         |event: On<SliderDragStarted>, mut world: bevy::ecs::world::DeferredWorld| {
             assert_eq!(
-                WidgetrySlider::value(&world, event.entity).unwrap(),
+                WidgetrySliderHeadless::value(&world, event.entity).unwrap(),
                 event.value
             );
             assert!(world.get::<Pressed>(event.entity).is_some());
@@ -61,7 +62,7 @@ fn fixture(id: PointerId, vertical: bool, stepped: bool) -> (App, Entity, Entity
     app.add_observer(
         |event: On<SliderDragEnded>, mut world: bevy::ecs::world::DeferredWorld| {
             assert_eq!(
-                WidgetrySlider::value(&world, event.entity).unwrap(),
+                WidgetrySliderHeadless::value(&world, event.entity).unwrap(),
                 event.value
             );
             assert!(world.get::<Pressed>(event.entity).is_none());
@@ -82,7 +83,7 @@ fn fixture(id: PointerId, vertical: bool, stepped: bool) -> (App, Entity, Entity
     app.add_observer(
         |event: On<ValueChange<f32>>, mut world: bevy::ecs::world::DeferredWorld| {
             assert_eq!(
-                WidgetrySlider::value(&world, event.source).unwrap(),
+                WidgetrySliderHeadless::value(&world, event.source).unwrap(),
                 event.value
             );
             world
@@ -140,7 +141,7 @@ fn moved(app: &mut App, id: PointerId, at: &mut Location, point: Vec2) {
     input(app, id, at, PointerAction::Move { delta });
 }
 fn value(app: &App, root: Entity) -> f32 {
-    WidgetrySlider::value(app.world(), root).unwrap()
+    WidgetrySliderHeadless::value(app.world(), root).unwrap()
 }
 
 #[test]
@@ -210,7 +211,7 @@ fn rejected_presses_and_programmatic_or_keyboard_changes_do_not_create_gestures(
         &at,
         PointerAction::Release(PointerButton::Primary),
     );
-    WidgetrySlider::set_value_in_world(app.world_mut(), root, 6.0).unwrap();
+    WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, 6.0).unwrap();
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();

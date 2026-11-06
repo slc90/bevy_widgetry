@@ -20,6 +20,42 @@
 use bevy::text::FontSource;
 
 #[test]
+#[cfg(feature = "slider")]
+fn slider_headless_scene_api_is_usable() {
+    use bevy_widgetry::slider::{
+        WidgetrySliderHeadless, WidgetrySliderHeadlessPlugin, WidgetrySliderState,
+    };
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        WidgetrySliderHeadlessPlugin,
+    ));
+    app.init_asset::<bevy::scene::ScenePatch>();
+    let root = bevy_widgetry::scene::spawn_scene(
+        app.world_mut(),
+        bsn! { @WidgetrySliderHeadless { @max:10.0,@step:{Some(3.0)},@value:{Some(4.0)} } },
+    )
+    .unwrap();
+    assert_eq!(
+        WidgetrySliderHeadless::state(app.world(), root)
+            .unwrap()
+            .value(),
+        4.0
+    );
+    WidgetrySliderHeadless::set_value(&mut app.world_mut().commands(), root, 7.0);
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetrySliderState>(root)
+            .unwrap()
+            .value(),
+        7.0
+    );
+    assert!(app.world().get::<Node>(root).is_none());
+}
+
+#[test]
 #[cfg(feature = "segmented")]
 fn segmented_headless_scene_api_is_usable() {
     use bevy_widgetry::segmented::{

@@ -530,7 +530,7 @@ mod tests {
                 app.update();
             }
             assert_eq!(
-                bevy_widgetry_slider::WidgetrySlider::value(app.world(), slider).unwrap(),
+                bevy_widgetry_slider::WidgetrySliderHeadless::value(app.world(), slider).unwrap(),
                 (state.position.as_secs_f64() / 100.0) as f32
             );
             assert_eq!(
@@ -561,8 +561,11 @@ mod tests {
                 position: track_center
                     + Vec2::X
                         * track_width
-                        * (bevy_widgetry_slider::WidgetrySlider::value(app.world(), slider)
-                            .unwrap()
+                        * (bevy_widgetry_slider::WidgetrySliderHeadless::value(
+                            app.world(),
+                            slider,
+                        )
+                        .unwrap()
                             - 0.5),
             };
             queue_pointer(
@@ -643,8 +646,12 @@ mod tests {
                 Arc::new(Source(WaveformSessionKind::Live)),
             )
             .unwrap();
-            bevy_widgetry_slider::WidgetrySlider::set_value_in_world(app.world_mut(), slider, 0.75)
-                .unwrap();
+            bevy_widgetry_slider::WidgetrySliderHeadless::set_value_in_world(
+                app.world_mut(),
+                slider,
+                0.75,
+            )
+            .unwrap();
             app.world_mut().flush();
             assert_eq!(requests.lock().unwrap().len(), 7);
         }

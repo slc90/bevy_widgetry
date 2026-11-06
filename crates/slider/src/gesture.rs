@@ -1,4 +1,4 @@
-use crate::value::SliderState;
+use crate::value::WidgetrySliderState;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Gesture {
@@ -18,7 +18,7 @@ impl Gesture {
         }
     }
 
-    pub(crate) fn advance(&mut self, state: &SliderState, position: f64) -> f32 {
+    pub(crate) fn advance(&mut self, state: &WidgetrySliderState, position: f64) -> f32 {
         let movement = position - self.previous_position;
         if movement != 0.0 {
             if self.direction != 0.0 && movement.signum() != self.direction {
@@ -39,7 +39,7 @@ impl Gesture {
     }
 }
 
-pub(crate) fn directional(state: &SliderState, anchor: f64, delta: f64) -> f32 {
+pub(crate) fn directional(state: &WidgetrySliderState, anchor: f64, delta: f64) -> f32 {
     let min = f64::from(state.min);
     let max = f64::from(state.max);
     let target = (anchor + delta).clamp(min, max);
@@ -69,12 +69,12 @@ pub(crate) fn directional(state: &SliderState, anchor: f64, delta: f64) -> f32 {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use crate::WidgetrySliderProps;
+    use crate::WidgetrySliderHeadlessProps;
     use bevy::prelude::default;
 
     #[test]
     fn reversing_from_the_endpoint_uses_the_current_value_as_anchor() {
-        let mut state = SliderState::new(&WidgetrySliderProps {
+        let mut state = WidgetrySliderState::new(&WidgetrySliderHeadlessProps {
             max: 10.0,
             step: Some(3.0),
             ..default()

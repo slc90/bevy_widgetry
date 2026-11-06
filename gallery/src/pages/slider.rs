@@ -10,10 +10,13 @@ use bevy_widgetry::{
     text::WidgetryText,
 };
 
+mod numeric;
+
 pub(crate) struct SliderDemoPlugin;
 
 impl Plugin for SliderDemoPlugin {
     fn build(&self, app: &mut App) {
+        numeric::install(app);
         app.register_type::<SliderDemoState>()
             .add_observer(
                 |event: On<SliderDragStarted>, mut states: Query<&mut SliderDemoState>| {
@@ -78,7 +81,8 @@ fn scene() -> impl Scene {
                     @demo(SliderKey::Disabled,"SliderDisabled",WidgetrySliderProps{value:Some(60.0),..default()},true,None)
                 ]--
                 @demo(SliderKey::Vertical,"SliderVertical",WidgetrySliderProps{value:Some(40.0),orientation:WidgetrySliderOrientation::Vertical,..default()},false,None)
-            ]
+            ]--
+            @numeric::scene()
         ]
     }
 }

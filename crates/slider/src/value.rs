@@ -2,22 +2,34 @@ use crate::{
     SliderError, SliderFailure, SliderNumericConfig, SliderValueRejection,
     error::{failure, missing},
 };
-use crate::{WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps};
+use crate::{WidgetrySliderHeadless, WidgetrySliderHeadlessProps};
 use bevy::{prelude::*, ui_widgets::ValueChange};
 use bevy_widgetry_diagnostics::ErrorFrame;
 
 #[derive(Component, Clone, Copy, Reflect)]
+#[component(immutable)]
 #[reflect(Component)]
-pub(crate) struct SliderState {
+pub struct WidgetrySliderState {
     pub(crate) min: f32,
     pub(crate) max: f32,
     pub(crate) step: Option<f32>,
-    pub(crate) orientation: WidgetrySliderOrientation,
     pub(crate) value: f32,
 }
 
-impl SliderState {
-    pub(crate) fn new(props: &WidgetrySliderProps) -> Result<Self, SliderFailure> {
+impl WidgetrySliderState {
+    pub fn value(&self) -> f32 {
+        self.value
+    }
+    pub fn min(&self) -> f32 {
+        self.min
+    }
+    pub fn max(&self) -> f32 {
+        self.max
+    }
+    pub fn step(&self) -> Option<f32> {
+        self.step
+    }
+    pub(crate) fn new(props: &WidgetrySliderHeadlessProps) -> Result<Self, SliderFailure> {
         let config = SliderNumericConfig {
             min: props.min,
             max: props.max,
@@ -48,7 +60,6 @@ impl SliderState {
             min: props.min,
             max: props.max,
             step: props.step,
-            orientation: props.orientation,
             value: props.value.unwrap_or(props.min),
         };
         state.validate(state.value)?;
@@ -105,28 +116,24 @@ fn reachable(value: f32, endpoint: f32, step: f32) -> bool {
     (distance - expected).abs() <= tolerance
 }
 
-fn state(world: &World, entity: Entity) -> Result<&SliderState, SliderFailure> {
-    if world.get::<WidgetrySlider>(entity).is_none() {
+fn state(world: &World, entity: Entity) -> Result<&WidgetrySliderState, SliderFailure> {
+    if world.get::<WidgetrySliderHeadless>(entity).is_none() {
         return Err(failure(
             SliderError::InvalidRoot { root: entity },
             ErrorFrame::new("slider.state"),
         ));
     }
     world
-        .get::<SliderState>(entity)
-        .ok_or_else(|| missing(entity, entity, "SliderState"))
+        .get::<WidgetrySliderState>(entity)
+        .ok_or_else(|| missing(entity, entity, "WidgetrySliderState"))
 }
 
-impl WidgetrySlider {
+impl WidgetrySliderHeadless {
+    pub fn state(world: &World, entity: Entity) -> Result<&WidgetrySliderState, SliderFailure> {
+        state(world, entity)
+    }
     pub fn value(world: &World, entity: Entity) -> Result<f32, SliderFailure> {
         Ok(state(world, entity)?.value)
-    }
-
-    pub fn orientation(
-        world: &World,
-        entity: Entity,
-    ) -> Result<WidgetrySliderOrientation, SliderFailure> {
-        Ok(state(world, entity)?.orientation)
     }
 
     pub fn set_value_in_world(
@@ -163,10 +170,8 @@ pub(crate) fn commit(
     if current.value == value {
         return Ok(false);
     }
-    world
-        .get_mut::<SliderState>(entity)
-        .ok_or_else(|| missing(entity, entity, "SliderState"))?
-        .value = value;
+    let next = WidgetrySliderState { value, ..*current };
+    world.entity_mut(entity).insert(next);
     world.trigger(ValueChange {
         source: entity,
         value,
@@ -182,7 +187,7 @@ mod tests {
 
     #[test]
     fn stepped_values_are_reachable_from_both_endpoints() {
-        let state = SliderState::new(&WidgetrySliderProps {
+        let state = WidgetrySliderState::new(&WidgetrySliderHeadlessProps {
             max: 10.0,
             step: Some(3.0),
             ..default()
@@ -201,7 +206,7 @@ mod tests {
             (-1.0, 1.0, 0.1),
             (1_000_000.0, 1_000_010.0, 0.3),
         ] {
-            let state = SliderState::new(&WidgetrySliderProps {
+            let state = WidgetrySliderState::new(&WidgetrySliderHeadlessProps {
                 min,
                 max,
                 step: Some(step),
@@ -218,7 +223,7 @@ mod tests {
                 }
             }
         }
-        let state = SliderState::new(&WidgetrySliderProps {
+        let state = WidgetrySliderState::new(&WidgetrySliderHeadlessProps {
             min: 1_000_000.0,
             max: 1_000_010.0,
             step: Some(3.0),
@@ -226,7 +231,7 @@ mod tests {
         })
         .unwrap();
         assert!(state.validate(1_000_004.5).is_err());
-        let tiny = SliderState::new(&WidgetrySliderProps {
+        let tiny = WidgetrySliderState::new(&WidgetrySliderHeadlessProps {
             max: f32::from_bits(10),
             step: Some(f32::from_bits(3)),
             ..default()

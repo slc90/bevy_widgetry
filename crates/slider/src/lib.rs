@@ -14,6 +14,16 @@ pub use colors::{WidgetrySliderColorOverrides, WidgetrySliderStateColorOverrides
 pub use error::{SliderError, SliderFailure, SliderNumericConfig, SliderValueRejection};
 pub use lifecycle::{SliderDragEnded, SliderDragOutcome, SliderDragStarted};
 pub use slider::{WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps};
+pub use slider::{WidgetrySliderHeadless, WidgetrySliderHeadlessProps};
+pub use value::WidgetrySliderState;
+
+pub struct WidgetrySliderHeadlessPlugin;
+impl Plugin for WidgetrySliderHeadlessPlugin {
+    fn build(&self, app: &mut App) {
+        app.register_type::<WidgetrySliderState>();
+        widgetry_debug!("WidgetrySliderHeadlessPlugin 注册完成");
+    }
+}
 
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_debug;
@@ -22,6 +32,9 @@ pub struct WidgetrySliderPlugin;
 
 impl Plugin for WidgetrySliderPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetrySliderHeadlessPlugin>() {
+            app.add_plugins(WidgetrySliderHeadlessPlugin);
+        }
         if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
             app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
         }

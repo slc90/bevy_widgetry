@@ -4,6 +4,7 @@ use bevy::{ecs::error::Severity, prelude::*, ui::InteractionDisabled, ui_widgets
 use bevy_widgetry_core::scene::{
     WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, spawn_scene,
 };
+use bevy_widgetry_slider::WidgetrySliderHeadless;
 use bevy_widgetry_slider::{
     WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderPlugin, WidgetrySliderProps,
 };
@@ -24,7 +25,7 @@ fn observe(world: &mut World) {
     world.init_resource::<Seen>();
     world.add_observer(
         |event: On<ValueChange<f32>>, mut world: bevy::ecs::world::DeferredWorld| -> Result {
-            let value = WidgetrySlider::value(&world, event.source)
+            let value = WidgetrySliderHeadless::value(&world, event.source)
                 .map_err(|error| error.into_bevy_error())?;
             world
                 .resource_mut::<Seen>()
@@ -42,7 +43,7 @@ fn bsn_initialization_and_queries_preserve_configuration() {
     let world = app.world_mut();
     observe(world);
     let default = slider(world, default());
-    assert_eq!(WidgetrySlider::value(world, default).unwrap(), 0.0);
+    assert_eq!(WidgetrySliderHeadless::value(world, default).unwrap(), 0.0);
     let explicit = slider(
         world,
         WidgetrySliderProps {
@@ -53,7 +54,10 @@ fn bsn_initialization_and_queries_preserve_configuration() {
             ..Default::default()
         },
     );
-    assert_eq!(WidgetrySlider::value(world, explicit).unwrap(), -3.5);
+    assert_eq!(
+        WidgetrySliderHeadless::value(world, explicit).unwrap(),
+        -3.5
+    );
     assert_eq!(
         WidgetrySlider::orientation(world, explicit).unwrap(),
         WidgetrySliderOrientation::Vertical
@@ -77,8 +81,8 @@ fn changes_commit_before_notification_and_disabled_does_not_block_api() {
     );
     world.entity_mut(entity).insert(InteractionDisabled);
     for value in [3.0, 6.0, 9.0, 10.0, 7.0, 4.0, 1.0, 0.0] {
-        assert!(WidgetrySlider::set_value_in_world(world, entity, value).unwrap());
-        assert!(!WidgetrySlider::set_value_in_world(world, entity, value).unwrap());
+        assert!(WidgetrySliderHeadless::set_value_in_world(world, entity, value).unwrap());
+        assert!(!WidgetrySliderHeadless::set_value_in_world(world, entity, value).unwrap());
     }
     let seen = &world.resource::<Seen>().0;
     assert_eq!(seen.len(), 8);
@@ -107,9 +111,10 @@ fn invalid_values_and_targets_are_errors_without_mutation_or_events() {
     let log = LogCapture::default();
     log.run(|| {
         for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 11.0, 4.5] {
-            let error = WidgetrySlider::set_value_in_world(world, entity, value).unwrap_err();
+            let error =
+                WidgetrySliderHeadless::set_value_in_world(world, entity, value).unwrap_err();
             assert_eq!(error.into_bevy_error().severity(), Severity::Error);
-            assert_eq!(WidgetrySlider::value(world, entity).unwrap(), 4.0);
+            assert_eq!(WidgetrySliderHeadless::value(world, entity).unwrap(), 4.0);
         }
     });
     assert_eq!(log.records().len(), 6);
@@ -118,8 +123,8 @@ fn invalid_values_and_targets_are_errors_without_mutation_or_events() {
     let stale = world.spawn_empty().id();
     world.despawn(stale);
     for invalid in [bare, incomplete, stale] {
-        assert!(WidgetrySlider::value(world, invalid).is_err());
-        assert!(WidgetrySlider::set_value_in_world(world, invalid, 0.0).is_err());
+        assert!(WidgetrySliderHeadless::value(world, invalid).is_err());
+        assert!(WidgetrySliderHeadless::set_value_in_world(world, invalid, 0.0).is_err());
     }
     assert!(world.resource::<Seen>().0.is_empty());
 }
@@ -201,15 +206,18 @@ fn queued_writes_validate_when_applied_and_route_failures_to_host() {
     let mut queue = bevy::ecs::world::CommandQueue::default();
     {
         let mut commands = Commands::new(&mut queue, app.world());
-        WidgetrySlider::set_value(&mut commands, entity, 4.5);
-        WidgetrySlider::set_value(&mut commands, stale, 1.0);
-        WidgetrySlider::set_value(&mut commands, entity, f32::NAN);
+        WidgetrySliderHeadless::set_value(&mut commands, entity, 4.5);
+        WidgetrySliderHeadless::set_value(&mut commands, stale, 1.0);
+        WidgetrySliderHeadless::set_value(&mut commands, entity, f32::NAN);
         let reserved = commands
             .spawn_scene_with_error_handler(bsn! { @WidgetrySlider { @min: 5.0, @max: 6.0 } })
             .id();
-        WidgetrySlider::set_value(&mut commands, reserved, 5.5);
+        WidgetrySliderHeadless::set_value(&mut commands, reserved, 5.5);
     }
-    assert_eq!(WidgetrySlider::value(app.world(), entity).unwrap(), 0.0);
+    assert_eq!(
+        WidgetrySliderHeadless::value(app.world(), entity).unwrap(),
+        0.0
+    );
     app.world_mut().despawn(stale);
     let capture = ErrorCapture::default();
     capture.run(|| queue.apply(app.world_mut()));
@@ -220,7 +228,10 @@ fn queued_writes_validate_when_applied_and_route_failures_to_host() {
             .iter()
             .all(|error| error.severity() == Severity::Error)
     );
-    assert_eq!(WidgetrySlider::value(app.world(), entity).unwrap(), 4.5);
+    assert_eq!(
+        WidgetrySliderHeadless::value(app.world(), entity).unwrap(),
+        4.5
+    );
     assert_eq!(app.world().resource::<Seen>().0.len(), 2);
 }
 

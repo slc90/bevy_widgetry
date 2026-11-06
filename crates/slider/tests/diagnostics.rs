@@ -2,6 +2,7 @@
 
 use bevy::prelude::*;
 use bevy_widgetry_core::scene::{WidgetrySceneCommandsExt, spawn_scene};
+use bevy_widgetry_slider::WidgetrySliderHeadless;
 use bevy_widgetry_slider::{
     SliderError, SliderFailure, SliderValueRejection, WidgetrySlider, WidgetrySliderColorOverrides,
     WidgetrySliderPlugin, WidgetrySliderProps, WidgetrySliderStateColorOverrides,
@@ -28,8 +29,8 @@ fn rejected_requests_keep_exact_numeric_configuration_and_identity() {
             (11.0, SliderValueRejection::OutOfRange),
             (4.5, SliderValueRejection::Unreachable),
         ] {
-            let error =
-                WidgetrySlider::set_value_in_world(app.world_mut(), root, value).unwrap_err();
+            let error = WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, value)
+                .unwrap_err();
             let SliderError::Numeric {
                 config,
                 reason: actual,
@@ -61,7 +62,10 @@ fn rejected_requests_keep_exact_numeric_configuration_and_identity() {
                 logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
                     .is_empty()
             );
-            assert_eq!(WidgetrySlider::value(app.world(), root).unwrap(), 4.0);
+            assert_eq!(
+                WidgetrySliderHeadless::value(app.world(), root).unwrap(),
+                4.0
+            );
         }
     });
     assert!(
@@ -242,9 +246,9 @@ fn colors_preserve_core_cause_and_palette_while_valid_operations_stay_silent() {
     });
     let logs = LogCapture::default();
     logs.run(|| {
-        assert!(!WidgetrySlider::set_value_in_world(app.world_mut(), root, 0.0).unwrap());
-        WidgetrySlider::set_value_in_world(app.world_mut(), root, 100.0).unwrap();
-        assert!(!WidgetrySlider::set_value_in_world(app.world_mut(), root, 100.0).unwrap());
+        assert!(!WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, 0.0).unwrap());
+        WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, 100.0).unwrap();
+        assert!(!WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, 100.0).unwrap());
         assert!(!WidgetrySliderColorOverrides::clear_in_world(app.world_mut(), root).unwrap());
     });
     assert!(logs.records().is_empty());

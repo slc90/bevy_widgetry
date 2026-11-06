@@ -1,8 +1,9 @@
+use crate::WidgetrySliderHeadless;
 use crate::{
     SliderDragEnded, SliderDragOutcome, SliderDragStarted, WidgetrySlider,
     WidgetrySliderOrientation,
     gesture::{Gesture, directional},
-    value::{SliderState, commit},
+    value::{WidgetrySliderState, commit},
 };
 use bevy::{
     camera::NormalizedRenderTarget,
@@ -94,19 +95,27 @@ fn position(
         return Ok(None);
     }
     let state = world
-        .get::<SliderState>(entity)
-        .ok_or_else(|| crate::error::missing(entity, entity, "SliderState"))?;
+        .get::<WidgetrySliderState>(entity)
+        .ok_or_else(|| crate::error::missing(entity, entity, "WidgetrySliderState"))?;
     let parts = world
         .get::<crate::style::Parts>(entity)
         .ok_or_else(|| crate::error::missing(entity, entity, "Parts"))?;
-    Ok(project_position(world, entity, point, state, parts))
+    Ok(project_position(
+        world,
+        entity,
+        point,
+        state,
+        WidgetrySlider::orientation(world, entity)?,
+        parts,
+    ))
 }
 
 fn project_position(
     world: &World,
     entity: Entity,
     point: Vec2,
-    state: &SliderState,
+    state: &WidgetrySliderState,
+    orientation: WidgetrySliderOrientation,
     parts: &crate::style::Parts,
 ) -> Option<(f64, Vec2, f32, f32)> {
     let node = world.get::<ComputedNode>(parts.track)?;
@@ -126,7 +135,7 @@ fn project_position(
         .transform_point2(point * target.scale_factor() / ui_scale - viewport_origin);
     let thumb = parts.thumb;
     let thumb = world.get::<ComputedNode>(thumb)?;
-    let vertical = state.orientation == WidgetrySliderOrientation::Vertical;
+    let vertical = orientation == WidgetrySliderOrientation::Vertical;
     let size = if vertical {
         thumb.size().y
     } else {
@@ -183,10 +192,12 @@ fn press(
             return Ok(());
         };
         let state = *world
-            .get::<SliderState>(event.entity)
-            .ok_or_else(|| broken(event.entity, "SliderState"))?;
+            .get::<WidgetrySliderState>(event.entity)
+            .ok_or_else(|| broken(event.entity, "WidgetrySliderState"))?;
         let normalized = (state.value - state.min) / (state.max - state.min);
-        let vertical = state.orientation == WidgetrySliderOrientation::Vertical;
+        let vertical = WidgetrySlider::orientation(world, event.entity)
+            .map_err(|error| error.into_bevy_error())?
+            == WidgetrySliderOrientation::Vertical;
         let center = (normalized - 0.5) * travel;
         let distance = if vertical {
             Vec2::new(local.x, -local.y - center)
@@ -295,8 +306,8 @@ fn moved(
             return Ok(());
         };
         let state = world
-            .get::<SliderState>(event.entity)
-            .ok_or_else(|| broken(event.entity, "SliderState"))?;
+            .get::<WidgetrySliderState>(event.entity)
+            .ok_or_else(|| broken(event.entity, "WidgetrySliderState"))?;
         let position = (position - drag.offset).clamp(f64::from(state.min), f64::from(state.max));
         let value = drag.gesture.advance(state, position);
         world.entity_mut(event.entity).insert(DragState(Some(drag)));
@@ -329,7 +340,9 @@ fn cancel_failed_projection(
     error: crate::SliderFailure,
 ) -> BevyError {
     let cancelled = clear_drag(world, entity);
-    let value = world.get::<SliderState>(entity).map(|state| state.value);
+    let value = world
+        .get::<WidgetrySliderState>(entity)
+        .map(|state| state.value);
     if cancelled && let Some(value) = value {
         world.trigger(SliderDragEnded {
             entity,
@@ -350,8 +363,8 @@ fn cancel_failed_projection(
 
 fn end(world: &mut World, entity: Entity, outcome: SliderDragOutcome) -> Result {
     if clear_drag(world, entity) {
-        let value =
-            WidgetrySlider::value(world, entity).map_err(|error| error.into_bevy_error())?;
+        let value = WidgetrySliderHeadless::value(world, entity)
+            .map_err(|error| error.into_bevy_error())?;
         world.trigger(SliderDragEnded {
             entity,
             value,
@@ -428,13 +441,20 @@ fn drag_ended(event: On<PointerDragEnd>, mut commands: Commands) {
 
 fn key(
     mut event: On<FocusedInput<KeyboardInput>>,
-    controls: Query<(&SliderState, Has<InteractionDisabled>), With<WidgetrySlider>>,
+    controls: Query<
+        (
+            &WidgetrySliderState,
+            &crate::slider::LinearOrientation,
+            Has<InteractionDisabled>,
+        ),
+        With<WidgetrySlider>,
+    >,
     focus: Res<InputFocus>,
     windows: Query<&Window>,
     mut commands: Commands,
 ) {
     let entity = event.focused_entity;
-    let Ok((state, disabled)) = controls.get(entity) else {
+    let Ok((_state, orientation, disabled)) = controls.get(entity) else {
         return;
     };
     if disabled
@@ -447,7 +467,7 @@ fn key(
         return;
     }
     let input = event.input.clone();
-    let Some(direction) = key_direction(state.orientation, input.key_code) else {
+    let Some(direction) = key_direction(orientation.0, input.key_code) else {
         return;
     };
     event.propagate(false);
@@ -461,8 +481,8 @@ fn key(
             return Ok(());
         }
         let state = world
-            .get::<SliderState>(entity)
-            .ok_or_else(|| broken(entity, "SliderState"))?;
+            .get::<WidgetrySliderState>(entity)
+            .ok_or_else(|| broken(entity, "WidgetrySliderState"))?;
         let step = state.step.unwrap_or((state.max - state.min) * 0.01);
         let value = directional(state, f64::from(state.value), direction * f64::from(step));
         end(world, entity, SliderDragOutcome::Cancelled)?;
@@ -537,9 +557,11 @@ mod tests {
         let mut app = bevy_widgetry_test_utils::scene_app();
         let root = spawn_scene(app.world_mut(), bsn! { @WidgetrySlider }).unwrap();
         assert!(position(app.world(), root, Vec2::ZERO).unwrap().is_none());
-        app.world_mut().entity_mut(root).remove::<SliderState>();
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<WidgetrySliderState>();
         assert!(
-            matches!(position(app.world(), root, Vec2::ZERO).unwrap_err().kind(), SliderError::MissingPart { root: owner, entity, component: "SliderState" } if *owner == root && *entity == root)
+            matches!(position(app.world(), root, Vec2::ZERO).unwrap_err().kind(), SliderError::MissingPart { root: owner, entity, component: "WidgetrySliderState" } if *owner == root && *entity == root)
         );
         app.world_mut().despawn(root);
         assert!(position(app.world(), root, Vec2::ZERO).unwrap().is_none());
@@ -592,7 +614,9 @@ mod tests {
                 .resource_mut::<PointerCaptureMap>()
                 .capture(pointer, root, hit.clone());
             if missing_state {
-                app.world_mut().entity_mut(root).remove::<SliderState>();
+                app.world_mut()
+                    .entity_mut(root)
+                    .remove::<WidgetrySliderState>();
             } else {
                 app.world_mut()
                     .entity_mut(root)

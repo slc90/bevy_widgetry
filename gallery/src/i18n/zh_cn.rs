@@ -329,6 +329,16 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             "覆盖组级已选背景，并局部覆盖中间 Option；其他字段继续跟随主题。"
         }
         TextKey::Navigation(NavigationKey::Slider) => "Slider",
+        TextKey::Slider(super::SliderKey::NumericDescription) => {
+            "独立数值读数 · 范围 0..10，步长 3，数值 4 从最大端可达；预设通过公开 API 设置。"
+        }
+        TextKey::Slider(super::SliderKey::NumericMin) => "设置最小值 (0)",
+        TextKey::Slider(super::SliderKey::NumericFour) => "设置 4",
+        TextKey::Slider(super::SliderKey::NumericMax) => "设置最大值 (10)",
+        TextKey::Slider(super::SliderKey::NumericDisabled) => "切换读数禁用",
+        TextKey::Slider(super::SliderKey::NumericStatus) => {
+            "{value} · 范围 {min}..{max} / 步长 {step} · 变化 {changes} 次"
+        }
         TextKey::Slider(super::SliderKey::Description) => {
             "拖动或使用方向键，控件旁数值实时更新；垂直滑块向上增大。"
         }

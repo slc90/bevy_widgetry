@@ -7,6 +7,7 @@ use bevy_widgetry_slider::{
 };
 use std::time::Duration;
 
+use bevy_widgetry_slider::WidgetrySliderHeadless;
 #[derive(Component)]
 pub(super) struct ProgressOwner {
     root: Entity,
@@ -63,7 +64,7 @@ pub(super) fn project(world: &mut World, slider: Entity, playback: WaveformPlayb
         .get_mut::<ProgressOwner>(slider)
         .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::ProgressOwner).at(slider))?
         .projecting = true;
-    let result = WidgetrySlider::set_value_in_world(world, slider, value);
+    let result = WidgetrySliderHeadless::set_value_in_world(world, slider, value);
     if let Some(mut owner) = world.get_mut::<ProgressOwner>(slider) {
         owner.projecting = false;
     }

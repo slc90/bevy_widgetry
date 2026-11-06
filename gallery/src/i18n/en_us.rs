@@ -323,6 +323,12 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             "Override checked backgrounds at group level and the middle option locally; other fields follow the theme."
         }
         TextKey::Navigation(NavigationKey::Slider) => "Slider",
+        TextKey::Slider(super::SliderKey::NumericDescription) => "Independent numeric readout · Range 0..10, step 3. Value 4 is reachable from max. Presets use the public API.",
+        TextKey::Slider(super::SliderKey::NumericMin) => "Set min (0)",
+        TextKey::Slider(super::SliderKey::NumericFour) => "Set 4",
+        TextKey::Slider(super::SliderKey::NumericMax) => "Set max (10)",
+        TextKey::Slider(super::SliderKey::NumericDisabled) => "Toggle readout disabled",
+        TextKey::Slider(super::SliderKey::NumericStatus) => "{value} · Range {min}..{max} / step {step} · Changes {changes}",
         TextKey::Slider(super::SliderKey::Description) => {
             "Drag or use arrow keys. Values beside each control update live; vertical values increase upward."
         }

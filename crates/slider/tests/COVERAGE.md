@@ -1,5 +1,7 @@
 # Slider 测试覆盖模型
 
+`headless.rs` 在只有 Asset/Scene 基础设施、没有 UI/布局的环境中验证独立构造与只读 State、双向端点可达、Disabled 程序设置、通知内已提交值、同值 change tick、原始 f32 拒绝快照、失效目标/缺状态、构造失败活动实体清理和 queued 错误隔离。
+
 `value_api.rs` 从 crate 外验证 BSN 构造、只读查询和 World / Commands 更新。
 
 - 状态：连续 / 步进、默认 / 显式初始值、方向、Disabled。

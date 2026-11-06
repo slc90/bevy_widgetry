@@ -6,6 +6,7 @@ use bevy::{
     prelude::*,
     ui::{InteractionDisabled, UiGlobalTransform},
 };
+use bevy_widgetry_slider::WidgetrySliderHeadless;
 use bevy_widgetry_slider::{
     WidgetrySlider, WidgetrySliderColorOverrides, WidgetrySliderOrientation, WidgetrySliderPlugin,
     WidgetrySliderStateColorOverrides,
@@ -133,7 +134,7 @@ fn bsn_geometry_projects_endpoints_and_vertical_fill_from_the_bottom() {
                 thickness
             );
             for value in [0.0, 2.5, 10.0] {
-                WidgetrySlider::set_value_in_world(app.world_mut(), root, value).unwrap();
+                WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, value).unwrap();
                 frames(&mut app);
                 let (track_center, thumb_center) =
                     (center(app.world(), track), center(app.world(), thumb));
@@ -205,7 +206,10 @@ fn actual_thumb_geometry_and_root_length_keep_input_aligned_at_scale() {
             };
             moved(&mut app, &mut at, original + offset);
             press(&mut app, &at, PointerAction::Press(PointerButton::Primary));
-            assert_eq!(WidgetrySlider::value(app.world(), root).unwrap(), 5.0);
+            assert_eq!(
+                WidgetrySliderHeadless::value(app.world(), root).unwrap(),
+                5.0
+            );
             let delta = (320.0 - 28.0) * 0.2 * ui_scale;
             let target = original
                 + offset
@@ -215,7 +219,9 @@ fn actual_thumb_geometry_and_root_length_keep_input_aligned_at_scale() {
                     Vec2::new(delta, 0.0)
                 };
             moved(&mut app, &mut at, target);
-            assert!((WidgetrySlider::value(app.world(), root).unwrap() - 7.0).abs() < 0.001);
+            assert!(
+                (WidgetrySliderHeadless::value(app.world(), root).unwrap() - 7.0).abs() < 0.001
+            );
             press(
                 &mut app,
                 &at,
@@ -382,13 +388,13 @@ fn color_commands_validate_at_execution_and_failed_requests_preserve_overrides()
 fn track_click_uses_the_actual_center_after_fractional_scale_layout_rounding() {
     for vertical in [false, true] {
         let (mut app, root, _, mut at) = fixture(vertical, 20.0, 6.0, 1.25, 1.0);
-        WidgetrySlider::set_value_in_world(app.world_mut(), root, 0.0).unwrap();
+        WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, 0.0).unwrap();
         frames(&mut app);
         let [track, _, _] = parts(app.world(), root);
         let midpoint = center(app.world(), track) / 1.25;
         moved(&mut app, &mut at, midpoint);
         press(&mut app, &at, PointerAction::Press(PointerButton::Primary));
-        assert!((WidgetrySlider::value(app.world(), root).unwrap() - 5.0).abs() < 0.00001);
+        assert!((WidgetrySliderHeadless::value(app.world(), root).unwrap() - 5.0).abs() < 0.00001);
     }
 }
 
@@ -415,5 +421,8 @@ fn track_endpoint_reaches_max_even_when_the_domain_spans_very_different_magnitud
     let endpoint = center(app.world(), track) + Vec2::new(size(app.world(), track).x * 0.5, 0.0);
     moved(&mut app, &mut at, endpoint);
     press(&mut app, &at, PointerAction::Press(PointerButton::Primary));
-    assert_eq!(WidgetrySlider::value(app.world(), root).unwrap(), 1.0);
+    assert_eq!(
+        WidgetrySliderHeadless::value(app.world(), root).unwrap(),
+        1.0
+    );
 }

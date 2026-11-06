@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{
     WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps, colors::ColorState,
-    input::DragState, value::SliderState,
+    input::DragState, value::WidgetrySliderState,
 };
 use bevy::{
     ecs::entity::EntityHashSet,
@@ -31,7 +31,7 @@ pub(crate) struct Parts {
 #[derive(Component, Default)]
 struct StyleDiagnostics(FailureState<StyleKey>);
 
-fn initial(props: &WidgetrySliderProps) -> Result<SliderState, SliderFailure> {
+fn validate_dimensions(props: &WidgetrySliderProps) -> Result<(), SliderFailure> {
     for (field, size) in [
         ("track_thickness", props.track_thickness),
         ("thumb_diameter", props.thumb_diameter),
@@ -47,10 +47,10 @@ fn initial(props: &WidgetrySliderProps) -> Result<SliderState, SliderFailure> {
             ));
         }
     }
-    SliderState::new(props)
+    Ok(())
 }
 
-fn ratio(state: &SliderState) -> f32 {
+fn ratio(state: &WidgetrySliderState) -> f32 {
     ((f64::from(state.value) - f64::from(state.min))
         / (f64::from(state.max) - f64::from(state.min))) as f32
 }
@@ -62,15 +62,23 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
     let cross = 28.0_f32.max(diameter).max(thickness);
     let initial_ratio = ((f64::from(props.value.unwrap_or(props.min)) - f64::from(props.min))
         / (f64::from(props.max) - f64::from(props.min))) as f32;
+    let orientation = props.orientation;
+    let value_props = crate::WidgetrySliderHeadlessProps {
+        min: props.min,
+        max: props.max,
+        step: props.step,
+        value: props.value,
+    };
     let colors = props.colors.clone();
     let colors_for_track = colors.clone();
     let colors_for_fill = colors.clone();
     let colors_for_thumb = colors.clone();
     bsn! {
-        template(move |context| initial(&props).map_err(|error| error.with_context(ErrorFrame::new("slider.initialize").field("root", context.entity.id())).into_bevy_error()))
+        template(move |context| validate_dimensions(&props).map(|()| StyleDiagnostics::default()).map_err(|error| error.with_context(ErrorFrame::new("slider.initialize").field("root", context.entity.id())).into_bevy_error()))
+        @crate::WidgetrySliderHeadless { @min: {value_props.min}, @max: {value_props.max}, @step: {value_props.step}, @value: {value_props.value} }
+        template(move |_| Ok(crate::slider::LinearOrientation(orientation)))
         template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
         template(|_| Ok(DragState::default()))
-        template(|_| Ok(StyleDiagnostics::default()))
         Parts { track: #SliderTrack, fill: #SliderFill, thumb: #SliderThumb }
         bevy::input_focus::tab_navigation::TabIndex(0) Hovered(false)
         Node {
@@ -108,8 +116,7 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
 }
 
 pub(crate) fn install(app: &mut App) {
-    app.register_type::<SliderState>()
-        .register_type::<WidgetrySliderOrientation>()
+    app.register_type::<WidgetrySliderOrientation>()
         .add_systems(PostUpdate, update.in_set(WidgetryUiSystems::Colors));
 }
 
@@ -122,7 +129,7 @@ fn update(
         (
             With<WidgetrySlider>,
             Or<(
-                Changed<SliderState>,
+                Changed<WidgetrySliderState>,
                 Changed<ColorState>,
                 Changed<Hovered>,
                 Changed<DragState>,
@@ -137,7 +144,8 @@ fn update(
     mut roots: Query<
         (
             Entity,
-            &SliderState,
+            &WidgetrySliderState,
+            &crate::slider::LinearOrientation,
             &Parts,
             &ColorState,
             Option<&Hovered>,
@@ -160,7 +168,7 @@ fn update(
     dirty.extend(removed_hovered.read());
     let mut failures = DiagnosticBatch::default();
     for root in dirty {
-        let Ok((_, state, parts, local, hovered, pressed, disabled, mut diagnostics)) =
+        let Ok((_, state, orientation, parts, local, hovered, pressed, disabled, mut diagnostics)) =
             roots.get_mut(root)
         else {
             continue;
@@ -186,7 +194,7 @@ fn update(
             fill.set_if_neq(BackgroundColor(color.fill));
             thumb.set_if_neq(BackgroundColor(color.thumb));
             let percentage = ratio(state) * 100.0;
-            let vertical = state.orientation == WidgetrySliderOrientation::Vertical;
+            let vertical = orientation.0 == WidgetrySliderOrientation::Vertical;
             let fill_length = if vertical {
                 fill_node.height
             } else {
