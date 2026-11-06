@@ -1,5 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 use bevy::prelude::*;
+use bevy_widgetry_toggle_button::WidgetryToggleButtonHeadless;
 use bevy_widgetry_toggle_button::{WidgetryToggleButton, WidgetryToggleButtonChanged};
 
 #[derive(Resource, Default)]
@@ -17,9 +18,13 @@ fn setter_commits_before_notification_and_same_value_is_silent() {
     let mut app = App::new();
     app.init_resource::<Changes>().add_observer(record);
     let root = app.world_mut().spawn(WidgetryToggleButton).id();
-    assert!(WidgetryToggleButton::set_selected_in_world(app.world_mut(), root, true).unwrap());
-    assert!(!WidgetryToggleButton::set_selected_in_world(app.world_mut(), root, true).unwrap());
-    WidgetryToggleButton::set_selected(&mut app.world_mut().commands(), root, false);
+    assert!(
+        WidgetryToggleButtonHeadless::set_selected_in_world(app.world_mut(), root, true).unwrap()
+    );
+    assert!(
+        !WidgetryToggleButtonHeadless::set_selected_in_world(app.world_mut(), root, true).unwrap()
+    );
+    WidgetryToggleButtonHeadless::set_selected(&mut app.world_mut().commands(), root, false);
     app.world_mut().flush();
     assert_eq!(
         app.world().resource::<Changes>().0,
@@ -65,13 +70,13 @@ fn native_input_toggles_persistently_and_disabled_inherits() {
     );
     app.world_mut().trigger(primary_press(root));
     app.world_mut().flush();
-    assert!(!WidgetryToggleButton::selected(app.world(), root).unwrap());
+    assert!(!WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
     assert!(app.world().get::<Pressed>(root).is_some());
     app.world_mut().trigger(primary_release(root));
     app.world_mut().trigger(primary_click(root));
     app.world_mut().flush();
     app.update();
-    assert!(WidgetryToggleButton::selected(app.world(), root).unwrap());
+    assert!(WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
     assert_eq!(
         app.world()
             .get::<AccessibilityNode>(root)
@@ -96,7 +101,7 @@ fn native_input_toggles_persistently_and_disabled_inherits() {
     app.update();
     app.world_mut().trigger(primary_click(root));
     app.world_mut().flush();
-    assert!(WidgetryToggleButton::selected(app.world(), root).unwrap());
+    assert!(WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
     assert!(
         app.world()
@@ -105,7 +110,7 @@ fn native_input_toggles_persistently_and_disabled_inherits() {
             .is_disabled()
     );
     // Explicit programmatic updates remain available while user input is disabled.
-    WidgetryToggleButton::set_selected_in_world(app.world_mut(), root, false).unwrap();
+    WidgetryToggleButtonHeadless::set_selected_in_world(app.world_mut(), root, false).unwrap();
     app.world_mut()
         .entity_mut(parent)
         .remove::<InteractionDisabled>();
@@ -115,10 +120,10 @@ fn native_input_toggles_persistently_and_disabled_inherits() {
     cancel(&mut app, root);
     app.update();
     assert!(app.world().get::<Pressed>(root).is_none());
-    assert!(!WidgetryToggleButton::selected(app.world(), root).unwrap());
+    assert!(!WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
     app.world_mut().trigger(primary_click(root));
     app.world_mut().flush();
-    assert!(WidgetryToggleButton::selected(app.world(), root).unwrap());
+    assert!(WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
 }
 
 #[test]
@@ -165,7 +170,7 @@ fn keyboard_focus_repeat_release_and_disabled_guards() {
         );
         app.update();
         assert_eq!(
-            WidgetryToggleButton::selected(app.world(), root).unwrap(),
+            WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap(),
             expected
         );
     }
@@ -186,7 +191,7 @@ fn keyboard_focus_repeat_release_and_disabled_guards() {
         },
     );
     app.update();
-    assert!(!WidgetryToggleButton::selected(app.world(), root).unwrap());
+    assert!(!WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
 }
 
 #[test]
@@ -268,12 +273,16 @@ fn selected_theme_overrides_and_native_checked_removal_refresh_content() {
 fn invalid_targets_are_errors_and_queued_setters_validate_at_execution() {
     let (mut app, root) = toggle_app(false);
     let wrong = app.world_mut().spawn_empty().id();
-    assert!(WidgetryToggleButton::selected(app.world(), wrong).is_err());
-    assert!(WidgetryToggleButton::set_selected_in_world(app.world_mut(), wrong, true).is_err());
-    WidgetryToggleButton::set_selected(&mut app.world_mut().commands(), root, true);
-    assert!(!WidgetryToggleButton::selected(app.world(), root).unwrap());
+    assert!(WidgetryToggleButtonHeadless::selected(app.world(), wrong).is_err());
+    assert!(
+        WidgetryToggleButtonHeadless::set_selected_in_world(app.world_mut(), wrong, true).is_err()
+    );
+    WidgetryToggleButtonHeadless::set_selected(&mut app.world_mut().commands(), root, true);
+    assert!(!WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
     app.world_mut().flush();
-    assert!(WidgetryToggleButton::selected(app.world(), root).unwrap());
+    assert!(WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
     app.world_mut().despawn(root);
-    assert!(WidgetryToggleButton::set_selected_in_world(app.world_mut(), root, false).is_err());
+    assert!(
+        WidgetryToggleButtonHeadless::set_selected_in_world(app.world_mut(), root, false).is_err()
+    );
 }

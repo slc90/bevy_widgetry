@@ -1,4 +1,5 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+use bevy_widgetry_toggle_button::WidgetryToggleButtonHeadless;
 
 use bevy::prelude::*;
 use bevy_widgetry_core::{color::WidgetryStyleOwner, diagnostics::CoreError};
@@ -26,14 +27,14 @@ fn unchecked_and_equal_requests_are_silent_while_invalid_targets_keep_the_operat
     let (mut app, root) = fixture();
     let logs = LogCapture::default();
     logs.run(|| {
-        assert!(!WidgetryToggleButton::selected(app.world(), root).unwrap());
-        assert!(!WidgetryToggleButton::set_selected_in_world(app.world_mut(), root, false).unwrap());
+        assert!(!WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
+        assert!(!WidgetryToggleButtonHeadless::set_selected_in_world(app.world_mut(), root, false).unwrap());
         assert!(!WidgetryToggleButtonColorOverrides::clear_in_world(app.world_mut(), root).unwrap());
         assert!(logs.records().is_empty());
         let wrong = app.world_mut().spawn_empty().id();
         for stale in [false, true] {
             if stale { app.world_mut().despawn(wrong); }
-            let failure: ToggleButtonFailure = WidgetryToggleButton::set_selected_in_world(app.world_mut(), wrong, true).unwrap_err();
+            let failure: ToggleButtonFailure = WidgetryToggleButtonHeadless::set_selected_in_world(app.world_mut(), wrong, true).unwrap_err();
             assert!(matches!(failure.kind(), ToggleButtonError::InvalidTarget { root: target } if *target == wrong));
             assert!(failure.contexts().iter().any(|context| context.operation() == "toggle_button.set_selected"));
             assert_eq!(logs.diagnostic_records(failure.origin().id(), DiagnosticPhase::Source).len(), 1);
@@ -74,7 +75,7 @@ fn queued_state_and_color_failures_reach_the_host_with_source_identity() {
     app.set_error_handler(ErrorCapture::handler());
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
-    WidgetryToggleButton::set_selected(&mut app.world_mut().commands(), stale, true);
+    WidgetryToggleButtonHeadless::set_selected(&mut app.world_mut().commands(), stale, true);
     WidgetryToggleButtonColorOverrides::clear(&mut app.world_mut().commands(), stale);
     logs.run(|| errors.run(|| app.world_mut().flush()));
     let records = errors.take_records();

@@ -3,6 +3,7 @@ mod hold;
 mod hold_bar;
 mod link_card;
 mod toggle;
+mod toggle_tag;
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::ButtonKey;
@@ -25,6 +26,7 @@ impl Plugin for ButtonDemoPlugin {
         hold_bar::install(app);
         custom::install(app);
         link_card::install(app);
+        toggle_tag::install(app);
         app.add_systems(OnEnter(GalleryPage::Button), enter)
             .add_systems(OnExit(GalleryPage::Button), exit)
             .add_systems(
@@ -65,6 +67,7 @@ pub(crate) fn scene() -> impl Scene {
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @button_row(true)]--
             @custom::scene()--
             @toggle::scene()--
+            @toggle_tag::scene()--
             @hold::scene()--
             @hold_bar::scene()--
             @link_examples()--

@@ -2,6 +2,7 @@ use crate::i18n::{ButtonKey, TextKey, localized};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
+use bevy_widgetry::toggle_button::WidgetryToggleButtonHeadless;
 use bevy_widgetry::{
     button::WidgetryButton,
     text::WidgetryText,
@@ -38,7 +39,7 @@ fn changed(
     checked: Query<Has<bevy::ui::Checked>>,
 ) -> Result {
     let selected = checked.get(event.entity)?;
-    info!(entity=?event.entity, selected, "Toggle Button selection committed");
+    info!(entity=?event.entity, selected, "切换按钮状态已提交");
     Ok(())
 }
 
@@ -49,9 +50,9 @@ fn set_selected(
 ) {
     for entity in &targets {
         commands.queue(move |world: &mut World| -> Result {
-            let selected = WidgetryToggleButton::selected(world, entity)
+            let selected = WidgetryToggleButtonHeadless::selected(world, entity)
                 .map_err(|error| error.into_bevy_error())?;
-            WidgetryToggleButton::set_selected_in_world(world, entity, !selected)
+            WidgetryToggleButtonHeadless::set_selected_in_world(world, entity, !selected)
                 .map_err(|error| error.into_bevy_error())?;
             Ok(())
         });

@@ -1,5 +1,6 @@
 use crate::view_error::ViewResult;
 use bevy_widgetry_job::JobFailure;
+use bevy_widgetry_toggle_button::WidgetryToggleButtonHeadless;
 mod gesture;
 mod input;
 
@@ -51,7 +52,7 @@ impl Waveform {
     }
     pub fn measurement_enabled(world: &World, root: Entity) -> Result<bool, JobFailure> {
         let toggle = Self::measurement_toggle(world, root)?;
-        WidgetryToggleButton::selected(world, toggle).map_err(|error| {
+        WidgetryToggleButtonHeadless::selected(world, toggle).map_err(|error| {
             JobFailure::from(error).with_context(
                 bevy_widgetry_diagnostics::ErrorFrame::new("waveform.measurement.enabled")
                     .field("root", root)
@@ -65,15 +66,14 @@ impl Waveform {
         enabled: bool,
     ) -> Result<bool, JobFailure> {
         let toggle = Self::measurement_toggle(world, root)?;
-        let changed = WidgetryToggleButton::set_selected_in_world(world, toggle, enabled).map_err(
-            |error| {
-                JobFailure::from(error).with_context(
-                    bevy_widgetry_diagnostics::ErrorFrame::new("waveform.measurement.set")
-                        .field("root", root)
-                        .field("toggle", toggle),
-                )
-            },
-        )?;
+        let changed = WidgetryToggleButtonHeadless::set_selected_in_world(world, toggle, enabled)
+            .map_err(|error| {
+            JobFailure::from(error).with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("waveform.measurement.set")
+                    .field("root", root)
+                    .field("toggle", toggle),
+            )
+        })?;
         if !enabled {
             Self::clear_measurement_in_world(world, root)?;
         }
@@ -112,7 +112,7 @@ fn snapshot(world: &World, root: Entity) -> ViewResult<Option<WaveformMeasuremen
     let parts = world.get::<MeasurementParts>(root).ok_or_else(|| {
         crate::view_error::missing(crate::WaveformPart::MeasurementParts).at(root)
     })?;
-    if !WidgetryToggleButton::selected(world, parts.toggle).map_err(|error| {
+    if !WidgetryToggleButtonHeadless::selected(world, parts.toggle).map_err(|error| {
         JobFailure::from(error).with_context(
             bevy_widgetry_diagnostics::ErrorFrame::new("waveform.measurement.query")
                 .field("root", root)
@@ -278,7 +278,7 @@ fn prepare_one(world: &mut World, root: Entity) -> ViewResult {
     if world.get::<WidgetryToggleButton>(toggle).is_none() {
         return Err(crate::view_error::missing(crate::WaveformPart::MeasurementToggle).at(toggle));
     }
-    let enabled = WidgetryToggleButton::selected(world, toggle)?;
+    let enabled = WidgetryToggleButtonHeadless::selected(world, toggle)?;
     if !enabled {
         clear(world, root)?;
     }

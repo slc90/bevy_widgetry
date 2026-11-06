@@ -150,6 +150,6 @@ mod tests {
             matches!(failure.kind(), ToggleButtonError::MissingPart { root: target, part: "ColorState" } if *target == root)
         );
         assert!(world.get::<ColorState>(root).is_none());
-        assert!(!crate::WidgetryToggleButton::selected(&world, root).unwrap());
+        assert!(!crate::WidgetryToggleButtonHeadless::selected(&world, root).unwrap());
     }
 }

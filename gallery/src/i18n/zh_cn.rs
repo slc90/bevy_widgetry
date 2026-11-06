@@ -362,6 +362,13 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             "二态按钮：点击或按空格 / 回车切换并保持选中外观。"
         }
         TextKey::Button(ButtonKey::ToggleButton) => "切换按钮",
+        TextKey::Button(ButtonKey::ToggleTagDescription) => {
+            "收藏标签：点击或按 Enter / Space 切换；禁用时仍可程序设置。"
+        }
+        TextKey::Button(ButtonKey::ToggleTagOn) => "已收藏面板",
+        TextKey::Button(ButtonKey::ToggleTagOff) => "收藏面板",
+        TextKey::Button(ButtonKey::ToggleTagFocus) => "聚焦标签",
+        TextKey::Button(ButtonKey::ToggleTagStatus) => "{state} · 已通知 {count} 次",
         TextKey::Button(ButtonKey::ToggleProgrammatic) => "程序化选中 / 取消",
         TextKey::Button(ButtonKey::HoldTitle) => "长按确认 · 64 / 112 / 160 px",
         TextKey::Button(ButtonKey::HoldBarDescription) => {

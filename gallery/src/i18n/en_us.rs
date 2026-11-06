@@ -356,6 +356,11 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             "Toggle Button: click or press Space / Enter to keep the selected appearance."
         }
         TextKey::Button(ButtonKey::ToggleButton) => "Toggle",
+        TextKey::Button(ButtonKey::ToggleTagDescription) => "Bookmark tag: click or press Enter / Space; programmatic updates work while disabled.",
+        TextKey::Button(ButtonKey::ToggleTagOn) => "Panel saved",
+        TextKey::Button(ButtonKey::ToggleTagOff) => "Save panel",
+        TextKey::Button(ButtonKey::ToggleTagFocus) => "Focus tag",
+        TextKey::Button(ButtonKey::ToggleTagStatus) => "{state} · Changed {count}",
         TextKey::Button(ButtonKey::ToggleProgrammatic) => "Set / clear selected",
         TextKey::Button(ButtonKey::HoldTitle) => "Hold to confirm · 64 / 112 / 160 px",
         TextKey::Button(ButtonKey::HoldBarDescription) => "Bar confirmation: hold for 3 s, release to decay, press again to resume. F6 cancels by disabling.",
