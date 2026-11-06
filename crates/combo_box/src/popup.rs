@@ -1,8 +1,6 @@
 use bevy_widgetry_theme::WidgetryTheme;
 
 use crate::combo_box::WidgetryComboBox;
-use crate::field::ComboBoxField;
-use crate::{ComboError, ComboPart, error::failure};
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -30,9 +28,11 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
     search: bool,
     search_prompt: crate::WidgetryComboBoxContent,
     no_results: crate::WidgetryComboBoxContent,
+    list_reference: bevy::ecs::template::EntityTemplate,
 ) -> impl Scene {
     // Erase the composed ListView Scene type to bound stack usage when expanding nested Gallery Scenes.
     let list: Box<dyn Scene> = Box::new(bsn! {
+        @crate::combo_box::root_reference(list_reference)
         @WidgetryListView::<T> { @source: source, @selection_mode: WidgetryListSelectionMode::Single, @item_height: item_height, @renderer: {renderer} }
         TabIndex(-1)
         Node { width: percent(100), height: percent(100), border: UiRect::ZERO }
@@ -79,80 +79,70 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
 
 pub(crate) fn handle_row_click<T: Send + Sync + 'static>(
     event: On<PointerClick>,
-    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
-    popups: Query<&ChildOf, With<ComboBoxPopup>>,
-    roots: Query<(), With<WidgetryComboBox<T>>>,
+    roots: Query<(Entity, &crate::WidgetryComboBoxParts), With<crate::WidgetryComboBoxHeadless<T>>>,
     mut commands: Commands,
 ) {
     if event.button != PointerButton::Primary {
         return;
     }
-    let list = event.entity;
-    let Ok(parent) = lists.get(list) else {
+    let Some((root, parts)) = roots.iter().find(|(_, parts)| parts.list == event.entity) else {
         return;
     };
-    let popup = parent.parent();
-    let Ok(parent) = popups.get(popup) else {
-        return;
-    };
-    let root = parent.parent();
-    if !roots.contains(root) {
-        return;
-    }
+    let list = parts.list;
     let target = event.original_event_target();
-    commands.queue(move |world: &mut World| {
-        if world.get::<InteractionDisabled>(root).is_some()
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if !world
+            .get::<crate::headless::OpenState>(root)
+            .is_some_and(|state| state.0)
             || world.get::<InteractionDisabled>(list).is_some()
-            || world.get::<Visibility>(popup) != Some(&Visibility::Visible)
         {
-            return;
+            return Ok(());
         }
         let mut entity = target;
         let mut item = None;
         while entity != list {
-            if world.get::<InteractionDisabled>(entity).is_some() {
-                return;
-            }
-            // The nearest ListView defines ownership, excluding rows from nested or foreign lists.
-            if world.get::<WidgetryListViewState>(entity).is_some() {
-                return;
+            if world.get::<InteractionDisabled>(entity).is_some()
+                || world.get::<WidgetryListViewState>(entity).is_some()
+            {
+                return Ok(());
             }
             if item.is_none() {
                 item = world.get::<WidgetryListViewItem>(entity).copied();
             }
             let Some(parent) = world.get::<ChildOf>(entity) else {
-                return;
+                return Ok(());
             };
             entity = parent.parent();
         }
         let Some(item) = item else {
-            return;
+            return Ok(());
         };
-        let Some(view) = world.get::<WidgetryListView<T>>(list) else {
-            return;
-        };
-        let Some(model) = world.get::<WidgetryListModel<T>>(view.source()) else {
-            return;
-        };
-        let Some(index) = model.index_of(item.id) else {
-            return;
-        };
-        if model.is_disabled(index) == Some(false)
+        let valid = world
+            .get::<WidgetryListView<T>>(list)
+            .and_then(|view| world.get::<WidgetryListModel<T>>(view.source()))
+            .is_some_and(|model| {
+                model
+                    .index_of(item.id)
+                    .is_some_and(|index| model.is_disabled(index) == Some(false))
+            })
             && world
                 .get::<bevy_widgetry_list_view::WidgetryListProjection>(list)
-                .is_some_and(|projection| projection.index_of(item.id).is_some())
-            && let Some(mut visibility) = world.get_mut::<Visibility>(popup)
+                .is_some_and(|projection| projection.index_of(item.id).is_some());
+        if valid
+            && world
+                .get::<WidgetryListSelectionState>(list)
+                .is_some_and(|selection| selection.contains(item.id))
         {
-            *visibility = Visibility::Hidden;
+            crate::headless::close::<T>(world, root)
+                .map_err(crate::ComboFailure::into_bevy_error)?;
         }
+        Ok(())
     });
 }
 
 pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
     event: On<FocusedInput<KeyboardInput>>,
-    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
-    popups: Query<&ChildOf, With<ComboBoxPopup>>,
-    roots: Query<(), With<WidgetryComboBox<T>>>,
+    roots: Query<(Entity, &crate::WidgetryComboBoxParts), With<crate::WidgetryComboBoxHeadless<T>>>,
     mut commands: Commands,
 ) {
     let list = event.focused_entity;
@@ -161,57 +151,43 @@ pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
     {
         return;
     }
-    let Ok(parent) = lists.get(list) else {
+    let Some((root, _)) = roots.iter().find(|(_, parts)| parts.list == list) else {
         return;
     };
-    let popup = parent.parent();
-    let Ok(parent) = popups.get(popup) else {
-        return;
-    };
-    let root = parent.parent();
-    if !roots.contains(root) {
-        return;
-    }
-    // Run in order with queued ListView navigation so active reflects earlier keys in the same frame.
-    commands.queue(move |world: &mut World| {
-        if world.get::<Visibility>(popup) != Some(&Visibility::Visible)
-            || world.get::<InteractionDisabled>(root).is_some()
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if !world
+            .get::<crate::headless::OpenState>(root)
+            .is_some_and(|state| state.0)
             || world.get::<InteractionDisabled>(list).is_some()
             || world
                 .get_resource::<InputFocus>()
                 .is_none_or(|focus| focus.get() != Some(list))
         {
-            return;
+            return Ok(());
         }
-        let Some(state) = world.get::<WidgetryListViewState>(list) else {
-            return;
-        };
-        let Some(active) = state.active.filter(|active| {
-            world
-                .get::<WidgetryListSelectionState>(list)
-                .is_some_and(|selection| selection.contains(*active))
-        }) else {
-            return;
-        };
-        let Some(view) = world.get::<WidgetryListView<T>>(list) else {
-            return;
-        };
-        let Some(model) = world.get::<WidgetryListModel<T>>(view.source()) else {
-            return;
-        };
-        if !model
-            .index_of(active)
-            .is_some_and(|index| model.is_disabled(index) == Some(false))
-            || confirmation_disabled(world, list, active)
-        {
-            return;
+        let active = world
+            .get::<WidgetryListViewState>(list)
+            .and_then(|state| state.active)
+            .filter(|id| {
+                world
+                    .get::<WidgetryListSelectionState>(list)
+                    .is_some_and(|selection| selection.contains(*id))
+            });
+        if let Some(active) = active {
+            let valid = world
+                .get::<WidgetryListView<T>>(list)
+                .and_then(|view| world.get::<WidgetryListModel<T>>(view.source()))
+                .is_some_and(|model| {
+                    model
+                        .index_of(active)
+                        .is_some_and(|index| model.is_disabled(index) == Some(false))
+                });
+            if valid && !confirmation_disabled(world, list, active) {
+                crate::headless::close::<T>(world, root)
+                    .map_err(crate::ComboFailure::into_bevy_error)?;
+            }
         }
-        if let Some(mut visibility) = world.get_mut::<Visibility>(popup) {
-            *visibility = Visibility::Hidden;
-        }
-        if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
-            focus.clear();
-        }
+        Ok(())
     });
 }
 
@@ -259,90 +235,95 @@ pub(crate) fn confirmation_disabled(
 
 pub(crate) fn handle_escape<T: Send + Sync + 'static>(
     mut event: On<FocusedInput<KeyboardInput>>,
-    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
-    mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
-    roots: Query<&Children, With<WidgetryComboBox<T>>>,
-    fields: Query<(), With<ComboBoxField>>,
-    mut focus: ResMut<InputFocus>,
-) -> Result<(), BevyError> {
-    let list = event.focused_entity;
+    roots: Query<
+        (
+            Entity,
+            &crate::WidgetryComboBoxParts,
+            &crate::headless::OpenState,
+        ),
+        With<crate::WidgetryComboBoxHeadless<T>>,
+    >,
+    focus: Res<InputFocus>,
+    mut commands: Commands,
+) {
     if event.input.key_code != KeyCode::Escape
         || event.input.state != ButtonState::Pressed
-        || focus.get() != Some(list)
+        || focus.get() != Some(event.focused_entity)
     {
-        return Ok(());
+        return;
     }
-    let Ok(parent) = lists.get(list) else {
-        return Ok(());
+    let Some((root, parts, _)) = roots
+        .iter()
+        .find(|(_, parts, state)| parts.list == event.focused_entity && state.0)
+    else {
+        return;
     };
-    let Ok((parent, mut visibility)) = popups.get_mut(parent.parent()) else {
-        return Ok(());
-    };
-    let Ok(children) = roots.get(parent.parent()) else {
-        return Ok(());
-    };
-    if *visibility != Visibility::Visible {
-        return Ok(());
-    }
-    let Some(field) = children.iter().find(|&child| fields.contains(child)) else {
-        return Err(failure(
-            ComboError::MissingPart {
-                root: parent.parent(),
-                entity: parent.parent(),
-                part: ComboPart::Field,
-            },
-            "combo_box.escape",
-        )
-        .into_bevy_error());
-    };
+    let trigger = parts.trigger;
     event.propagate(false);
-    *visibility = Visibility::Hidden;
-    focus.set(field, FocusCause::Navigated);
-    Ok(())
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if crate::headless::close::<T>(world, root).map_err(crate::ComboFailure::into_bevy_error)?
+            && world.get_entity(trigger).is_ok()
+        {
+            world
+                .resource_mut::<InputFocus>()
+                .set(trigger, FocusCause::Navigated);
+        }
+        Ok(())
+    });
 }
 
-pub(crate) fn clear_hidden_focus<T: Send + Sync + 'static>(
-    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
-    searches: Query<
-        (
-            &ChildOf,
-            &bevy_widgetry_core::input_target::WidgetryInputTarget,
-        ),
-        With<crate::search::SearchField>,
+pub(crate) fn project_visibility<T: Send + Sync + 'static>(world: &mut World, root: Entity) {
+    if world.get::<WidgetryComboBox<T>>(root).is_none() {
+        return;
+    }
+    let Some(parts) = world.get::<crate::WidgetryComboBoxParts>(root).copied() else {
+        return;
+    };
+    if crate::headless::owner(world, parts.popup) != Some(root) {
+        return;
+    }
+    let open = world
+        .get::<crate::headless::OpenState>(root)
+        .is_some_and(|state| state.0);
+    if let Some(mut visibility) = world.get_mut::<Visibility>(parts.popup) {
+        visibility.set_if_neq(if open {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        });
+    }
+}
+
+pub(crate) fn sync_visibility<T: Send + Sync + 'static>(
+    roots: Query<
+        (&crate::headless::OpenState, &crate::WidgetryComboBoxParts),
+        With<WidgetryComboBox<T>>,
     >,
-    popups: Query<(&ChildOf, &Visibility), With<ComboBoxPopup>>,
-    roots: Query<(), With<WidgetryComboBox<T>>>,
-    focus: Option<ResMut<InputFocus>>,
+    mut popups: Query<&mut Visibility>,
 ) {
-    let Some(mut focus) = focus else {
-        return;
-    };
-    let Some(focused) = focus.get() else {
-        return;
-    };
-    let popup = if let Ok(parent) = lists.get(focused) {
-        parent.parent()
-    } else if let Some((parent, _)) = searches.iter().find(|(_, target)| target.target == focused) {
-        parent.parent()
-    } else {
-        return;
-    };
-    let Ok((parent, visibility)) = popups.get(popup) else {
-        return;
-    };
-    if roots.contains(parent.parent()) && *visibility != Visibility::Visible {
-        focus.clear();
+    for (state, parts) in &roots {
+        if let Ok(mut visibility) = popups.get_mut(parts.popup) {
+            visibility.set_if_neq(if state.0 {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            });
+        }
     }
 }
 
 pub(crate) fn sync_geometry<T: Send + Sync + 'static>(world: &mut World) {
     let roots = world
-        .query::<(Entity, &WidgetryComboBox<T>)>()
+        .query::<(
+            Entity,
+            &WidgetryComboBox<T>,
+            &crate::WidgetryComboBoxHeadless<T>,
+        )>()
         .iter(world)
-        .map(|(root, combo)| {
+        .map(|(root, combo, behavior)| {
             (
                 root,
-                combo.source(),
+                behavior.source(),
                 combo.item_height(),
                 combo.max_visible_items(),
                 combo.search().is_some(),
@@ -427,93 +408,56 @@ pub(crate) fn sync_geometry<T: Send + Sync + 'static>(world: &mut World) {
         }
         if !search
             && model_empty
-            && let Some(mut visibility) = world.get_mut::<Visibility>(popup)
+            && let Err(error) = crate::headless::close::<T>(world, root)
         {
-            *visibility = Visibility::Hidden;
+            world
+                .commands()
+                .queue(move |_: &mut World| -> Result<(), BevyError> {
+                    Err(error.into_bevy_error())
+                });
         }
     }
 }
 
 pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
     event: On<Activate>,
-    fields: Query<&ChildOf, With<ComboBoxField>>,
-    roots: Query<(&WidgetryComboBox<T>, &Children, Has<InteractionDisabled>)>,
-    models: Query<&WidgetryListModel<T>>,
-    lists: Query<(), With<WidgetryListView<T>>>,
-    mut popups: Query<(&Children, &mut Visibility), With<ComboBoxPopup>>,
-    mut focus: Option<ResMut<InputFocus>>,
+    roots: Query<(Entity, &crate::WidgetryComboBoxParts), With<crate::WidgetryComboBoxHeadless<T>>>,
     mut commands: Commands,
-) -> Result<(), BevyError> {
-    let Ok(parent) = fields.get(event.entity) else {
-        return Ok(());
+) {
+    let Some((root, _)) = roots
+        .iter()
+        .find(|(_, parts)| parts.trigger == event.entity)
+    else {
+        return;
     };
-    let Ok((combo, children, disabled)) = roots.get(parent.parent()) else {
-        return Ok(());
-    };
-    if disabled
-        || !models
-            .get(combo.source())
-            .is_ok_and(|model| !model.is_empty() || combo.search().is_some())
-    {
-        return Ok(());
-    }
-    let Some(popup) = children.iter().find(|&child| popups.contains(child)) else {
-        return Err(failure(
-            ComboError::MissingPart {
-                root: parent.parent(),
-                entity: parent.parent(),
-                part: ComboPart::Popup,
-            },
-            "combo_box.activate",
-        )
-        .into_bevy_error());
-    };
-    if let Ok((children, mut visibility)) = popups.get_mut(popup) {
-        let Some(list) = children.iter().find(|&child| lists.contains(child)) else {
-            return Err(failure(
-                ComboError::MissingPart {
-                    root: parent.parent(),
-                    entity: popup,
-                    part: ComboPart::ListView,
-                },
-                "combo_box.activate",
-            )
-            .into_bevy_error());
-        };
-        *visibility = if *visibility == Visibility::Hidden {
-            Visibility::Visible
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if crate::WidgetryComboBoxHeadless::<T>::is_open(world, root)
+            .map_err(crate::ComboFailure::into_bevy_error)?
+        {
+            crate::WidgetryComboBoxHeadless::<T>::close_in_world(world, root)
         } else {
-            Visibility::Hidden
-        };
-        if *visibility == Visibility::Visible {
-            if combo.search().is_some() {
-                let root = parent.parent();
-                commands.queue(move |world: &mut World| {
-                    crate::search::open::<T>(world, root)
-                        .map_err(|error| error.into_bevy_error::<T>(root, "combo_box.open_search"))
-                });
-            } else if let Some(ref mut focus) = focus {
-                focus.set(list, FocusCause::Navigated);
-            }
+            crate::WidgetryComboBoxHeadless::<T>::open_in_world(world, root)
         }
-    }
-    Ok(())
+        .map(|_| ())
+        .map_err(crate::ComboFailure::into_bevy_error)
+    });
 }
 
-pub(crate) fn handle_outside_click(
+pub(crate) fn handle_outside_click<T: Send + Sync + 'static>(
     event: On<PointerClick>,
-    parents: Query<&ChildOf>,
-    mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
+    roots: Query<(Entity, &crate::headless::OpenState), With<crate::WidgetryComboBoxHeadless<T>>>,
+    mut commands: Commands,
 ) {
     let target = event.original_event_target();
-    for (parent, mut visibility) in &mut popups {
-        if *visibility == Visibility::Visible
-            && target != parent.parent()
-            && !parents
-                .iter_ancestors(target)
-                .any(|ancestor| ancestor == parent.parent())
-        {
-            *visibility = Visibility::Hidden;
+    for (root, state) in &roots {
+        if state.0 {
+            commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+                if !crate::headless::contains(world, root, target) {
+                    crate::headless::close::<T>(world, root)
+                        .map_err(crate::ComboFailure::into_bevy_error)?;
+                }
+                Ok(())
+            });
         }
     }
 }

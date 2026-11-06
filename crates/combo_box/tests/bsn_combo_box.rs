@@ -53,6 +53,7 @@ fn child<T: Component>(world: &World, root: Entity) -> Entity {
 fn field_uses_combo_colors_and_open_state() {
     let (mut app, _, field, _) = app_with_combo();
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
@@ -120,6 +121,7 @@ fn owner_overrides_follow_theme_and_reject_direct_field_writes() {
     colors.field.open.background = Some(Color::NONE);
     WidgetryComboBoxColorOverrides::set_in_world(app.world_mut(), root, colors).unwrap();
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
@@ -167,6 +169,7 @@ fn clicking_another_combo_closes_previous_popup() {
     let other_field = child::<WidgetryButtonHeadless>(app.world(), other);
     let other_popup = app.world().get::<Children>(other).unwrap()[1];
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.world_mut().trigger(primary_press(other_field));
     app.world_mut().flush();
     app.world_mut().trigger(primary_click(other_field));
@@ -181,6 +184,7 @@ fn clicking_another_combo_closes_previous_popup() {
     );
     let outside = app.world_mut().spawn_empty().id();
     app.world_mut().trigger(primary_click(outside));
+    app.world_mut().flush();
     assert_eq!(
         *app.world().get::<Visibility>(other_popup).unwrap(),
         Visibility::Hidden
@@ -212,7 +216,7 @@ fn wait_for_image(app: &mut App, icon: Entity, expected: Option<&Handle<Image>>)
 }
 
 #[test]
-fn dropdown_icon_follows_popup_visibility() {
+fn dropdown_icon_follows_logical_open_state() {
     let (mut app, root, field, popup) = app_with_combo();
     app.finish();
     app.cleanup();
@@ -249,11 +253,13 @@ fn dropdown_icon_follows_popup_visibility() {
     let up = wait_for_image(&mut app, reference, None);
     assert_ne!(down, up);
     let original_node = app.world().get::<Node>(icon).unwrap().clone();
-    *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Visible;
+    bevy_widgetry_combo_box::WidgetryComboBoxHeadless::<u32>::open_in_world(app.world_mut(), root)
+        .unwrap();
     app.update();
     let image = child::<ImageNode>(app.world(), icon);
     assert_eq!(app.world().get::<ImageNode>(image).unwrap().image, up);
-    *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Hidden;
+    bevy_widgetry_combo_box::WidgetryComboBoxHeadless::<u32>::close_in_world(app.world_mut(), root)
+        .unwrap();
     app.update();
     assert_eq!(app.world().get::<ImageNode>(image).unwrap().image, down);
     assert_eq!(
@@ -268,11 +274,12 @@ fn dropdown_icon_follows_popup_visibility() {
         app.world().get::<Node>(icon).unwrap().height,
         original_node.height
     );
-    *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Visible;
+    bevy_widgetry_combo_box::WidgetryComboBoxHeadless::<u32>::open_in_world(app.world_mut(), root)
+        .unwrap();
     app.update();
     let source = app
         .world()
-        .get::<WidgetryComboBox<u32>>(root)
+        .get::<bevy_widgetry_combo_box::WidgetryComboBoxHeadless<u32>>(root)
         .unwrap()
         .source();
     app.world_mut()

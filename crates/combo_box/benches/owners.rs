@@ -175,7 +175,10 @@ fn validate(fixture: &mut Fixture) -> Result<u32> {
             let item = world
                 .get::<bevy_widgetry_list_view::WidgetryListViewItem>(row)
                 .ok_or_else(|| missing("visible row item"))?;
-            let expected = if item.index == 0 {
+            let expected = if world
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(fixture.list)
+                .is_some_and(|selection| selection.contains(item.id))
+            {
                 colors.selected
             } else {
                 colors.normal
@@ -188,7 +191,15 @@ fn validate(fixture: &mut Fixture) -> Result<u32> {
                     != Some(expected.background)
                 || world.get::<TextColor>(text).map(|color| color.0) != Some(expected.foreground)
             {
-                return Err(missing("reused row identity and owner colors"));
+                return Err(missing(&format!(
+                    "reused row identity and owner colors: row={row:?}, actual_index={}, expected_index={}, background={:?}, expected_background={:?}, foreground={:?}, expected_foreground={:?}",
+                    item.index,
+                    start + offset,
+                    world.get::<BackgroundColor>(row),
+                    expected.background,
+                    world.get::<TextColor>(text),
+                    expected.foreground
+                )));
             }
         }
     }

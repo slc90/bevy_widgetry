@@ -5,7 +5,6 @@ use crate::{
     error::{self, ComboFault, RuntimeFailure, part},
 };
 use bevy::prelude::*;
-use bevy::ui::InteractionDisabled;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::icon::WidgetryIcon;
@@ -58,12 +57,16 @@ struct RenderedSelection {
 
 pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) {
     let roots = world
-        .query::<(Entity, &WidgetryComboBox<T>)>()
+        .query::<(
+            Entity,
+            &WidgetryComboBox<T>,
+            &crate::WidgetryComboBoxHeadless<T>,
+        )>()
         .iter(world)
-        .map(|(root, combo)| {
+        .map(|(root, combo, behavior)| {
             (
                 root,
-                combo.source(),
+                behavior.source(),
                 combo.renderer().clone(),
                 combo.placeholder().clone(),
             )
@@ -274,20 +277,6 @@ pub(crate) fn scene() -> impl Scene {
             border: UiRect::all(px(1)),
         }
 
-    }
-}
-
-pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
-    event: On<Add<InteractionDisabled>>,
-    roots: Query<&Children, With<WidgetryComboBox<T>>>,
-    mut popups: Query<&mut Visibility, With<ComboBoxPopup>>,
-) {
-    if let Ok(children) = roots.get(event.entity) {
-        for child in children.iter() {
-            if let Ok(mut visibility) = popups.get_mut(child) {
-                *visibility = Visibility::Hidden;
-            }
-        }
     }
 }
 

@@ -40,6 +40,8 @@
 
 ## Coverage Map
 
+- `headless.rs`：公开Headless和根内多层显式trigger/popup/list绑定，不要求默认Field或Popup标记；None初始化、独占ListView选择Authority与根通知、程序选择保留打开状态、关闭焦点与幂等性、外部布局高度保留、禁用立即关闭但允许程序选择、部件失效关闭、根销毁清理嵌套Popup、Model为空拒绝打开、Source映射诊断，以及拒绝跨根绑定和Multiple列表。真实键盘派发验证确认后同批后续键拒绝、Escape回到显式触发器，以及外部点击保留新的外部焦点。
+
 - `data_contract.rs`：泛型 Source、Model ID、共享 Source 与构造诊断；失效 Source 经组合层保留 ListView 领域分类、实际 Source、原始诊断 ID 及单次源头日志。
 - `diagnostics.rs`：独立无效请求的 Root / 类型和新 ID；同轮多个 Field 结构故障及重复观察共享 origin；Model / Popup / 内部 List 映射、失效 ID 与执行时 index 拒绝；List 注册冲突的原类型和单次源头日志；多个 Field Scene 失败的原始 origin、原生 cause / Severity / payload 与自有内容清理和独立业务 Entity 归属；颜色拒绝的原值及底层类型。
 - `selection_field.rs`：Selection Authority 到 Field / Placeholder 的投影、公开本体查询、执行时原始索引、隐藏选择保留、通知顺序及 Model Revision。失败 Renderer 的清理回归显式覆盖下拉箭头延后生成 Image 的初始化时序，在具体 Icon 的 Image 与资产就绪后记录全局实体基线，再验证失败内容及预约 Entity 全部清理，避免将合法异步实体误判为泄漏。
@@ -47,6 +49,9 @@
 - `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
 - `search.rs`：可选搜索的每实例 Projection 隔离、真实文本键入与结果导航的分流、光标编辑、IME 确认隔离、携带换行正文的 Enter、关闭后同批确认阻断、无结果展示及 Model 自动刷新、隐藏选择与真实删除、重新打开重置查询、有效 Disabled、外部编辑器焦点配色、同周期变化合并和稳定帧不重复匹配，以及 10,000 项结果的有界行数及 Reveal。
 - `search.rs` 同时保护同帧文本 / 确认的相对顺序、确认后丢弃剩余正文，以及原生编辑器重新开启冒泡后 Enter / Esc 仍不能触发外层快捷键。
+- 搜索确认通知的消费者可将焦点移到下一输入框、排队销毁根或立即重新打开同一实例；旧输入批次必须在关闭通知前结束，不清理新焦点、不对正常销毁误报，也不把旧尾随正文交给新会话。
+- 同页有多个同T搜索实例时，先处理实例的确认消费者可销毁整个页面；同步循环必须跳过已销毁的后续实例，不能对正常页面清理报告结构错误。
+- 公开open排队后紧接销毁根时，延迟搜索初始化取消，不产生伪错误或业务变化通知。
 - `search.rs` 的真实 UI Layout 回归保护搜索结果的 viewport 和行宽撑满 Popup 内宽，覆盖首次打开、过滤为单结果、无结果后恢复和根宽变化。
 
 搜索新增 Query 空 / 有匹配 / 无匹配、输入框 Focus 与 List Active 的耦合。过滤不改 Selection / Model，导航不提交选择，只有有效确认才关闭并通知。`benches/search.rs` 在真实 Headless UI / Layout 中固定 1,000 / 10,000 条数据，交替测单结果 / 全部 / 无结果 / 多结果的查询更新（含两次 App Update，使变化后的 Popup 尺寸被虚拟化消费），以及 10,000 项结果窗口 0 / 640px 往返滚动，核对匹配数量、渲染行数和 Text 就绪；不代表原生 Present 或完整 GUI 60 FPS。

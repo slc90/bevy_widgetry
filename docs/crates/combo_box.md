@@ -8,6 +8,18 @@
 
 ComboBox 在业务上组合 Button、ListView 和 ScrollArea。数据由 Model 持有，Selection 使用 Stable Item ID；Field 与 Popup 分别由 Renderer 构造内容。Popup 的可见性不应产生第二份选择 Authority。Field 与内部 ListView 的颜色归属在构造时绑定，BSN 延后挂接及后续层级 / 部件变化在 StyleOwners 阶段补偿；稳定实例不再逐帧遍历层级建立归属。移除归属标记会在首次颜色消费前修复，部件脱离或 Root 失效时清理对应派生关系。
 
+`WidgetryComboBoxHeadless<T>` 通过一次性的 `source` Props 保存数据源身份，不构造触发器、弹层或默认 Field 内容。用 BSN 在根挂载不可变的 `WidgetryComboBoxParts { trigger, popup, list }`，引用调用方自己的触发器、弹层容器和 `WidgetryListView<T>`。三者可在根内任意多层嵌套，列表必须处于绑定 Popup 内，触发器位于 Popup 外；绑定不能跨越另一个 ComboBox 根。根销毁时这些子树随之销毁，不支持把弹层放到根外的 portal。
+
+绑定列表必须使用相同的 `WidgetryListModel<T>` Source 和 Single 选择模式。触发器接收 `Activate`，可使用公开 Button Headless，不要求默认 Button、Field 或内容容器。默认 `WidgetryComboBox<T>` 组合相同 Headless 与显式绑定，默认布局、内容 Renderer、尺寸与颜色归属仍由视觉层负责。
+
+逻辑打开状态由根私有保存，使用 `WidgetryComboBoxHeadless::<T>::is_open` 查询，`open_in_world` / `close_in_world` 同步控制，`open` / `close` 排队控制。无效根和绑定通过 `ComboFailure` 返回；Disabled 拒绝用户打开，非搜索空 Model 不打开。默认 Popup Visibility 是此状态的投影，属于控件托管输出，不通过直接写入 Visibility 打开或关闭；外部 Style 自行把 `is_open` 投影为自己的显示方式，库不写外部 Popup 的尺寸或颜色。
+
+外部显示投影需在宿主验证焦点可用性前生效。Gallery 的自定义 Style 在 PreUpdate 的 Picking Last 之后、InputFocus Dispatch 之前，以及 PostUpdate 的 Widgetry Build 之前更新 Visibility，避免打开的列表仍因旧 Hidden 输出被窗口焦点作用域移出。
+
+关闭统一清理 Popup 内的焦点，并给绑定列表施加内部 Disabled 原因，立即阻断隐藏列表和同批后续确认；重新打开撤销这一内部原因，不覆盖调用方的本地 Disabled。Escape 关闭后回到绑定触发器，外部点击仅清理本实例持有的弹层焦点，不抢回其他控件焦点。有效禁用、部件失效、非搜索 Model 变空均结束打开状态。
+
+打开与选择操作校验 Source 和完整绑定；`is_open` 查询根的逻辑状态，`close_in_world` 允许在部件失效时清理旧会话，两者仍要求有效的 Headless 根。
+
 组合配色响应 Field Hover / Pressed、Popup 可见性、有效 Disabled、颜色 Override / Theme 和部件生命周期变化；稳定实例不重复解析或应用整套颜色。根缓存真正样式 Owner 提供的 palette，托管 ComboBox 的局部交互沿用该 palette，解除托管后恢复自己的 Theme / Override。内部 ListView 使用组合 Owner 的列表配色，独立处理 Selection、Active、Focus 与可见行输入及滚动复用。Field `(id, index, revision)` 内容缓存保持独立，颜色变化不重建 Renderer，新的 Text / Icon 在当帧前景传播中获得正确颜色。
 
 ## 主要功能
@@ -18,6 +30,7 @@ ComboBox 在业务上组合 Button、ListView 和 ScrollArea。数据由 Model �
 - Popup 支持 Pointer、Keyboard Navigation 与 Scroll；选择后关闭，Escape 或外部点击也可以关闭。
 - Model Insert / Remove / Move / Edit 后，列表及 Field 跟随最新数据。
 - `select_id` 按 Stable ID 选择，`select_index` 在 Commands 执行时解析原始 Model 索引；`clear_selection` 清空。`selected_id(world, combo)` 从本体只读查询唯一 Selection，无需应用查找内部列表。
+- Headless 提供相同 Selection API；数据源通过 Headless Component 的 `source()` 查询。默认控件保留 Selection 入口并调用同一提交路径。
 - 使用 `ValueChange<Option<WidgetryListItemId>>` 通知变化。
 - 可通过 `search: Some(WidgetryComboBoxMatcher::new(...))` 启用 Popup 本地搜索；匹配器接收查询和原始条目，`search_prompt` / `no_results` 使用可复用的 `WidgetryComboBoxContent` Scene 工厂。
 - `search_state(world, combo)` 只读查询搜索词、匹配数量和 Active，查询正文由内部 TextField 的官方 EditableText 唯一持有。
@@ -45,4 +58,5 @@ Field、搜索、图标及自有配色的持续结构异常按实例和业务键
 - 使用前需要为具体 `T` 注册能力，不能只安装非泛型 Plugin。
 - Renderer 控制内容形态；ComboBox 不内建所有业务类型的选项展示。
 - 当前 Popup 与 Field 的生命周期和 Focus 行为取决于相应 Widget 的组合契约。
+- 外部自定义搜索区域尚未开放；默认可搜索 ComboBox 继续使用内建搜索组合。
 

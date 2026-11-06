@@ -472,6 +472,8 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::CheckBox(CheckBoxKey::TriSymbolStatus) => "{state} · Committed changes {count}",
         TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "Tri-State CheckBox",
         TextKey::ComboBox(ComboBoxKey::LocalSearch) => "Local search (shared data)",
+        TextKey::ComboBox(ComboBoxKey::CustomDescription) => "Custom card and decorated popup: select, clear, Escape, or click outside to close.",
+        TextKey::ComboBox(ComboBoxKey::CustomPopup) => "Choose a fruit",
         TextKey::ComboBox(ComboBoxKey::SearchPrompt) => "Search",
         TextKey::ComboBox(ComboBoxKey::NoResults) => "No matching options",
         TextKey::ComboBox(ComboBoxKey::SearchStatus) => {

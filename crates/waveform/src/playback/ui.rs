@@ -328,7 +328,7 @@ fn activate(
 fn speed_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
     mut combos: Query<(
-        &WidgetryComboBox<Speed>,
+        &bevy_widgetry_combo_box::WidgetryComboBoxHeadless<Speed>,
         &mut SpeedOwner,
         Has<InteractionDisabled>,
     )>,

@@ -11,6 +11,8 @@ pub type ComboFailure = WidgetryFailure<ComboError>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComboPart {
+    Bindings,
+    OpenState,
     Children,
     Field,
     FieldContent,
@@ -37,6 +39,11 @@ pub enum ComboPart {
 
 #[derive(Debug)]
 pub enum ComboError {
+    InvalidBinding {
+        root: Entity,
+        entity: Entity,
+        part: ComboPart,
+    },
     InvalidRoot {
         root: Entity,
         item_type: &'static str,
@@ -103,6 +110,7 @@ pub enum ComboError {
 impl fmt::Display for ComboError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::InvalidBinding { .. } => "ComboBox 部件不属于绑定根或弹层",
             Self::InvalidRoot { .. } => "ComboBox 不存在或类型不匹配",
             Self::InvalidSource { .. } => "ComboBox 数据源不存在或 Model 类型不匹配",
             Self::MissingPart { .. } => "ComboBox 缺失运行部件",

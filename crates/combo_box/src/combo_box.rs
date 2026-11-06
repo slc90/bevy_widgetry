@@ -2,13 +2,8 @@ use crate::{
     ComboError, ComboFailure, ComboPart,
     error::{ComboFault, failure, list},
 };
-use crate::{
-    field,
-    popup::{self, ComboBoxPopup},
-};
-use bevy::input_focus::InputFocus;
+use crate::{field, popup};
 use bevy::prelude::*;
-use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_diagnostics::bevy::FailureState;
 use bevy_widgetry_list_view::{
@@ -21,7 +16,6 @@ use std::{collections::VecDeque, sync::Arc};
 #[scene(WidgetryComboBoxProps<T>)]
 #[require(crate::style::StyleInvalidation, ComboDiagnostics, ForwardedChanges, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
 pub struct WidgetryComboBox<T: Send + Sync + 'static> {
-    source: Entity,
     item_height: f32,
     max_visible_items: usize,
     renderer: WidgetryListViewRenderer<T>,
@@ -60,38 +54,33 @@ pub(crate) struct ForwardedChanges(VecDeque<ValueChange<Option<WidgetryListItemI
 
 pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
     event: On<WidgetryListSelectionChanged>,
-    lists: Query<(&ChildOf, Has<PreservePopup>), With<WidgetryListView<T>>>,
-    mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
-    mut roots: Query<(Has<InteractionDisabled>, &mut ForwardedChanges), With<WidgetryComboBox<T>>>,
-    focus: Option<ResMut<InputFocus>>,
+    mut roots: Query<
+        (Entity, &crate::WidgetryComboBoxParts, &mut ForwardedChanges),
+        With<crate::WidgetryComboBoxHeadless<T>>,
+    >,
+    lists: Query<Has<PreservePopup>, With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {
+    let Some((root, _, mut changes)) = roots
+        .iter_mut()
+        .find(|(_, parts, _)| parts.list == event.source)
+    else {
+        return;
+    };
     let value = event.selected.iter().next().copied();
-    let Ok((list_parent, preserve)) = lists.get(event.source) else {
-        return;
-    };
-    let Ok((popup_parent, mut visibility)) = popups.get_mut(list_parent.parent()) else {
-        return;
-    };
-    let root = popup_parent.parent();
-    let Ok((disabled, mut changes)) = roots.get_mut(root) else {
-        return;
-    };
-    if !disabled && !preserve && value.is_some() {
-        *visibility = Visibility::Hidden;
-        // Input for this frame has already been dispatched to the old target.
-        // Release focus immediately so ListView rejects the remaining queued keyboard operations.
-        if let Some(mut focus) = focus
-            && focus.get() == Some(event.source)
-        {
-            focus.clear();
-        }
-    }
+    let preserve = lists.get(event.source).unwrap_or(false);
     changes.0.push_back(ValueChange {
         source: root,
         value,
         is_final: true,
     });
+    if !preserve && value.is_some() {
+        commands.queue(move |world: &mut World| {
+            crate::headless::close::<T>(world, root)
+                .map(|_| ())
+                .map_err(ComboFailure::into_bevy_error)
+        });
+    }
     commands.queue(move |world: &mut World| dispatch_value_changes(world, root));
 }
 
@@ -110,7 +99,10 @@ fn dispatch_value_changes(world: &mut World, root: Entity) {
 // Queue dispatch separately so those commands run before the next request resolves a stable ID from a potentially stale index.
 fn queue_pending_changes<T: Send + Sync + 'static>(commands: &mut Commands, root: Entity) {
     commands.queue(move |world: &mut World| {
-        if world.get::<WidgetryComboBox<T>>(root).is_some() {
+        if world
+            .get::<crate::WidgetryComboBoxHeadless<T>>(root)
+            .is_some()
+        {
             dispatch_value_changes(world, root);
         }
     });
@@ -120,15 +112,17 @@ pub(crate) fn update_list<T: Send + Sync + 'static>(
     world: &World,
     root: Entity,
 ) -> Result<(Entity, Entity), ComboFailure> {
-    let combo = world.get::<WidgetryComboBox<T>>(root).ok_or_else(|| {
-        failure(
-            ComboError::InvalidRoot {
-                root,
-                item_type: std::any::type_name::<T>(),
-            },
-            "combo_box.update_list",
-        )
-    })?;
+    let combo = world
+        .get::<crate::WidgetryComboBoxHeadless<T>>(root)
+        .ok_or_else(|| {
+            failure(
+                ComboError::InvalidRoot {
+                    root,
+                    item_type: std::any::type_name::<T>(),
+                },
+                "combo_box.update_list",
+            )
+        })?;
     let source = combo.source();
     if world.get::<WidgetryListModel<T>>(source).is_none() {
         return Err(failure(
@@ -140,30 +134,32 @@ pub(crate) fn update_list<T: Send + Sync + 'static>(
             "combo_box.update_list",
         ));
     }
-    let mut failed_popup = None;
-    let list = world
-        .get::<Children>(root)
-        .and_then(|children| {
-            children.iter().find_map(|popup| {
-                world.get::<ComboBoxPopup>(popup)?;
-                failed_popup = Some(popup);
-                world.get::<Visibility>(popup)?;
-                world
-                    .get::<Children>(popup)?
-                    .iter()
-                    .find(|&child| world.get::<WidgetryListView<T>>(child).is_some())
-            })
-        })
-        .ok_or_else(|| {
-            failure(
-                ComboError::MissingList {
-                    root,
-                    source,
-                    popup: failed_popup,
-                },
-                "combo_box.update_list",
-            )
-        })?;
+    let parts = crate::headless::parts(world, root)?;
+    let list = parts.list;
+    if world.get::<Visibility>(parts.popup).is_none()
+        || world.get::<WidgetryListView<T>>(list).is_none()
+    {
+        return Err(failure(
+            ComboError::MissingList {
+                root,
+                source,
+                popup: Some(parts.popup),
+            },
+            "combo_box.update_list",
+        ));
+    }
+    if world.get::<WidgetryListView<T>>(list).is_some_and(|view| {
+        view.selection_mode() != bevy_widgetry_list_view::WidgetryListSelectionMode::Single
+    }) {
+        return Err(failure(
+            ComboError::InvalidBinding {
+                root,
+                entity: list,
+                part: ComboPart::Selection,
+            },
+            "combo_box.update_list",
+        ));
+    }
     let actual_source = world
         .get::<WidgetryListView<T>>(list)
         .map(WidgetryListView::source);
@@ -228,10 +224,6 @@ fn queue_selection<T: Send + Sync + 'static>(
 }
 
 impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
-    pub fn source(&self) -> Entity {
-        self.source
-    }
-
     pub fn item_height(&self) -> f32 {
         self.item_height
     }
@@ -314,18 +306,16 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         let max_visible_items = props.max_visible_items;
         let source = props.source;
         let item_height = props.item_height;
-        let popup = popup::scene::<T>(
-            props.source,
-            props.item_height,
-            props.renderer.clone(),
-            props.search.is_some(),
-            props.search_prompt,
-            props.no_results,
-        );
+        let renderer = props.renderer.clone();
+        let search = props.search.is_some();
+        let search_prompt = props.search_prompt;
+        let no_results = props.no_results;
         bsn! {
             template(move |context| props.colors.clone().initial::<T>(context.entity.id()).map_err(ComboFailure::into_bevy_error))
+            @crate::WidgetryComboBoxHeadless::<T> {@source:source}
+            crate::WidgetryComboBoxParts {trigger:#Trigger,popup:#Popup,list:#List}
             WidgetryComboBox::<T> {
-                source: {props.source}, item_height: {props.item_height},
+                item_height: {props.item_height},
                 max_visible_items: {props.max_visible_items}, renderer: {props.renderer}, placeholder: {props.placeholder}, search: {props.search},
             }
             template(move |context| {
@@ -335,7 +325,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
                 Ok(ValidatedConfig)
             })
             Node { width: px(200) }
-            Children [@field::scene()-- @{popup}]
+            Children [#Trigger @field::scene()-- #Popup @popup::scene::<T>(source,item_height,renderer,search,search_prompt,no_results,#List)]
         }
     }
 }
@@ -376,4 +366,12 @@ impl WidgetryComboBoxContent {
     pub(crate) fn build(&self) -> Box<dyn SceneList> {
         (self.0)()
     }
+}
+
+pub(crate) fn root_reference(reference: bevy::ecs::template::EntityTemplate) -> impl Scene {
+    bevy::scene::SceneFunction(move |_, scene| {
+        if let bevy::ecs::template::EntityTemplate::SceneEntityReference(reference) = reference {
+            scene.entity_references.push(reference);
+        }
+    })
 }

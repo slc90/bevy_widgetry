@@ -5,7 +5,9 @@ use crate::i18n::{Language, TextKey, localized};
 use crate::theme::GalleryTheme;
 use bevy::prelude::*;
 use bevy::ui_widgets::ValueChange;
-use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
+use bevy_widgetry::combo_box::{
+    WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxHeadless,
+};
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::style::z_index;
@@ -52,7 +54,7 @@ pub(crate) fn install(app: &mut App) -> Result {
 fn sync_external_settings(world: &mut World) -> Result {
     let language = *world.resource::<Language>();
     let language_combos = world
-        .query_filtered::<(Entity, &WidgetryComboBox<Language>), With<LanguageComboBox>>()
+        .query_filtered::<(Entity, &WidgetryComboBoxHeadless<Language>), With<LanguageComboBox>>()
         .iter(world)
         .map(|(root, combo)| (root, combo.source()))
         .collect::<Vec<_>>();
@@ -71,7 +73,7 @@ fn sync_external_settings(world: &mut World) -> Result {
         }
     }
     let scale_combos = world
-        .query::<(Entity, &WidgetryComboBox<f32>, &ScaleFactorComboBox)>()
+        .query::<(Entity, &WidgetryComboBoxHeadless<f32>, &ScaleFactorComboBox)>()
         .iter(world)
         .map(|(root, combo, scale)| (root, combo.source(), scale.target_window))
         .collect::<Vec<_>>();
@@ -190,7 +192,7 @@ fn scale_factor_selector(
 }
 
 fn initialize_scale_factor_selection(
-    combos: Query<(Entity, &WidgetryComboBox<f32>, &ScaleFactorComboBox)>,
+    combos: Query<(Entity, &WidgetryComboBoxHeadless<f32>, &ScaleFactorComboBox)>,
     models: Query<&WidgetryListModel<f32>>,
     windows: Query<&Window>,
     mut commands: Commands,
@@ -231,7 +233,7 @@ fn initialize_scale_factor_selection(
 fn on_scale_factor_combo_box_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
     _main_thread: bevy::ecs::system::NonSendMarker,
-    combos: Query<(&WidgetryComboBox<f32>, &ScaleFactorComboBox)>,
+    combos: Query<(&WidgetryComboBoxHeadless<f32>, &ScaleFactorComboBox)>,
     models: Query<&WidgetryListModel<f32>>,
     mut windows: Query<(
         Entity,
@@ -298,7 +300,7 @@ fn on_scale_factor_combo_box_changed(
 
 fn on_theme_combo_box_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
-    theme_combo_boxes: Query<&WidgetryComboBox<GalleryTheme>, With<ThemeComboBox>>,
+    theme_combo_boxes: Query<&WidgetryComboBoxHeadless<GalleryTheme>, With<ThemeComboBox>>,
     models: Query<&WidgetryListModel<GalleryTheme>>,
     mut commands: Commands,
 ) -> Result {
@@ -339,7 +341,7 @@ fn on_theme_combo_box_changed(
 fn sync_theme_combo_box(
     _: On<WidgetryThemeChanged>,
     theme: Res<WidgetryTheme>,
-    combos: Query<(Entity, &WidgetryComboBox<GalleryTheme>), With<ThemeComboBox>>,
+    combos: Query<(Entity, &WidgetryComboBoxHeadless<GalleryTheme>), With<ThemeComboBox>>,
     models: Query<&WidgetryListModel<GalleryTheme>>,
     mut commands: Commands,
 ) -> Result {
@@ -353,7 +355,7 @@ fn sync_theme_combo_box(
 
 fn initialize_theme_selection(
     theme_mode: Res<WidgetryTheme>,
-    combos: Query<(Entity, &WidgetryComboBox<GalleryTheme>), With<ThemeComboBox>>,
+    combos: Query<(Entity, &WidgetryComboBoxHeadless<GalleryTheme>), With<ThemeComboBox>>,
     models: Query<&WidgetryListModel<GalleryTheme>>,
     mut commands: Commands,
 ) -> Result {
@@ -367,7 +369,7 @@ fn initialize_theme_selection(
 
 fn select_theme(
     mode: Option<GalleryTheme>,
-    combos: &Query<(Entity, &WidgetryComboBox<GalleryTheme>), With<ThemeComboBox>>,
+    combos: &Query<(Entity, &WidgetryComboBoxHeadless<GalleryTheme>), With<ThemeComboBox>>,
     models: &Query<&WidgetryListModel<GalleryTheme>>,
     commands: &mut Commands,
 ) -> Result {
@@ -414,7 +416,7 @@ fn language_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
 
 fn initialize_language_selection(
     language: Res<Language>,
-    combos: Query<(Entity, &WidgetryComboBox<Language>), With<LanguageComboBox>>,
+    combos: Query<(Entity, &WidgetryComboBoxHeadless<Language>), With<LanguageComboBox>>,
     models: Query<&WidgetryListModel<Language>>,
     mut commands: Commands,
 ) {
@@ -431,7 +433,7 @@ fn initialize_language_selection(
 
 fn on_language_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
-    combos: Query<&WidgetryComboBox<Language>, With<LanguageComboBox>>,
+    combos: Query<&WidgetryComboBoxHeadless<Language>, With<LanguageComboBox>>,
     models: Query<&WidgetryListModel<Language>>,
     mut language: ResMut<Language>,
     mut config: ResMut<AppConfig>,
@@ -517,7 +519,7 @@ mod tests {
         let root = bevy_widgetry::scene::spawn_scene(app.world_mut(), selector).unwrap();
         let source = app
             .world()
-            .get::<WidgetryComboBox<f32>>(root)
+            .get::<WidgetryComboBoxHeadless<f32>>(root)
             .unwrap()
             .source();
         for (index, expected) in [(0, 1.0), (2, 1.5)] {
@@ -581,7 +583,7 @@ mod tests {
         app.update();
         let source = app
             .world()
-            .get::<WidgetryComboBox<GalleryTheme>>(root)
+            .get::<WidgetryComboBoxHeadless<GalleryTheme>>(root)
             .unwrap()
             .source();
         let id = app
@@ -608,7 +610,7 @@ mod tests {
         let root = bevy_widgetry::scene::spawn_scene(app.world_mut(), selector).unwrap();
         let source = app
             .world()
-            .get::<WidgetryComboBox<GalleryTheme>>(root)
+            .get::<WidgetryComboBoxHeadless<GalleryTheme>>(root)
             .unwrap()
             .source();
         let selected = app

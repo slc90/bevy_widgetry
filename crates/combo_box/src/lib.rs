@@ -2,6 +2,10 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod combo_box;
+mod headless;
+pub use headless::{
+    WidgetryComboBoxHeadless, WidgetryComboBoxHeadlessProps, WidgetryComboBoxParts,
+};
 mod error;
 pub use error::{ComboError, ComboFailure, ComboPart};
 mod field;
@@ -40,8 +44,7 @@ impl Plugin for WidgetryComboBoxPlugin {
             app.add_plugins(PopoverPlugin);
         }
         app.add_observer(search::contain_keys);
-        app.add_observer(popup::handle_outside_click)
-            .add_observer(field::own_dropdown_icon);
+        app.add_observer(field::own_dropdown_icon);
         widgetry_debug!("WidgetryComboBoxPlugin 注册完成");
     }
 }

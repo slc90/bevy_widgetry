@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+mod custom;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::ComboBoxKey;
 use crate::i18n::{CommonKey, NavigationKey};
@@ -170,7 +171,8 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
             @localized(TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             @combo(sources[3], "Data-Driven") template(|_| Ok(DynamicComboBox))--
             template(|_| Ok(DemoStatus::default())) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
-            Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]
+            Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]--
+            @custom::scene(sources[0])
         ]
     });
     content
@@ -281,7 +283,7 @@ fn operate(
 
 fn operate_world(world: &mut World, root: Entity, action: Action) -> Result<(), BevyError> {
     let source = world
-        .get::<WidgetryComboBox<ComboBoxDemoItem>>(root)
+        .get::<bevy_widgetry::combo_box::WidgetryComboBoxHeadless<ComboBoxDemoItem>>(root)
         .ok_or_else(|| {
             crate::diagnostics::at(
                 "ComboBox demo root missing",
@@ -397,7 +399,10 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
         }
     }
     let Ok((root, combo)) = world
-        .query_filtered::<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>()
+        .query_filtered::<(
+            Entity,
+            &bevy_widgetry::combo_box::WidgetryComboBoxHeadless<ComboBoxDemoItem>,
+        ), With<DynamicComboBox>>()
         .single(world)
     else {
         return Ok(());
@@ -450,6 +455,7 @@ impl Plugin for ComboBoxDemoPlugin {
         let result = (|| -> Result<(), BevyError> {
             app.register_widgetry_combo_box::<ComboBoxDemoItem>()
                 .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?;
+            custom::install(app);
             app.register_type::<ComboBoxDemoSources>()
                 .add_systems(
                     PostUpdate,

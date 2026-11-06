@@ -120,6 +120,184 @@ fn selected(f: &Fixture) -> Option<WidgetryListItemId> {
 }
 
 #[test]
+fn search_confirmation_preserves_focus_transferred_by_the_value_consumer() {
+    let mut f = fixture(4);
+    let next = f
+        .app
+        .world_mut()
+        .spawn_scene(bsn! {@WidgetryTextField})
+        .unwrap()
+        .id();
+    let root = f.root;
+    f.app.add_observer(
+        move |event: On<ValueChange<Option<WidgetryListItemId>>>, mut commands: Commands| {
+            if event.source == root && event.value.is_some() {
+                commands.queue(move |world: &mut World| {
+                    WidgetryTextFieldHeadless::focus_in_world(world, next)
+                        .map(|_| ())
+                        .map_err(|error| error.into_bevy_error())
+                });
+            }
+        },
+    );
+    key(&mut f, KeyCode::Enter, None);
+    f.app.update();
+    let editor = f
+        .app
+        .world()
+        .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(next)
+        .unwrap()
+        .target;
+    assert_eq!(f.app.world().resource::<InputFocus>().get(), Some(editor));
+    assert_eq!(
+        f.app.world().get::<Visibility>(f.popup),
+        Some(&Visibility::Hidden)
+    );
+    assert!(selected(&f).is_some());
+    assert_eq!(f.app.world().resource::<Changes>().0.len(), 1);
+}
+
+#[test]
+fn search_confirmation_allows_its_value_consumer_to_despawn_the_combo() {
+    use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+    let mut f = fixture(4);
+    f.app.set_error_handler(ErrorCapture::handler());
+    let root = f.root;
+    f.app.add_observer(
+        move |event: On<ValueChange<Option<WidgetryListItemId>>>, mut commands: Commands| {
+            if event.source == root && event.value.is_some() {
+                commands.entity(root).despawn();
+            }
+        },
+    );
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    key(&mut f, KeyCode::Enter, None);
+    logs.run(|| {
+        errors.run(|| {
+            f.app.update();
+            f.app.update();
+        })
+    });
+    assert!(f.app.world().get_entity(root).is_err());
+    assert_eq!(f.app.world().resource::<Changes>().0.len(), 1);
+    assert!(errors.take().is_empty());
+    assert!(
+        logs.records()
+            .iter()
+            .all(|record| record.level != bevy::log::Level::ERROR)
+    );
+}
+
+#[test]
+fn search_confirmation_reopen_does_not_consume_the_old_input_batch() {
+    let mut f = fixture(4);
+    let root = f.root;
+    f.app.add_observer(
+        move |event: On<ValueChange<Option<WidgetryListItemId>>>, mut commands: Commands| {
+            if event.source == root && event.value.is_some() {
+                WidgetryComboBoxHeadless::<String>::open(&mut commands, root);
+            }
+        },
+    );
+    key(&mut f, KeyCode::Enter, None);
+    key(&mut f, KeyCode::KeyT, Some("tail"));
+    f.app.update();
+    assert!(WidgetryComboBoxHeadless::<String>::is_open(f.app.world(), root).unwrap());
+    assert_eq!(
+        WidgetryComboBox::<String>::search_state(f.app.world(), root)
+            .unwrap()
+            .query,
+        ""
+    );
+    assert_eq!(f.app.world().resource::<Changes>().0.len(), 1);
+}
+
+#[test]
+fn search_confirmation_can_destroy_a_page_of_search_combos() {
+    use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+    let mut f = fixture(4);
+    let source = f.source;
+    let other=f.app.world_mut().spawn_scene(bsn! {
+        @WidgetryComboBox::<String> {@source:source,@search:{Some(WidgetryComboBoxMatcher::new(|q:&str,item:&String|item.contains(q)))},@renderer:{WidgetryListViewRenderer::new(|item:&String|bsn_list!{Text({item.clone()})})}}
+    }).unwrap().id();
+    let page = f.app.world_mut().spawn_scene(bsn! {Node}).unwrap().id();
+    f.app
+        .world_mut()
+        .entity_mut(page)
+        .add_children(&[f.root, other]);
+    f.app.update();
+    let first = f
+        .app
+        .world_mut()
+        .query::<(Entity, &WidgetryComboBox<String>)>()
+        .iter(f.app.world())
+        .next()
+        .unwrap()
+        .0;
+    WidgetryComboBoxHeadless::<String>::open_in_world(f.app.world_mut(), first).unwrap();
+    f.app.world_mut().flush();
+    let popup = f.app.world().get::<Children>(first).unwrap()[1];
+    let input = f.app.world().get::<Children>(popup).unwrap()[0];
+    WidgetryTextFieldHeadless::focus_in_world(f.app.world_mut(), input).unwrap();
+    f.app.add_observer(
+        move |event: On<ValueChange<Option<WidgetryListItemId>>>, mut commands: Commands| {
+            if event.source == first && event.value.is_some() {
+                commands.entity(page).despawn();
+            }
+        },
+    );
+    f.app.set_error_handler(ErrorCapture::handler());
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    key(&mut f, KeyCode::Enter, None);
+    logs.run(|| {
+        errors.run(|| {
+            f.app.update();
+            f.app.update();
+        })
+    });
+    assert!(f.app.world().get_entity(page).is_err());
+    assert!(f.app.world().get_entity(f.root).is_err());
+    assert!(f.app.world().get_entity(other).is_err());
+    assert_eq!(f.app.world().resource::<Changes>().0.len(), 1);
+    assert!(errors.take().is_empty());
+    assert!(
+        logs.records()
+            .iter()
+            .all(|record| record.level != bevy::log::Level::ERROR)
+    );
+}
+
+#[test]
+fn queued_search_open_is_canceled_when_the_next_command_destroys_the_combo() {
+    use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+    let mut f = fixture(4);
+    let root = f.root;
+    WidgetryComboBoxHeadless::<String>::close_in_world(f.app.world_mut(), root).unwrap();
+    f.app.set_error_handler(ErrorCapture::handler());
+    WidgetryComboBoxHeadless::<String>::open(&mut f.app.world_mut().commands(), root);
+    f.app.world_mut().commands().entity(root).despawn();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            f.app.world_mut().flush();
+            f.app.update();
+            f.app.update();
+        })
+    });
+    assert!(f.app.world().get_entity(root).is_err());
+    assert!(f.app.world().resource::<Changes>().0.is_empty());
+    assert!(errors.take().is_empty());
+    assert!(
+        logs.records()
+            .iter()
+            .all(|record| record.level != bevy::log::Level::ERROR)
+    );
+}
+
+#[test]
 fn search_read_keeps_the_text_field_diagnostic_at_the_command_boundary() {
     use bevy_widgetry_core::input_target::WidgetryInputTarget;
     use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};

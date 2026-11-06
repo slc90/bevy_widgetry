@@ -173,7 +173,7 @@ fn algorithm_selector() -> impl Scene {
 
 fn change_algorithm(
     event: On<bevy::ui_widgets::ValueChange<Option<WidgetryListItemId>>>,
-    combos: Query<&WidgetryComboBox<AlgorithmChoice>>,
+    combos: Query<&bevy_widgetry::combo_box::WidgetryComboBoxHeadless<AlgorithmChoice>>,
     models: Query<&WidgetryListModel<AlgorithmChoice>>,
     roots: Query<Entity, With<DemoKind>>,
     mut commands: Commands,

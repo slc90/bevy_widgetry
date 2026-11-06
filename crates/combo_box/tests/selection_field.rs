@@ -145,6 +145,7 @@ fn reentrant_programmatic_selection_preserves_root_notification_order() {
         let popup = app.world().get::<Children>(root).unwrap()[1];
         let list = list(app.world(), root);
         app.world_mut().trigger(Activate { entity: field });
+        app.world_mut().flush();
         WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, b);
         app.world_mut().flush();
         let next = (!clear).then_some(a);
@@ -197,6 +198,7 @@ fn programmatic_root_notification_reads_committed_authority_and_keeps_popup() {
     let field = app.world().get::<Children>(root).unwrap()[0];
     let popup = app.world().get::<Children>(root).unwrap()[1];
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     for _ in 0..2 {
         WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, b);
     }
@@ -615,6 +617,7 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     assert_eq!(rendered(app.world(), root).2, "Pick");
     assert_eq!(content(app.world(), root), container);
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible
@@ -701,7 +704,6 @@ fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
     let popup = app.world().get::<Children>(root).unwrap()[1];
-    *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Visible;
     let missing = app.world_mut().spawn_empty().id();
     app.world_mut().despawn(missing);
     app.set_error_handler(ErrorCapture::handler());
@@ -732,7 +734,7 @@ fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
     assert_eq!(rendered(app.world(), root).2, "B");
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
-        Visibility::Visible
+        Visibility::Hidden
     );
     assert_eq!(
         app.world().resource::<Changes>().0,

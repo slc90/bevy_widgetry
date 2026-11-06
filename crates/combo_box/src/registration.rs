@@ -65,8 +65,9 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
             PostUpdate,
             (
                 popup::sync_geometry::<T>,
+                popup::sync_visibility::<T>,
                 field::sync_icon::<T>,
-                popup::clear_hidden_focus::<T>,
+                crate::headless::reconcile::<T>,
             )
                 .chain()
                 .after(WidgetryListViewSystems::Reconcile)
@@ -83,10 +84,11 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
             .add_observer(popup::handle_row_click::<T>)
             .add_observer(popup::handle_reselection::<T>)
             .add_observer(popup::handle_escape::<T>)
-            .add_observer(field::on_disabled_added::<T>)
+            .add_observer(crate::headless::disabled::<T>)
+            .add_observer(popup::handle_outside_click::<T>)
             .add_systems(
                 PreUpdate,
-                popup::clear_hidden_focus::<T>
+                crate::headless::reconcile::<T>
                     .after(PickingSystems::Last)
                     .before(InputFocusSystems::Dispatch),
             )

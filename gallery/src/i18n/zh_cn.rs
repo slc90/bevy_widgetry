@@ -504,6 +504,10 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::CheckBox(CheckBoxKey::TriSymbolStatus) => "{state} · 已提交通知 {count} 次",
         TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "三态 CheckBox",
         TextKey::ComboBox(ComboBoxKey::LocalSearch) => "本地搜索（共享数据）",
+        TextKey::ComboBox(ComboBoxKey::CustomDescription) => {
+            "自定义卡片与装饰弹层：可选择、清空，按 Escape 或点击外部关闭。"
+        }
+        TextKey::ComboBox(ComboBoxKey::CustomPopup) => "选择一种水果",
         TextKey::ComboBox(ComboBoxKey::SearchPrompt) => "搜索",
         TextKey::ComboBox(ComboBoxKey::NoResults) => "没有匹配的选项",
         TextKey::ComboBox(ComboBoxKey::SearchStatus) => {

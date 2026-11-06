@@ -503,7 +503,9 @@ fn apply_style<T: Send + Sync + 'static>(
         .find(|e| world.get::<ComboBoxPopup>(*e).is_some())
         .ok_or_else(|| missing(root, ComboPart::Popup))?;
     let disabled = world.get::<InteractionDisabled>(field).is_some();
-    let open = world.get::<Visibility>(popup) == Some(&Visibility::Visible);
+    let open = world
+        .get::<crate::headless::OpenState>(root)
+        .is_some_and(|state| state.0);
     let state = if disabled {
         colors.field.disabled
     } else if open {
@@ -1253,7 +1255,7 @@ mod tests {
             .id();
         let popup = app.world_mut().spawn_scene(crate::popup::scene::<String>(source, 32.0,
             WidgetryListViewRenderer::new(|value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText}),
-            false, default(), default()
+            false, default(), default(), bevy::ecs::template::EntityTemplate::Entity(Entity::PLACEHOLDER)
         )).unwrap().id();
         let list = app.world().get::<Children>(popup).unwrap()[0];
         app.world_mut().flush();

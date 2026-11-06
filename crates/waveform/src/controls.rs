@@ -297,7 +297,10 @@ fn project_one(world: &mut World, model_entity: Entity, combo: Entity) -> ViewRe
 
 fn on_range_choice(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
-    mut controls: Query<(&WidgetryComboBox<RangeChoice>, &mut ControlOwner)>,
+    mut controls: Query<(
+        &bevy_widgetry_combo_box::WidgetryComboBoxHeadless<RangeChoice>,
+        &mut ControlOwner,
+    )>,
     models: Query<&WidgetryListModel<RangeChoice>>,
     mut commands: Commands,
 ) -> Result {

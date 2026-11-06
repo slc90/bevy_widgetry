@@ -34,7 +34,13 @@ fn generic_scene_uses_independent_model() {
     }).unwrap().id();
     app.update();
     let combo = app.world().get::<WidgetryComboBox<String>>(root).unwrap();
-    assert_eq!(combo.source(), source);
+    assert_eq!(
+        app.world()
+            .get::<bevy_widgetry_combo_box::WidgetryComboBoxHeadless<String>>(root)
+            .unwrap()
+            .source(),
+        source
+    );
     assert_eq!(combo.item_height(), 32.0);
     assert_eq!(combo.max_visible_items(), 8);
     WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, selected);
@@ -92,6 +98,11 @@ fn internal_list_request_survives_combo_disable_and_recovery() {
         .remove::<InteractionDisabled>();
     app.update();
     assert!(app.world().get::<InteractionDisabled>(list).is_some());
+    bevy_widgetry_combo_box::WidgetryComboBoxHeadless::<String>::open_in_world(
+        app.world_mut(),
+        root,
+    )
+    .unwrap();
     app.world_mut()
         .entity_mut(list)
         .remove::<InteractionDisabled>();
@@ -345,16 +356,20 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
         .find_map(|(entity, item)| (item.id == selected).then_some(entity))
         .unwrap();
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     let initial_focus = app.world().resource::<InputFocus>().get();
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.world_mut().trigger(primary_press(row));
     app.world_mut().trigger(primary_click(row));
     app.world_mut().flush();
     assert_eq!(list_snapshot(app.world(), list), initial_state);
-    assert_eq!(app.world().resource::<InputFocus>().get(), initial_focus);
+    assert_eq!(initial_focus, Some(list));
+    assert_eq!(app.world().resource::<InputFocus>().get(), None);
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
+    app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.world_mut().trigger(primary_click(row));
     app.world_mut().flush();
     assert_eq!(

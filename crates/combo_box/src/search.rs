@@ -1,8 +1,8 @@
+use crate::WidgetryComboBox;
 use crate::{
     ComboFailure, ComboPart,
     error::{self, ComboFault, RuntimeFailure},
 };
-use crate::{WidgetryComboBox, popup::ComboBoxPopup};
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{FocusCause, FocusedInput, InputFocus};
 use bevy::prelude::*;
@@ -55,18 +55,14 @@ struct SearchAction {
     edits: Vec<TextEdit>,
 }
 
-fn parts<T: Send + Sync + 'static>(
-    world: &World,
-    root: Entity,
-) -> Result<(Entity, Entity, Entity), ComboFault> {
-    let children = error::part(world.get::<Children>(root), root, ComboPart::Children)?;
-    let popup = error::part(
-        children
-            .iter()
-            .find(|&child| world.get::<ComboBoxPopup>(child).is_some()),
-        root,
-        ComboPart::Popup,
-    )?;
+fn parts(world: &World, root: Entity) -> Result<(Entity, Entity, Entity), ComboFault> {
+    let binding = world
+        .get::<crate::WidgetryComboBoxParts>(root)
+        .ok_or(ComboFault::Part {
+            entity: root,
+            part: ComboPart::Bindings,
+        })?;
+    let popup = binding.popup;
     let children = error::part(world.get::<Children>(popup), popup, ComboPart::Children)?;
     let field = error::part(
         children
@@ -75,13 +71,7 @@ fn parts<T: Send + Sync + 'static>(
         popup,
         ComboPart::SearchField,
     )?;
-    let list = error::part(
-        children
-            .iter()
-            .find(|&child| world.get::<WidgetryListView<T>>(child).is_some()),
-        popup,
-        ComboPart::ListView,
-    )?;
+    let list = binding.list;
     Ok((popup, field, list))
 }
 
@@ -91,7 +81,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         root: Entity,
     ) -> Result<WidgetryComboBoxSearchState, ComboFailure> {
         let (list, _) = crate::combo_box::update_list::<T>(world, root)?;
-        let (_, field, _) = parts::<T>(world, root).map_err(|fault| {
+        let (_, field, _) = parts(world, root).map_err(|fault| {
             error::failure(fault.into_error::<T>(root), "combo_box.search_state")
         })?;
         Ok(WidgetryComboBoxSearchState {
@@ -114,7 +104,7 @@ fn refresh<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
 ) -> Result<(), RuntimeFailure> {
-    let (_, field, list) = parts::<T>(world, root)?;
+    let (_, field, list) = parts(world, root)?;
     let query = WidgetryTextFieldHeadless::text(world, field).map_err(|error| {
         error::text(error, root, "combo_box.search").with_context(
             bevy_widgetry_core::scene::ErrorFrame::new("combo_box.text_field.text"),
@@ -207,8 +197,11 @@ pub(crate) fn open<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
 ) -> Result<(), RuntimeFailure> {
-    let (popup, field, list) = parts::<T>(world, root)?;
-    if world.get::<Visibility>(popup) != Some(&Visibility::Visible) {
+    let (_, field, list) = parts(world, root)?;
+    if !world
+        .get::<crate::headless::OpenState>(root)
+        .is_some_and(|state| state.0)
+    {
         return Ok(());
     }
     WidgetryTextFieldHeadless::set_text_in_world(world, field, "").map_err(|error| {
@@ -235,8 +228,7 @@ pub(crate) fn open<T: Send + Sync + 'static>(
 pub(crate) fn on_key<T: Send + Sync + 'static>(
     mut event: On<FocusedInput<KeyboardInput>>,
     fields: Query<(&ChildOf, &WidgetryInputTarget), With<SearchField>>,
-    popups: Query<&ChildOf, With<ComboBoxPopup>>,
-    roots: Query<(), With<WidgetryComboBox<T>>>,
+    roots: Query<(Entity, &crate::WidgetryComboBoxParts), With<WidgetryComboBox<T>>>,
     editors: Query<&EditableText>,
     mut commands: Commands,
 ) {
@@ -250,13 +242,12 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
     let Some((parent, _)) = fields.iter().find(|(_, target)| target.target == editor) else {
         return;
     };
-    let Ok(parent) = popups.get(parent.parent()) else {
+    let Some((root, _)) = roots
+        .iter()
+        .find(|(_, parts)| parts.popup == parent.parent())
+    else {
         return;
     };
-    let root = parent.parent();
-    if !roots.contains(root) {
-        return;
-    }
     let key = (navigation_key(event.input.key_code)
         && editors.get(editor).is_ok_and(|edit| !edit.is_composing()))
     .then_some(event.input.key_code);
@@ -266,7 +257,7 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         let result = (|| -> Result<(),RuntimeFailure> {
         let (_, field, _) =
-            parts::<T>(world, root)?;
+            parts(world, root)?;
         // Observer commands flush after this event's native handlers, before the next input event.
         // Capture the official edit queue here so confirmation cannot overtake or absorb later text.
         let mut edits = std::mem::take(
@@ -438,6 +429,13 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World) {
         .filter_map(|(root, combo)| combo.search().is_some().then_some(root))
         .collect::<Vec<_>>();
     for root in roots {
+        // A previous root can flush a value consumer that tears down the whole page.
+        if world
+            .get::<WidgetryComboBox<T>>(root)
+            .is_none_or(|combo| combo.search().is_none())
+        {
+            continue;
+        }
         let result = sync_root::<T>(world, root);
         let failure = match result {
             Ok(()) => {
@@ -479,7 +477,7 @@ fn sync_root<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
 ) -> Result<(), RuntimeFailure> {
-    let (popup, field, list) = parts::<T>(world, root)?;
+    let (_, field, list) = parts(world, root)?;
     let editor = world
         .get::<WidgetryInputTarget>(field)
         .ok_or(ComboFault::Part {
@@ -507,7 +505,9 @@ fn sync_root<T: Send + Sync + 'static>(
     );
     for action in actions {
         let editor = action.editor;
-        if world.get::<Visibility>(popup) != Some(&Visibility::Visible)
+        if !world
+            .get::<crate::headless::OpenState>(root)
+            .is_some_and(|state| state.0)
             || [root, field, editor, list]
                 .iter()
                 .any(|entity| world.get::<InteractionDisabled>(*entity).is_some())
@@ -525,11 +525,10 @@ fn sync_root<T: Send + Sync + 'static>(
         refresh::<T>(world, root)?;
         match key {
             KeyCode::Escape => {
-                world.entity_mut(popup).insert(Visibility::Hidden);
+                crate::headless::close::<T>(world, root)?;
                 let field = world
-                    .get::<Children>(root)
-                    .and_then(|children| children.first())
-                    .copied()
+                    .get::<crate::WidgetryComboBoxParts>(root)
+                    .map(|parts| parts.trigger)
                     .ok_or(ComboFault::Part {
                         entity: root,
                         part: ComboPart::Field,
@@ -547,7 +546,7 @@ fn sync_root<T: Send + Sync + 'static>(
                         .get::<WidgetryListProjection>(list)
                         .is_some_and(|projection| projection.index_of(active).is_some())
                         && world
-                            .get::<WidgetryComboBox<T>>(root)
+                            .get::<crate::WidgetryComboBoxHeadless<T>>(root)
                             .and_then(|combo| world.get::<WidgetryListModel<T>>(combo.source()))
                             .and_then(|model| {
                                 model
@@ -558,15 +557,23 @@ fn sync_root<T: Send + Sync + 'static>(
                     if valid && !crate::popup::confirmation_disabled(world, list, active) {
                         WidgetryListView::<T>::select_id_in_world(world, list, active)
                             .map_err(|error| error::list(error, root, "combo_box.search"))?;
-                        world.entity_mut(popup).insert(Visibility::Hidden);
-                        world.resource_mut::<InputFocus>().clear();
+                        // Closing flushes notifications whose consumers can focus elsewhere, reopen, or despawn.
+                        // Finish this input batch before that flush and never resume its old actions afterward.
+                        if let Some(mut edit) = world.get_mut::<EditableText>(editor) {
+                            edit.pending_edits.clear();
+                            edit.pending_paste = None;
+                        }
+                        crate::headless::close::<T>(world, root)?;
+                        return Ok(());
                     }
                 }
             }
             _ => navigate::<T>(world, root, list, key)?,
         }
     }
-    if world.get::<Visibility>(popup) == Some(&Visibility::Visible)
+    if world
+        .get::<crate::headless::OpenState>(root)
+        .is_some_and(|state| state.0)
         && ![root, field, list, editor]
             .iter()
             .any(|entity| world.get::<InteractionDisabled>(*entity).is_some())

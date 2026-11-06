@@ -390,6 +390,7 @@ fn popup_and_field_keep_geometry_and_current_theme() {
             .background
     );
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     assert_eq!(
         app.world().get::<BackgroundColor>(popup).unwrap().0,
@@ -414,6 +415,7 @@ fn popup_and_field_keep_geometry_and_current_theme() {
         Visibility::Visible
     );
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Hidden
@@ -421,7 +423,7 @@ fn popup_and_field_keep_geometry_and_current_theme() {
     assert_eq!(app.world().get::<Children>(popup).unwrap()[0], list);
     let source = app
         .world()
-        .get::<WidgetryComboBox<String>>(root)
+        .get::<bevy_widgetry_combo_box::WidgetryComboBoxHeadless<String>>(root)
         .unwrap()
         .source();
     let other = app
@@ -515,6 +517,7 @@ fn shared_model_crud_and_user_selection_are_independent() {
         .unwrap();
     let target = row(&mut app, list, 1);
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.world_mut().trigger(primary_click(target));
     app.world_mut().flush();
     app.update();
@@ -751,6 +754,7 @@ fn combo_palette_survives_row_reuse_and_field_replacement() {
     overrides.list.item.pressed.foreground = Some(row_color);
     WidgetryComboBoxColorOverrides::set_in_world(app.world_mut(), root, overrides).unwrap();
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.update();
     let content = app
         .world()
@@ -858,6 +862,7 @@ fn opening_requires_items_and_transfers_focus_to_list() {
     } = fixture(0);
     let original_focus = app.world().resource::<InputFocus>().get();
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Hidden
@@ -877,6 +882,7 @@ fn opening_requires_items_and_transfers_focus_to_list() {
         None
     );
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible
@@ -933,6 +939,7 @@ fn row_selection_and_reselection_close_without_duplicate_notifications() {
         .id(1)
         .unwrap();
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     let target_text = app.world().get::<Children>(target).unwrap()[0];
     app.world_mut().trigger(primary_click(target_text));
     app.world_mut().flush();
@@ -949,6 +956,7 @@ fn row_selection_and_reselection_close_without_duplicate_notifications() {
     let field_text = app.world().get::<Children>(content).unwrap()[0];
     assert_eq!(app.world().get::<Text>(field_text).unwrap().0, "1");
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.world_mut().trigger(primary_click(target));
     app.world_mut().flush();
     app.update();
@@ -971,6 +979,7 @@ fn escape_returns_focus_without_resetting_list_state() {
         ..
     } = fixture(5);
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     press_key(&mut app, window, KeyCode::ArrowDown);
     let state = list_snapshot(app.world(), list);
     assert_ne!(state.selected, state.active);
@@ -1005,6 +1014,7 @@ fn bounded_popup_inherits_virtualization_and_keyboard_selection() {
     );
     assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(74));
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     let initial_row = row(&mut app, list, 0);
     let pointer = primary_click(initial_row);
     app.world_mut().trigger(PointerScroll {
@@ -1091,6 +1101,7 @@ fn disabled_items_and_root_keep_listview_contract() {
         .unwrap()
         .selected_id();
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.world_mut().trigger(primary_click(disabled_row));
     app.world_mut().flush();
     assert_eq!(
@@ -1186,7 +1197,6 @@ fn disabled_items_and_root_keep_listview_contract() {
         .remove::<InteractionDisabled>();
     app.update();
     assert!(app.world().get::<InteractionDisabled>(field).is_none());
-    assert!(app.world().get::<InteractionDisabled>(list).is_none());
     app.world_mut().trigger(primary_press(field));
     app.world_mut().flush();
     app.world_mut().trigger(primary_click(field));
@@ -1196,6 +1206,7 @@ fn disabled_items_and_root_keep_listview_contract() {
         Visibility::Visible
     );
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
+    assert!(app.world().get::<InteractionDisabled>(list).is_none());
     let disabled_row = row(&mut app, list, 1);
     assert!(
         app.world()
@@ -1255,6 +1266,7 @@ fn outside_click_and_another_field_preserve_target_focus() {
     let (other_field, other_popup) = (children[0], children[1]);
     let other_list = app.world().get::<Children>(other_popup).unwrap()[0];
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.world_mut().trigger(primary_press(other_field));
     app.world_mut().flush();
     app.world_mut().trigger(primary_click(other_field));
@@ -1304,7 +1316,11 @@ fn only_owned_enabled_primary_row_clicks_close_popup() {
         .get::<Children>(nested)
         .unwrap()
         .iter()
-        .find(|&child| app.world().get::<ScrollArea>(child).is_some())
+        .find(|&child| {
+            app.world()
+                .get::<bevy_widgetry_scroll_area::WidgetryScrollAreaViewport>(child)
+                .is_some()
+        })
         .unwrap();
     app.world_mut()
         .entity_mut(nested_viewport)
@@ -1317,6 +1333,7 @@ fn only_owned_enabled_primary_row_clicks_close_popup() {
     app.update();
     let nested_row = row(&mut app, nested, 0);
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     app.world_mut().trigger(primary_click(nested_row));
     app.world_mut().flush();
     assert_eq!(
@@ -1360,6 +1377,7 @@ fn closed_popup_cannot_select_hidden_items_from_keyboard() {
         ..
     } = fixture(3);
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     press_key(&mut app, window, KeyCode::ArrowDown);
     press_key(&mut app, window, KeyCode::Enter);
     let selected = app
@@ -1389,6 +1407,7 @@ fn closed_popup_cannot_select_hidden_items_from_keyboard() {
         vec![(root, Some(selected))]
     );
     app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().flush();
     let outside = app.world_mut().spawn_scene(bsn! { Node }).unwrap().id();
     app.world_mut().trigger(primary_click(outside));
     app.world_mut().flush();
@@ -1425,6 +1444,7 @@ fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
             ..
         } = fixture(5);
         app.world_mut().trigger(Activate { entity: field });
+        app.world_mut().flush();
         let selected = app
             .world()
             .get::<WidgetryListModel<String>>(source)
@@ -1475,6 +1495,7 @@ fn keyboard_reselection_closes_popup_without_notification() {
         } = fixture(5);
         let initial = list_snapshot(app.world(), list);
         app.world_mut().trigger(Activate { entity: field });
+        app.world_mut().flush();
         for key_code in [confirm, KeyCode::End, confirm] {
             queue_key(
                 &mut app,
@@ -1514,6 +1535,7 @@ fn local_disabled_row_click_preserves_popup_and_selection_until_recovery() {
         let target = row(&mut app, list, index);
         let initial = list_snapshot(app.world(), list);
         app.world_mut().trigger(Activate { entity: field });
+        app.world_mut().flush();
         app.world_mut()
             .entity_mut(target)
             .insert(InteractionDisabled);
@@ -1587,6 +1609,7 @@ fn local_disabled_row_or_container_blocks_keyboard_reselection_until_recovery() 
             };
             let initial = list_snapshot(app.world(), list);
             app.world_mut().trigger(Activate { entity: field });
+            app.world_mut().flush();
             app.world_mut()
                 .entity_mut(target)
                 .insert(InteractionDisabled);
@@ -1633,6 +1656,7 @@ fn pointer_close_stops_keyboard_selection_in_same_frame() {
             row(&mut app, list, 0)
         };
         app.world_mut().trigger(Activate { entity: field });
+        app.world_mut().flush();
         // An ordinary update boundary can hide stale focus after Picking.
         // Click during official Picking before keyboard dispatch consumes the remaining input in that frame.
         app.configure_sets(
