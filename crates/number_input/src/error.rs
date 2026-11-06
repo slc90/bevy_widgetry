@@ -62,6 +62,18 @@ pub enum NumberInputError {
         root: Entity,
         numeric_type: &'static str,
     },
+    InvalidEditorBinding {
+        root: Entity,
+        field: Entity,
+        read_only: bool,
+    },
+    IncompatibleEditor {
+        root: Entity,
+        field: Entity,
+        editor: Entity,
+        max_length: Option<usize>,
+        multiline: bool,
+    },
     MissingPart {
         root: Entity,
         entity: Entity,
@@ -101,6 +113,12 @@ impl fmt::Display for NumberInputError {
                 }
             }),
             Self::InvalidRoot { .. } => f.write_str("NumberInput 根不存在或数值类型不匹配"),
+            Self::InvalidEditorBinding { .. } => {
+                f.write_str("NumberInput 编辑区必须属于当前根且只读模式一致")
+            }
+            Self::IncompatibleEditor { .. } => {
+                f.write_str("NumberInput 编辑区必须为不限长度的单行文本")
+            }
             Self::MissingPart { component, .. } => {
                 write!(f, "NumberInput 缺失必需部件: {component}")
             }

@@ -7,7 +7,9 @@ pub use error::{
     NumberInputConfigSnapshot, NumberInputError, NumberInputFailure, NumberInputRejection,
     NumberInputValue,
 };
+mod headless;
 mod input;
+pub use headless::{WidgetryNumberInputEditor, WidgetryNumberInputHeadless};
 mod layout;
 mod number;
 mod repeating;

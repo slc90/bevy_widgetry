@@ -204,6 +204,10 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         },
         TextKey::Navigation(NavigationKey::NumberInput) => "数值输入",
         TextKey::NumberInput(key) => match key {
+            super::NumberInputKey::CustomEditing => {
+                "自定义数字框 · 仅编辑区 · Enter 提交，Esc 恢复"
+            }
+            super::NumberInputKey::CustomDraftStatus => "正式值：{value} · 草稿：{draft}",
             super::NumberInputKey::Description => {
                 "输入草稿，按 Enter 或离开后提交，Esc 取消。方向键或按住 −/+ 可步进。正式值与事件次数仅在真实变化时更新。预设按钮覆盖草稿，只读与禁用时仍可设值。"
             }

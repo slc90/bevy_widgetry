@@ -1,5 +1,9 @@
 # NumberInput 覆盖模型
 
+`headless.rs` 从外部使用公开数值根与 TextField 绑定，验证没有默认 Frame/按钮的多层 Editor 的初始化、原类型 API 身份、精度切换、草稿/正式值分离、Enter/非法保留/Esc/失焦提交、根 source/final 通知，以及只读和祖先禁用期间程序设置、同值清理与解除禁用不补交。
+
+公开绑定同时覆盖全部 14 种数值类型、u128 精确极值、跨根绑定及只读模式不一致的写入前拒绝。长度受限或多行 Editor 的配置单独拒绝，保护完整数值投影与 Enter 提交，失败保持原数值和草稿。
+
 `diagnostics.rs` 覆盖全部 14 种支持类型的快照分类与原类型名、u128 / i128 极值精确拒绝字段、f32 NaN 原始位、初始配置拒绝类别 / step / decimals、Scene 桥保留原 origin、TextField 原因链及两层操作上下文、Command 的 Error Severity 和源头一次 ERROR。`editing.rs` 的既有草稿 / Enter / Esc / 失焦场景额外断言正常拒绝和恢复无错误或虚假处理日志。
 
 映射回归区分 TextField 自有编辑器有效与 WidgetryInputTarget 指向失效 / 无 EditableText 目标；Enabled / Disabled Setter 均在写入前拒绝，保持原数值与草稿。

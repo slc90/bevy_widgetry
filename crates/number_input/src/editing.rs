@@ -3,7 +3,8 @@ use crate::{
     error::{failure, missing, text_field},
 };
 use crate::{
-    WidgetryNumber, WidgetryNumberInput, WidgetryNumberInputProps,
+    WidgetryNumber, WidgetryNumberInputEditor, WidgetryNumberInputHeadless,
+    WidgetryNumberInputProps,
     value::{State, state},
 };
 use bevy::{
@@ -40,12 +41,24 @@ pub(crate) struct ReadOnly;
 #[derive(Component)]
 struct PendingDisabled;
 
+#[derive(Component)]
+struct PendingInitialization;
+
+pub(crate) fn behavior<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> impl Scene {
+    let read_only = props.read_only.then_some(bsn! { ReadOnly });
+    bsn! {
+        template(move |context| State::new(&props).map_err(|error| error.with_context(ErrorFrame::new("number_input.initialize").field("root", context.entity.id())).into_bevy_error()))
+        template(|_|Ok(DisplayFocus::default()))
+        template(|_|Ok(PendingInitialization))
+        @{read_only}
+    }
+}
+
 pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> impl Scene {
     let text = props
         .value
         .map(|v| format_value(v, props.decimals, false))
         .unwrap_or_default();
-    let read_only = props.read_only.then_some(bsn! { ReadOnly });
     let field_scene: Box<dyn Scene> = if props.read_only {
         Box::new(bsn! { @WidgetryReadOnlyTextField { @value: {text.clone()} } })
     } else {
@@ -59,11 +72,9 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
         .then_some(bsn! { bevy::ui::InteractionDisabled });
     bsn! {
         @root_reference(#NumberInputRoot)
-        template(move |context| State::new(&props).map_err(|error| error.with_context(ErrorFrame::new("number_input.initialize").field("root", context.entity.id())).into_bevy_error()))
-        template(|_|Ok(DisplayFocus::default()))
-        @{read_only}
+        @WidgetryNumberInputHeadless<T> {@value:{props.value},@min:{props.min},@max:{props.max},@step:{props.step},@decimals:{props.decimals},@read_only:{props.read_only}}
+        WidgetryNumberInputEditor {field:#NumberInputField}
         Parts {field:#NumberInputField,decrease:#NumberInputDecrease,increase:#NumberInputIncrease}
-        WidgetryInputTarget {target:#NumberInputField}
         Node {
             width:px(200),min_width:px(134),min_height:px(38),flex_direction:FlexDirection::Row,
             border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4)),overflow:Overflow::clip(),
@@ -115,13 +126,49 @@ fn format_value<T: WidgetryNumber>(value: T, decimals: Option<u8>, focused: bool
 
 pub(crate) fn field(world: &World, root: Entity) -> Result<Entity, NumberInputFailure> {
     world
-        .get::<Parts>(root)
+        .get::<WidgetryNumberInputEditor>(root)
         .map(|p| p.field)
-        .ok_or_else(|| missing(root, root, "Parts", "number_input.field"))
+        .ok_or_else(|| {
+            missing(
+                root,
+                root,
+                "WidgetryNumberInputEditor",
+                "number_input.field",
+            )
+        })
 }
 
 pub(crate) fn editor(world: &World, root: Entity) -> Result<Entity, NumberInputFailure> {
     let field = field(world, root)?;
+    let read_only = world.get::<ReadOnly>(root).is_some();
+    let mut ancestor = field;
+    while ancestor != root {
+        let Some(parent) = world.get::<ChildOf>(ancestor) else {
+            return Err(failure(
+                NumberInputError::InvalidEditorBinding {
+                    root,
+                    field,
+                    read_only,
+                },
+                ErrorFrame::new("number_input.editor"),
+            ));
+        };
+        ancestor = parent.parent();
+    }
+    if field == root
+        || WidgetryTextFieldHeadless::is_read_only(world, field)
+            .map_err(|error| text_field(error, root, field, "number_input.editor"))?
+            != read_only
+    {
+        return Err(failure(
+            NumberInputError::InvalidEditorBinding {
+                root,
+                field,
+                read_only,
+            },
+            ErrorFrame::new("number_input.editor"),
+        ));
+    }
     let target = world
         .get::<WidgetryInputTarget>(field)
         .ok_or_else(|| missing(root, field, "WidgetryInputTarget", "number_input.editor"))?
@@ -148,6 +195,23 @@ pub(crate) fn editor(world: &World, root: Entity) -> Result<Entity, NumberInputF
             root,
             field,
             "number_input.editor",
+        ));
+    }
+    let max_length = WidgetryTextFieldHeadless::max_length(world, field)
+        .map_err(|error| text_field(error, root, field, "number_input.editor"))?;
+    let multiline = WidgetryTextFieldHeadless::editor(world, field)
+        .map_err(|error| text_field(error, root, field, "number_input.editor"))?
+        .allow_newlines;
+    if max_length.is_some() || multiline {
+        return Err(failure(
+            NumberInputError::IncompatibleEditor {
+                root,
+                field,
+                editor: bound,
+                max_length,
+                multiline,
+            },
+            ErrorFrame::new("number_input.editor"),
         ));
     }
     Ok(bound)
@@ -191,6 +255,7 @@ pub(crate) fn project<T: WidgetryNumber>(
             )
         })?
         .0 = focused;
+    world.entity_mut(root).remove::<PendingInitialization>();
     Ok(())
 }
 
@@ -279,7 +344,7 @@ fn submit<T: WidgetryNumber>(
     }
     let value = T::parse_decimal(&text).filter(|v| state.accepts(*v));
     if let Some(value) = value {
-        WidgetryNumberInput::<T>::set_value_in_world(world, root, value)?;
+        WidgetryNumberInputHeadless::<T>::set_value_in_world(world, root, value)?;
     } else if blur {
         let value = state.value;
         project(world, root, value)?;
@@ -290,9 +355,9 @@ fn submit<T: WidgetryNumber>(
 fn on_key<T: WidgetryNumber>(
     mut event: On<FocusedInput<KeyboardInput>>,
     roots: Query<
-        &Parts,
+        &WidgetryNumberInputEditor,
         (
-            With<WidgetryNumberInput<T>>,
+            With<WidgetryNumberInputHeadless<T>>,
             Without<ReadOnly>,
             Without<bevy::ui::InteractionDisabled>,
         ),
@@ -317,7 +382,7 @@ fn on_key<T: WidgetryNumber>(
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result {
         let result = (|| -> Result<(), NumberInputFailure> {
-            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+            if world.get::<WidgetryNumberInputHeadless<T>>(root).is_none() {
                 return Ok(());
             }
             if !can_edit(world, root) {
@@ -342,7 +407,7 @@ fn on_key<T: WidgetryNumber>(
 
 fn on_blur<T: WidgetryNumber>(
     event: On<FocusLost>,
-    roots: Query<&Parts, With<WidgetryNumberInput<T>>>,
+    roots: Query<&WidgetryNumberInputEditor, With<WidgetryNumberInputHeadless<T>>>,
     mut commands: Commands,
 ) {
     if !roots.contains(event.entity) {
@@ -351,11 +416,19 @@ fn on_blur<T: WidgetryNumber>(
     let root = event.entity;
     commands.queue(move |world: &mut World| -> Result {
         let result = (|| -> Result<(), NumberInputFailure> {
-            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+            if world.get::<WidgetryNumberInputHeadless<T>>(root).is_none() {
                 return Ok(());
             }
-            if world.resource::<InputFocus>().get() == Some(editor(world, root)?) {
-                return Ok(());
+            if let Some(mut focused) = world.resource::<InputFocus>().get() {
+                loop {
+                    if focused == root {
+                        return Ok(());
+                    }
+                    let Some(parent) = world.get::<ChildOf>(focused) else {
+                        break;
+                    };
+                    focused = parent.parent();
+                }
             }
             submit::<T>(world, root, true)
         })();
@@ -370,6 +443,10 @@ pub(crate) fn install<T: WidgetryNumber>(app: &mut App) {
         .add_observer(on_disabled::<T>)
         .add_observer(on_disabled_replaced::<T>);
     app.add_systems(
+        PreUpdate,
+        initialize::<T>.before(bevy::input_focus::InputFocusSystems::Dispatch),
+    );
+    app.add_systems(
         PostUpdate,
         prepare_focus::<T>
             .before(bevy::text::EditableTextSystems)
@@ -377,14 +454,46 @@ pub(crate) fn install<T: WidgetryNumber>(app: &mut App) {
     );
     app.add_systems(
         PostUpdate,
-        restore_pending_disabled::<T>
+        (initialize::<T>, restore_pending_disabled::<T>)
+            .chain()
             .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Materialize),
     );
 }
 
+fn initialize<T: WidgetryNumber>(
+    roots: Query<
+        Entity,
+        (
+            With<WidgetryNumberInputHeadless<T>>,
+            With<PendingInitialization>,
+        ),
+    >,
+    mut commands: Commands,
+) {
+    for root in &roots {
+        commands.queue(move |world: &mut World| -> Result {
+            if world.get::<WidgetryNumberInputHeadless<T>>(root).is_none() {
+                return Ok(());
+            }
+            if world.get::<PendingInitialization>(root).is_none() {
+                return Ok(());
+            }
+            world.entity_mut(root).remove::<PendingInitialization>();
+            if world.get::<crate::WidgetryNumberInput<T>>(root).is_some() {
+                editor(world, root).map_err(|error| error.into_bevy_error())?;
+                return Ok(());
+            }
+            let value = state::<T>(world, root)
+                .map_err(|error| error.into_bevy_error())?
+                .value;
+            project(world, root, value).map_err(|error| error.into_bevy_error())
+        });
+    }
+}
+
 fn on_disabled<T: WidgetryNumber>(
     event: On<Insert<WidgetryEffectiveDisabled>>,
-    roots: Query<&WidgetryEffectiveDisabled, With<WidgetryNumberInput<T>>>,
+    roots: Query<&WidgetryEffectiveDisabled, With<WidgetryNumberInputHeadless<T>>>,
     mut commands: Commands,
 ) {
     if !roots
@@ -398,7 +507,7 @@ fn on_disabled<T: WidgetryNumber>(
 
 fn on_disabled_replaced<T: WidgetryNumber>(
     event: On<Discard<WidgetryEffectiveDisabled>>,
-    roots: Query<&WidgetryEffectiveDisabled, With<WidgetryNumberInput<T>>>,
+    roots: Query<&WidgetryEffectiveDisabled, With<WidgetryNumberInputHeadless<T>>>,
     mut commands: Commands,
 ) {
     // Discard observes the old state, including a disabled-to-enabled replacement.
@@ -413,11 +522,17 @@ fn on_disabled_replaced<T: WidgetryNumber>(
 fn queue_disabled_restore<T: WidgetryNumber>(root: Entity, commands: &mut Commands) {
     commands.queue(move |world: &mut World| -> Result {
         let result = (|| -> Result<(), NumberInputFailure> {
-            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+            if world.get::<WidgetryNumberInputHeadless<T>>(root).is_none() {
                 return Ok(());
             }
             // Initial disabled projection can flush before BSN has applied the field's children.
-            let field = field(world, root)?;
+            let Some(field) = world
+                .get::<WidgetryNumberInputEditor>(root)
+                .map(|binding| binding.field)
+            else {
+                world.entity_mut(root).insert(PendingDisabled);
+                return Ok(());
+            };
             if world
                 .get::<WidgetryInputTarget>(field)
                 .and_then(|target| world.get::<EditableText>(target.target))
@@ -434,13 +549,13 @@ fn queue_disabled_restore<T: WidgetryNumber>(root: Entity, commands: &mut Comman
 }
 
 fn restore_pending_disabled<T: WidgetryNumber>(
-    roots: Query<Entity, (With<WidgetryNumberInput<T>>, With<PendingDisabled>)>,
+    roots: Query<Entity, (With<WidgetryNumberInputHeadless<T>>, With<PendingDisabled>)>,
     mut commands: Commands,
 ) {
     for root in &roots {
         commands.queue(move |world: &mut World| -> Result {
             let result = (|| -> Result<(), NumberInputFailure> {
-                if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+                if world.get::<WidgetryNumberInputHeadless<T>>(root).is_none() {
                     return Ok(());
                 }
                 world.entity_mut(root).remove::<PendingDisabled>();
@@ -460,18 +575,21 @@ fn prepare_focus<T: WidgetryNumber>(world: &mut World) -> Result {
     let Some(focus) = world.resource::<InputFocus>().get() else {
         return Ok(());
     };
-    let root = world
-        .query_filtered::<(Entity, &Parts, &DisplayFocus), With<WidgetryNumberInput<T>>>()
-        .iter(world)
-        .find_map(|(root, parts, display)| {
-            (!display.0
-                && world
-                    .get::<WidgetryInputTarget>(parts.field)
-                    .is_some_and(|target| target.target == focus))
-            .then_some(root)
-        });
-    if let Some(root) = root {
-        ensure_full::<T>(world, root).map_err(|error| error.into_bevy_error())?;
+    let mut ancestor = focus;
+    loop {
+        if world
+            .get::<WidgetryNumberInputHeadless<T>>(ancestor)
+            .is_some()
+        {
+            if editor(world, ancestor).map_err(|error| error.into_bevy_error())? == focus {
+                ensure_full::<T>(world, ancestor).map_err(|error| error.into_bevy_error())?;
+            }
+            break;
+        }
+        let Some(parent) = world.get::<ChildOf>(ancestor) else {
+            break;
+        };
+        ancestor = parent.parent();
     }
     Ok(())
 }
@@ -524,7 +642,7 @@ pub(crate) fn ensure_full<T: WidgetryNumber>(
 
 fn on_focus<T: WidgetryNumber>(
     event: On<FocusGained>,
-    roots: Query<(), With<WidgetryNumberInput<T>>>,
+    roots: Query<(), With<WidgetryNumberInputHeadless<T>>>,
     mut commands: Commands,
 ) {
     let root = event.entity;
@@ -533,7 +651,7 @@ fn on_focus<T: WidgetryNumber>(
     }
     commands.queue(move |world: &mut World| -> Result {
         let result = (|| -> Result<(), NumberInputFailure> {
-            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+            if world.get::<WidgetryNumberInputHeadless<T>>(root).is_none() {
                 return Ok(());
             }
             ensure_full::<T>(world, root)
@@ -546,6 +664,7 @@ fn on_focus<T: WidgetryNumber>(
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod diagnostic_tests {
     use super::*;
+    use crate::WidgetryNumberInput;
     use bevy_widgetry_core::scene::spawn_scene;
     use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
 

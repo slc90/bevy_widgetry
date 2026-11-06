@@ -2,6 +2,12 @@
 
 NumberInput / SpinBox 共用 `WidgetryNumberInput<T>`，正式值始终以原始 `T` 保存。支持 `i8/i16/i32/i64/i128/isize`、`u8/u16/u32/u64/u128/usize`、`f32/f64`，由 sealed `WidgetryNumber` 描述数值能力。`WidgetryNumberInputPlugin` 注册所有支持类型的运行时反射。
 
+`WidgetryNumberInputHeadless<T>` 提供相同数值与编辑行为，不创建默认外框或加减按钮。默认控件组合该能力，值与提交仅有一条路径。两者共用 `WidgetryNumberInputProps<T>`；Headless 上公开 `value`、同步/排队 `set_value`、`field_entity` 和 `editor_entity`，以 Headless 根作为数值身份。
+
+通过 BSN 在数值根挂载不可变的 `WidgetryNumberInputEditor { field }`，指向其后代的公开 TextField Headless 根。TextField 可以用任意层数 Node 包含官方 Editor，不要求默认 Frame。绑定必须处于该数值根内，TextField 的构造期只读模式必须与 NumberInput 相同；失效绑定通过领域错误反馈。外部绑定在首次输入派发前初始化，运行中新增的实例在 Materialize 初始化；之后普通刷新不覆盖草稿。外部 TextField 的布局、边框和颜色由调用方拥有，默认三段样式不处理这些实例。
+
+绑定 Editor 必须使用 `max_length: None`、`multiline: false`。数值的完整精度与固定小数位投影不能被文字长度限制截断，Enter 必须交给数值根提交。初始化、查询 Editor 及 Setter 均验证这一前提，`IncompatibleEditor` 保留根、TextField、Editor、长度上限与多行配置；拒绝发生在写入之前，不修改正式值或草稿。
+
 通过 BSN Scene 构造，`@value: Some(value)` 必填；`min/max` 默认无应用范围，`step` 默认为同类型的一。值、端点和步长必须有限，步长严格为正，`min <= max`，初始值必须位于范围内。配置构造后固定；Props 不保留为运行时状态。非法构造通过 Scene 错误通道报告并清理预约根。
 
 `value(&World, root)` 查询正式值，返回领域结果；`set_value_in_world(&mut World, root, value)` 返回 `Result<bool, NumberInputFailure>`；`set_value(&mut Commands, root, value)` 在执行时校验和提交，失败交宿主 Error Handler。Setter 只校验有限性和范围，不要求步进对齐，也不受 Disabled 限制。
@@ -64,4 +70,4 @@ ReadOnly 和 Disabled 均不限制程序化 Setter：合法变化仍先提交后
 
 NumberInput 统一拥有内部 TextField 的样式，按钮文字通过共享前景继承刷新。四套 Theme 切换、焦点、Hover、Pressed 和有效 Disabled 变化只更新颜色，不修改草稿、光标或正式值，不发数值通知。ReadOnly 的按钮使用 Disabled 配色；数值到达端点仍保留普通交互反馈，不转为 Disabled。当前没有 NumberInput 专属颜色 Overrides 协议。
 
-Gallery 的 NumberInput 页展示不同类型、范围、步长、精度、只读/禁用及窄容器，并通过公开 API 查询正式值、统计根 `ValueChange<T>`、提供合法预设 Setter。进入页面重新创建示例和统计，离开后销毁。
+Gallery 的 NumberInput 页展示不同类型、范围、步长、精度、只读/禁用及窄容器，并通过公开 API 查询正式值、统计根 `ValueChange<T>`、提供合法预设 Setter。另有只含多层 Editor 的自定义输入区，分别显示正式值与草稿。进入页面重新创建示例和统计，离开后销毁。

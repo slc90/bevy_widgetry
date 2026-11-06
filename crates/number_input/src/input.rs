@@ -3,8 +3,8 @@ use crate::{
     error::{missing, query, text_field},
 };
 use crate::{
-    WidgetryNumber, WidgetryNumberInput,
-    editing::{Parts, ReadOnly, StepButton, apply_pending, can_edit, editor, ensure_full, field},
+    WidgetryNumber, WidgetryNumberInput, WidgetryNumberInputEditor,
+    editing::{ReadOnly, StepButton, apply_pending, can_edit, editor, ensure_full, field},
     value::state,
 };
 use bevy::{
@@ -79,7 +79,7 @@ fn activate<T: WidgetryNumber>(
 fn focus_button(
     mut event: On<AcquireFocus>,
     buttons: Query<&StepButton, Without<InteractionDisabled>>,
-    parts: Query<&Parts>,
+    parts: Query<&WidgetryNumberInputEditor>,
     targets: Query<&WidgetryInputTarget>,
     mut focus: ResMut<InputFocus>,
 ) -> Result {
@@ -90,7 +90,7 @@ fn focus_button(
         query(
             button.root,
             button.root,
-            "Parts",
+            "WidgetryNumberInputEditor",
             source,
             "number_input.focus_button",
         )
@@ -113,7 +113,10 @@ fn focus_button(
 
 fn on_key<T: WidgetryNumber>(
     mut event: On<FocusedInput<KeyboardInput>>,
-    roots: Query<(Entity, &Parts), (With<WidgetryNumberInput<T>>, Without<ReadOnly>)>,
+    roots: Query<
+        (Entity, &WidgetryNumberInputEditor),
+        (With<WidgetryNumberInput<T>>, Without<ReadOnly>),
+    >,
     targets: Query<&WidgetryInputTarget>,
     editors: Query<&EditableText, Without<InteractionDisabled>>,
     mut commands: Commands,

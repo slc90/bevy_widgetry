@@ -180,6 +180,8 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         },
         TextKey::Navigation(NavigationKey::NumberInput) => "NumberInput",
         TextKey::NumberInput(key) => match key {
+            super::NumberInputKey::CustomEditing => "Custom NumberInput · editor only · Enter commits, Esc restores",
+            super::NumberInputKey::CustomDraftStatus => "Official: {value} · draft: {draft}",
             super::NumberInputKey::Description => {
                 "Edit a draft, then Enter or leave to commit; Esc cancels. Use arrows or hold −/+ to step. Official value and event counts change only on a real commit. Preset buttons replace drafts, including in read-only or disabled examples."
             }

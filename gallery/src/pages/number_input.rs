@@ -15,6 +15,8 @@ use bevy_widgetry::{
 
 pub(crate) struct NumberInputDemoPlugin;
 
+mod custom;
+
 impl Plugin for NumberInputDemoPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<NumberDemoState<i32>>()
@@ -30,6 +32,7 @@ impl Plugin for NumberInputDemoPlugin {
                     refresh::<u8>,
                     refresh::<f64>,
                     refresh::<i64>,
+                    custom::refresh,
                 )
                     .after(bevy::input_focus::InputFocusSystems::FocusChangeEvents)
                     .run_if(in_state(GalleryPage::NumberInput)),
@@ -198,6 +201,7 @@ fn scene() -> impl Scene {
         Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(16),flex_shrink:0.0}
         Children [
             @label(NumberInputKey::Description) Node {max_width:percent(100)}--
+            @custom::scene()--
             Node {width:percent(100),flex_wrap:FlexWrap::Wrap,column_gap:px(24),row_gap:px(24),align_items:AlignItems::Start}
             Children [{examples}]
         ]

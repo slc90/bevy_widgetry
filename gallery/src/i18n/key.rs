@@ -179,6 +179,8 @@ pub(crate) enum CollapsibleKey {
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NumberInputKey {
     Description,
+    CustomEditing,
+    CustomDraftStatus,
     Signed,
     Unsigned,
     Float,

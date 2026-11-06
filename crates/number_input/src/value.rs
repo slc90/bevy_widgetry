@@ -1,6 +1,6 @@
 use crate::{
     NumberInputConfigSnapshot, NumberInputError, NumberInputFailure, NumberInputRejection,
-    WidgetryNumber,
+    WidgetryNumber, WidgetryNumberInputHeadless,
     error::{failure, missing},
 };
 use bevy::prelude::*;
@@ -175,7 +175,10 @@ pub(crate) fn state<T: WidgetryNumber>(
     world: &World,
     entity: Entity,
 ) -> Result<&State<T>, NumberInputFailure> {
-    if world.get::<WidgetryNumberInput<T>>(entity).is_none() {
+    if world
+        .get::<WidgetryNumberInputHeadless<T>>(entity)
+        .is_none()
+    {
         return Err(failure(
             NumberInputError::InvalidRoot {
                 root: entity,
