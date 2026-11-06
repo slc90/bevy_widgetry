@@ -13,7 +13,7 @@ use bevy_widgetry_test_utils::{
     ErrorCapture, add_ui_plugins, advance_until, primary_press, primary_release, scene_app,
     spawn_ui_camera,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 const TITLES: [&str; 3] = [
     "A",
@@ -153,14 +153,14 @@ fn palettes_overrides_interactions_and_focus_preserve_selection_and_page_style()
     let selected = WidgetryTabs::header(app.world(), root, 0).unwrap();
     let other = WidgetryTabs::header(app.world(), root, 1).unwrap();
     for theme in [
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), theme).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), theme).unwrap();
         app.update();
-        let palette = theme.colors().tabs;
+        let palette = theme.tabs;
         assert_eq!(
             app.world().get::<BackgroundColor>(selected).unwrap().0,
             palette.header.selected.normal.background
@@ -268,8 +268,7 @@ fn header_pointer_press_projects_pressed_colors_without_changing_selection() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(header).unwrap().0,
-        WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .tabs
             .header
             .unselected
@@ -370,7 +369,9 @@ fn missing_managed_outputs_report_once_and_recover_after_reinsertion() {
         assert!(errors.take().is_empty());
         assert_eq!(
             app.world().get::<BackgroundColor>(entity).unwrap().0,
-            WidgetryThemeMode::Dark.colors().tabs.panel_background
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .tabs
+                .panel_background
         );
     }
     let ellipsis = text_and_ellipsis(app.world(), header).1;
@@ -388,8 +389,7 @@ fn missing_managed_outputs_report_once_and_recover_after_reinsertion() {
     assert!(errors.take().is_empty());
     assert_eq!(
         app.world().get::<ResolvedForeground>(ellipsis).unwrap().0,
-        WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .tabs
             .header
             .selected

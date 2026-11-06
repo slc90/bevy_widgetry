@@ -12,7 +12,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState},
 };
-use bevy_widgetry_theme::{WidgetryButtonStateColors, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryButtonStateColors, WidgetryTheme};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -84,10 +84,10 @@ type StyleFilter = (
 );
 
 fn apply(
-    mode: &WidgetryThemeMode,
+    mode: &WidgetryTheme,
     (overrides, hovered, selected, pressed, disabled, mut background, mut border, mut foreground): <StyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
 ) {
-    let theme = mode.colors();
+    let theme = mode;
     let (base, overrides) = if selected {
         let states = &theme.check_box.checked;
         let (base, overrides) = if disabled {
@@ -126,7 +126,7 @@ fn apply(
 }
 
 fn update_colors(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut query: Query<(Entity, StyleData), StyleFilter>,
     roots: Query<
         (

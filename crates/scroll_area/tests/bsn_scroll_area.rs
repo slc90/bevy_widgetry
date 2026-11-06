@@ -884,8 +884,7 @@ fn disabled_thumb_keeps_layout_and_programmatic_scroll_current() {
         if !local_viewport {
             assert_eq!(
                 app.world().get::<BackgroundColor>(thumb).unwrap().0,
-                bevy_widgetry_theme::WidgetryThemeMode::Dark
-                    .colors()
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
                     .scroll_area
                     .vertical
                     .thumb
@@ -920,8 +919,7 @@ fn disabled_thumb_keeps_layout_and_programmatic_scroll_current() {
         assert!(app.world().get::<Scrollbar>(bar).is_some());
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            bevy_widgetry_theme::WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .scroll_area
                 .vertical
                 .thumb

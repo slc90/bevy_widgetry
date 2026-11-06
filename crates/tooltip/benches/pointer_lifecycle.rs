@@ -82,8 +82,7 @@ fn fixture(hits: usize, pointers: usize, pending: bool, visible: bool) -> Result
         app,
         location,
         anchor,
-        background: bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        background: bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .tooltip
             .popup
             .normal

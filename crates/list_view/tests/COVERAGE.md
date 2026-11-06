@@ -74,3 +74,5 @@ Tree 专用内部桥接的三段落点、Inside禁止反馈与实时加载状态
 `drag.rs` 工作量回归保护无数据变化的拖拽提交不重新求值投影资格；`benches/drag.rs` 在 1k/10k/100k 项上经真实 Pointer 事件反复换位并完成一次 Headless Update，核对 Model 不变、每次投影实际改变与可见行有界，记录 CPU/Layout 耗时，不覆盖原生窗口 Present。
 
 `diagnostics.rs` 覆盖 Model 越界精确现场、合法缺失无伪错误、自定义 u128 Key 的类型和值、原子选择拒绝、重复/清空的静默路径、注册冲突类型、Source 请求目标，以及真实 Commands 的 Severity::Error 与源头诊断身份。Model 单元耗尽测试同步检查 ID / revision / len / next_id 快照和失败后索引不变；Property 测试继续保护操作序列中的身份账本。
+
+Virtualization renderer coverage checks 2× DPI icon raster resolution while retaining the logical icon bounds and same-frame materialization.

@@ -391,8 +391,7 @@ fn apply<T: Send + Sync + 'static>(
                 ..default()
             };
             let color = world
-                .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-                .colors()
+                .resource::<bevy_widgetry_theme::WidgetryTheme>()
                 .table
                 .column_header
                 .selected

@@ -13,7 +13,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{Diagnostic, DiagnosticBatch, FailureState, WidgetryEcsError},
 };
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 use std::sync::Arc;
 
 pub(crate) type FrameOwner = bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTabs>;
@@ -210,7 +210,7 @@ fn apply(world: &mut World, entity: Entity) -> Result<bool, Problem> {
             part: "ColorState",
         })?
         .0
-        .resolve(&world.resource::<WidgetryThemeMode>().colors().tabs);
+        .resolve(&world.resource::<WidgetryTheme>().tabs);
     if entity == root {
         let parts = world.get::<Parts>(root).ok_or(Problem::MissingPart {
             root,

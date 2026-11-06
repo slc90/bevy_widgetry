@@ -1,6 +1,4 @@
-use bevy_widgetry_theme::{
-    WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin,
-};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemePlugin};
 
 use bevy::{
     app::{App, Plugin, PostUpdate},
@@ -123,16 +121,16 @@ fn apply_outputs(
 }
 
 fn update_widgetry_button_style_changed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut query: ChangedButtonStyleQuery<'_, '_>,
 ) {
     for item in &mut query {
-        apply_button_style(mode.colors(), item);
+        apply_button_style(&mode, item);
     }
 }
 
 fn update_widgetry_button_style_removed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut removed_pressed: RemovedComponents<Pressed>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
     mut query: Query<
@@ -145,7 +143,7 @@ fn update_widgetry_button_style_removed(
 ) {
     for entity in removed_pressed.read().chain(removed_disabled.read()) {
         if let Ok(item) = query.get_mut(entity) {
-            apply_button_style(mode.colors(), item);
+            apply_button_style(&mode, item);
         }
     }
 }
@@ -153,7 +151,7 @@ fn update_widgetry_button_style_removed(
 fn refresh_button_theme(_event: On<WidgetryThemeChanged>, mut commands: bevy::prelude::Commands) {
     commands.queue(
         |world: &mut bevy::prelude::World| -> Result<(), bevy::prelude::BevyError> {
-            let colors = *world.resource::<WidgetryThemeMode>().colors();
+            let colors = *world.resource::<WidgetryTheme>();
             let mut state = bevy::ecs::system::SystemState::<
                 Query<
                     ButtonStyleData,

@@ -11,7 +11,7 @@ use bevy_widgetry::scene::spawn_scene;
 use bevy_widgetry::scroll_area::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
 };
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry::theme::{WidgetryTheme, WidgetryThemeChanged};
 pub(crate) struct GalleryPlugin;
 
 #[derive(Component)]
@@ -101,7 +101,7 @@ pub(crate) fn scene() -> impl Scene {
                     },
                 }
                 template(|_| Ok(GallerySidebar))
-                template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.border)))
+                template(|context| Ok(BorderColor::all(context.resource::<WidgetryTheme>().window.frame.normal.border)))
                 Node {
                     width: px(176),
                     height: percent(100),
@@ -263,11 +263,12 @@ fn log_page_transition(mut transitions: MessageReader<StateTransitionEvent<Galle
 }
 
 fn refresh_sidebar_theme(
-    event: On<WidgetryThemeChanged>,
+    _: On<WidgetryThemeChanged>,
+    mode: Res<WidgetryTheme>,
     mut sidebars: Query<&mut BorderColor, With<GallerySidebar>>,
 ) {
     for mut border in &mut sidebars {
-        *border = BorderColor::all(event.mode.colors().window.frame.normal.border);
+        *border = BorderColor::all(mode.window.frame.normal.border);
     }
 }
 

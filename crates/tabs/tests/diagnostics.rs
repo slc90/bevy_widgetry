@@ -259,7 +259,7 @@ fn style_batches_keep_each_owner_origin_across_theme_refresh_recovery_and_recurr
         for diagnostic in &first {
             assert!(matches!(original(*diagnostic).kind(), TabsError::Structure { source: TabsStructureError::MissingPart { root, entity, part: "BackgroundColor" } } if roots.iter().zip(&headers).any(|(r, h)| r == root && h == entity)));
         }
-        bevy_widgetry_theme::WidgetryThemeMode::set_in_world(app.world_mut(), bevy_widgetry_theme::WidgetryThemeMode::Light).unwrap();
+        bevy_widgetry_theme::WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME).unwrap();
         app.update();
         let repeated = errors.take_records();
         assert_eq!(repeated.len(), 1);

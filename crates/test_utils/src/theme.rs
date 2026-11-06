@@ -1,8 +1,8 @@
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 use bevy::app::App;
-pub fn switch_theme(app: &mut App, mode: WidgetryThemeMode) {
-    WidgetryThemeMode::set(&mut app.world_mut().commands(), mode);
+pub fn switch_theme(app: &mut App, mode: WidgetryTheme) {
+    WidgetryTheme::set(&mut app.world_mut().commands(), mode);
     app.world_mut().flush();
 }
 
@@ -36,16 +36,17 @@ mod tests {
         let logs = LogCapture::default();
         let errors = ErrorCapture::default();
         logs.run(|| {
-            let first = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark)
-                .unwrap_err();
-            let second = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark)
-                .unwrap_err();
-            assert!(matches!(
-                first.kind(),
-                ThemeError::MissingMode {
-                    mode: WidgetryThemeMode::Dark
-                }
-            ));
+            let first = WidgetryTheme::set_in_world(
+                app.world_mut(),
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+            )
+            .unwrap_err();
+            let second = WidgetryTheme::set_in_world(
+                app.world_mut(),
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+            )
+            .unwrap_err();
+            assert!(matches!(first.kind(), ThemeError::MissingTheme));
             assert_ne!(first.origin().id(), second.origin().id());
             let origin = Arc::clone(first.origin());
             assert_eq!(origin.backtrace().status(), BacktraceStatus::Captured);
@@ -66,12 +67,7 @@ mod tests {
             assert_eq!(records[0].error.severity(), Severity::Error);
             let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
             assert!(Arc::ptr_eq(diagnostic.origin(), &origin));
-            assert!(matches!(
-                kind(diagnostic),
-                ThemeError::MissingMode {
-                    mode: WidgetryThemeMode::Dark
-                }
-            ));
+            assert!(matches!(kind(diagnostic), ThemeError::MissingTheme));
             assert_eq!(
                 logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
                     .len(),
@@ -81,7 +77,7 @@ mod tests {
                 logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
                     .is_empty()
             );
-            assert!(!app.world().contains_resource::<WidgetryThemeMode>());
+            assert!(!app.world().contains_resource::<WidgetryTheme>());
         });
     }
 
@@ -95,21 +91,16 @@ mod tests {
         logs.run(|| {
             let mut queue = bevy::ecs::world::CommandQueue::default();
             let mut commands = Commands::new(&mut queue, app.world());
-            WidgetryThemeMode::set(&mut commands, WidgetryThemeMode::Dark);
+            WidgetryTheme::set(&mut commands, bevy_widgetry_theme::WIDGETRY_DARK_THEME);
             assert!(logs.records().is_empty());
-            app.world_mut().remove_resource::<WidgetryThemeMode>();
+            app.world_mut().remove_resource::<WidgetryTheme>();
             errors.run(|| queue.apply(app.world_mut()));
             let records = errors.take_records();
             assert_eq!(records.len(), 1);
             assert_eq!(records[0].error.severity(), Severity::Error);
             let managed = records[0].error.downcast_ref::<WidgetryEcsError>().unwrap();
             let diagnostic = managed.diagnostics().next().unwrap();
-            assert!(matches!(
-                kind(diagnostic),
-                ThemeError::MissingMode {
-                    mode: WidgetryThemeMode::Dark
-                }
-            ));
+            assert!(matches!(kind(diagnostic), ThemeError::MissingTheme));
             assert_eq!(
                 logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
                     .len(),
@@ -123,7 +114,52 @@ mod tests {
     }
 
     #[derive(Resource, Default)]
-    struct Notifications(Vec<WidgetryThemeMode>);
+    struct Notifications(Vec<WidgetryTheme>);
+
+    #[test]
+    fn queued_invalid_palette_preserves_state_and_reports_one_typed_error() {
+        let mut app = App::new();
+        app.add_plugins(WidgetryThemePlugin)
+            .init_resource::<Notifications>()
+            .set_error_handler(ErrorCapture::handler());
+        app.add_observer(
+            |_: On<WidgetryThemeChanged>,
+             theme: Res<WidgetryTheme>,
+             mut seen: ResMut<Notifications>| {
+                seen.0.push(*theme);
+            },
+        );
+        let before = *app.world().resource::<WidgetryTheme>();
+        let mut invalid = before;
+        invalid.text.normal.foreground = Color::WHITE;
+        invalid.waveform.disabled.background = Color::linear_rgba(f32::INFINITY, 0.0, 0.0, 1.0);
+        let logs = LogCapture::default();
+        let errors = ErrorCapture::default();
+        logs.run(|| {
+            let mut queue = bevy::ecs::world::CommandQueue::default();
+            WidgetryTheme::set(&mut Commands::new(&mut queue, app.world()), invalid);
+            assert!(logs.records().is_empty());
+            errors.run(|| queue.apply(app.world_mut()));
+        });
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].error.severity(), Severity::Error);
+        let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+        assert!(
+            matches!(kind(diagnostic), ThemeError::InvalidColor { field, .. } if field == "theme.waveform.disabled.background")
+        );
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+        assert_eq!(*app.world().resource::<WidgetryTheme>(), before);
+        assert!(app.world().resource::<Notifications>().0.is_empty());
+    }
 
     #[test]
     fn normal_theme_switch_helper_and_same_value_have_only_original_notifications() {
@@ -131,21 +167,20 @@ mod tests {
         app.add_plugins(WidgetryThemePlugin)
             .init_resource::<Notifications>();
         app.add_observer(
-            |event: On<WidgetryThemeChanged>,
-             mode: Res<WidgetryThemeMode>,
+            |_: On<WidgetryThemeChanged>,
+             mode: Res<WidgetryTheme>,
              mut seen: ResMut<Notifications>| {
-                assert_eq!(*mode, event.mode);
-                seen.0.push(event.mode);
+                seen.0.push(*mode);
             },
         );
         let modes = [
-            WidgetryThemeMode::Dark,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME,
             #[cfg(feature = "light")]
-            WidgetryThemeMode::Light,
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
             #[cfg(feature = "pink_dream")]
-            WidgetryThemeMode::PinkDream,
+            bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
             #[cfg(feature = "kamuri_violet")]
-            WidgetryThemeMode::KamuriViolet,
+            bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
         ];
         let logs = LogCapture::default();
         logs.run(|| {

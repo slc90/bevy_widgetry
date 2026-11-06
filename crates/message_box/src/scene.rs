@@ -2,7 +2,7 @@ use crate::lifecycle::{MessageBoxState, forward_activation, handle_message_box_c
 use bevy::prelude::*;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use bevy_widgetry_window::{
     WidgetryModalWindow, WidgetryWindowBackground, WidgetryWindowControlsConfig,
     owned_widgetry_window,
@@ -133,7 +133,7 @@ impl MessageBoxScene {
             template(move |context| colors.clone().initial().map_err(|failure| failure.with_context(bevy_widgetry_diagnostics::ErrorFrame::new("message_box.colors.initialize").field("message_box", context.entity.id())).into_bevy_error()))
             template(|_| Ok(MessageBoxState::default()))
             on(handle_message_box_click)
-            template(|context| Ok(ResolvedForeground(context.resource::<WidgetryThemeMode>().colors().message_box.body.normal.foreground)))
+            template(|context| Ok(ResolvedForeground(context.resource::<WidgetryTheme>().message_box.body.normal.foreground)))
             @owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme, Default::default(),
                 bsn_list!{Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
                     template(|_| Ok(Pickable::IGNORE))

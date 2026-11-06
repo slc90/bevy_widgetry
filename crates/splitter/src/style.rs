@@ -20,7 +20,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use std::sync::Arc;
 
 #[derive(Component, FromTemplate)]
@@ -97,7 +97,7 @@ fn removed(
 }
 
 fn collect(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     roots: Query<Entity, With<WidgetrySplitter>>,
     inputs: Query<
         Entity,
@@ -217,7 +217,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), Problem> {
             part: "ColorState",
         })?
         .0
-        .resolve(&world.resource::<WidgetryThemeMode>().colors().splitter);
+        .resolve(&world.resource::<WidgetryTheme>().splitter);
     let color = if disabled {
         palette.disabled
     } else if world.get::<Pressed>(handle).is_some() {

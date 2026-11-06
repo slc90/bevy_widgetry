@@ -19,7 +19,7 @@ use bevy_widgetry_test_utils::switch_theme;
 use bevy_widgetry_test_utils::{
     add_ui_plugins, advance_until, press, primary_click, scene_app, spawn_ui_camera,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use bevy_widgetry_window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
     owned_widgetry_window,
@@ -509,17 +509,20 @@ fn message_box_text_tracks_theme() {
     app.update();
     prepare_bound_camera(&mut app, root);
     app.update();
-    for mode in [WidgetryThemeMode::Dark, WidgetryThemeMode::Light] {
+    for mode in [
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+    ] {
         switch_theme(&mut app, mode);
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(root).unwrap().0,
-            mode.colors().window.frame.normal.background
+            mode.window.frame.normal.background
         );
         assert!(app.world().get::<ImageNode>(root).is_none());
         assert_eq!(
             app.world().get::<ResolvedForeground>(root).unwrap().0,
-            mode.colors().message_box.body.normal.foreground
+            mode.message_box.body.normal.foreground
         );
         let texts: Vec<_> = subtree(app.world(), root)
             .into_iter()
@@ -533,7 +536,7 @@ fn message_box_text_tracks_theme() {
         for text in texts {
             assert_eq!(
                 app.world().get::<TextColor>(text).unwrap().0,
-                mode.colors().message_box.body.normal.foreground
+                mode.message_box.body.normal.foreground
             );
             assert!(
                 !app.world()
@@ -584,8 +587,7 @@ fn action_colors_follow_input_removal_disabled_and_override_clear() {
     app.update();
     let theme = app
         .world()
-        .resource::<WidgetryThemeMode>()
-        .colors()
+        .resource::<WidgetryTheme>()
         .message_box
         .action_button;
     assert_eq!(background(&app, yes), theme.hovered.background);

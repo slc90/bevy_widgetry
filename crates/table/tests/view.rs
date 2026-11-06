@@ -13,7 +13,7 @@ use bevy::picking::pointer::{Location, PointerId};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition, UiGlobalTransform};
 use bevy::window::RequestRedraw;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 use bevy_widgetry_table::*;
 use bevy_widgetry_test_utils::{
@@ -492,7 +492,7 @@ fn style_and_disabled_preserve_content_and_picking() {
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
         .expect("theme switch succeeds");
     app.update();
     assert_eq!(text(&app, cell).0, content);
@@ -510,7 +510,11 @@ fn style_and_disabled_preserve_content_and_picking() {
     assert!(app.world().get::<Pickable>(cell).is_none());
     assert_eq!(
         app.world().get::<BorderColor>(cell).unwrap().top,
-        WidgetryThemeMode::Light.colors().table.cell.normal.border
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .table
+            .cell
+            .normal
+            .border
     );
 }
 
@@ -637,18 +641,16 @@ fn shared_views_prepare_new_and_reused_cell_content_with_cached_palettes() {
     check(&mut app, first_color, second_color);
     WidgetryTableColorOverrides::clear_in_world(app.world_mut(), first).unwrap();
     WidgetryTableColorOverrides::clear_in_world(app.world_mut(), second).unwrap();
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.update();
     check(
         &mut app,
-        WidgetryThemeMode::Light
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .table
             .cell
             .normal
             .foreground,
-        WidgetryThemeMode::Light
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .table
             .cell
             .disabled

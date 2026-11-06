@@ -198,8 +198,7 @@ fn window_color_failures_keep_the_original_lower_origin_through_message_box_owne
     app.world_mut().entity_mut(root).remove::<BorderColor>();
     let colors = app
         .world()
-        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-        .colors()
+        .resource::<bevy_widgetry_theme::WidgetryTheme>()
         .message_box;
     let logs = LogCapture::default();
     let origin = logs.run(|| {

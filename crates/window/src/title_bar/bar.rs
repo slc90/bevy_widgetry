@@ -5,7 +5,7 @@ use crate::{
 use bevy::prelude::*;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 #[derive(Component)]
 #[require(
@@ -88,7 +88,7 @@ pub(crate) fn title_bar(
 ) -> impl Scene {
     bsn! {
         template(|_| Ok(TitleBar))
-        template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.title_bar.normal.border)))
+        template(|context| Ok(BorderColor::all(context.resource::<WidgetryTheme>().window.title_bar.normal.border)))
         Children [
             template(|_| Ok(TitleBarDragArea)) template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))--
             template(|_| Ok(TitleBarContent)) Children [{content}]--

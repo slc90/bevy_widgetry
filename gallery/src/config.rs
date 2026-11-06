@@ -1,10 +1,10 @@
+use crate::theme::GalleryTheme;
 use crate::{
     diagnostics::{self, GalleryError},
     i18n::Language,
 };
 use bevy::prelude::*;
 use bevy_widgetry::diagnostics::ErrorFrame;
-use bevy_widgetry::theme::WidgetryThemeMode;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -14,21 +14,11 @@ use std::path::PathBuf;
 #[serde(deny_unknown_fields)]
 pub(crate) struct AppConfig {
     pub(crate) scale_factor: f32,
-    #[serde(with = "ThemeMode")]
-    pub(crate) theme: WidgetryThemeMode,
+    pub(crate) theme: GalleryTheme,
     #[serde(with = "ConfigLanguage")]
     pub(crate) language: Language,
     pub(crate) brp_enabled: bool,
     pub(crate) brp_port: u16,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "WidgetryThemeMode")]
-enum ThemeMode {
-    Light,
-    Dark,
-    PinkDream,
-    KamuriViolet,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -42,7 +32,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             scale_factor: 1.25,
-            theme: WidgetryThemeMode::Dark,
+            theme: GalleryTheme::Dark,
             language: Language::English,
             brp_enabled: true,
             brp_port: 15702,

@@ -7,7 +7,7 @@ use bevy::{
 };
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::WidgetryAppExt;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 use bevy_widgetry_window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
@@ -206,7 +206,7 @@ fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
 fn theme_colors_initialize_and_refresh_together() {
     let mut app = App::new();
     app.set_default_font(bevy::text::FontSource::monospace());
-    app.insert_resource(WidgetryThemeMode::Light);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -225,21 +225,24 @@ fn theme_colors_initialize_and_refresh_together() {
         .id();
     app.update();
     let title = app.world().get::<Children>(root).unwrap()[0];
-    for mode in [WidgetryThemeMode::Light, WidgetryThemeMode::Dark] {
-        if mode == WidgetryThemeMode::Dark {
-            WidgetryThemeMode::set_in_world(app.world_mut(), mode).expect("theme switch succeeds");
+    for mode in [
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+    ] {
+        if mode == bevy_widgetry_theme::WIDGETRY_DARK_THEME {
+            WidgetryTheme::set_in_world(app.world_mut(), mode).expect("theme switch succeeds");
         }
         assert_eq!(
             app.world().get::<BackgroundColor>(root).unwrap().0,
-            mode.colors().window.frame.normal.background
+            mode.window.frame.normal.background
         );
         assert_eq!(
             *app.world().get::<BorderColor>(root).unwrap(),
-            BorderColor::all(mode.colors().window.frame.normal.border)
+            BorderColor::all(mode.window.frame.normal.border)
         );
         assert_eq!(
             *app.world().get::<BorderColor>(title).unwrap(),
-            BorderColor::all(mode.colors().window.title_bar.normal.border)
+            BorderColor::all(mode.window.title_bar.normal.border)
         );
     }
 }

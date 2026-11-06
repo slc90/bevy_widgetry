@@ -176,10 +176,10 @@ fn rejected_values_keep_request_and_origin_at_boundary() {
 #[test]
 fn broken_visuals_batch_roots_reuse_origin_and_recover() {
     use bevy_widgetry_progress_bar::WidgetryProgressBarPlugin;
-    use bevy_widgetry_theme::WidgetryThemeMode;
+
     let mut app = bevy_widgetry_test_utils::scene_app();
     app.add_plugins(WidgetryProgressBarPlugin);
-    app.insert_resource(WidgetryThemeMode::Light);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.set_error_handler(ErrorCapture::handler());
     app.edit_schedule(PostUpdate, |schedule| {
         schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
@@ -205,7 +205,7 @@ fn broken_visuals_batch_roots_reuse_origin_and_recover() {
         .map(|diagnostic| diagnostic.origin().clone())
         .collect();
     assert_eq!(origins.len(), 2);
-    app.insert_resource(WidgetryThemeMode::Dark);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_DARK_THEME);
     logs.run(|| errors.run(|| app.world_mut().run_schedule(PostUpdate)));
     let repeated = errors.take_records();
     assert_eq!(repeated.len(), 1);
@@ -222,7 +222,7 @@ fn broken_visuals_batch_roots_reuse_origin_and_recover() {
             .entity_mut(*track)
             .insert(BackgroundColor(Color::NONE));
     }
-    app.insert_resource(WidgetryThemeMode::Light);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     logs.run(|| errors.run(|| app.world_mut().run_schedule(PostUpdate)));
     assert!(errors.take().is_empty());
     for origin in &origins {
@@ -237,7 +237,7 @@ fn broken_visuals_batch_roots_reuse_origin_and_recover() {
     app.world_mut()
         .entity_mut(tracks[0])
         .remove::<BackgroundColor>();
-    app.insert_resource(WidgetryThemeMode::Dark);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_DARK_THEME);
     logs.run(|| errors.run(|| app.world_mut().run_schedule(PostUpdate)));
     let new = errors.take_records();
     let origin = new[0]

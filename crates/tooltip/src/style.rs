@@ -12,7 +12,7 @@ use bevy_widgetry_diagnostics::{
     bevy::{DiagnosticBatch, FailureState},
 };
 use bevy_widgetry_internal_log::widgetry_debug;
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemePlugin};
 use std::sync::Arc;
 
 #[derive(SceneComponent, Default, Clone)]
@@ -126,7 +126,7 @@ fn popup_scene(
 
 fn show_tooltip(
     event: On<ShowTooltip>,
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     anchors: Query<
         (
             &TooltipContent,
@@ -160,7 +160,7 @@ fn show_tooltip(
         .0
         .build(anchor)
         .map_err(TooltipFailure::into_bevy_error)?;
-    let colors = overrides.0.resolve(&mode.colors().tooltip);
+    let colors = overrides.0.resolve(&mode.tooltip);
     let popup = commands.spawn_empty().id();
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         if !world.entities().contains(anchor) {
@@ -256,7 +256,8 @@ fn popup_color_failure(
 }
 
 fn refresh_tooltip_theme(
-    event: On<WidgetryThemeChanged>,
+    _: On<WidgetryThemeChanged>,
+    mode: Res<WidgetryTheme>,
     anchors: Query<&crate::colors::ColorState, With<WidgetryTooltip>>,
     mut popups: Query<
         (
@@ -292,7 +293,7 @@ fn refresh_tooltip_theme(
                 .field("popup", popup)
         });
         apply_tooltip_colors(
-            &overrides.0.resolve(&event.mode.colors().tooltip),
+            &overrides.0.resolve(&mode.tooltip),
             (background, border, foreground),
         );
     }
@@ -303,7 +304,7 @@ fn refresh_tooltip_theme(
 }
 
 fn update_tooltip_colors(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     anchors: Query<Ref<crate::colors::ColorState>, With<WidgetryTooltip>>,
     mut popups: Query<
         (
@@ -350,7 +351,7 @@ fn update_tooltip_colors(
             continue;
         }
         apply_tooltip_colors(
-            &overrides.0.resolve(&mode.colors().tooltip),
+            &overrides.0.resolve(&mode.tooltip),
             (background, border, foreground),
         );
     }
@@ -410,7 +411,6 @@ impl Plugin for WidgetryTooltipPlugin {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME};
 
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -559,7 +559,11 @@ mod tests {
         let logs = LogCapture::default();
         logs.run(|| {
             errors.run(|| {
-                WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap()
+                WidgetryTheme::set_in_world(
+                    app.world_mut(),
+                    bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+                )
+                .unwrap()
             });
             let failures = errors.take();
             assert_eq!(failures.len(), 1);
@@ -689,7 +693,11 @@ mod tests {
         assert_eq!(STYLE_WORK.replace(0), 1);
         assert_eq!(
             app.world().get::<ResolvedForeground>(popup).unwrap().0,
-            WIDGETRY_DARK_THEME.tooltip.popup.normal.foreground
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .tooltip
+                .popup
+                .normal
+                .foreground
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
     }
@@ -851,15 +859,29 @@ mod tests {
         assert_eq!(popover.window_margin, 8.0);
         assert_eq!(
             app.world().get::<BackgroundColor>(popup).unwrap().0,
-            WIDGETRY_DARK_THEME.tooltip.popup.normal.background
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .tooltip
+                .popup
+                .normal
+                .background
         );
         assert_eq!(
             *app.world().get::<BorderColor>(popup).unwrap(),
-            BorderColor::all(WIDGETRY_DARK_THEME.tooltip.popup.normal.border)
+            BorderColor::all(
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                    .tooltip
+                    .popup
+                    .normal
+                    .border
+            )
         );
         assert_eq!(
             app.world().get::<ResolvedForeground>(popup).unwrap().0,
-            WIDGETRY_DARK_THEME.tooltip.popup.normal.foreground
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .tooltip
+                .popup
+                .normal
+                .foreground
         );
         app.update();
         let mut descendants = app.world().get::<Children>(popup).unwrap().to_vec();
@@ -924,22 +946,33 @@ mod tests {
         app.world_mut().trigger(ShowTooltip { source: anchor });
         app.world_mut().flush();
         let popup = popup(&mut app);
-        WidgetryThemeMode::set_in_world(
-            app.world_mut(),
-            bevy_widgetry_theme::WidgetryThemeMode::Light,
-        )
-        .expect("theme switch succeeds");
+        WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+            .expect("theme switch succeeds");
         assert_eq!(
             app.world().get::<BackgroundColor>(popup).unwrap().0,
-            WIDGETRY_LIGHT_THEME.tooltip.popup.normal.background
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+                .tooltip
+                .popup
+                .normal
+                .background
         );
         assert_eq!(
             *app.world().get::<BorderColor>(popup).unwrap(),
-            BorderColor::all(WIDGETRY_LIGHT_THEME.tooltip.popup.normal.border)
+            BorderColor::all(
+                bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+                    .tooltip
+                    .popup
+                    .normal
+                    .border
+            )
         );
         assert_eq!(
             app.world().get::<ResolvedForeground>(popup).unwrap().0,
-            WIDGETRY_LIGHT_THEME.tooltip.popup.normal.foreground
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+                .tooltip
+                .popup
+                .normal
+                .foreground
         );
     }
 }

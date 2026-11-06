@@ -111,7 +111,7 @@ Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活�
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识，包括 Kamuri 45 种动画的共享时序、热点与图集目录。 |
-| [theme](crates/theme.md) | 提供预定义 Theme、Widget 配色及 Theme 状态管理。 |
+| [theme](crates/theme.md) | 提供完整 Theme 数据、预设配色及原子主题切换；Gallery 自行管理预设名称与配置。 |
 | [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 状态及可选 Kamuri Cursor。 |
 | [tray](crates/tray.md) | 可选 Windows 常驻托盘图标、静态嵌入 ICO 与 Tooltip、原生右键菜单、主线程生命周期及唤醒反应式循环的点击通知。 |
 | [power_inhibit](crates/power_inhibit.md) | 默认关闭的 Windows Display/System 电源请求、同步开关及 Resource RAII 清理。 |

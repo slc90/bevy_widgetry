@@ -16,7 +16,7 @@ use bevy_widgetry::{
     },
     scene::WidgetrySceneCommandsExt,
     text::WidgetryText,
-    theme::WidgetryThemeMode,
+    theme::WidgetryTheme,
     window::{
         WidgetryWindowBackground, WidgetryWindowImageBackground, WidgetryWindowImageMode,
         owned_widgetry_window,
@@ -96,13 +96,12 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
     let button = event.entity;
     commands.queue(move |world: &mut World| -> Result {
         if matches!(action.operation, Operation::Theme) {
-            let mode = match *world.resource::<WidgetryThemeMode>() {
-                WidgetryThemeMode::Dark => WidgetryThemeMode::Light,
-                WidgetryThemeMode::Light => WidgetryThemeMode::PinkDream,
-                WidgetryThemeMode::PinkDream => WidgetryThemeMode::KamuriViolet,
-                WidgetryThemeMode::KamuriViolet => WidgetryThemeMode::Dark,
-            };
-            WidgetryThemeMode::set_in_world(world, mode)
+            let mode = crate::theme::GalleryTheme::from_colors(world.resource::<WidgetryTheme>())
+                .map_or(
+                    crate::theme::GalleryTheme::Dark,
+                    crate::theme::GalleryTheme::next,
+                );
+            WidgetryTheme::set_in_world(world, mode.colors())
                 .map_err(|error| error.into_bevy_error())?;
             info!(?mode, "从颜色示例窗口切换 Theme");
             return Ok(());

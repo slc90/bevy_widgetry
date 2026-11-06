@@ -9,7 +9,7 @@ use bevy::{
 use bevy_widgetry_core::{input_target::WidgetryInputTarget, scene::spawn_scene};
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
 use bevy_widgetry_text_field::WidgetryTextField;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 #[derive(Resource, Default)]
 struct Changes(usize);
@@ -40,17 +40,22 @@ fn themes_refresh_the_shared_shell_and_owned_children_without_touching_drafts() 
         .set(editor, FocusCause::Navigated);
     app.update();
     WidgetryTextField::set_text_in_world(app.world_mut(), field, "7.").unwrap();
+    let mut custom = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
+    custom.button.normal.background = Color::srgb(0.2, 0.3, 0.4);
+    custom.button.normal.foreground = Color::srgb(0.8, 0.7, 0.6);
+    custom.text_field.editable.focused.foreground = Color::srgb(0.6, 0.7, 0.8);
     for mode in [
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
-        WidgetryThemeMode::Dark,
+        custom,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         for _ in 0..3 {
             app.update();
         }
-        let colors = mode.colors();
+        let colors = mode;
         assert_eq!(
             *app.world().get::<BorderColor>(root).unwrap(),
             BorderColor::all(colors.text_field.editable.focused.border)
@@ -82,7 +87,7 @@ fn themes_refresh_the_shared_shell_and_owned_children_without_touching_drafts() 
 #[test]
 fn button_feedback_is_local_and_endpoints_remain_visually_enabled() {
     let (mut app, root, minus, _, plus, _) = fixture(false);
-    let theme = app.world().resource::<WidgetryThemeMode>().colors();
+    let theme = *app.world().resource::<WidgetryTheme>();
     let geometry = app.world().get::<Node>(root).unwrap().clone();
     let window = app
         .world_mut()
@@ -164,7 +169,7 @@ fn button_feedback_is_local_and_endpoints_remain_visually_enabled() {
 fn read_only_and_inherited_disabled_use_matching_palettes_and_recover() {
     for read_only in [false, true] {
         let (mut app, root, minus, _, plus, editor) = fixture(read_only);
-        let theme = app.world().resource::<WidgetryThemeMode>().colors();
+        let theme = *app.world().resource::<WidgetryTheme>();
         let palette = if read_only {
             theme.text_field.read_only
         } else {

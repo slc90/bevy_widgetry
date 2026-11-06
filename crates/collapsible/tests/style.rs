@@ -7,7 +7,7 @@ use bevy_widgetry_collapsible::{
 };
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_test_utils::scene_app;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 fn parts(world: &World, root: Entity) -> (Entity, Entity, Entity) {
     let children = world.get::<Children>(root).unwrap();
@@ -203,15 +203,15 @@ fn all_themes_and_local_overrides_only_change_managed_colors() {
     let child = app.world().get::<Children>(content).unwrap()[0];
     let local = Color::srgb(0.17, 0.31, 0.59);
     for mode in [
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         WidgetryCollapsibleColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
         app.update();
-        let base = mode.colors().collapsible;
+        let base = mode.collapsible;
         assert_eq!(base.header_background, base.content_background);
         assert_eq!(
             app.world().get::<BackgroundColor>(root).unwrap().0,

@@ -4,7 +4,7 @@ use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
 use bevy_widgetry_internal_log::widgetry_debug;
 use std::{error::Error, fmt};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
 pub struct WidgetryTheme {
     pub text: WidgetryTextColors,
     pub icon: WidgetryIconColors,
@@ -149,35 +149,29 @@ pub const WIDGETRY_KAMURI_VIOLET_THEME: WidgetryTheme = WidgetryTheme {
 };
 
 #[derive(Event, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct WidgetryThemeChanged {
-    pub mode: WidgetryThemeMode,
-}
+pub struct WidgetryThemeChanged;
 
 pub struct WidgetryThemePlugin;
 
-#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum WidgetryThemeMode {
-    #[cfg(feature = "light")]
-    Light,
-    #[default]
-    Dark,
-    #[cfg(feature = "pink_dream")]
-    PinkDream,
-    #[cfg(feature = "kamuri_violet")]
-    KamuriViolet,
-}
-
 #[derive(Debug)]
 pub enum ThemeError {
-    MissingMode { mode: WidgetryThemeMode },
+    MissingTheme,
+    InvalidColor { field: String, color: Color },
+    InvalidPalette { field: String },
 }
 
 impl fmt::Display for ThemeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingMode { .. } => {
-                f.write_str("WidgetryThemeMode requires WidgetryThemePlugin")
-            }
+            Self::MissingTheme => f.write_str("WidgetryTheme requires WidgetryThemePlugin"),
+            Self::InvalidColor { field, .. } => write!(
+                f,
+                "Theme color {field} must have finite components and alpha in [0,1]"
+            ),
+            Self::InvalidPalette { field } => write!(
+                f,
+                "Theme palette {field} requires at least two colors with different cyclic neighbors"
+            ),
         }
     }
 }
@@ -186,39 +180,34 @@ impl Error for ThemeError {}
 
 pub type ThemeFailure = WidgetryFailure<ThemeError>;
 
-impl WidgetryThemeMode {
-    pub const fn colors(self) -> &'static WidgetryTheme {
-        match self {
-            #[cfg(feature = "light")]
-            Self::Light => &WIDGETRY_LIGHT_THEME,
-            Self::Dark => &WIDGETRY_DARK_THEME,
-            #[cfg(feature = "pink_dream")]
-            Self::PinkDream => &WIDGETRY_PINK_DREAM_THEME,
-            #[cfg(feature = "kamuri_violet")]
-            Self::KamuriViolet => &WIDGETRY_KAMURI_VIOLET_THEME,
-        }
+impl Default for WidgetryTheme {
+    fn default() -> Self {
+        WIDGETRY_DARK_THEME
     }
+}
 
+impl WidgetryTheme {
     #[track_caller]
-    pub fn set_in_world(world: &mut World, mode: Self) -> Result<bool, ThemeFailure> {
-        let Some(mut current) = world.get_resource_mut::<Self>() else {
+    pub fn set_in_world(world: &mut World, theme: Self) -> Result<bool, ThemeFailure> {
+        let Some(current) = world.get_resource::<Self>() else {
             return Err(ThemeFailure::new(
-                ThemeError::MissingMode { mode },
-                ErrorFrame::new("theme.set_in_world").field("mode", format_args!("{mode:?}")),
+                ThemeError::MissingTheme,
+                ErrorFrame::new("theme.set_in_world"),
             ));
         };
-        if *current == mode {
+        super::validation::validate(&theme)?;
+        if *current == theme {
             return Ok(false);
         }
-        *current = mode;
-        world.trigger(WidgetryThemeChanged { mode });
+        world.insert_resource(theme);
+        world.trigger(WidgetryThemeChanged);
         world.flush();
         Ok(true)
     }
 
-    pub fn set(commands: &mut Commands, mode: Self) {
+    pub fn set(commands: &mut Commands, theme: Self) {
         commands.queue(move |world: &mut World| {
-            Self::set_in_world(world, mode)
+            Self::set_in_world(world, theme)
                 .map(|_| ())
                 .map_err(ThemeFailure::into_bevy_error)
         });
@@ -227,76 +216,58 @@ impl WidgetryThemeMode {
 
 impl Plugin for WidgetryThemePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<WidgetryThemeMode>();
+        app.init_resource::<WidgetryTheme>();
         widgetry_debug!("WidgetryThemePlugin 注册完成");
     }
 }
 
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
 
     use super::*;
 
-    #[cfg(not(any(feature = "light", feature = "pink_dream", feature = "kamuri_violet")))]
-    #[test]
-    fn default_build_exposes_only_dark() {
-        let WidgetryThemeMode::Dark = WidgetryThemeMode::default();
-        assert_eq!(WidgetryThemeMode::Dark.colors(), &WIDGETRY_DARK_THEME);
-    }
-
-    fn modes() -> &'static [WidgetryThemeMode] {
+    fn modes() -> &'static [WidgetryTheme] {
         &[
-            WidgetryThemeMode::Dark,
+            WIDGETRY_DARK_THEME,
             #[cfg(feature = "light")]
-            WidgetryThemeMode::Light,
+            WIDGETRY_LIGHT_THEME,
             #[cfg(feature = "pink_dream")]
-            WidgetryThemeMode::PinkDream,
+            WIDGETRY_PINK_DREAM_THEME,
             #[cfg(feature = "kamuri_violet")]
-            WidgetryThemeMode::KamuriViolet,
+            WIDGETRY_KAMURI_VIOLET_THEME,
         ]
     }
 
     #[derive(Resource, Default)]
-    struct Notifications(Vec<WidgetryThemeMode>);
+    struct Notifications(Vec<WidgetryTheme>);
 
     fn app() -> App {
         let mut app = App::new();
         app.add_plugins(WidgetryThemePlugin)
             .init_resource::<Notifications>()
             .add_observer(
-                |event: On<WidgetryThemeChanged>,
-                 mode: Res<WidgetryThemeMode>,
+                |_: On<WidgetryThemeChanged>,
+                 mode: Res<WidgetryTheme>,
                  mut seen: ResMut<Notifications>| {
-                    assert_eq!(*mode, event.mode);
-                    seen.0.push(event.mode);
+                    seen.0.push(*mode);
                 },
             );
         app
     }
 
     #[test]
-    fn modes_resolve_complete_fixed_palettes() {
-        assert_eq!(WidgetryThemeMode::default(), WidgetryThemeMode::Dark);
-        #[cfg(feature = "light")]
-        assert_eq!(WidgetryThemeMode::Light.colors(), &WIDGETRY_LIGHT_THEME);
-        assert_eq!(WidgetryThemeMode::Dark.colors(), &WIDGETRY_DARK_THEME);
-        #[cfg(feature = "pink_dream")]
-        assert_eq!(
-            WidgetryThemeMode::PinkDream.colors(),
-            &WIDGETRY_PINK_DREAM_THEME
-        );
-        #[cfg(feature = "kamuri_violet")]
-        assert_eq!(
-            WidgetryThemeMode::KamuriViolet.colors(),
-            &WIDGETRY_KAMURI_VIOLET_THEME
-        );
+    fn presets_are_valid_and_dark_is_default() {
+        assert_eq!(WidgetryTheme::default(), WIDGETRY_DARK_THEME);
+        for theme in modes() {
+            super::super::validation::validate(theme).unwrap();
+        }
     }
 
     #[test]
     fn normal_text_contrast_matches_reference_budget() {
         for &mode in modes() {
-            let theme = mode.colors();
+            let theme = mode;
             let text = theme.text.normal.foreground;
             for background in [
                 theme.window.frame.normal.background,
@@ -373,8 +344,8 @@ mod tests {
             for &target in modes {
                 let mut immediate = app();
                 let mut deferred = app();
-                WidgetryThemeMode::set_in_world(immediate.world_mut(), initial)?;
-                WidgetryThemeMode::set_in_world(deferred.world_mut(), initial)?;
+                WidgetryTheme::set_in_world(immediate.world_mut(), initial)?;
+                WidgetryTheme::set_in_world(deferred.world_mut(), initial)?;
                 immediate
                     .world_mut()
                     .resource_mut::<Notifications>()
@@ -386,18 +357,15 @@ mod tests {
                     .0
                     .clear();
                 assert_eq!(
-                    WidgetryThemeMode::set_in_world(immediate.world_mut(), target)?,
+                    WidgetryTheme::set_in_world(immediate.world_mut(), target)?,
                     initial != target
                 );
-                assert!(!WidgetryThemeMode::set_in_world(
-                    immediate.world_mut(),
-                    target
-                )?);
+                assert!(!WidgetryTheme::set_in_world(immediate.world_mut(), target)?);
                 let mut queue = bevy::ecs::world::CommandQueue::default();
                 let mut commands = Commands::new(&mut queue, deferred.world());
-                WidgetryThemeMode::set(&mut commands, target);
-                WidgetryThemeMode::set(&mut commands, target);
-                assert_eq!(*deferred.world().resource::<WidgetryThemeMode>(), initial);
+                WidgetryTheme::set(&mut commands, target);
+                WidgetryTheme::set(&mut commands, target);
+                assert_eq!(*deferred.world().resource::<WidgetryTheme>(), initial);
                 assert!(deferred.world().resource::<Notifications>().0.is_empty());
                 queue.apply(deferred.world_mut());
                 let expected = if initial == target {
@@ -405,8 +373,8 @@ mod tests {
                 } else {
                     vec![target]
                 };
-                assert_eq!(*immediate.world().resource::<WidgetryThemeMode>(), target);
-                assert_eq!(*deferred.world().resource::<WidgetryThemeMode>(), target);
+                assert_eq!(*immediate.world().resource::<WidgetryTheme>(), target);
+                assert_eq!(*deferred.world().resource::<WidgetryTheme>(), target);
                 assert_eq!(immediate.world().resource::<Notifications>().0, expected);
                 assert_eq!(deferred.world().resource::<Notifications>().0, expected);
             }
@@ -430,7 +398,7 @@ mod tests {
             let mut app = App::new();
             app.insert_resource(initial)
                 .add_plugins(WidgetryThemePlugin);
-            assert_eq!(*app.world().resource::<WidgetryThemeMode>(), initial);
+            assert_eq!(*app.world().resource::<WidgetryTheme>(), initial);
         }
     }
 
@@ -438,25 +406,25 @@ mod tests {
     #[test]
     fn switching_commits_before_notification_and_same_value_is_noop() -> Result<(), ThemeFailure> {
         let mut app = app();
-        assert!(!WidgetryThemeMode::set_in_world(
+        assert!(!WidgetryTheme::set_in_world(
             app.world_mut(),
-            WidgetryThemeMode::Dark
+            WIDGETRY_DARK_THEME
         )?);
-        assert!(WidgetryThemeMode::set_in_world(
+        assert!(WidgetryTheme::set_in_world(
             app.world_mut(),
-            WidgetryThemeMode::Light
+            WIDGETRY_LIGHT_THEME
         )?);
-        assert!(!WidgetryThemeMode::set_in_world(
+        assert!(!WidgetryTheme::set_in_world(
             app.world_mut(),
-            WidgetryThemeMode::Light
+            WIDGETRY_LIGHT_THEME
         )?);
-        assert!(WidgetryThemeMode::set_in_world(
+        assert!(WidgetryTheme::set_in_world(
             app.world_mut(),
-            WidgetryThemeMode::Dark
+            WIDGETRY_DARK_THEME
         )?);
         assert_eq!(
             app.world().resource::<Notifications>().0,
-            [WidgetryThemeMode::Light, WidgetryThemeMode::Dark]
+            [WIDGETRY_LIGHT_THEME, WIDGETRY_DARK_THEME]
         );
         Ok(())
     }
@@ -467,35 +435,30 @@ mod tests {
         let mut app = app();
         let mut queue = bevy::ecs::world::CommandQueue::default();
         let mut commands = Commands::new(&mut queue, app.world());
-        WidgetryThemeMode::set(&mut commands, WidgetryThemeMode::Light);
-        WidgetryThemeMode::set(&mut commands, WidgetryThemeMode::Light);
-        WidgetryThemeMode::set(&mut commands, WidgetryThemeMode::Dark);
+        WidgetryTheme::set(&mut commands, WIDGETRY_LIGHT_THEME);
+        WidgetryTheme::set(&mut commands, WIDGETRY_LIGHT_THEME);
+        WidgetryTheme::set(&mut commands, WIDGETRY_DARK_THEME);
         assert_eq!(
-            *app.world().resource::<WidgetryThemeMode>(),
-            WidgetryThemeMode::Dark
+            *app.world().resource::<WidgetryTheme>(),
+            WIDGETRY_DARK_THEME
         );
         assert!(app.world().resource::<Notifications>().0.is_empty());
         queue.apply(app.world_mut());
         assert_eq!(
             app.world().resource::<Notifications>().0,
-            [WidgetryThemeMode::Light, WidgetryThemeMode::Dark]
+            [WIDGETRY_LIGHT_THEME, WIDGETRY_DARK_THEME]
         );
     }
 
     #[test]
     fn missing_mode_is_error_without_notification() {
         let mut app = app();
-        app.world_mut().remove_resource::<WidgetryThemeMode>();
-        let error = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark)
+        app.world_mut().remove_resource::<WidgetryTheme>();
+        let error = WidgetryTheme::set_in_world(app.world_mut(), WIDGETRY_DARK_THEME)
             .expect_err("missing mode must fail");
-        assert!(matches!(
-            error.kind(),
-            ThemeError::MissingMode {
-                mode: WidgetryThemeMode::Dark
-            }
-        ));
-        assert!(error.to_string().contains("WidgetryThemeMode"));
+        assert!(matches!(error.kind(), ThemeError::MissingTheme));
+        assert!(error.to_string().contains("WidgetryTheme"));
         assert!(app.world().resource::<Notifications>().0.is_empty());
-        assert!(!app.world().contains_resource::<WidgetryThemeMode>());
+        assert!(!app.world().contains_resource::<WidgetryTheme>());
     }
 }

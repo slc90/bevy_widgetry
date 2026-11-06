@@ -13,7 +13,7 @@ use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{color::WidgetryStyleOwner, foreground::ResolvedForeground};
 use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 use bevy_widgetry_window::internal::WindowRoot;
 
 #[cfg(test)]
@@ -305,7 +305,7 @@ fn collect_colors(
     >,
     owners: Query<Entity, Changed<WidgetryStyleOwner<WidgetryMessageBox>>>,
     mut removed_owners: RemovedComponents<WidgetryStyleOwner<WidgetryMessageBox>>,
-    theme: Res<WidgetryThemeMode>,
+    theme: Res<WidgetryTheme>,
     all_parts: Query<(Entity, &PartOwner)>,
     mut style_queries: ParamSet<(
         Query<Entity, Added<MessageBoxStyle>>,
@@ -587,7 +587,7 @@ pub(crate) fn update_colors(world: &mut World) -> Result {
         let result = if palette {
             #[cfg(test)]
             COLOR_WORK.with_borrow_mut(|work| work.0.push(root));
-            let theme = world.resource::<WidgetryThemeMode>().colors().message_box;
+            let theme = world.resource::<WidgetryTheme>().message_box;
             if let Some(overrides) = world.get::<crate::colors::ColorState>(root) {
                 let colors = overrides.0.resolve(&theme);
                 if let Some(mut style) = world.get_mut::<MessageBoxStyle>(root) {
@@ -745,8 +745,7 @@ mod tests {
         assert_eq!(
             app.world().get::<BackgroundColor>(action).unwrap().0,
             app.world()
-                .resource::<WidgetryThemeMode>()
-                .colors()
+                .resource::<WidgetryTheme>()
                 .message_box
                 .action_button
                 .hovered
@@ -757,8 +756,7 @@ mod tests {
         assert_eq!(
             app.world().get::<BackgroundColor>(action).unwrap().0,
             app.world()
-                .resource::<WidgetryThemeMode>()
-                .colors()
+                .resource::<WidgetryTheme>()
                 .message_box
                 .action_button
                 .normal
@@ -777,8 +775,7 @@ mod tests {
         app.update();
         let mut colors = app
             .world()
-            .resource::<WidgetryThemeMode>()
-            .colors()
+            .resource::<WidgetryTheme>()
             .file_dialog
             .confirmation;
         colors.body.normal.background = Color::srgb(0.2, 0.3, 0.4);
@@ -812,8 +809,7 @@ mod tests {
         assert_eq!(
             app.world().get::<BackgroundColor>(action).unwrap().0,
             app.world()
-                .resource::<WidgetryThemeMode>()
-                .colors()
+                .resource::<WidgetryTheme>()
                 .message_box
                 .action_button
                 .hovered

@@ -18,7 +18,6 @@ use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_check_box::{
     WidgetryCheckBox, WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
 
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_test_utils::{
@@ -385,13 +384,12 @@ fn theme_change_refreshes_checkboxes_immediately() {
         .id();
     app.update();
 
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     for root in [binary, tri] {
         let indicator = app.world().get::<Children>(root).unwrap()[0];
         assert_eq!(
             app.world().get::<BackgroundColor>(indicator).unwrap().0,
-            WidgetryThemeMode::Light
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 .check_box
                 .unchecked
                 .normal
@@ -411,7 +409,7 @@ fn state_changes_refresh_checkbox_style() {
         .id();
     app.update();
     let indicator = app.world().get::<Children>(root).unwrap()[0];
-    let colors = WidgetryThemeMode::Dark.colors();
+    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     assert_eq!(
         app.world().get::<BackgroundColor>(indicator).unwrap().0,
         colors.check_box.unchecked.normal.background
@@ -805,15 +803,13 @@ fn loaded_mark_projection_tracks_states_and_disabled() {
             assert_eq!(
                 image.color,
                 if disabled {
-                    WidgetryThemeMode::Dark
-                        .colors()
+                    bevy_widgetry_theme::WIDGETRY_DARK_THEME
                         .check_box
                         .unchecked
                         .disabled
                         .foreground
                 } else {
-                    WidgetryThemeMode::Dark
-                        .colors()
+                    bevy_widgetry_theme::WIDGETRY_DARK_THEME
                         .check_box
                         .checked
                         .normal

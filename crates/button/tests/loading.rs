@@ -238,7 +238,7 @@ fn changes_notify_after_commit_and_invalid_calls_reach_the_host_without_partial_
 #[test]
 fn spinner_uses_normal_foreground_and_shared_masks_and_stops_when_loading_ends() {
     use bevy_widgetry_button::WidgetryButtonColorOverrides;
-    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_theme::WidgetryTheme;
     let (mut app, button) = fixture();
     let other = app
         .world_mut()
@@ -266,15 +266,15 @@ fn spinner_uses_normal_foreground_and_shared_masks_and_stops_when_loading_ends()
         .insert(InteractionDisabled);
     WidgetryButtonLoading::set_in_world(app.world_mut(), button, true).unwrap();
     for mode in [
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         let foreground = app.world().get::<ImageNode>(arc).unwrap().color;
-        assert_eq!(foreground, mode.colors().button.normal.foreground);
+        assert_eq!(foreground, mode.button.normal.foreground);
         assert!(
             app.world()
                 .get::<ImageNode>(images[0])
@@ -285,7 +285,7 @@ fn spinner_uses_normal_foreground_and_shared_masks_and_stops_when_loading_ends()
         );
         assert_eq!(
             app.world().get::<BackgroundColor>(button).unwrap().0,
-            mode.colors().button.normal.background
+            mode.button.normal.background
         );
     }
     assert_ne!(*app.world().get::<UiTransform>(arc).unwrap(), original);
@@ -312,8 +312,7 @@ fn spinner_uses_normal_foreground_and_shared_masks_and_stops_when_loading_ends()
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(button).unwrap().0,
-        WidgetryThemeMode::KamuriViolet
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME
             .button
             .disabled
             .background

@@ -26,6 +26,7 @@ mod text_field;
 mod theme;
 mod tooltip;
 mod tree;
+mod validation;
 mod waveform;
 mod window;
 
@@ -86,7 +87,7 @@ pub use theme::WIDGETRY_LIGHT_THEME;
 pub use theme::WIDGETRY_PINK_DREAM_THEME;
 pub use theme::{
     ThemeError, ThemeFailure, WIDGETRY_DARK_THEME, WidgetryTheme, WidgetryThemeChanged,
-    WidgetryThemeMode, WidgetryThemePlugin,
+    WidgetryThemePlugin,
 };
 pub use tooltip::{WidgetryTooltipColors, WidgetryTooltipPopupColors, WidgetryTooltipStateColors};
 pub use tree::{

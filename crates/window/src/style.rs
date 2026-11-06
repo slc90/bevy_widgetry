@@ -22,7 +22,7 @@ use bevy_widgetry_core::{
     color::WidgetryStyleOwner, foreground::ResolvedForeground, ui::WidgetryUiSystems,
 };
 use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryWindowColors};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryWindowColors};
 
 #[cfg(test)]
 thread_local! {
@@ -124,7 +124,7 @@ struct Changes<'w, 's> {
     >,
     parts: Query<'w, 's, &'static StyledPart>,
     parents: Query<'w, 's, &'static ChildOf>,
-    theme: Res<'w, WidgetryThemeMode>,
+    theme: Res<'w, WidgetryTheme>,
 }
 
 fn collect_changes(mut changes: Changes) {
@@ -574,7 +574,7 @@ pub(crate) fn update_colors(world: &mut World) -> Result {
         let result = if palette {
             #[cfg(test)]
             STYLE_WORK.with_borrow_mut(|work| work.0.push(root));
-            let theme = world.resource::<WidgetryThemeMode>().colors().window;
+            let theme = world.resource::<WidgetryTheme>().window;
             match world.get::<crate::colors::ColorState>(root) {
                 Some(overrides) => {
                     let colors = overrides.0.resolve(&theme);
@@ -676,7 +676,7 @@ mod tests {
         let (mut app, a, b) = fixture();
         let close = part(&app, a, PartKind::Close);
         let other = part(&app, b, PartKind::Close);
-        let colors = WidgetryThemeMode::Dark.colors().window;
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.window;
         for (step, expected) in [
             colors.close.hovered,
             colors.close.pressed,
@@ -784,7 +784,7 @@ mod tests {
         app.world_mut()
             .entity_mut(a)
             .insert(WidgetryStyleOwner::<WindowRoot>::new(a));
-        let mut colors = WidgetryThemeMode::Light.colors().window;
+        let mut colors = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.window;
         colors.close.hovered.background = Color::srgb(0.1, 0.7, 0.3);
         apply_owned_window_colors(app.world_mut(), a, &colors).unwrap();
         app.update();
@@ -816,8 +816,7 @@ mod tests {
         assert_eq!(take_work().0, vec![a]);
         assert_eq!(
             app.world().get::<BackgroundColor>(close).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .window
                 .close
                 .hovered
@@ -841,7 +840,8 @@ mod tests {
         assert!(work.1.iter().all(
             |entity| *entity == a || app.world().get::<StyledPart>(*entity).unwrap().root == a
         ));
-        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+            .unwrap();
         app.update();
         let work = take_work();
         assert!(work.0.contains(&a) && work.0.contains(&b));
@@ -854,8 +854,7 @@ mod tests {
         assert!(take_work().0.is_empty());
         assert_eq!(
             app.world().get::<BackgroundColor>(a).unwrap().0,
-            WidgetryThemeMode::Light
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 .window
                 .frame
                 .disabled
@@ -960,7 +959,8 @@ mod tests {
         let background = app.world().get::<BackgroundColor>(close).unwrap().0;
         take_work();
         app.world_mut().entity_mut(close).insert(Hovered(true));
-        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+            .unwrap();
         app.update();
         assert!(!take_work().1.contains(&close));
         assert_eq!(
@@ -1005,8 +1005,7 @@ mod tests {
         );
         assert_eq!(
             app.world().get::<BackgroundColor>(close).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .window
                 .close
                 .hovered

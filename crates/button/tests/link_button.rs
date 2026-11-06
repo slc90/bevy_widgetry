@@ -9,7 +9,7 @@ use bevy_widgetry_button::WidgetryLinkButtonColorOverrides;
 use bevy_widgetry_button::{WidgetryButtonPlugin, WidgetryLinkButton};
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_test_utils::scene_app;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 fn app() -> App {
     let mut app = scene_app();
@@ -166,12 +166,12 @@ fn inherited_disabled_states_themes_and_overrides_preserve_url_and_layout() {
     let root = app.world().get::<Children>(parent).unwrap()[0];
     let label = text(app.world(), root);
     for mode in [
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         for (hovered, pressed, disabled) in [
             (false, false, false),
             (true, false, false),
@@ -197,7 +197,7 @@ fn inherited_disabled_states_themes_and_overrides_preserve_url_and_layout() {
                     .remove::<InteractionDisabled>();
             }
             app.update();
-            let c = mode.colors().link_button;
+            let c = mode.link_button;
             let expected = if disabled {
                 c.disabled
             } else if pressed {
@@ -242,7 +242,8 @@ fn inherited_disabled_states_themes_and_overrides_preserve_url_and_layout() {
     app.world_mut().entity_mut(root).insert(Hovered(true));
     app.update();
     assert_eq!(app.world().get::<TextColor>(label).unwrap().0, Color::BLACK);
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+        .unwrap();
     app.update();
     assert_eq!(app.world().get::<TextColor>(label).unwrap().0, Color::BLACK);
     let invalid = WidgetryLinkButtonColorOverrides {
@@ -260,7 +261,9 @@ fn inherited_disabled_states_themes_and_overrides_preserve_url_and_layout() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(label).unwrap().0,
-        WidgetryThemeMode::Light.colors().link_button.hovered
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .link_button
+            .hovered
     );
 }
 

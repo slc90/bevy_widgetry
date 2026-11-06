@@ -157,7 +157,7 @@ pub(crate) fn finish(
     mut axes: Query<(Entity, &mut AxisState, &ComputedNode, &UiGlobalTransform)>,
     mut labels: Query<(&ComputedNode, &UiGlobalTransform, &mut Visibility), Without<AxisState>>,
     mut marks: Query<&mut BackgroundColor>,
-    theme: Res<bevy_widgetry_theme::WidgetryThemeMode>,
+    theme: Res<bevy_widgetry_theme::WidgetryTheme>,
     commands: Commands,
 ) -> Result {
     let mut failure = ViewErrors::default();
@@ -204,7 +204,7 @@ pub(crate) fn finish(
                         part: crate::WaveformPart::TickMark,
                         source,
                     })?
-                    .0 = theme.colors().text.normal.foreground.with_alpha(0.4);
+                    .0 = theme.text.normal.foreground.with_alpha(0.4);
             }
             Ok(measured.max(90.0))
         })();

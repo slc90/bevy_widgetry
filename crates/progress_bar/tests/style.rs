@@ -103,21 +103,21 @@ fn updates_and_parent_resize_preserve_inset_ratio_and_custom_height() {
 #[test]
 fn themes_and_partial_overrides_refresh_without_resetting_state() {
     use bevy_widgetry_progress_bar::WidgetryProgressBarColorOverrides;
-    use bevy_widgetry_theme::WidgetryThemeMode;
+
     let (mut app, _, bar) = fixture(0.65);
     let track = app.world().get::<Children>(bar).unwrap()[0];
     let clip = app.world().get::<Children>(track).unwrap()[0];
     let fill = app.world().get::<Children>(clip).unwrap()[0];
     for mode in [
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         app.insert_resource(mode);
         WidgetryProgressBarColorOverrides::clear_in_world(app.world_mut(), bar).unwrap();
         frames(&mut app);
-        let colors = &mode.colors().progress_bar;
+        let colors = &mode.progress_bar;
         assert_eq!(
             app.world().get::<BackgroundColor>(track).unwrap().0,
             colors.track
@@ -154,11 +154,11 @@ fn themes_and_partial_overrides_refresh_without_resetting_state() {
             WidgetryProgressState::Determinate { value: 0.65 }
         );
     }
-    app.insert_resource(WidgetryThemeMode::Light);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     frames(&mut app);
     assert_eq!(
         app.world().get::<BackgroundColor>(track).unwrap().0,
-        WidgetryThemeMode::Light.colors().progress_bar.track
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.progress_bar.track
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(fill).unwrap().0,
@@ -168,7 +168,7 @@ fn themes_and_partial_overrides_refresh_without_resetting_state() {
     frames(&mut app);
     assert_eq!(
         app.world().get::<BackgroundColor>(fill).unwrap().0,
-        WidgetryThemeMode::Light.colors().progress_bar.fill
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.progress_bar.fill
     );
 }
 

@@ -10,7 +10,7 @@ use bevy_widgetry_text_field::{
     AutoSize, WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
     WidgetryTextFieldPrefix, WidgetryTextFieldSuffix,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use support::editing_app;
 
 fn displays(world: &World, root: Entity) -> Vec<(Entity, &str)> {
@@ -114,8 +114,7 @@ fn focus_preedit_readonly_and_disabled_keep_the_hint_visible() {
         assert_eq!(
             app.world().get::<TextColor>(hint).unwrap().0,
             app.world()
-                .resource::<WidgetryThemeMode>()
-                .colors()
+                .resource::<WidgetryTheme>()
                 .text_field
                 .hint_warning
         );
@@ -146,18 +145,18 @@ fn all_four_themes_refresh_warning_without_changing_editor_state() {
         .raw_selection()
         .text_range();
     for mode in [
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        *app.world_mut().resource_mut::<WidgetryThemeMode>() = mode;
+        *app.world_mut().resource_mut::<WidgetryTheme>() = mode;
         app.update();
         let (hint, text) = displays(app.world(), root)[0];
         assert_eq!(text, "Warning");
         assert_eq!(
             app.world().get::<TextColor>(hint).unwrap().0,
-            mode.colors().text_field.hint_warning
+            mode.text_field.hint_warning
         );
         assert_eq!(
             WidgetryTextField::text(app.world(), root).unwrap(),
@@ -218,14 +217,14 @@ fn owned_warning_colors_remain_owned_through_global_theme_updates() {
         })
         .unwrap()
         .id();
-    let colors = WidgetryThemeMode::PinkDream.colors().text_field;
+    let colors = bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME.text_field;
     bevy_widgetry_text_field::internal::apply_owned_text_field_colors(
         app.world_mut(),
         root,
         &colors,
     )
     .unwrap();
-    *app.world_mut().resource_mut::<WidgetryThemeMode>() = WidgetryThemeMode::Light;
+    *app.world_mut().resource_mut::<WidgetryTheme>() = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME;
     app.update();
     let hint = displays(app.world(), root)[0].0;
     assert_eq!(

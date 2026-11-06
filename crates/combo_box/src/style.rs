@@ -16,7 +16,7 @@ use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{color::WidgetryStyleOwner, foreground::ResolvedForeground};
 use bevy_widgetry_diagnostics::bevy::{DiagnosticBatch, WidgetryEcsError};
 use bevy_widgetry_list_view::WidgetryListView;
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 use std::marker::PhantomData;
 
 #[cfg(test)]
@@ -591,7 +591,7 @@ fn apply_style<T: Send + Sync + 'static>(
     Ok(())
 }
 pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
-    let theme = world.resource::<WidgetryThemeMode>().colors().combo_box;
+    let theme = world.resource::<WidgetryTheme>().combo_box;
     let roots = world
         .query_filtered::<Entity, With<WidgetryComboBox<T>>>()
         .iter(world)
@@ -798,7 +798,7 @@ mod tests {
     fn field_inputs_only_repaint_the_affected_combo() {
         let (mut app, _, roots) = fixture(3);
         let (field, popup, _) = parts(app.world(), roots[1]);
-        let colors = WidgetryThemeMode::Dark.colors().combo_box;
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.combo_box;
         clear_style_work(&mut app);
         app.world_mut().entity_mut(field).insert(Hovered(true));
         app.update();
@@ -884,7 +884,7 @@ mod tests {
         app.world_mut()
             .entity_mut(root)
             .insert(WidgetryStyleOwner::<WidgetryComboBox<String>>::new(owner));
-        let mut palette = WidgetryThemeMode::Light.colors().combo_box;
+        let mut palette = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.combo_box;
         palette.field.hovered.background = Color::srgb(0.7, 0.2, 0.6);
         apply_owned_combo_colors::<String>(app.world_mut(), root, &palette).unwrap();
         app.update();
@@ -907,8 +907,7 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(field).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .combo_box
                 .field
                 .hovered
@@ -973,8 +972,7 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(field).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .combo_box
                 .field
                 .normal
@@ -1279,8 +1277,7 @@ mod tests {
         assert_owners(app.world(), roots[0], field, list);
         assert_eq!(
             app.world().get::<BackgroundColor>(field).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .combo_box
                 .field
                 .normal

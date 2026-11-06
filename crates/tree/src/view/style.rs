@@ -8,7 +8,7 @@ use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{color::WidgetryStyleOwner, foreground::ResolvedForeground};
 use bevy_widgetry_list_view::WidgetryListView;
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryTreeColors};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryTreeColors};
 
 #[derive(Component, Default)]
 pub(crate) struct TreeStyle(Option<WidgetryTreeColors>);
@@ -129,7 +129,7 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
         let result: Result<(), TreeViewFailure> = (|| {
             #[cfg(test)]
             COLOR_WORK.with_borrow_mut(|work| work.0.push(root));
-            let theme = world.resource::<WidgetryThemeMode>().colors().tree;
+            let theme = world.resource::<WidgetryTheme>().tree;
             let fault = if world.get::<crate::colors::ColorState>(root).is_none() {
                 Some(crate::TreeViewPart::ColorState)
             } else if world.get::<TreeStyle>(root).is_none() {

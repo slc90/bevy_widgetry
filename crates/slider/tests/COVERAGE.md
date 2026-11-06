@@ -33,6 +33,7 @@
 - DPI 1 / 1.5、UiScale 1 / 1.5 下，自定义 Thumb 尺寸、抓取偏移与输入行程一致。
 - Scale 1.25 的非对称 padding 像素取整后，真实 Track 中点点击仍精确映射数值中点。
 - 跨越极不同数量级的连续值域（如 -1e20..1），点击 Track 端点精确到达 max，避免浮点相消丢失端点。
+- 外部完整配色在 Scene 构造时立即用于 Track / Fill / Thumb，不先使用 Dark。
 - 四主题、局部颜色覆盖 / 清除、Hovered / Pressed / Focused / Disabled，以及状态切换几何保持。
 - 非法尺寸构造失败和预约实体清理。
 - 颜色 Commands 执行时校验及错误传播；失败不覆盖原有局部配色，清除恢复默认覆盖配置。

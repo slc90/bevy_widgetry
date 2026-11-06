@@ -371,12 +371,12 @@ fn render_root(world: &mut World, root: Entity) -> ViewResult<Option<()>> {
 fn update_grid(world: &mut World, root: Entity, size: UVec2) -> ViewResult {
     let (revision, positions) = crate::time_axis::grid_snapshot(world, root)?;
     let visible = crate::Waveform::grid_visible(world, root)?;
-    let theme = world.resource::<bevy_widgetry_theme::WidgetryThemeMode>();
+    let theme = world.resource::<bevy_widgetry_theme::WidgetryTheme>();
     let disabled = world.get::<bevy::ui::InteractionDisabled>(root).is_some();
     let color = if disabled {
-        theme.colors().text.disabled.foreground
+        theme.text.disabled.foreground
     } else {
-        theme.colors().text.normal.foreground
+        theme.text.normal.foreground
     }
     .with_alpha(0.12);
     let key = (revision, size, color, visible);

@@ -1,18 +1,18 @@
 use bevy::prelude::*;
 use bevy_widgetry_core::color::WidgetryStyleOwner;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 #[derive(Component, Default, Clone)]
 pub(crate) struct HintDisplay;
 
 pub(crate) fn sync_colors(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut hints: Query<(&ChildOf, &mut TextColor), With<HintDisplay>>,
     owned: Query<(), With<WidgetryStyleOwner<crate::WidgetryTextField>>>,
 ) {
     for (parent, mut color) in &mut hints {
         if !owned.contains(parent.parent()) {
-            color.set_if_neq(TextColor(mode.colors().text_field.hint_warning));
+            color.set_if_neq(TextColor(mode.text_field.hint_warning));
         }
     }
 }

@@ -813,7 +813,7 @@ fn awaiting_overwrite_with_colors(
 #[test]
 fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_clear() {
     use bevy_widgetry_test_utils::LogCapture;
-    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_theme::WidgetryTheme;
     use bevy_widgetry_window::WidgetryWindowColorOverrides;
     let mut app = fixture();
     let mut colors = WidgetryFileDialogColorOverrides::default();
@@ -863,8 +863,11 @@ fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_cl
         .filter(|entity| descendant(app.world(), *entity, child))
         .collect::<Vec<_>>();
     assert_eq!(buttons.len(), 3);
-    for mode in [WidgetryThemeMode::Dark, WidgetryThemeMode::Light] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+    for mode in [
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+    ] {
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         assert_eq!(
             *app.world().get::<BorderColor>(root).unwrap(),
@@ -963,7 +966,7 @@ fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_cl
             .confirmation(),
         &confirmation
     );
-    let theme = WidgetryThemeMode::Light.colors().file_dialog;
+    let theme = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.file_dialog;
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
         BorderColor::all(theme.window.frame.normal.border)

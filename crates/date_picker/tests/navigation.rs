@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry_date_picker::*;
 use bevy_widgetry_test_utils::{primary_click, scene_app};
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use time::macros::date;
 
 #[derive(Resource, Default)]
@@ -61,12 +61,7 @@ fn candidate_navigation_only_commits_on_month_confirmation() {
     click(&mut app, "DatePickerTitle");
     assert_eq!(label(&mut app, "DatePickerTitle"), "2026");
     let december = find(&mut app, "DatePickerCandidate11");
-    let selected_color = app
-        .world()
-        .resource::<WidgetryThemeMode>()
-        .colors()
-        .date_picker
-        .selected;
+    let selected_color = app.world().resource::<WidgetryTheme>().date_picker.selected;
     assert_eq!(
         app.world().get::<BackgroundColor>(december).unwrap().0,
         selected_color

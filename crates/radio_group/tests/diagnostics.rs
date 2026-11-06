@@ -172,7 +172,7 @@ fn style_batches_keep_each_option_identity_across_theme_and_repair_without_idle_
         assert_eq!(*app.world().get::<BorderColor>(indicators[2]).unwrap(), healthy_before);
         app.update();
         assert!(errors.take_records().is_empty());
-        bevy_widgetry_theme::WidgetryThemeMode::set_in_world(app.world_mut(), bevy_widgetry_theme::WidgetryThemeMode::Light).unwrap();
+        bevy_widgetry_theme::WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME).unwrap();
         let records = errors.take_records();
         assert_eq!(records.len(), 1);
         let mut repeated: Vec<_> = records[0].managed().unwrap().diagnostics().map(|diagnostic| {

@@ -145,7 +145,7 @@ fn broken_style_owners_are_batched_persist_until_repair_and_recover_without_a_st
         app.update();
         assert!(errors.take_records().is_empty());
         assert_eq!(logs.records().iter().filter(|record| record.matches_field("phase", "recovered")).count(), 2);
-        assert_eq!(app.world().get::<BackgroundColor>(a).unwrap().0, bevy_widgetry_theme::WidgetryThemeMode::Dark.colors().button.normal.background);
+        assert_eq!(app.world().get::<BackgroundColor>(a).unwrap().0, bevy_widgetry_theme::WIDGETRY_DARK_THEME.button.normal.background);
     }));
 }
 

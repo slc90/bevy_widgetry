@@ -1,6 +1,6 @@
 use crate::error::{Channel, PartIssue, collect, observe};
 use bevy_widgetry_diagnostics::bevy::{DiagnosticBatch, WidgetryEcsError};
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 
 use crate::disabled::SuspendedScrollbar;
 use crate::headless::{
@@ -354,7 +354,7 @@ fn resolved_colors(
     {
         world.resource_mut::<StyleWork>().roots += 1;
     }
-    let theme = &world.resource::<WidgetryThemeMode>().colors().scroll_area;
+    let theme = &world.resource::<WidgetryTheme>().scroll_area;
     Ok(world
         .get::<crate::colors::ColorState>(root)
         .ok_or_else(|| PartIssue::new(root, "ColorState", None))?
@@ -560,7 +560,10 @@ mod tests {
                 .entity_mut(thumb)
                 .remove::<ScrollbarDragState>();
             app.update();
-            let dark = axis_colors(&WidgetryThemeMode::Dark.colors().scroll_area, orientation);
+            let dark = axis_colors(
+                &bevy_widgetry_theme::WIDGETRY_DARK_THEME.scroll_area,
+                orientation,
+            );
             assert_eq!(
                 app.world().get::<BackgroundColor>(thumb).unwrap().0,
                 dark.thumb.hovered.background
@@ -582,8 +585,12 @@ mod tests {
                 app.world().get::<BackgroundColor>(thumb).unwrap().0,
                 dark.thumb.disabled.background
             );
-            WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
-            let light = axis_colors(&WidgetryThemeMode::Light.colors().scroll_area, orientation);
+            WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+                .unwrap();
+            let light = axis_colors(
+                &bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.scroll_area,
+                orientation,
+            );
             assert_eq!(
                 app.world().get::<BackgroundColor>(thumb).unwrap().0,
                 light.thumb.disabled.background
@@ -616,7 +623,7 @@ mod tests {
             app.world_mut()
                 .entity_mut(root)
                 .insert(StyleOwner::new(root));
-            let mut owned = WidgetryThemeMode::Light.colors().scroll_area;
+            let mut owned = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.scroll_area;
             owned.horizontal.thumb.normal.background = Color::BLACK;
             owned.vertical.thumb.normal.background = Color::BLACK;
             owned.horizontal.thumb.hovered.background = Color::WHITE;
@@ -667,8 +674,7 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .scroll_area
                 .vertical
                 .thumb
@@ -805,8 +811,7 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .scroll_area
                 .vertical
                 .thumb
@@ -817,8 +822,7 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .scroll_area
                 .vertical
                 .thumb
@@ -832,20 +836,18 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .scroll_area
                 .vertical
                 .thumb
                 .dragged
                 .background
         );
-        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+        WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
             .expect("theme switch succeeds");
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            WidgetryThemeMode::Light
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 .scroll_area
                 .vertical
                 .thumb
@@ -859,8 +861,7 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            WidgetryThemeMode::Light
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 .scroll_area
                 .vertical
                 .thumb
@@ -871,8 +872,7 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            WidgetryThemeMode::Light
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 .scroll_area
                 .vertical
                 .thumb
@@ -898,7 +898,7 @@ mod tests {
             app.world().get::<BackgroundColor>(external).unwrap().0,
             Color::srgb_u8(12, 34, 56)
         );
-        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+        WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
             .expect("theme switch succeeds");
         assert_eq!(
             app.world().get::<BackgroundColor>(external).unwrap().0,

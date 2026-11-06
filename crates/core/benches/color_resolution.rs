@@ -11,7 +11,7 @@ use bevy_widgetry_test_utils::{
     },
     scene_app,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use std::fs::File;
 use std::io::Write;
 
@@ -101,12 +101,12 @@ fn operation(f: &mut Fixture, action: &str) -> Result {
                 }));
         }
         "theme" => {
-            WidgetryThemeMode::set_in_world(
+            WidgetryTheme::set_in_world(
                 f.app.world_mut(),
                 if f.toggle {
-                    WidgetryThemeMode::Light
+                    bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 } else {
-                    WidgetryThemeMode::Dark
+                    bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 },
             )
             .map_err(|error| error.into_bevy_error())?;

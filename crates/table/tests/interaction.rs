@@ -27,7 +27,7 @@ use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_cancel, primary_click,
     primary_press, queue_key,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use common::{fixture, projection, scroll};
 
 #[derive(Resource, Default)]
@@ -1102,8 +1102,7 @@ fn selection_focus_and_disabled_styles_preserve_content() {
     assert!(app.world().get::<bevy::ui::Selected>(entity).is_some());
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .list_view
             .item
             .selected
@@ -1111,8 +1110,7 @@ fn selection_focus_and_disabled_styles_preserve_content() {
     );
     assert_eq!(
         app.world().get::<BorderColor>(entity).unwrap().top,
-        bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .table
             .table
             .focused_border
@@ -1121,8 +1119,7 @@ fn selection_focus_and_disabled_styles_preserve_content() {
     app.update();
     assert_eq!(
         app.world().get::<BorderColor>(entity).unwrap().top,
-        bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .table
             .cell
             .normal
@@ -1143,8 +1140,7 @@ fn selection_focus_and_disabled_styles_preserve_content() {
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .table
             .table
             .disabled
@@ -1830,8 +1826,7 @@ fn hover_style_priority_and_theme_follow_public_state() {
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .list_view
             .item
             .hovered
@@ -1865,16 +1860,12 @@ fn hover_style_priority_and_theme_follow_public_state() {
         .entity_mut(root)
         .remove::<InteractionDisabled>();
     app.world_mut().resource_mut::<HoverTarget>().0 = None;
-    WidgetryThemeMode::set_in_world(
-        app.world_mut(),
-        bevy_widgetry_theme::WidgetryThemeMode::Light,
-    )
-    .expect("theme switch succeeds");
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+        .expect("theme switch succeeds");
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        bevy_widgetry_theme::WidgetryThemeMode::Light
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .list_view
             .item
             .selected

@@ -405,11 +405,10 @@ fn shell_leaves_unsupported_keyboard_input_to_ancestors() {
 fn shell_plugin_reuses_existing_infrastructure() {
     let mut app = scene_app();
     app.add_plugins((bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin,))
-        .insert_resource(bevy_widgetry_theme::WidgetryThemeMode::Light)
+        .insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
         .add_plugins(WidgetryListViewPlugin);
     assert_eq!(
-        *app.world()
-            .resource::<bevy_widgetry_theme::WidgetryThemeMode>(),
-        bevy_widgetry_theme::WidgetryThemeMode::Light
+        *app.world().resource::<bevy_widgetry_theme::WidgetryTheme>(),
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
     );
 }

@@ -15,7 +15,6 @@ use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{
     add_keyboard_dispatch, press, press_key, primary_click, release, scene_app, switch_theme,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
 use bevy_widgetry_tree::{
     WidgetryTreeAppExt, WidgetryTreeEvent, WidgetryTreeEventKind, WidgetryTreeModel,
     WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeRenderer, WidgetryTreeState,
@@ -311,7 +310,7 @@ fn shared_projection_and_repair_keep_each_views_current_composition_palette() {
         inverse_scale_factor: 1.0,
         ..default()
     });
-    let mut expected_first = WidgetryThemeMode::Dark.colors().tree;
+    let mut expected_first = bevy_widgetry_theme::WIDGETRY_DARK_THEME.tree;
     expected_first.item.normal.foreground = Color::srgb_u8(17, 34, 51);
     expected_first.item.selected.foreground = Color::srgb_u8(51, 68, 85);
     expected_first.expander.expanded.normal.foreground = Color::srgb_u8(85, 102, 119);
@@ -321,7 +320,7 @@ fn shared_projection_and_repair_keep_each_views_current_composition_palette() {
     first_colors.expander.expanded.normal.foreground =
         Some(expected_first.expander.expanded.normal.foreground);
     WidgetryTreeColorOverrides::set_in_world(app.world_mut(), first, first_colors).unwrap();
-    let mut expected_second = WidgetryThemeMode::Dark.colors().tree;
+    let mut expected_second = bevy_widgetry_theme::WIDGETRY_DARK_THEME.tree;
     expected_second.item.disabled.foreground = Color::srgb_u8(119, 136, 153);
     expected_second.expander.expanded.disabled.foreground = Color::srgb_u8(153, 170, 187);
     let mut second_colors = WidgetryTreeColorOverrides::default();
@@ -377,10 +376,14 @@ fn shared_projection_and_repair_keep_each_views_current_composition_palette() {
     }
     WidgetryTreeColorOverrides::clear_in_world(app.world_mut(), first).unwrap();
     WidgetryTreeColorOverrides::clear_in_world(app.world_mut(), second).unwrap();
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.update();
     for view in [first, second] {
-        assert_composition_colors(&mut app, view, WidgetryThemeMode::Light.colors().tree);
+        assert_composition_colors(
+            &mut app,
+            view,
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.tree,
+        );
     }
     for node in original_nodes {
         assert!(app.world().get_entity(node).is_ok());
@@ -526,18 +529,18 @@ fn selection_and_disabled_follow_tree_authority() {
 #[test]
 fn dynamic_expanders_receive_theme_in_the_generation_frame() {
     for (mode, disabled) in [
-        (WidgetryThemeMode::Dark, false),
-        (WidgetryThemeMode::Light, false),
-        (WidgetryThemeMode::Dark, true),
-        (WidgetryThemeMode::Light, true),
+        (bevy_widgetry_theme::WIDGETRY_DARK_THEME, false),
+        (bevy_widgetry_theme::WIDGETRY_LIGHT_THEME, false),
+        (bevy_widgetry_theme::WIDGETRY_DARK_THEME, true),
+        (bevy_widgetry_theme::WIDGETRY_LIGHT_THEME, true),
     ] {
         let (mut app, _source, view, a, _, _) = fixture();
-        if mode == WidgetryThemeMode::Dark && !disabled {
+        if mode == bevy_widgetry_theme::WIDGETRY_DARK_THEME && !disabled {
             let first = row(&mut app, 0);
             let button = expander(app.world(), first);
             assert_eq!(
                 app.world().get::<BackgroundColor>(button).unwrap().0,
-                mode.colors().tree.expander.collapsed.normal.background
+                mode.tree.expander.collapsed.normal.background
             );
         }
         switch_theme(&mut app, mode);
@@ -551,7 +554,7 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
             .query_filtered::<Entity, With<WidgetryButtonHeadless>>()
             .iter(app.world())
         {
-            let colors = mode.colors();
+            let colors = mode;
             assert_eq!(
                 app.world().get::<BackgroundColor>(button).unwrap().0,
                 if disabled {
@@ -750,7 +753,11 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     assert_style_owners(&mut app, view);
     let viewport = view_viewport(app.world(), view);
     let before = rows(&mut app, view);
-    assert_composition_colors(&mut app, view, WidgetryThemeMode::Dark.colors().tree);
+    assert_composition_colors(
+        &mut app,
+        view,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME.tree,
+    );
     assert_eq!(
         before.iter().map(|row| row.0).collect::<Vec<_>>(),
         vec![0, 1, 2]
@@ -772,7 +779,11 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     app.update();
     assert_style_owners(&mut app, view);
     let after = rows(&mut app, view);
-    assert_composition_colors(&mut app, view, WidgetryThemeMode::Dark.colors().tree);
+    assert_composition_colors(
+        &mut app,
+        view,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME.tree,
+    );
     assert_eq!(&before[1..], &after[..2]);
     assert!(
         old_subtree
@@ -812,7 +823,11 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     app.update();
     assert_style_owners(&mut app, view);
     let restored = rows(&mut app, view)[1].1;
-    assert_composition_colors(&mut app, view, WidgetryThemeMode::Dark.colors().tree);
+    assert_composition_colors(
+        &mut app,
+        view,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME.tree,
+    );
     assert_eq!(
         app.world()
             .get::<Text>(text_entity(app.world(), restored))

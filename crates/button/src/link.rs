@@ -7,7 +7,7 @@ use bevy::ui_widgets::{Activate, Button};
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::text::WidgetryText;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 
 use crate::link_colors::{LinkColorState, WidgetryLinkButtonColorOverrides};
 use crate::link_error::failure;
@@ -261,7 +261,7 @@ fn apply_style(
 }
 
 fn update_styles(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut roots: Query<
         StyleData,
         (
@@ -279,12 +279,12 @@ fn update_styles(
     mut commands: Commands,
 ) {
     for item in &mut roots {
-        apply_style(&mode.colors().link_button, item, &texts, &mut commands);
+        apply_style(&mode.link_button, item, &texts, &mut commands);
     }
 }
 
 fn removed_styles(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut pressed: RemovedComponents<Pressed>,
     mut disabled: RemovedComponents<InteractionDisabled>,
     mut roots: Query<StyleData, With<WidgetryLinkButton>>,
@@ -293,14 +293,14 @@ fn removed_styles(
 ) {
     for entity in pressed.read().chain(disabled.read()) {
         if let Ok(item) = roots.get_mut(entity) {
-            apply_style(&mode.colors().link_button, item, &texts, &mut commands);
+            apply_style(&mode.link_button, item, &texts, &mut commands);
         }
     }
 }
 
 fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
     commands.queue(|world: &mut World| -> Result {
-        let mode = *world.resource::<WidgetryThemeMode>();
+        let mode = *world.resource::<WidgetryTheme>();
         let mut state = bevy::ecs::system::SystemState::<(
             Query<StyleData, With<WidgetryLinkButton>>,
             Query<Has<Underline>, With<LinkText>>,
@@ -314,7 +314,7 @@ fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
             .into_bevy_error()
         })?;
         for item in &mut roots {
-            apply_style(&mode.colors().link_button, item, &texts, &mut commands);
+            apply_style(&mode.link_button, item, &texts, &mut commands);
         }
         state.apply(world);
         Ok(())

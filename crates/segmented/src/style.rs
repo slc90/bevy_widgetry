@@ -16,7 +16,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
 };
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 use std::sync::Arc;
 
 #[derive(Component, Default)]
@@ -198,7 +198,7 @@ fn update(world: &mut World) -> Result<(), BevyError> {
 }
 
 fn apply(world: &mut World, entity: Entity) -> Result<(), StyleIssue> {
-    let theme = world.resource::<WidgetryThemeMode>().colors().segmented;
+    let theme = world.resource::<WidgetryTheme>().segmented;
     let disabled = world.get::<InteractionDisabled>(entity).is_some();
     if world.get::<WidgetrySegmented>(entity).is_some() {
         let colors = world
@@ -346,8 +346,7 @@ mod tests {
         assert!(errors.take().is_empty());
         assert_eq!(
             app.world().get::<BackgroundColor>(option).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .segmented
                 .option
                 .checked

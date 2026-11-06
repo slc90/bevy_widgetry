@@ -5,7 +5,7 @@ use bevy_widgetry_segmented::{
     WidgetrySegmented, WidgetrySegmentedOption, WidgetrySegmentedPlugin,
 };
 use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 fn fixture(equal_width: bool) -> (App, Entity, Vec<Entity>) {
     let mut app = scene_app();
@@ -52,16 +52,16 @@ fn equal_width_distributes_patched_container_width_independent_of_content() {
     let initial = widths(&app, &children);
     assert_equal(&initial);
     for mode in [
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         app.world_mut()
             .entity_mut(children[1])
             .insert(InteractionDisabled);
         app.world_mut().entity_mut(root).insert(InteractionDisabled);
         WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 2);
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         assert_eq!(widths(&app, &children), initial);
     }
@@ -163,20 +163,20 @@ fn vertical_layout_preserves_content_heights_and_uses_the_shared_style() {
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
     for mode in [
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         assert_eq!(
             app.world().get::<BorderColor>(root).unwrap().top,
-            mode.colors().segmented.container.focused.border
+            mode.segmented.container.focused.border
         );
         assert_eq!(
             app.world().get::<BackgroundColor>(children[0]).unwrap().0,
-            mode.colors().segmented.option.checked.normal.background
+            mode.segmented.option.checked.normal.background
         );
         assert!(app.world().get::<Checked>(children[0]).is_some());
     }
@@ -184,8 +184,7 @@ fn vertical_layout_preserves_content_heights_and_uses_the_shared_style() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(children[0]).unwrap().0,
-        WidgetryThemeMode::KamuriViolet
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME
             .segmented
             .option
             .checked

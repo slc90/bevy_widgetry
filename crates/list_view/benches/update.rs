@@ -4,7 +4,6 @@ use bevy::ui::ScrollPosition;
 use bevy_widgetry_list_view::*;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
-use bevy_widgetry_theme::WidgetryThemeMode;
 
 #[derive(Resource, Default)]
 struct HoverRequest(Option<(Entity, bool)>);
@@ -216,7 +215,7 @@ fn main() -> Result {
                             .iter(world)
                             .find(|(item, _)| item.index == 0)
                             .ok_or_else(|| missing("first visible row color"))?;
-                        let colors = WidgetryThemeMode::Dark.colors().list_view.item;
+                        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.list_view.item;
                         let expected = if hovered {
                             colors.hovered.background
                         } else if all_selected {

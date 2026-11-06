@@ -9,7 +9,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState},
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use std::sync::Arc;
 
 #[derive(Component, FromTemplate)]
@@ -76,7 +76,7 @@ pub(crate) fn install(app: &mut App) {
 }
 
 fn update(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     time: Res<Time<Real>>,
     mut redraw: MessageWriter<bevy::window::RequestRedraw>,
     mut roots: Query<
@@ -111,7 +111,7 @@ fn update(
         let frame = || ErrorFrame::new("progress_bar.style").field("root", root);
         let entities = [parts.track, parts.fill, parts.clip];
         let result = (|| -> Result<(), bevy::ecs::query::QueryEntityError> {
-            let colors = local.0.resolve(&mode.colors().progress_bar);
+            let colors = local.0.resolve(&mode.progress_bar);
             let [
                 (_, mut track),
                 (mut fill_node, mut fill),

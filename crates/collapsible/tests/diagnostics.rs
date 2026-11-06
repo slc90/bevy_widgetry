@@ -277,7 +277,7 @@ fn scene_color_validation_preserves_core_source_and_one_origin() {
 
 #[test]
 fn style_failures_keep_each_root_origin_until_actual_repair() {
-    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_theme::WidgetryTheme;
     let mut app = fixture();
     let roots: Vec<_> = (0..2)
         .map(|_| {
@@ -294,7 +294,7 @@ fn style_failures_keep_each_root_origin_until_actual_repair() {
     let logs = LogCapture::default();
     let errors = ErrorCapture::default();
     logs.run(|| errors.run(|| {
-        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME).unwrap();
         app.update();
         let first = errors.take_records();
         let first: Vec<_> = first.iter().flat_map(|record| record.managed().unwrap().diagnostics()).collect();
@@ -302,7 +302,7 @@ fn style_failures_keep_each_root_origin_until_actual_repair() {
         for diagnostic in &first {
             assert!(matches!(original(*diagnostic).kind(), CollapsibleError::Structure { source: Problem::MissingPart { root, entity, part: "BorderColor" } } if roots.contains(root) && root == entity));
         }
-        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_DARK_THEME).unwrap();
         app.update();
         let repeated = errors.take_records();
         let repeated: Vec<_> = repeated.iter().flat_map(|record| record.managed().unwrap().diagnostics()).collect();
@@ -310,7 +310,7 @@ fn style_failures_keep_each_root_origin_until_actual_repair() {
         for diagnostic in repeated { assert!(first.iter().any(|prior| Arc::ptr_eq(prior.origin(), diagnostic.origin()))); }
         for diagnostic in &first { assert_eq!(logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source).len(), 1); }
         for root in &roots { app.world_mut().entity_mut(*root).insert(BorderColor::default()); }
-        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME).unwrap();
         app.update();
         assert!(errors.take_records().is_empty());
         assert_eq!(logs.records().iter().filter(|record| record.matches_field("phase", "recovered")).count(), 2);

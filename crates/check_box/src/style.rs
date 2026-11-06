@@ -12,7 +12,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
 };
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 use std::sync::Arc;
 
 #[derive(PartialEq, Eq)]
@@ -344,7 +344,7 @@ fn apply_style(
 }
 
 pub(crate) fn update_changed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut roots: Query<RootStyleData, OwnedFilter>,
     changed: Query<
         (),
@@ -369,7 +369,7 @@ pub(crate) fn update_changed(
             push(
                 &mut batch,
                 apply_style(
-                    &mode.colors().check_box,
+                    &mode.check_box,
                     item,
                     &mut indicators,
                     &mut marks,
@@ -382,7 +382,7 @@ pub(crate) fn update_changed(
 }
 
 pub(crate) fn update_removed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut pressed: RemovedComponents<Pressed>,
     mut checked: RemovedComponents<Checked>,
     mut disabled: RemovedComponents<InteractionDisabled>,
@@ -397,7 +397,7 @@ pub(crate) fn update_removed(
             push(
                 &mut batch,
                 apply_style(
-                    &mode.colors().check_box,
+                    &mode.check_box,
                     item,
                     &mut indicators,
                     &mut marks,
@@ -411,7 +411,7 @@ pub(crate) fn update_removed(
 
 pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
     commands.queue(|world: &mut World| -> Result {
-        let theme = world.resource::<WidgetryThemeMode>().colors().check_box;
+        let theme = world.resource::<WidgetryTheme>().check_box;
         let roots = world
             .query_filtered::<Entity, OwnedFilter>()
             .iter(world)
@@ -534,8 +534,7 @@ mod tests {
                 assert_ne!(ids[0][0], ids[0][1]);
                 assert_eq!(
                     app.world().get::<BackgroundColor>(indicators[2]).unwrap().0,
-                    WidgetryThemeMode::Dark
-                        .colors()
+                    bevy_widgetry_theme::WIDGETRY_DARK_THEME
                         .check_box
                         .unchecked
                         .hovered
@@ -623,7 +622,7 @@ mod tests {
 
     #[test]
     fn style_priority() {
-        let colors = WidgetryThemeMode::Dark.colors();
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
         for (state, hover, press, disabled, background, border) in [
             (
                 CheckBoxVisualState::Checked,

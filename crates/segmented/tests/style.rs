@@ -5,7 +5,7 @@ use bevy_widgetry_segmented::{
     WidgetrySegmented, WidgetrySegmentedOption, WidgetrySegmentedPlugin,
 };
 use bevy_widgetry_test_utils::scene_app;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 #[test]
 fn checked_background_moves_in_one_update_without_changing_the_selection() {
@@ -21,7 +21,7 @@ fn checked_background_moves_in_one_update_without_changing_the_selection() {
         .id();
     app.update();
     let children = app.world().get::<Children>(root).unwrap().to_vec();
-    let colors = WidgetryThemeMode::Dark.colors().segmented;
+    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.segmented;
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
         colors.container.normal.background
@@ -66,7 +66,7 @@ fn focus_hover_and_disabled_keep_selection_and_local_requests() {
     use bevy::picking::hover::Hovered;
     use bevy::ui::InteractionDisabled;
     let (mut app, root, options) = fixture();
-    let colors = WidgetryThemeMode::Dark.colors().segmented;
+    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.segmented;
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(root, bevy::input_focus::FocusCause::Navigated);
@@ -130,16 +130,16 @@ fn theme_group_and_local_overrides_have_fieldwise_priority() {
     local.checked.normal.background = Some(Color::WHITE);
     Local::set_in_world(app.world_mut(), options[0], local).unwrap();
     for mode in [
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(root).unwrap().0,
-            mode.colors().segmented.container.normal.background
+            mode.segmented.container.normal.background
         );
         assert_eq!(
             app.world().get::<BackgroundColor>(options[0]).unwrap().0,
@@ -165,8 +165,7 @@ fn theme_group_and_local_overrides_have_fieldwise_priority() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(options[0]).unwrap().0,
-        WidgetryThemeMode::KamuriViolet
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME
             .segmented
             .option
             .checked

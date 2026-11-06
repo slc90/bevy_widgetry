@@ -10,7 +10,7 @@ use bevy::ui::{ScrollPosition, Selected};
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_table::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
-use bevy_widgetry_theme::{WidgetryTableRegionColors, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTableRegionColors, WidgetryTheme};
 
 struct Fixture {
     app: App,
@@ -787,7 +787,7 @@ fn validate_colors(fixture: &mut Fixture) -> Result {
     {
         return Err(missing("Table hover stimulus"));
     }
-    let colors = world.resource::<WidgetryThemeMode>().colors().table;
+    let colors = world.resource::<WidgetryTheme>().table;
     let range = WidgetryTable::<u32>::selection_range(world, fixture.root)
         .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
     let view = world

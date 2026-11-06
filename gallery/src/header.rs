@@ -2,13 +2,14 @@ use crate::assets::GalleryIcon;
 use crate::config::{AppConfig, ConfigFile};
 use crate::i18n::HeaderKey;
 use crate::i18n::{Language, TextKey, localized};
+use crate::theme::GalleryTheme;
 use bevy::prelude::*;
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::style::z_index;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry::theme::{WidgetryTheme, WidgetryThemeChanged};
 
 #[derive(Component)]
 struct GalleryTitle;
@@ -26,7 +27,7 @@ struct ScaleFactorComboBox {
 
 pub(crate) fn install(app: &mut App) -> Result {
     crate::window_scale::install(app);
-    app.register_widgetry_combo_box::<WidgetryThemeMode>()
+    app.register_widgetry_combo_box::<GalleryTheme>()
         .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
         .register_widgetry_combo_box::<f32>()
         .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
@@ -141,10 +142,10 @@ pub(crate) fn scene(
 fn theme_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
     let mut model = WidgetryListModel::default();
     for mode in [
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        GalleryTheme::Dark,
+        GalleryTheme::Light,
+        GalleryTheme::PinkDream,
+        GalleryTheme::KamuriViolet,
     ] {
         model
             .push(mode)
@@ -153,13 +154,13 @@ fn theme_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
     let source = commands.spawn(model).id();
     Ok(bsn! {
         #ThemeComboBox
-        @WidgetryComboBox::<WidgetryThemeMode> {
+        @WidgetryComboBox::<GalleryTheme> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|mode: &WidgetryThemeMode| bsn_list!{@localized(match mode {
-                WidgetryThemeMode::Dark => TextKey::GalleryHeader(HeaderKey::Dark),
-                WidgetryThemeMode::Light => TextKey::GalleryHeader(HeaderKey::Light),
-                WidgetryThemeMode::PinkDream => TextKey::GalleryHeader(HeaderKey::PinkDream),
-                WidgetryThemeMode::KamuriViolet => TextKey::GalleryHeader(HeaderKey::KamuriViolet),
+            @renderer: {WidgetryListViewRenderer::new(|mode: &GalleryTheme| bsn_list!{@localized(match mode {
+                GalleryTheme::Dark => TextKey::GalleryHeader(HeaderKey::Dark),
+                GalleryTheme::Light => TextKey::GalleryHeader(HeaderKey::Light),
+                GalleryTheme::PinkDream => TextKey::GalleryHeader(HeaderKey::PinkDream),
+                GalleryTheme::KamuriViolet => TextKey::GalleryHeader(HeaderKey::KamuriViolet),
             }) bevy_widgetry::text::WidgetryText})},
         }
         template(|_| Ok(ThemeComboBox))
@@ -297,8 +298,8 @@ fn on_scale_factor_combo_box_changed(
 
 fn on_theme_combo_box_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
-    theme_combo_boxes: Query<&WidgetryComboBox<WidgetryThemeMode>, With<ThemeComboBox>>,
-    models: Query<&WidgetryListModel<WidgetryThemeMode>>,
+    theme_combo_boxes: Query<&WidgetryComboBox<GalleryTheme>, With<ThemeComboBox>>,
+    models: Query<&WidgetryListModel<GalleryTheme>>,
     mut commands: Commands,
 ) -> Result {
     let Ok(combo) = theme_combo_boxes.get(event.source) else {
@@ -315,11 +316,15 @@ fn on_theme_combo_box_changed(
         .ok_or_else(|| header_sync_error("主题选择器选中项失效"))?;
 
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        let previous = world.get_resource::<WidgetryThemeMode>().copied();
+        let previous = world
+            .get_resource::<WidgetryTheme>()
+            .and_then(GalleryTheme::from_colors);
         if previous != Some(mode) {
             info!(setting = "theme", requested = ?mode, ?previous, "用户选择 Gallery 设置");
         }
-        if WidgetryThemeMode::set_in_world(world, mode).map_err(|error| error.into_bevy_error())? {
+        if WidgetryTheme::set_in_world(world, mode.colors())
+            .map_err(|error| error.into_bevy_error())?
+        {
             debug!(setting = "theme", applied = ?mode, "Gallery 设置已生效");
             world.resource_mut::<AppConfig>().theme = mode;
             world
@@ -332,27 +337,38 @@ fn on_theme_combo_box_changed(
 }
 
 fn sync_theme_combo_box(
-    event: On<WidgetryThemeChanged>,
-    combos: Query<(Entity, &WidgetryComboBox<WidgetryThemeMode>), With<ThemeComboBox>>,
-    models: Query<&WidgetryListModel<WidgetryThemeMode>>,
+    _: On<WidgetryThemeChanged>,
+    theme: Res<WidgetryTheme>,
+    combos: Query<(Entity, &WidgetryComboBox<GalleryTheme>), With<ThemeComboBox>>,
+    models: Query<&WidgetryListModel<GalleryTheme>>,
     mut commands: Commands,
 ) -> Result {
-    select_theme(event.mode, &combos, &models, &mut commands)
+    select_theme(
+        GalleryTheme::from_colors(&theme),
+        &combos,
+        &models,
+        &mut commands,
+    )
 }
 
 fn initialize_theme_selection(
-    theme_mode: Res<WidgetryThemeMode>,
-    combos: Query<(Entity, &WidgetryComboBox<WidgetryThemeMode>), With<ThemeComboBox>>,
-    models: Query<&WidgetryListModel<WidgetryThemeMode>>,
+    theme_mode: Res<WidgetryTheme>,
+    combos: Query<(Entity, &WidgetryComboBox<GalleryTheme>), With<ThemeComboBox>>,
+    models: Query<&WidgetryListModel<GalleryTheme>>,
     mut commands: Commands,
 ) -> Result {
-    select_theme(*theme_mode, &combos, &models, &mut commands)
+    select_theme(
+        GalleryTheme::from_colors(&theme_mode),
+        &combos,
+        &models,
+        &mut commands,
+    )
 }
 
 fn select_theme(
-    mode: WidgetryThemeMode,
-    combos: &Query<(Entity, &WidgetryComboBox<WidgetryThemeMode>), With<ThemeComboBox>>,
-    models: &Query<&WidgetryListModel<WidgetryThemeMode>>,
+    mode: Option<GalleryTheme>,
+    combos: &Query<(Entity, &WidgetryComboBox<GalleryTheme>), With<ThemeComboBox>>,
+    models: &Query<&WidgetryListModel<GalleryTheme>>,
     commands: &mut Commands,
 ) -> Result {
     for (entity, combo) in combos {
@@ -360,10 +376,13 @@ fn select_theme(
             .get(combo.source())
             .map_err(|source| crate::diagnostics::error(source))?;
         let id = (0..model.len())
-            .find(|index| model.get(*index) == Some(&mode))
-            .and_then(|index| model.id(index))
-            .ok_or_else(|| header_sync_error("当前主题不在选择器选项中"))?;
-        WidgetryComboBox::<WidgetryThemeMode>::select_id(commands, entity, id);
+            .find(|index| model.get(*index).copied() == mode)
+            .and_then(|index| model.id(index));
+        if let Some(id) = id {
+            WidgetryComboBox::<GalleryTheme>::select_id(commands, entity, id);
+        } else {
+            WidgetryComboBox::<GalleryTheme>::clear_selection(commands, entity);
+        }
     }
     Ok(())
 }
@@ -533,10 +552,55 @@ mod tests {
     }
 
     #[test]
+    fn external_palette_clears_preset_selection_and_known_palette_restores_it() {
+        let mut app = scene_app();
+        crate::i18n::install(&mut app);
+        app.register_widgetry_combo_box::<GalleryTheme>()
+            .unwrap()
+            .add_observer(sync_theme_combo_box);
+        let selector = theme_selector(&mut app.world_mut().commands()).unwrap();
+        app.world_mut().flush();
+        let root = bevy_widgetry::scene::spawn_scene(app.world_mut(), selector).unwrap();
+        app.update();
+        WidgetryTheme::set_in_world(app.world_mut(), GalleryTheme::Light.colors()).unwrap();
+        app.update();
+        assert!(
+            WidgetryComboBox::<GalleryTheme>::selected_id(app.world(), root)
+                .unwrap()
+                .is_some()
+        );
+        let mut external = GalleryTheme::Light.colors();
+        external.button.normal.background = Color::srgb(0.1, 0.2, 0.3);
+        WidgetryTheme::set_in_world(app.world_mut(), external).unwrap();
+        app.update();
+        assert_eq!(
+            WidgetryComboBox::<GalleryTheme>::selected_id(app.world(), root).unwrap(),
+            None
+        );
+        WidgetryTheme::set_in_world(app.world_mut(), GalleryTheme::Dark.colors()).unwrap();
+        app.update();
+        let source = app
+            .world()
+            .get::<WidgetryComboBox<GalleryTheme>>(root)
+            .unwrap()
+            .source();
+        let id = app
+            .world()
+            .get::<WidgetryListModel<GalleryTheme>>(source)
+            .unwrap()
+            .id(0)
+            .unwrap();
+        assert_eq!(
+            WidgetryComboBox::<GalleryTheme>::selected_id(app.world(), root).unwrap(),
+            Some(id)
+        );
+    }
+
+    #[test]
     fn missing_theme_reaches_the_command_error_handler_without_logging_success() {
         let mut app = scene_app();
         app.set_error_handler(ErrorCapture::handler());
-        app.register_widgetry_combo_box::<WidgetryThemeMode>()
+        app.register_widgetry_combo_box::<GalleryTheme>()
             .unwrap()
             .add_observer(on_theme_combo_box_changed);
         let selector = theme_selector(&mut app.world_mut().commands()).unwrap();
@@ -544,16 +608,16 @@ mod tests {
         let root = bevy_widgetry::scene::spawn_scene(app.world_mut(), selector).unwrap();
         let source = app
             .world()
-            .get::<WidgetryComboBox<WidgetryThemeMode>>(root)
+            .get::<WidgetryComboBox<GalleryTheme>>(root)
             .unwrap()
             .source();
         let selected = app
             .world()
-            .get::<WidgetryListModel<WidgetryThemeMode>>(source)
+            .get::<WidgetryListModel<GalleryTheme>>(source)
             .unwrap()
             .id(1)
             .unwrap();
-        app.world_mut().remove_resource::<WidgetryThemeMode>();
+        app.world_mut().remove_resource::<WidgetryTheme>();
         let errors = ErrorCapture::default();
         let logs = LogCapture::with_targets(["bevy_widgetry", "widget_gallery::header"]);
         logs.run(|| {

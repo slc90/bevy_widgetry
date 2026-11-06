@@ -35,7 +35,7 @@ use bevy_widgetry_test_utils::{
     add_keyboard_dispatch, add_ui_plugins, cancel, primary_click, primary_press, primary_release,
     queue_key, scene_app, switch_theme,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use bevy_widgetry_toggle_button::{WidgetryToggleButtonColorOverrides, WidgetryToggleButtonPlugin};
 
 fn toggle_app(selected: bool) -> (App, Entity) {
@@ -81,8 +81,7 @@ fn native_input_toggles_persistently_and_disabled_inherits() {
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
-        WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .check_box
             .checked
             .normal
@@ -195,20 +194,20 @@ fn selected_theme_overrides_and_native_checked_removal_refresh_content() {
     let (mut app, root) = toggle_app(true);
     let child = app.world().get::<Children>(root).unwrap()[0];
     for mode in [
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
         switch_theme(&mut app, mode);
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(root).unwrap().0,
-            mode.colors().check_box.checked.normal.background
+            mode.check_box.checked.normal.background
         );
         assert_eq!(
             app.world().get::<TextColor>(child).unwrap().0,
-            mode.colors().check_box.checked.normal.mark
+            mode.check_box.checked.normal.mark
         );
     }
     let mut colors = WidgetryToggleButtonColorOverrides::default();
@@ -245,10 +244,10 @@ fn selected_theme_overrides_and_native_checked_removal_refresh_content() {
         .entity_mut(root)
         .remove::<(InteractionDisabled, Pressed, Checked)>();
     app.world_mut().run_schedule(PostUpdate);
-    let mode = *app.world().resource::<WidgetryThemeMode>();
+    let mode = *app.world().resource::<WidgetryTheme>();
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
-        mode.colors().button.hovered.background
+        mode.button.hovered.background
     );
     assert_eq!(
         app.world()

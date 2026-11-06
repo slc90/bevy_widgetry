@@ -131,7 +131,7 @@ fn committed_edits_selection_paste_and_ime_update_the_same_frame() {
 #[test]
 fn readonly_disabled_theme_and_focus_leave_display_and_editor_state_intact() {
     use bevy::ui::InteractionDisabled;
-    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_theme::WidgetryTheme;
     let mut app = editing_app();
     app.add_plugins(WidgetryTextFieldPlugin);
     let root = app.world_mut().spawn_scene(bsn! {
@@ -154,7 +154,7 @@ fn readonly_disabled_theme_and_focus_leave_display_and_editor_state_intact() {
         .editor()
         .raw_selection()
         .text_range();
-    *app.world_mut().resource_mut::<WidgetryThemeMode>() = WidgetryThemeMode::Dark;
+    *app.world_mut().resource_mut::<WidgetryTheme>() = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     app.update();
     assert_eq!(count(app.world(), root).unwrap().1, "1");
     assert_eq!(

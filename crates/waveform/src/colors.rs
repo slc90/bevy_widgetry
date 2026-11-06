@@ -135,8 +135,7 @@ fn invalid(entity: Entity) -> JobFailure {
 
 fn apply_colors(world: &mut World, roots: Vec<Entity>) {
     let theme = world
-        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-        .colors()
+        .resource::<bevy_widgetry_theme::WidgetryTheme>()
         .waveform;
     for entity in roots {
         let Some(overrides) = world.get::<ColorState>(entity).map(|state| state.0.clone()) else {

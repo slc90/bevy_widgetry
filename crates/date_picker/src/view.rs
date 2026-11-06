@@ -15,7 +15,7 @@ use bevy_widgetry_core::{
     pointer::WidgetryPointerPressed, ui::WidgetryUiSystems,
 };
 use bevy_widgetry_diagnostics::ErrorFrame;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 #[derive(Resource, Reflect, Default, Clone, Copy, Debug, PartialEq, Eq)]
 #[reflect(Resource)]
@@ -218,7 +218,7 @@ fn owner(
 }
 
 fn update(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     today: Res<crate::today::Today>,
     language: Res<WidgetryDatePickerLanguage>,
     roots: Query<(Entity, Ref<State>, Ref<ColorState>, Ref<Navigation>)>,
@@ -403,7 +403,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), DatePickerFailure> {
     });
     let days = WidgetryDatePicker::days(world, root, world.resource::<crate::today::Today>().0)?;
     let colors = crate::WidgetryDatePickerColorOverrides::get(world, root)?
-        .resolve(&world.resource::<WidgetryThemeMode>().colors().date_picker);
+        .resolve(&world.resource::<WidgetryTheme>().date_picker);
     world.entity_mut(root).insert((
         BackgroundColor(colors.background),
         BorderColor::all(colors.border),

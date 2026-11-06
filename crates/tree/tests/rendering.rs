@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, UiSystems};
 use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon};
 use bevy_widgetry_button::WidgetryButtonHeadless;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::icon::WidgetryIcon;
@@ -50,8 +50,7 @@ fn assert_text_ready(app: &mut App, font: &Handle<Font>, expected: &[&str]) {
         assert_eq!(
             world.get::<TextColor>(entity).unwrap().0,
             world
-                .resource::<WidgetryThemeMode>()
-                .colors()
+                .resource::<WidgetryTheme>()
                 .tree
                 .item
                 .normal
@@ -185,8 +184,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     assert_expander_ready(
         app.world(),
         view,
-        WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .tree
             .expander
             .collapsed
@@ -199,8 +197,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     assert_expander_ready(
         app.world(),
         view,
-        WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .tree
             .expander
             .collapsed
@@ -223,7 +220,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
         &["folder", "changed with cached palette", "tail"],
     );
     app.world_mut().get_mut::<Label>(c).unwrap().0 = "longer child label".into();
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.update();
     assert!(app.world().get_entity(old_text).is_err());
     assert_text_ready(&mut app, &font, &["folder", "longer child label", "tail"]);
@@ -238,8 +235,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     assert_expander_ready(
         app.world(),
         view,
-        WidgetryThemeMode::Light
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .tree
             .expander
             .collapsed
@@ -252,8 +248,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     assert_expander_ready(
         app.world(),
         view,
-        WidgetryThemeMode::Light
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .tree
             .expander
             .collapsed

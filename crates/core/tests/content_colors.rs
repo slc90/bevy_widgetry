@@ -6,7 +6,7 @@ use bevy_widgetry_core::text::{WidgetryTextColorOverrides, WidgetryTextStateColo
 use bevy_widgetry_core::{
     foreground::ResolvedForeground, text::WidgetryText, ui::WidgetryUiPlugin,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 #[test]
 fn text_marker_supports_component_and_scene_construction_without_errors() {
@@ -40,7 +40,10 @@ fn text_marker_supports_component_and_scene_construction_without_errors() {
     );
     assert_eq!(
         app.world().get::<TextColor>(direct).unwrap().0,
-        WidgetryThemeMode::Dark.colors().text.normal.foreground
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text
+            .normal
+            .foreground
     );
     assert_eq!(app.world().get::<TextColor>(scene).unwrap().0, Color::NONE);
 }
@@ -84,7 +87,10 @@ fn managed_content_inherits_while_native_text_keeps_its_color() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(managed).unwrap().0,
-        WidgetryThemeMode::Dark.colors().text.disabled.foreground
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text
+            .disabled
+            .foreground
     );
     app.world_mut()
         .entity_mut(branch)
@@ -95,13 +101,17 @@ fn managed_content_inherits_while_native_text_keeps_its_color() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(managed).unwrap().0,
-        WidgetryThemeMode::Dark.colors().text.normal.foreground
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text
+            .normal
+            .foreground
     );
     app.world_mut().entity_mut(managed).remove::<WidgetryText>();
     app.world_mut()
         .entity_mut(managed)
         .insert(TextColor(Color::BLACK));
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+        .unwrap();
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(managed).unwrap().0,
@@ -135,9 +145,13 @@ fn overrides_are_atomic_state_specific_and_clear_to_current_theme() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        WidgetryThemeMode::Dark.colors().text.disabled.foreground
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text
+            .disabled
+            .foreground
     );
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+        .unwrap();
     app.world_mut()
         .entity_mut(text)
         .remove::<InteractionDisabled>();
@@ -145,7 +159,10 @@ fn overrides_are_atomic_state_specific_and_clear_to_current_theme() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        WidgetryThemeMode::Light.colors().text.normal.foreground
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .text
+            .normal
+            .foreground
     );
     let invalid = WidgetryTextColorOverrides {
         normal: WidgetryTextStateColorOverrides {
@@ -191,7 +208,10 @@ fn nearest_scope_reparent_and_rich_text_keep_source_identity() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(span).unwrap().0,
-        WidgetryThemeMode::Dark.colors().text.normal.foreground
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text
+            .normal
+            .foreground
     );
 }
 
@@ -231,7 +251,10 @@ fn disabled_spans_use_ui_context_and_text2d_is_not_managed() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(span).unwrap().0,
-        WidgetryThemeMode::Dark.colors().text.disabled.foreground
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text
+            .disabled
+            .foreground
     );
     for entity in [native, world_text, world_span] {
         assert_eq!(

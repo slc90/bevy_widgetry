@@ -18,7 +18,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState},
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use std::sync::Arc;
 
 #[derive(Component, FromTemplate)]
@@ -63,10 +63,9 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
     let initial_ratio = ((f64::from(props.value.unwrap_or(props.min)) - f64::from(props.min))
         / (f64::from(props.max) - f64::from(props.min))) as f32;
     let colors = props.colors.clone();
-    let palette = props
-        .colors
-        .resolve(&WidgetryThemeMode::default().colors().slider)
-        .normal;
+    let colors_for_track = colors.clone();
+    let colors_for_fill = colors.clone();
+    let colors_for_thumb = colors.clone();
     bsn! {
         template(move |context| initial(&props).map_err(|error| error.with_context(ErrorFrame::new("slider.initialize").field("root", context.entity.id())).into_bevy_error()))
         template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
@@ -83,7 +82,7 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
         Children [
             #SliderTrack Pickable::IGNORE
             Node { width: {if vertical {px(thickness)} else {percent(100)}}, height: {if vertical {percent(100)} else {px(thickness)}}, flex_shrink: 0.0, border_radius: BorderRadius::MAX }
-            BackgroundColor({palette.track})
+            template(move |context| Ok(BackgroundColor(colors_for_track.resolve(&context.resource::<WidgetryTheme>().slider).normal.track)))
             Children [
                 #SliderFill Pickable::IGNORE
                 Node {
@@ -92,7 +91,7 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
                     height: {if vertical {percent(initial_ratio*100.0)} else {percent(100)}},
                     border_radius: BorderRadius::MAX,
                 }
-                BackgroundColor({palette.fill})--
+                template(move |context| Ok(BackgroundColor(colors_for_fill.resolve(&context.resource::<WidgetryTheme>().slider).normal.fill)))--
                 #SliderThumb Pickable::IGNORE
                 Node {
                     position_type: PositionType::Absolute, width: px(diameter), height: px(diameter),
@@ -101,7 +100,7 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
                     border_radius: BorderRadius::MAX,
                 }
                 UiTransform { translation: {Val2::percent(-50,-50)} }
-                BackgroundColor({palette.thumb})
+                template(move |context| Ok(BackgroundColor(colors_for_thumb.resolve(&context.resource::<WidgetryTheme>().slider).normal.thumb)))
                 Outline { width: px(2), offset: px(3), color: Color::NONE }
             ]
         ]
@@ -115,7 +114,7 @@ pub(crate) fn install(app: &mut App) {
 }
 
 fn update(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     focus: Res<InputFocus>,
     focus_visible: Res<InputFocusVisible>,
     changed: Query<
@@ -168,7 +167,7 @@ fn update(
         };
         let entities = [parts.track, parts.fill, parts.thumb];
         let result = (|| -> Result<(), StyleProblem> {
-            let colors = local.0.resolve(&mode.colors().slider);
+            let colors = local.0.resolve(&mode.slider);
             let color = if disabled {
                 colors.disabled
             } else if pressed {

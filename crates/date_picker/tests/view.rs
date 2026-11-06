@@ -33,7 +33,7 @@ fn observe(app: &mut App) {
 
 #[test]
 fn clear_label_uses_normal_foreground_only_while_available() {
-    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_theme::WidgetryTheme;
     let mut app = scene_app();
     app.add_plugins(WidgetryDatePickerPlugin);
     let parent = app
@@ -54,14 +54,14 @@ fn clear_label_uses_normal_foreground_only_while_available() {
         app.world().get::<TextColor>(text).unwrap().0
     };
     for mode in [
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
-        let palette = mode.colors().date_picker;
+        let palette = mode.date_picker;
         assert_eq!(label_color(&app, clear), palette.foreground);
         assert_eq!(label_color(&app, adjacent), palette.adjacent);
         app.world_mut().trigger(primary_click(clear));
@@ -112,7 +112,7 @@ fn clear_label_uses_normal_foreground_only_while_available() {
 fn pointer_press_release_and_disabled_have_real_visual_feedback() {
     use bevy::ui::Pressed;
     use bevy_widgetry_test_utils::{primary_press, primary_release};
-    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_theme::WidgetryTheme;
     let mut app = scene_app();
     app.add_plugins(WidgetryDatePickerPlugin);
     let root = app
@@ -131,11 +131,7 @@ fn pointer_press_release_and_disabled_have_real_visual_feedback() {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(target).unwrap().0,
-            app.world()
-                .resource::<WidgetryThemeMode>()
-                .colors()
-                .date_picker
-                .pressed
+            app.world().resource::<WidgetryTheme>().date_picker.pressed
         );
         app.world_mut().trigger(primary_release(target));
         app.world_mut().flush();
@@ -155,7 +151,7 @@ fn pointer_press_release_and_disabled_have_real_visual_feedback() {
 
 #[test]
 fn arrows_same_value_ancestor_disabled_and_color_overrides_remain_independent() {
-    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_theme::WidgetryTheme;
     let mut app = scene_app();
     app.add_plugins(WidgetryDatePickerPlugin);
     let parent = app
@@ -213,12 +209,12 @@ fn arrows_same_value_ancestor_disabled_and_color_overrides_remain_independent() 
     )
     .unwrap();
     for mode in [
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         assert_eq!(app.world().get::<BackgroundColor>(root).unwrap().0, custom);
         assert_eq!(
@@ -230,8 +226,7 @@ fn arrows_same_value_ancestor_disabled_and_color_overrides_remain_independent() 
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
-        WidgetryThemeMode::KamuriViolet
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME
             .date_picker
             .background
     );

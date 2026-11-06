@@ -1,4 +1,4 @@
-use bevy_widgetry_theme::{WidgetryRadioGroupColors, WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryRadioGroupColors, WidgetryTheme, WidgetryThemeChanged};
 
 use crate::error::{StyleFailureKey, StyleIssue, collect, observe_style};
 use crate::{
@@ -230,7 +230,7 @@ fn apply(
 }
 
 pub(crate) fn update_changed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut changes: ResMut<StyleChanges>,
     mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,
     groups: Query<&crate::colors::ColorState, With<crate::WidgetryRadioGroup>>,
@@ -244,7 +244,7 @@ pub(crate) fn update_changed(
             collect(
                 &mut batch,
                 apply(
-                    &mode.colors().radio_group,
+                    &mode.radio_group,
                     item,
                     &groups,
                     &valid_groups,
@@ -258,7 +258,8 @@ pub(crate) fn update_changed(
 }
 
 pub(crate) fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
+    _: On<WidgetryThemeChanged>,
+    mode: Res<WidgetryTheme>,
     mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,
     groups: Query<&crate::colors::ColorState, With<crate::WidgetryRadioGroup>>,
     valid_groups: Query<(), With<crate::WidgetryRadioGroup>>,
@@ -270,7 +271,7 @@ pub(crate) fn refresh_theme(
         collect(
             &mut batch,
             apply(
-                &event.mode.colors().radio_group,
+                &mode.radio_group,
                 item,
                 &groups,
                 &valid_groups,
@@ -362,8 +363,7 @@ mod tests {
         app.world_mut().entity_mut(option).remove::<Hovered>();
         app.update();
         assert_eq!(STYLE_WORK.with_borrow_mut(std::mem::take), vec![option]);
-        let colors = WidgetryThemeMode::Dark
-            .colors()
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .radio_group
             .option
             .unchecked
@@ -532,8 +532,7 @@ mod tests {
             let dot = app.world().get::<Children>(replacement).unwrap()[0];
             assert_eq!(
                 app.world().get::<BackgroundColor>(dot).unwrap().0,
-                WidgetryThemeMode::Dark
-                    .colors()
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
                     .radio_group
                     .option
                     .checked
@@ -591,7 +590,7 @@ mod tests {
                 probe(&mut app, &errors, 1);
             }
             assert_eq!(option_logs(&logs, bevy::log::Level::ERROR), 2);
-            errors.run(|| switch_theme(&mut app, WidgetryThemeMode::Light));
+            errors.run(|| switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME));
             let failures = errors.take_records();
             assert_eq!(failures.len(), 2);
             assert!(
@@ -612,8 +611,7 @@ mod tests {
                     .get::<ResolvedForeground>(healthy_option)
                     .unwrap()
                     .0,
-                WidgetryThemeMode::Light
-                    .colors()
+                bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                     .radio_group
                     .option
                     .checked

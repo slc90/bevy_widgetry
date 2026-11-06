@@ -51,10 +51,7 @@ use bevy_widgetry::text::WidgetryText;
 use bevy_widgetry::text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
 };
-use bevy_widgetry::theme::{
-    WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryTheme, WidgetryThemeMode,
-    WidgetryThemePlugin,
-};
+use bevy_widgetry::theme::{WidgetryTheme, WidgetryThemePlugin};
 use bevy_widgetry::tooltip::{
     TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,
 };
@@ -628,18 +625,18 @@ fn theme_command_reports_missing_mode_at_execution_without_notifying() {
     );
     app.set_error_handler(ErrorCapture::handler());
     let mut queue = bevy::ecs::world::CommandQueue::default();
-    WidgetryThemeMode::set(
+    WidgetryTheme::set(
         &mut Commands::new(&mut queue, app.world()),
-        WidgetryThemeMode::Light,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
     );
-    app.world_mut().remove_resource::<WidgetryThemeMode>();
+    app.world_mut().remove_resource::<WidgetryTheme>();
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
     errors.run(|| logs.run(|| queue.apply(app.world_mut())));
     let errors = errors.take();
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
-    assert!(errors[0].to_string().contains("WidgetryThemeMode"));
+    assert!(errors[0].to_string().contains("WidgetryTheme"));
     let diagnostic = errors[0]
         .downcast_ref::<bevy_widgetry::diagnostics::bevy::WidgetryEcsError>()
         .unwrap()
@@ -651,18 +648,16 @@ fn theme_command_reports_missing_mode_at_execution_without_notifying() {
             .source()
             .unwrap()
             .downcast_ref::<bevy_widgetry::theme::ThemeError>(),
-        Some(bevy_widgetry::theme::ThemeError::MissingMode {
-            mode: WidgetryThemeMode::Light
-        })
+        Some(bevy_widgetry::theme::ThemeError::MissingTheme)
     ));
     let source = logs.diagnostic_records(
         diagnostic.origin().id(),
         bevy_widgetry_test_utils::DiagnosticPhase::Source,
     );
     assert_eq!(source.len(), 1);
-    assert!(source[0].fields["error"].contains("WidgetryThemeMode"));
+    assert!(source[0].fields["error"].contains("WidgetryTheme"));
     assert_eq!(app.world().resource::<ThemeNotifications>().0, 0);
-    assert!(!app.world().contains_resource::<WidgetryThemeMode>());
+    assert!(!app.world().contains_resource::<WidgetryTheme>());
 }
 
 #[derive(Resource, Default)]
@@ -670,21 +665,20 @@ struct ThemeNotifications(usize);
 
 #[test]
 fn style_theme_api_and_plugins_work_together() {
-    let _: &WidgetryTheme = &WIDGETRY_DARK_THEME;
-    assert_eq!(WidgetryThemeMode::Light.colors(), &WIDGETRY_LIGHT_THEME);
+    let _: &WidgetryTheme = &bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     let mut app = App::new();
     app.add_plugins(WidgetryThemePlugin);
     app.set_default_font(FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default()))
         .init_asset::<Image>();
-    app.insert_resource(WidgetryThemeMode::Light)
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
         .add_plugins((WidgetryButtonPlugin, WidgetryComboBoxPlugin));
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
         .expect("theme switch succeeds");
     app.update();
     assert_eq!(
-        *app.world().resource::<WidgetryThemeMode>(),
-        WidgetryThemeMode::Light
+        *app.world().resource::<WidgetryTheme>(),
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
     );
 }
 
@@ -781,7 +775,10 @@ fn button_scene_api_is_usable() {
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        WIDGETRY_DARK_THEME.button.normal.background
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .button
+            .normal
+            .background
     );
 }
 
@@ -1026,7 +1023,7 @@ fn standalone_widget_plugins_and_facade_share_ui_theme_and_pointer_plugins() {
                 bevy::input_focus::InputFocusPlugin,
             ));
             app.init_asset::<Image>().init_asset::<Font>();
-            app.insert_resource(WidgetryThemeMode::Light);
+            app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
             if preinstalled {
                 app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
             }
@@ -1069,8 +1066,8 @@ fn standalone_widget_plugins_and_facade_share_ui_theme_and_pointer_plugins() {
             }
             assert_eq!(app.get_added_plugins::<WidgetryThemePlugin>().len(), 1);
             assert_eq!(
-                *app.world().resource::<WidgetryThemeMode>(),
-                WidgetryThemeMode::Light
+                *app.world().resource::<WidgetryTheme>(),
+                bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             );
             assert!(app.is_plugin_added::<WidgetryPointerPlugin>());
             let count = app.get_added_plugins::<WidgetryPointerPlugin>().len();

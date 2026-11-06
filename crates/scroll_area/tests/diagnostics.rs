@@ -81,7 +81,7 @@ fn scrollbar_damage_keeps_axis_policy_owner_and_shared_style_identity() {
     logs.run(|| errors.run(|| {
         app.update(); let records = errors.take_records(); let first = diagnostics(&records); assert_eq!(first.len(), 1);
         assert!(matches!(first[0].source().unwrap().downcast_ref::<ScrollAreaError>(), Some(ScrollAreaError::MissingPart { context, entity, part: "Scrollbar" }) if context.root == root && *entity == bar && context.axis == Some(ScrollAxis::Vertical) && context.policy == Some(ScrollbarPolicy::Auto)));
-        let colors = bevy_widgetry_theme::WidgetryThemeMode::Dark.colors().scroll_area;
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.scroll_area;
         let from_owner = bevy_widgetry_scroll_area::internal::apply_owned_scroll_colors(app.world_mut(), root, &colors).unwrap_err();
         let repeated = from_owner.diagnostics().next().unwrap();
         assert!(Arc::ptr_eq(first[0].origin(), repeated.origin()));
@@ -286,8 +286,7 @@ fn geometry_recovery_retries_root_and_thumb_style_work_without_another_input() {
             app.world_mut()
                 .entity_mut(thumb)
                 .insert(bevy::picking::hover::Hovered(true));
-            bevy_widgetry_theme::WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .scroll_area
                 .vertical
                 .thumb

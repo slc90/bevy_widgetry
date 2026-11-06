@@ -926,8 +926,7 @@ mod tests {
                 assert_eq!(work.1, vec![button]);
             });
         };
-        let colors = bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .tree
             .expander
             .collapsed;
@@ -1008,8 +1007,7 @@ mod tests {
             app.update();
             assert_eq!(
                 app.world().get::<ResolvedForeground>(button).unwrap().0,
-                bevy_widgetry_theme::WidgetryThemeMode::Dark
-                    .colors()
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
                     .tree
                     .expander
                     .collapsed

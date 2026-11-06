@@ -14,7 +14,6 @@ use bevy_widgetry_splitter::{
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, picking_app, queue_pointer, spawn_picking_camera,
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
 
 fn frames(app: &mut App) {
     for _ in 0..8 {
@@ -120,10 +119,10 @@ fn all_themes_follow_real_hover_drag_disabled_and_restore_without_geometry_chang
         let pane = app.world().get::<Children>(root).unwrap()[0];
         let original = *app.world().get::<BackgroundColor>(pane).unwrap();
         for mode in [
-            WidgetryThemeMode::Light,
-            WidgetryThemeMode::Dark,
-            WidgetryThemeMode::PinkDream,
-            WidgetryThemeMode::KamuriViolet,
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+            bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+            bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
         ] {
             app.insert_resource(mode);
             let outside = Location {
@@ -135,17 +134,17 @@ fn all_themes_follow_real_hover_drag_disabled_and_restore_without_geometry_chang
                 &outside,
                 PointerAction::Move { delta: Vec2::ZERO },
             );
-            assert_eq!(color(app.world(), handle), mode.colors().splitter.normal);
+            assert_eq!(color(app.world(), handle), mode.splitter.normal);
             send(&mut app, &at, PointerAction::Move { delta: Vec2::ZERO });
-            assert_eq!(color(app.world(), handle), mode.colors().splitter.hovered);
+            assert_eq!(color(app.world(), handle), mode.splitter.hovered);
             assert!(
                 matches!(app.world().get::<EntityCursor>(handle),Some(EntityCursor::System(c)) if *c == if vertical {SystemCursorIcon::NsResize} else {SystemCursorIcon::EwResize})
             );
             send(&mut app, &at, PointerAction::Press(PointerButton::Primary));
-            assert_eq!(color(app.world(), handle), mode.colors().splitter.dragging);
+            assert_eq!(color(app.world(), handle), mode.splitter.dragging);
             WidgetrySplitter::set_resizable_in_world(app.world_mut(), root, false).unwrap();
             app.update();
-            assert_eq!(color(app.world(), handle), mode.colors().splitter.disabled);
+            assert_eq!(color(app.world(), handle), mode.splitter.disabled);
             assert!(app.world().get::<EntityCursor>(handle).is_none());
             send(
                 &mut app,
@@ -154,19 +153,19 @@ fn all_themes_follow_real_hover_drag_disabled_and_restore_without_geometry_chang
             );
             WidgetrySplitter::set_resizable_in_world(app.world_mut(), root, true).unwrap();
             app.update();
-            assert_eq!(color(app.world(), handle), mode.colors().splitter.hovered);
+            assert_eq!(color(app.world(), handle), mode.splitter.hovered);
             app.world_mut().entity_mut(root).insert(InteractionDisabled);
             app.update();
-            assert_eq!(color(app.world(), handle), mode.colors().splitter.disabled);
+            assert_eq!(color(app.world(), handle), mode.splitter.disabled);
             assert!(app.world().get::<EntityCursor>(handle).is_none());
             app.world_mut()
                 .entity_mut(root)
                 .remove::<InteractionDisabled>();
             app.update();
-            assert_eq!(color(app.world(), handle), mode.colors().splitter.hovered);
+            assert_eq!(color(app.world(), handle), mode.splitter.hovered);
             send(&mut app, &at, PointerAction::Press(PointerButton::Primary));
             send(&mut app, &at, PointerAction::Cancel);
-            assert_ne!(color(app.world(), handle), mode.colors().splitter.dragging);
+            assert_ne!(color(app.world(), handle), mode.splitter.dragging);
             assert_eq!(*app.world().get::<BackgroundColor>(pane).unwrap(), original);
             assert_eq!(
                 WidgetrySplitter::split_ratio(app.world(), root).unwrap(),
@@ -188,13 +187,13 @@ fn partial_color_overrides_follow_theme_and_commands_validate_at_execution() {
     assert_eq!(Colors::get(app.world(), root).unwrap(), &local);
     app.update();
     assert_eq!(color(app.world(), handle), local.normal.unwrap());
-    app.insert_resource(WidgetryThemeMode::Light);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.update();
     assert_eq!(color(app.world(), handle), local.normal.unwrap());
     send(&mut app, &at, PointerAction::Move { delta: Vec2::ZERO });
     assert_eq!(
         color(app.world(), handle),
-        WidgetryThemeMode::Light.colors().splitter.hovered
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.splitter.hovered
     );
     let outside = Location {
         position: Vec2::splat(900.0),
@@ -212,7 +211,7 @@ fn partial_color_overrides_follow_theme_and_commands_validate_at_execution() {
     app.update();
     assert_eq!(
         color(app.world(), handle),
-        WidgetryThemeMode::Light.colors().splitter.normal
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.splitter.normal
     );
     assert!(!Colors::clear_in_world(app.world_mut(), root).unwrap());
     Colors::set(&mut app.world_mut().commands(), root, local.clone());

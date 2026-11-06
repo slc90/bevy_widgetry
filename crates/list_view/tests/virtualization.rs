@@ -722,7 +722,12 @@ fn assert_text_icon_rows(app: &mut App, font: &Handle<Font>) {
                 .get(handle)
                 .unwrap()
                 .size(),
-            UVec2::splat(8)
+            UVec2::splat(16)
+        );
+        let computed_image = world.get::<ComputedNode>(image).unwrap();
+        assert_eq!(
+            computed_image.size() * computed_image.inverse_scale_factor(),
+            Vec2::splat(8.0)
         );
         for entity in [text, icon, image] {
             assert!(world.get::<InheritedVisibility>(entity).unwrap().get());

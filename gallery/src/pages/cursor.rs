@@ -153,7 +153,7 @@ fn target(
     bsn! {
         Name({format!("CursorTarget{label}")})
         Node { min_width: px(160), height: px(88), column_gap: px(8), border: UiRect::all(px(1)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        template(|context| Ok(BorderColor::all(context.resource::<bevy_widgetry::theme::WidgetryThemeMode>().colors().window.frame.normal.border)))
+        template(|context| Ok(BorderColor::all(context.resource::<bevy_widgetry::theme::WidgetryTheme>().window.frame.normal.border)))
         @{system.map(|icon| bsn! { EntityCursor::System(icon) })}
         @{hint.map(|hint| bsn! { template(move |_| Ok(hint)) })}
         Children [

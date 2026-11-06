@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::ui::VisualBox;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 #[derive(Component)]
 pub(crate) struct ThemeWindowBackground;
@@ -41,7 +41,7 @@ pub(crate) fn window_background(background: WidgetryWindowBackground) -> impl Sc
     bsn! {
         @{theme.then_some(bsn! {
             template(|_| Ok(ThemeWindowBackground))
-            template(|context| Ok(BackgroundColor(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.background)))
+            template(|context| Ok(BackgroundColor(context.resource::<WidgetryTheme>().window.frame.normal.background)))
         })}
         @{image.map(|config| {
             let cover = config.mode == WidgetryWindowImageMode::Cover;

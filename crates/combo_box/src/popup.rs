@@ -1,4 +1,4 @@
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 use crate::combo_box::WidgetryComboBox;
 use crate::field::ComboBoxField;
@@ -65,8 +65,8 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
             ]},
             window_margin: 8.0,
         }
-        template(|context| Ok(BackgroundColor(context.resource::<WidgetryThemeMode>().colors().combo_box.popup.normal.background)))
-        template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().combo_box.popup.normal.border)))
+        template(|context| Ok(BackgroundColor(context.resource::<WidgetryTheme>().combo_box.popup.normal.background)))
+        template(|context| Ok(BorderColor::all(context.resource::<WidgetryTheme>().combo_box.popup.normal.border)))
         Node {
             position_type: PositionType::Absolute,
             width: percent(100), height: px(2), box_sizing: BoxSizing::BorderBox,

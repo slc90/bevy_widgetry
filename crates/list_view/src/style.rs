@@ -8,7 +8,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, WidgetryEcsError},
 };
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 use std::sync::Arc;
 
 use crate::virtualization::ListRuntime;
@@ -466,7 +466,7 @@ fn apply_style<T: Send + Sync + 'static, K: WidgetryListKey>(
 pub(crate) fn update<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
 ) -> Result<(), BevyError> {
-    let theme = world.resource::<WidgetryThemeMode>().colors().list_view;
+    let theme = world.resource::<WidgetryTheme>().list_view;
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T, K>>>()
         .iter(world)
@@ -556,7 +556,6 @@ pub fn apply_owned_list_colors<T: Send + Sync + 'static>(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_theme::WIDGETRY_DARK_THEME;
 
     fn fixture(count: usize) -> (App, Entity, Vec<Entity>) {
         use crate::{
@@ -636,7 +635,7 @@ mod tests {
             .set(roots[1], FocusCause::Navigated);
         app.update();
         assert_eq!(take_work(&mut app), (2, 6));
-        let colors = WIDGETRY_DARK_THEME.list_view.container;
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.list_view.container;
         assert_eq!(
             *app.world().get::<BorderColor>(roots[0]).unwrap(),
             BorderColor::all(colors.normal.border)
@@ -661,7 +660,7 @@ mod tests {
         app.world_mut()
             .entity_mut(root)
             .insert(WidgetryStyleOwner::<WidgetryListView<String>>::new(root));
-        let mut colors = WIDGETRY_DARK_THEME.list_view;
+        let mut colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.list_view;
         colors.item.hovered.foreground = Color::srgb(0.8, 0.2, 0.4);
         colors.item.normal.foreground = Color::srgb(0.1, 0.7, 0.3);
         apply_owned_list_colors::<String>(app.world_mut(), root, &colors).unwrap();
@@ -702,7 +701,11 @@ mod tests {
         assert_eq!(take_work(&mut app), (1, 3));
         assert_eq!(
             app.world().get::<ResolvedForeground>(row).unwrap().0,
-            WIDGETRY_DARK_THEME.list_view.item.hovered.foreground
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .list_view
+                .item
+                .hovered
+                .foreground
         );
     }
 
@@ -715,7 +718,7 @@ mod tests {
         let root = roots[0];
         let row = app.world().get::<ListRuntime>(root).unwrap().rows[0];
         app.world_mut().entity_mut(row).remove::<BackgroundColor>();
-        let colors = WIDGETRY_DARK_THEME.list_view;
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.list_view;
         bevy_widgetry_test_utils::LogCapture::default().run(|| {
             for _ in 0..2 {
                 let error =
@@ -738,7 +741,7 @@ mod tests {
     }
 
     fn colors() -> bevy_widgetry_theme::WidgetryListViewColors {
-        let mut colors = WIDGETRY_DARK_THEME.list_view;
+        let mut colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.list_view;
         colors.container.normal.border = Color::srgb_u8(1, 0, 0);
         colors.container.focused.border = Color::srgb_u8(2, 0, 0);
         colors.container.disabled.border = Color::srgb_u8(3, 0, 0);

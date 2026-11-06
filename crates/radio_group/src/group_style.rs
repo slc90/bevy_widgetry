@@ -1,4 +1,4 @@
-use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 
 use crate::WidgetryRadioGroup;
 use crate::error::{StyleFailureKey, StyleIssue, collect, observe_style};
@@ -56,7 +56,7 @@ fn apply(
 }
 
 pub(crate) fn update_changed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     focus: Res<InputFocus>,
     mut groups: Query<
         GroupStyleData,
@@ -72,13 +72,13 @@ pub(crate) fn update_changed(
 ) -> Result {
     let mut batch = DiagnosticBatch::default();
     for item in &mut groups {
-        collect(&mut batch, apply(mode.colors(), focus.get(), item));
+        collect(&mut batch, apply(&mode, focus.get(), item));
     }
     batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub(crate) fn update_focus_and_removed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     focus: Res<InputFocus>,
     mut removed: RemovedComponents<InteractionDisabled>,
     mut groups: Query<GroupStyleData, With<WidgetryRadioGroup>>,
@@ -86,13 +86,13 @@ pub(crate) fn update_focus_and_removed(
     let mut batch = DiagnosticBatch::default();
     if focus.is_changed() {
         for item in &mut groups {
-            collect(&mut batch, apply(mode.colors(), focus.get(), item));
+            collect(&mut batch, apply(&mode, focus.get(), item));
         }
         removed.clear();
     } else {
         for entity in removed.read() {
             if let Ok(item) = groups.get_mut(entity) {
-                collect(&mut batch, apply(mode.colors(), focus.get(), item));
+                collect(&mut batch, apply(&mode, focus.get(), item));
             }
         }
     }
@@ -100,13 +100,14 @@ pub(crate) fn update_focus_and_removed(
 }
 
 pub(crate) fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
+    _: On<WidgetryThemeChanged>,
+    mode: Res<WidgetryTheme>,
     focus: Res<InputFocus>,
     mut groups: Query<GroupStyleData, With<WidgetryRadioGroup>>,
 ) -> Result {
     let mut batch = DiagnosticBatch::default();
     for item in &mut groups {
-        collect(&mut batch, apply(event.mode.colors(), focus.get(), item));
+        collect(&mut batch, apply(&mode, focus.get(), item));
     }
     batch.into_bevy_error().map_or(Ok(()), Err)
 }

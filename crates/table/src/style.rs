@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Selected};
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
-use bevy_widgetry_theme::{WidgetryTableColors, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTableColors, WidgetryTheme};
 
 #[cfg(test)]
 thread_local! {
@@ -543,13 +543,7 @@ fn update_root(
     {
         #[cfg(test)]
         STYLE_WORK.with_borrow_mut(|work| work.0.push(root));
-        let theme = required(
-            world.get_resource::<WidgetryThemeMode>(),
-            root,
-            "WidgetryThemeMode",
-        )?
-        .colors()
-        .table;
+        let theme = required(world.get_resource::<WidgetryTheme>(), root, "WidgetryTheme")?.table;
         let colors = required(
             world.get::<crate::colors::ColorState>(root),
             root,
@@ -757,9 +751,12 @@ mod tests {
         for (hovered, expected) in [
             (
                 Some(true),
-                WidgetryThemeMode::Dark.colors().table.cell.hovered,
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME.table.cell.hovered,
             ),
-            (None, WidgetryThemeMode::Dark.colors().table.cell.normal),
+            (
+                None,
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME.table.cell.normal,
+            ),
         ] {
             take_work();
             app.world_mut().resource_mut::<HoverChange>().0 = Some((cell, hovered));
@@ -775,8 +772,7 @@ mod tests {
         assert_eq!(take_work(), (vec![], vec![cell]));
         assert_eq!(
             app.world().get::<BackgroundColor>(cell).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .table
                 .cell
                 .disabled
@@ -789,8 +785,7 @@ mod tests {
         assert_eq!(take_work(), (vec![], vec![cell]));
         assert_eq!(
             app.world().get::<BackgroundColor>(cell).unwrap().0,
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .table
                 .cell
                 .normal
@@ -862,7 +857,10 @@ mod tests {
         assert_eq!(take_work(), (vec![], vec![entity]));
         assert_eq!(
             app.world().get::<BorderColor>(entity).unwrap().top,
-            WidgetryThemeMode::Dark.colors().table.cell.focused_border
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .table
+                .cell
+                .focused_border
         );
         let other = app.world().get::<TableRuntime>(roots[1]).unwrap().cells[&(row, column)];
         WidgetryTable::<u32>::set_focused_cell(app.world_mut(), roots[1], Some(cell)).unwrap();
@@ -878,7 +876,11 @@ mod tests {
         );
         assert_eq!(
             app.world().get::<BorderColor>(entity).unwrap().top,
-            WidgetryThemeMode::Dark.colors().table.cell.normal.border
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .table
+                .cell
+                .normal
+                .border
         );
         app.world_mut()
             .get_mut::<WidgetryTableStyle>(roots[0])
@@ -998,12 +1000,11 @@ mod tests {
         assert!(app.world().get::<Selected>(cell).is_some());
         assert_eq!(take_work(), (vec![], vec![cell]));
         WidgetryTableColorOverrides::clear_in_world(app.world_mut(), roots[0]).unwrap();
-        switch_theme(&mut app, WidgetryThemeMode::Light);
+        switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(cell).unwrap().0,
-            WidgetryThemeMode::Light
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 .table
                 .cell
                 .selected
@@ -1012,8 +1013,7 @@ mod tests {
         let other = app.world().get::<TableRuntime>(roots[1]).unwrap().cells[&(row, column)];
         assert_eq!(
             app.world().get::<BackgroundColor>(other).unwrap().0,
-            WidgetryThemeMode::Light
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 .table
                 .cell
                 .normal

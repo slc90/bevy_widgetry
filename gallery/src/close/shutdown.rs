@@ -8,8 +8,7 @@ use bevy::ui_widgets::Activate;
 use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
 use bevy::{prelude::*, window::RequestRedraw};
 use bevy_widgetry::{
-    button::WidgetryButton, job::*, scene::spawn_scene, text::WidgetryText,
-    theme::WidgetryThemeMode,
+    button::WidgetryButton, job::*, scene::spawn_scene, text::WidgetryText, theme::WidgetryTheme,
 };
 use std::time::Duration;
 
@@ -299,7 +298,7 @@ fn show(world: &mut World) -> Result {
     let parts = world.query::<&Panel>().iter(world).next().copied();
     if parts.is_some()
         && !world.is_resource_changed::<GalleryShutdownState>()
-        && !world.is_resource_changed::<WidgetryThemeMode>()
+        && !world.is_resource_changed::<WidgetryTheme>()
     {
         return Ok(());
     }
@@ -353,8 +352,7 @@ fn show(world: &mut World) -> Result {
         Display::None
     };
     let color = world
-        .resource::<WidgetryThemeMode>()
-        .colors()
+        .resource::<WidgetryTheme>()
         .window
         .frame
         .normal

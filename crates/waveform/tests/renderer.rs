@@ -114,7 +114,7 @@ fn assert_waveform_colors(
 #[test]
 fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
     use bevy::ui::InteractionDisabled;
-    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_theme::WidgetryTheme;
     let (mut app, root, source) = fixture(1000, 200.0);
     let (_, handle) = mesh(&mut app);
     let camera = app
@@ -192,10 +192,10 @@ fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
     }
     WidgetryWaveformColorOverrides::set_in_world(app.world_mut(), root, colors.clone()).unwrap();
     for (mode, disabled) in [
-        (WidgetryThemeMode::Dark, false),
-        (WidgetryThemeMode::Dark, true),
-        (WidgetryThemeMode::Light, true),
-        (WidgetryThemeMode::Light, false),
+        (bevy_widgetry_theme::WIDGETRY_DARK_THEME, false),
+        (bevy_widgetry_theme::WIDGETRY_DARK_THEME, true),
+        (bevy_widgetry_theme::WIDGETRY_LIGHT_THEME, true),
+        (bevy_widgetry_theme::WIDGETRY_LIGHT_THEME, false),
     ] {
         if disabled {
             app.world_mut().entity_mut(root).insert(InteractionDisabled);
@@ -204,7 +204,7 @@ fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
                 .entity_mut(root)
                 .remove::<InteractionDisabled>();
         }
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         let expected = if disabled {
             &colors.disabled
@@ -223,19 +223,19 @@ fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     WidgetryWaveformColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
     app.update();
-    let theme = WidgetryThemeMode::Light.colors().waveform.disabled;
+    let theme = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.waveform.disabled;
     assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
     unchanged(&mut app);
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
     app.update();
-    let theme = WidgetryThemeMode::Light.colors().waveform.normal;
+    let theme = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.waveform.normal;
     assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
     unchanged(&mut app);
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark).unwrap();
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_DARK_THEME).unwrap();
     app.update();
-    let theme = WidgetryThemeMode::Dark.colors().waveform.normal;
+    let theme = bevy_widgetry_theme::WIDGETRY_DARK_THEME.waveform.normal;
     assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
     unchanged(&mut app);
     // A normal-state override must not become the fallback for an unspecified disabled-state color.
@@ -243,7 +243,7 @@ fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
     WidgetryWaveformColorOverrides::set_in_world(app.world_mut(), root, colors).unwrap();
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
-    let theme = WidgetryThemeMode::Dark.colors().waveform.disabled;
+    let theme = bevy_widgetry_theme::WIDGETRY_DARK_THEME.waveform.disabled;
     assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
     unchanged(&mut app);
 }

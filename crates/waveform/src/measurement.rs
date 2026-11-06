@@ -307,9 +307,7 @@ fn prepare_one(world: &mut World, root: Entity) -> ViewResult {
         } else {
             Pickable::IGNORE
         });
-    let colors = world
-        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-        .colors();
+    let colors = world.resource::<bevy_widgetry_theme::WidgetryTheme>();
     let border = colors.check_box.checked.normal.border;
     let background = colors.waveform.normal.background;
     world

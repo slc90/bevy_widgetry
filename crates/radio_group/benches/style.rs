@@ -6,7 +6,6 @@ use bevy_widgetry_radio_group::{
     WidgetryRadioOption,
 };
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app};
-use bevy_widgetry_theme::WidgetryThemeMode;
 
 #[derive(Resource, Default)]
 struct HoverRequest(Option<(Entity, bool)>);
@@ -66,8 +65,7 @@ fn fixture(count: usize) -> Result<Fixture> {
     {
         return Err(missing("laid out Indicator"));
     }
-    let colors = WidgetryThemeMode::Dark
-        .colors()
+    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME
         .radio_group
         .option
         .unchecked
@@ -93,7 +91,7 @@ fn main() -> Result {
                 || fixture(count),
                 |fixture, index| {
                     let active = index.is_multiple_of(2);
-                    let colors = &WidgetryThemeMode::Dark.colors().radio_group.option;
+                    let colors = &bevy_widgetry_theme::WIDGETRY_DARK_THEME.radio_group.option;
                     match action {
                         "hover_one" => {
                             fixture.app.world_mut().resource_mut::<HoverRequest>().0 =

@@ -4,7 +4,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::VisualBox;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
 use bevy_widgetry_window::{
@@ -69,7 +69,8 @@ fn locally_disabled_content_uses_disabled_frame_foreground_and_recovers() {
         app.world().get::<TextColor>(text).unwrap().0,
         colors.frame.disabled.foreground.unwrap()
     );
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+        .unwrap();
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
@@ -79,8 +80,7 @@ fn locally_disabled_content_uses_disabled_frame_foreground_and_recovers() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        WidgetryThemeMode::Light
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .window
             .frame
             .disabled
@@ -92,8 +92,7 @@ fn locally_disabled_content_uses_disabled_frame_foreground_and_recovers() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        WidgetryThemeMode::Light
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .window
             .frame
             .normal
@@ -122,11 +121,11 @@ fn image_tint_multiplies_configured_opacity_without_compounding() {
     };
     WidgetryWindowColorOverrides::set_in_world(app.world_mut(), root, colors).unwrap();
     for mode in [
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::Dark,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         app.update();
         let image = app.world().get::<ImageNode>(root).unwrap();
@@ -165,8 +164,7 @@ fn theme_and_image_backgrounds_are_exclusive_on_both_entry_points() {
         assert_eq!(
             app.world().get::<BackgroundColor>(theme).unwrap().0,
             app.world()
-                .resource::<WidgetryThemeMode>()
-                .colors()
+                .resource::<WidgetryTheme>()
                 .window
                 .frame
                 .normal
@@ -182,11 +180,11 @@ fn theme_and_image_backgrounds_are_exclusive_on_both_entry_points() {
         assert_eq!(node.color, Color::srgba(1.0, 1.0, 1.0, 0.5));
         assert_eq!(app.world().get::<Children>(theme).unwrap().len(), 3);
         assert_eq!(app.world().get::<Children>(image).unwrap().len(), 3);
-        let mode = WidgetryThemeMode::Light;
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).expect("theme switch succeeds");
+        let mode = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME;
+        WidgetryTheme::set_in_world(app.world_mut(), mode).expect("theme switch succeeds");
         assert_eq!(
             app.world().get::<BackgroundColor>(theme).unwrap().0,
-            mode.colors().window.frame.normal.background
+            mode.window.frame.normal.background
         );
         assert!(app.world().get::<BackgroundColor>(image).is_none());
         assert_eq!(
@@ -196,12 +194,12 @@ fn theme_and_image_backgrounds_are_exclusive_on_both_entry_points() {
         for root in [theme, image] {
             assert_eq!(
                 *app.world().get::<BorderColor>(root).unwrap(),
-                BorderColor::all(mode.colors().window.frame.normal.border)
+                BorderColor::all(mode.window.frame.normal.border)
             );
             let bar = app.world().get::<Children>(root).unwrap()[0];
             assert_eq!(
                 *app.world().get::<BorderColor>(bar).unwrap(),
-                BorderColor::all(mode.colors().window.title_bar.normal.border)
+                BorderColor::all(mode.window.title_bar.normal.border)
             );
         }
     }
@@ -249,8 +247,11 @@ fn image_opacity_preserves_geometry_and_theme_independence_on_both_entry_points(
                     app.world_mut().get_mut::<ComputedNode>(root).unwrap().size = size;
                     app.update();
                     let expected_rect = (mode == WidgetryWindowImageMode::Cover).then_some(cover);
-                    for theme in [WidgetryThemeMode::Light, WidgetryThemeMode::Dark] {
-                        WidgetryThemeMode::set_in_world(app.world_mut(), theme)
+                    for theme in [
+                        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+                        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+                    ] {
+                        WidgetryTheme::set_in_world(app.world_mut(), theme)
                             .expect("theme switch succeeds");
                         app.update();
                         let node = app.world().get::<ImageNode>(root).unwrap();
@@ -262,12 +263,12 @@ fn image_opacity_preserves_geometry_and_theme_independence_on_both_entry_points(
                         assert!(app.world().get::<BackgroundColor>(root).is_none());
                         assert_eq!(
                             *app.world().get::<BorderColor>(root).unwrap(),
-                            BorderColor::all(theme.colors().window.frame.normal.border)
+                            BorderColor::all(theme.window.frame.normal.border)
                         );
                         let bar = app.world().get::<Children>(root).unwrap()[0];
                         assert_eq!(
                             *app.world().get::<BorderColor>(bar).unwrap(),
-                            BorderColor::all(theme.colors().window.title_bar.normal.border)
+                            BorderColor::all(theme.window.title_bar.normal.border)
                         );
                     }
                 }

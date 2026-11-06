@@ -10,7 +10,7 @@ use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{Diagnostic, FailureState, WidgetryEcsError},
 };
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use std::sync::Arc;
 
 pub(crate) const BORDER: f32 = 1.0;
@@ -69,7 +69,7 @@ pub(crate) fn install(app: &mut App) {
 }
 
 fn update(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     roots: Query<(Entity, Ref<ColorState>, Ref<Parts>)>,
     mut commands: Commands,
 ) {
@@ -118,7 +118,7 @@ fn apply_colors(world: &mut World, root: Entity) -> Result<(), Problem> {
             part: "ColorState",
         })?
         .0
-        .resolve(&world.resource::<WidgetryThemeMode>().colors().collapsible);
+        .resolve(&world.resource::<WidgetryTheme>().collapsible);
     for entity in [root, parts.header, parts.content] {
         if world.get::<BackgroundColor>(entity).is_none() {
             return Err(Problem::MissingPart {

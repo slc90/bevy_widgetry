@@ -300,8 +300,7 @@ fn editor_focus_projects_and_clears_list_navigation_style() {
     let colors = f
         .app
         .world()
-        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-        .colors()
+        .resource::<bevy_widgetry_theme::WidgetryTheme>()
         .combo_box
         .list
         .container;

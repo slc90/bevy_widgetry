@@ -19,6 +19,7 @@ mod page_lifecycle_benchmark;
 mod pages;
 mod splash;
 mod startup_cursor;
+mod theme;
 mod waveform_benchmark;
 mod waveform_data;
 mod window_scale;
@@ -89,7 +90,7 @@ fn run(
     }
     let loaded = config::load(executable.with_file_name("config").join("config.ron"));
     app.insert_resource(loaded.config.language);
-    app.insert_resource(loaded.config.theme);
+    app.insert_resource(loaded.config.theme.colors());
     i18n::install(&mut app);
     app.insert_resource(WinitSettings::desktop_app());
     app.insert_resource(WidgetryCursorTheme::System);

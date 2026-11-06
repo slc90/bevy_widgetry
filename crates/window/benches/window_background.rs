@@ -73,8 +73,7 @@ fn main() -> Result {
                     fixture.app.update();
                     for &root in &fixture.roots {
                         if matches!(action, "theme_idle" | "hover_one" | "press_one") {
-                            let colors =
-                                bevy_widgetry_theme::WidgetryThemeMode::Dark.colors().window;
+                            let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.window;
                             let background = fixture
                                 .app
                                 .world()
@@ -97,10 +96,7 @@ fn main() -> Result {
                         }
                         std::hint::black_box(image.rect);
                     }
-                    let colors = bevy_widgetry_theme::WidgetryThemeMode::Dark
-                        .colors()
-                        .window
-                        .close;
+                    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.window.close;
                     let expected = if action == "press_one" && index.is_multiple_of(2) {
                         colors.pressed
                     } else if action == "hover_one" && index.is_multiple_of(2) {

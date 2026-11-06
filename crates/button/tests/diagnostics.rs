@@ -113,10 +113,7 @@ fn missing_managed_outputs_keep_the_actual_query_source_and_leave_other_outputs_
     let (mut app, root) = fixture();
     let before = *app.world().get::<BackgroundColor>(root).unwrap();
     app.world_mut().entity_mut(root).remove::<BorderColor>();
-    let colors = bevy_widgetry_theme::WidgetryThemeMode::Dark
-        .colors()
-        .button
-        .pressed;
+    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.button.pressed;
     let failure =
         bevy_widgetry_button::internal::apply_owned_button_colors(app.world_mut(), root, colors)
             .unwrap_err();

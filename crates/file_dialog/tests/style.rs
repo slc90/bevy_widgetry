@@ -4,7 +4,6 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
-use bevy_widgetry_theme::WidgetryThemeMode;
 
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
@@ -1438,7 +1437,7 @@ fn sidebar_selection_matches_canonical_prefix_and_keeps_original_navigation_path
         (r"C:\fixture", r"\\?\Volume{fixture}\fixture", false),
     ] {
         let mut app = fixture();
-        switch_theme(&mut app, WidgetryThemeMode::Dark);
+        switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_DARK_THEME);
         let root = app
             .world_mut()
             .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
@@ -1481,8 +1480,7 @@ fn sidebar_selection_matches_canonical_prefix_and_keeps_original_navigation_path
             Some(selected)
         );
         if selected {
-            let color = WidgetryThemeMode::Dark
-                .colors()
+            let color = bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .file_dialog
                 .entry
                 .selected
@@ -2402,7 +2400,7 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
     assert!(!after.is_empty());
     assert!(app.world_mut().query::<(Entity, &Text)>().iter(app.world()).any(|(entity, text)| text.0 == "file_000099.txt" && belongs(app.world(), entity, root)));
     assert!(!app.world_mut().query::<(Entity, &Text)>().iter(app.world()).any(|(entity, text)| text.0 == "file_000000.txt" && belongs(app.world(), entity, root)));
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     for row in &after {
         assert_eq!(app.world().get::<BackgroundColor>(*row).unwrap().0, entry);
         let text_colors = app
@@ -2437,7 +2435,7 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
             .token(),
         token
     );
-    let theme = WidgetryThemeMode::Light.colors().file_dialog;
+    let theme = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME.file_dialog;
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
         theme.body.normal.background
@@ -2712,7 +2710,7 @@ fn search_editor_updates_query_and_theme_keeps_text_cursor_and_session() {
         .unwrap()
         .token()
         .session;
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.update();
     assert_eq!(
         app.world()

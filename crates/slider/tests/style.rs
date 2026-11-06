@@ -11,7 +11,34 @@ use bevy_widgetry_slider::{
     WidgetrySliderStateColorOverrides,
 };
 use bevy_widgetry_test_utils::{picking_app, pointer_ids, queue_pointer, spawn_picking_camera};
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
+
+#[test]
+fn scene_initial_colors_use_the_current_external_palette() {
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetrySliderPlugin);
+    let mut custom = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
+    custom.slider.normal.track = Color::srgb(0.1, 0.2, 0.3);
+    custom.slider.normal.fill = Color::srgb(0.3, 0.2, 0.1);
+    custom.slider.normal.thumb = Color::srgb(0.4, 0.5, 0.6);
+    WidgetryTheme::set_in_world(app.world_mut(), custom).unwrap();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetrySlider {} })
+        .unwrap()
+        .id();
+    let [track, fill, thumb] = parts(app.world(), root);
+    for (entity, expected) in [
+        (track, custom.slider.normal.track),
+        (fill, custom.slider.normal.fill),
+        (thumb, custom.slider.normal.thumb),
+    ] {
+        assert_eq!(
+            app.world().get::<BackgroundColor>(entity).unwrap().0,
+            expected
+        );
+    }
+}
 
 fn fixture(
     vertical: bool,
@@ -218,27 +245,27 @@ fn themes_overrides_and_interaction_feedback_preserve_geometry() {
     );
     assert!(!WidgetrySliderColorOverrides::set_in_world(app.world_mut(), root, overrides).unwrap());
     for mode in [
-        WidgetryThemeMode::Light,
-        WidgetryThemeMode::Dark,
-        WidgetryThemeMode::PinkDream,
-        WidgetryThemeMode::KamuriViolet,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+        bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
     ] {
-        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         frames(&mut app);
         assert_eq!(app.world().get::<BackgroundColor>(thumb).unwrap().0, fixed);
         assert_eq!(
             app.world().get::<BackgroundColor>(track).unwrap().0,
-            mode.colors().slider.normal.track
+            mode.slider.normal.track
         );
         assert_eq!(
             app.world().get::<BackgroundColor>(fill).unwrap().0,
-            mode.colors().slider.normal.fill
+            mode.slider.normal.fill
         );
         app.world_mut().entity_mut(root).insert(InteractionDisabled);
         frames(&mut app);
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            mode.colors().slider.disabled.thumb
+            mode.slider.disabled.thumb
         );
         app.world_mut()
             .entity_mut(root)
@@ -247,7 +274,7 @@ fn themes_overrides_and_interaction_feedback_preserve_geometry() {
     }
     WidgetrySliderColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
     frames(&mut app);
-    let colors = WidgetryThemeMode::KamuriViolet.colors().slider;
+    let colors = bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME.slider;
     moved(&mut app, &mut at, original_center);
     assert_eq!(
         app.world().get::<BackgroundColor>(thumb).unwrap().0,

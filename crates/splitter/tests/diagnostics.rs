@@ -183,7 +183,7 @@ fn style_batches_keep_each_line_identity_across_theme_refresh_and_repair() {
         app.update(); let first = errors.take_records(); assert_eq!(first.len(), 1);
         let first: Vec<_> = first[0].managed().unwrap().diagnostics().collect(); assert_eq!(first.len(), 2);
         for failure in &first { assert!(matches!(domain(*failure), SplitterError::Layout { root, source, .. } if roots.contains(root) && matches!(source.as_ref(), SplitterLayoutError::MissingPart { entity, part: "BackgroundColor" } if lines.contains(entity)))); }
-        bevy_widgetry_theme::WidgetryThemeMode::set_in_world(app.world_mut(), bevy_widgetry_theme::WidgetryThemeMode::Light).unwrap();
+        bevy_widgetry_theme::WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME).unwrap();
         app.update(); let repeated = errors.take_records();
         let repeated: Vec<_> = repeated[0].managed().unwrap().diagnostics().collect(); assert_eq!(repeated.len(), 2);
         for failure in repeated { assert!(first.iter().any(|original| Arc::ptr_eq(original.origin(), failure.origin()))); }

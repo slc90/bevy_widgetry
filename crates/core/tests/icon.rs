@@ -335,8 +335,7 @@ fn runtime_mutations_survive_scene_initialization() {
     app.update();
     assert_eq!(
         app.world().get::<ImageNode>(child).unwrap().color,
-        bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .icon
             .normal
             .foreground
@@ -358,8 +357,7 @@ fn runtime_mutations_survive_scene_initialization() {
     assert_eq!(app.world().get::<Children>(entity).unwrap()[0], child);
     assert_eq!(
         app.world().get::<ImageNode>(child).unwrap().color,
-        bevy_widgetry_theme::WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .icon
             .normal
             .foreground

@@ -20,7 +20,6 @@ use bevy::{
     ui::{BorderRadius, UiRect},
 };
 use bevy_widgetry_core::WidgetryFontPlugin;
-use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
 
 use bevy_widgetry_test_utils::{scene_app, switch_theme};
 use bevy_widgetry_text_field::{
@@ -168,9 +167,21 @@ fn spawned_text_field_uses_normal_style() {
     assert_style(
         &app,
         entity,
-        WIDGETRY_DARK_THEME.text_field.editable.normal.background,
-        WIDGETRY_DARK_THEME.text_field.editable.normal.border,
-        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .foreground,
     );
 }
 
@@ -193,9 +204,21 @@ fn hover_and_focus_follow_expected_priority() {
     assert_style(
         &app,
         entity,
-        WIDGETRY_DARK_THEME.text_field.editable.hovered.background,
-        WIDGETRY_DARK_THEME.text_field.editable.hovered.border,
-        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .hovered
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .hovered
+            .border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .foreground,
     );
 
     focus(&mut app, entity);
@@ -205,9 +228,21 @@ fn hover_and_focus_follow_expected_priority() {
     assert_style(
         &app,
         entity,
-        WIDGETRY_DARK_THEME.text_field.editable.focused.background,
-        WIDGETRY_DARK_THEME.text_field.editable.focused.border,
-        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .focused
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .focused
+            .border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .foreground,
     );
 
     clear_focus(&mut app);
@@ -217,9 +252,21 @@ fn hover_and_focus_follow_expected_priority() {
     assert_style(
         &app,
         entity,
-        WIDGETRY_DARK_THEME.text_field.editable.hovered.background,
-        WIDGETRY_DARK_THEME.text_field.editable.hovered.border,
-        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .hovered
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .hovered
+            .border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .foreground,
     );
 }
 
@@ -244,9 +291,21 @@ fn disabled_has_priority_and_removal_restores_focus() {
     assert_style(
         &app,
         entity,
-        WIDGETRY_DARK_THEME.text_field.editable.disabled.background,
-        WIDGETRY_DARK_THEME.text_field.editable.disabled.border,
-        WIDGETRY_DARK_THEME.text_field.editable.disabled.foreground,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .disabled
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .disabled
+            .border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .disabled
+            .foreground,
     );
 
     app.world_mut()
@@ -258,9 +317,21 @@ fn disabled_has_priority_and_removal_restores_focus() {
     assert_style(
         &app,
         entity,
-        WIDGETRY_DARK_THEME.text_field.editable.focused.background,
-        WIDGETRY_DARK_THEME.text_field.editable.focused.border,
-        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .focused
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .focused
+            .border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .foreground,
     );
 }
 
@@ -284,16 +355,36 @@ fn removing_disabled_without_focus_restores_hover_or_normal() {
             &app,
             entity,
             if hovered {
-                WIDGETRY_DARK_THEME.text_field.editable.hovered.background
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                    .text_field
+                    .editable
+                    .hovered
+                    .background
             } else {
-                WIDGETRY_DARK_THEME.text_field.editable.normal.background
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                    .text_field
+                    .editable
+                    .normal
+                    .background
             },
             if hovered {
-                WIDGETRY_DARK_THEME.text_field.editable.hovered.border
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                    .text_field
+                    .editable
+                    .hovered
+                    .border
             } else {
-                WIDGETRY_DARK_THEME.text_field.editable.normal.border
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                    .text_field
+                    .editable
+                    .normal
+                    .border
             },
-            WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .text_field
+                .editable
+                .normal
+                .foreground,
         );
     }
 }
@@ -318,22 +409,46 @@ fn theme_switch_preserves_current_widget_states() {
 
     app.update();
 
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
 
     assert_style(
         &app,
         focused,
-        WIDGETRY_LIGHT_THEME.text_field.editable.focused.background,
-        WIDGETRY_LIGHT_THEME.text_field.editable.focused.border,
-        WIDGETRY_LIGHT_THEME.text_field.editable.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .text_field
+            .editable
+            .focused
+            .background,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .text_field
+            .editable
+            .focused
+            .border,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .text_field
+            .editable
+            .normal
+            .foreground,
     );
 
     assert_style(
         &app,
         disabled,
-        WIDGETRY_LIGHT_THEME.text_field.editable.disabled.background,
-        WIDGETRY_LIGHT_THEME.text_field.editable.disabled.border,
-        WIDGETRY_LIGHT_THEME.text_field.editable.disabled.foreground,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .text_field
+            .editable
+            .disabled
+            .background,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .text_field
+            .editable
+            .disabled
+            .border,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .text_field
+            .editable
+            .disabled
+            .foreground,
     );
 
     assert_eq!(
@@ -363,7 +478,7 @@ fn selection_colors_follow_theme() {
     assert_eq!(
         cursor.selected_text_color,
         Some(
-            WIDGETRY_DARK_THEME
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .text_field
                 .editable
                 .normal
@@ -372,7 +487,7 @@ fn selection_colors_follow_theme() {
     );
     assert_eq!(
         cursor.selection_color,
-        WIDGETRY_DARK_THEME
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .text_field
             .editable
             .normal
@@ -380,14 +495,14 @@ fn selection_colors_follow_theme() {
     );
     assert_eq!(
         cursor.unfocused_selection_color,
-        WIDGETRY_DARK_THEME
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .text_field
             .editable
             .normal
             .unfocused_selection_background
     );
 
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
 
     let cursor = app
         .world()
@@ -397,7 +512,7 @@ fn selection_colors_follow_theme() {
     assert_eq!(cursor.selected_text_color, Some(cursor.color));
     assert_eq!(
         cursor.selection_color,
-        WIDGETRY_LIGHT_THEME
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .text_field
             .editable
             .normal
@@ -405,7 +520,7 @@ fn selection_colors_follow_theme() {
     );
     assert_eq!(
         cursor.unfocused_selection_color,
-        WIDGETRY_LIGHT_THEME
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .text_field
             .editable
             .normal
@@ -439,8 +554,14 @@ fn read_only_style_matches_text_field_in_each_state() {
     focus(&mut app, focused);
     app.update();
     for (colors, mode) in [
-        (WIDGETRY_DARK_THEME, WidgetryThemeMode::Dark),
-        (WIDGETRY_LIGHT_THEME, WidgetryThemeMode::Light),
+        (
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        ),
+        (
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        ),
     ] {
         switch_theme(&mut app, mode);
         assert_style(
@@ -538,7 +659,10 @@ fn theme_and_state_preserve_consumed_text_and_selection() {
         .queue_edit(TextEdit::SelectAll);
     }
     app.update();
-    for mode in [WidgetryThemeMode::Light, WidgetryThemeMode::Dark] {
+    for mode in [
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+    ] {
         switch_theme(&mut app, mode);
         for disabled in [false, true, false] {
             for root in [normal, read_only] {
@@ -551,7 +675,7 @@ fn theme_and_state_preserve_consumed_text_and_selection() {
                 }
             }
             app.update();
-            let c = mode.colors();
+            let c = mode;
             for root in [normal, read_only] {
                 let edit = support::editor(app.world(), root).unwrap();
                 assert_eq!(edit.value().to_string(), "content");

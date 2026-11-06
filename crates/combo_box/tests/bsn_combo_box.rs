@@ -14,7 +14,7 @@ use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButtonHeadless;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
+use bevy_widgetry_theme::WidgetryTheme;
 
 use bevy_widgetry_list_view::{WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry_test_utils::{primary_click, primary_press, scene_app, switch_theme};
@@ -56,7 +56,11 @@ fn field_uses_combo_colors_and_open_state() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_DARK_THEME.combo_box.field.open.background
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .combo_box
+            .field
+            .open
+            .background
     );
     app.world_mut().spawn((
         PointerId::Mouse,
@@ -77,19 +81,31 @@ fn field_uses_combo_colors_and_open_state() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_DARK_THEME.combo_box.field.open.background
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .combo_box
+            .field
+            .open
+            .background
     );
     app.world_mut().trigger(primary_press(field));
     app.world_mut().flush();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_DARK_THEME.combo_box.field.open.background
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .combo_box
+            .field
+            .open
+            .background
     );
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_LIGHT_THEME.combo_box.field.open.background
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .combo_box
+            .field
+            .open
+            .background
     );
 }
 
@@ -109,20 +125,30 @@ fn owner_overrides_follow_theme_and_reject_direct_field_writes() {
         app.world().get::<BackgroundColor>(field).unwrap().0,
         Color::NONE
     );
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
         Color::NONE
     );
     assert_eq!(
         *app.world().get::<BorderColor>(field).unwrap(),
-        BorderColor::all(WIDGETRY_LIGHT_THEME.combo_box.field.open.border)
+        BorderColor::all(
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+                .combo_box
+                .field
+                .open
+                .border
+        )
     );
     WidgetryComboBoxColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_LIGHT_THEME.combo_box.field.open.background
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .combo_box
+            .field
+            .open
+            .background
     );
     app.world_mut()
         .entity_mut(root)
@@ -274,7 +300,10 @@ fn disabling_again_in_same_frame_preserves_mirror() {
     assert!(app.world().get::<InteractionDisabled>(field).is_some());
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_DARK_THEME.button.disabled.background
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .button
+            .disabled
+            .background
     );
 }
 
@@ -295,9 +324,14 @@ fn internal_color_ownership_is_present_before_the_first_pass() {
     let icon = child::<WidgetryIcon>(app.world(), app.world().get::<Children>(field).unwrap()[0]);
     assert!(WidgetryIcon::set_color_in_world(app.world_mut(), icon, Color::BLACK).is_err());
     assert!(WidgetryIcon::clear_color_in_world(app.world_mut(), icon).is_err());
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+        .unwrap();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_LIGHT_THEME.combo_box.field.normal.background
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .combo_box
+            .field
+            .normal
+            .background
     );
 }

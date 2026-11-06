@@ -15,7 +15,7 @@ use bevy_widgetry_core::{
     ui::WidgetryUiSystems,
 };
 use bevy_widgetry_text_field::WidgetryTextField;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 
 pub(crate) fn install(app: &mut App) {
     app.add_systems(
@@ -34,7 +34,7 @@ fn establish_owners(roots: Query<(Entity, &Parts), Added<Parts>>, mut commands: 
 }
 
 fn update(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     focus: Res<InputFocus>,
     roots: Query<Entity, With<Parts>>,
     changed: Query<Entity, (With<Parts>, Or<(Added<Parts>, Added<InteractionDisabled>)>)>,
@@ -83,7 +83,7 @@ fn update(
 }
 
 fn apply(world: &mut World, root: Entity) -> Result<(), NumberInputFailure> {
-    let theme = world.resource::<WidgetryThemeMode>().colors();
+    let theme = *world.resource::<WidgetryTheme>();
     let parts = world
         .get::<Parts>(root)
         .ok_or_else(|| missing(root, root, "Parts", "number_input.style"))?;

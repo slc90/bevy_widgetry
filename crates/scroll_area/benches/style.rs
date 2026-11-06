@@ -5,7 +5,6 @@ use bevy_widgetry_scroll_area::{
     ScrollAxis, WidgetryScrollArea, WidgetryScrollAreaColorOverrides, WidgetryScrollAreaPlugin,
 };
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app};
-use bevy_widgetry_theme::WidgetryThemeMode;
 
 #[derive(Resource, Default)]
 struct HoverRequest(Option<(Entity, bool)>);
@@ -80,8 +79,7 @@ fn fixture(count: usize) -> Result<Fixture> {
         app,
         root,
         thumb,
-        expected: WidgetryThemeMode::Dark
-            .colors()
+        expected: bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .scroll_area
             .vertical
             .thumb
@@ -105,8 +103,10 @@ fn main() -> Result {
                         "hover_one" => {
                             fixture.app.world_mut().resource_mut::<HoverRequest>().0 =
                                 Some((fixture.thumb, active));
-                            let colors =
-                                &WidgetryThemeMode::Dark.colors().scroll_area.vertical.thumb;
+                            let colors = &bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                                .scroll_area
+                                .vertical
+                                .thumb;
                             fixture.expected = if active {
                                 colors.hovered.background
                             } else {

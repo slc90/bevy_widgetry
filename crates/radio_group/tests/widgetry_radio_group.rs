@@ -21,7 +21,7 @@ use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_click, primary_press,
     queue_key, scene_app, switch_theme,
 };
-use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
+use bevy_widgetry_theme::WidgetryTheme;
 
 fn has_radio_error(
     error: &BevyError,
@@ -398,7 +398,7 @@ fn damaged_option_does_not_block_other_options_theme_update() {
     app.set_error_handler(ErrorCapture::handler());
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
-    errors.run(|| logs.run(|| switch_theme(&mut app, WidgetryThemeMode::Light)));
+    errors.run(|| logs.run(|| switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)));
     let errors = errors.take();
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
@@ -406,11 +406,21 @@ fn damaged_option_does_not_block_other_options_theme_update() {
         let indicator = app.world().get::<Children>(*option).unwrap()[0];
         assert_eq!(
             *app.world().get::<BorderColor>(indicator).unwrap(),
-            BorderColor::all(WIDGETRY_LIGHT_THEME.radio_group.container.normal.border)
+            BorderColor::all(
+                bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+                    .radio_group
+                    .container
+                    .normal
+                    .border
+            )
         );
         assert_eq!(
             app.world().get::<ResolvedForeground>(*option).unwrap().0,
-            WIDGETRY_LIGHT_THEME.radio_group.container.normal.foreground
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+                .radio_group
+                .container
+                .normal
+                .foreground
         );
     }
     assert_eq!(
@@ -758,8 +768,16 @@ fn group_style_tracks_focus_disabled_and_theme() {
     };
     assert_colors(
         &app,
-        WIDGETRY_DARK_THEME.radio_group.container.normal.background,
-        WIDGETRY_DARK_THEME.radio_group.container.normal.border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .radio_group
+            .container
+            .normal
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .radio_group
+            .container
+            .normal
+            .border,
     );
     app.world_mut()
         .resource_mut::<InputFocus>()
@@ -767,29 +785,45 @@ fn group_style_tracks_focus_disabled_and_theme() {
     app.update();
     assert_colors(
         &app,
-        WIDGETRY_DARK_THEME.radio_group.container.normal.background,
-        WIDGETRY_DARK_THEME.radio_group.container.focused.border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .radio_group
+            .container
+            .normal
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .radio_group
+            .container
+            .focused
+            .border,
     );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
     assert_colors(
         &app,
-        WIDGETRY_DARK_THEME
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .radio_group
             .container
             .disabled
             .background,
-        WIDGETRY_DARK_THEME.radio_group.container.disabled.border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .radio_group
+            .container
+            .disabled
+            .border,
     );
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     assert_colors(
         &app,
-        WIDGETRY_LIGHT_THEME
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             .radio_group
             .container
             .disabled
             .background,
-        WIDGETRY_LIGHT_THEME.radio_group.container.disabled.border,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .radio_group
+            .container
+            .disabled
+            .border,
     );
     app.world_mut()
         .entity_mut(root)
@@ -797,15 +831,31 @@ fn group_style_tracks_focus_disabled_and_theme() {
     app.update();
     assert_colors(
         &app,
-        WIDGETRY_LIGHT_THEME.radio_group.container.normal.background,
-        WIDGETRY_LIGHT_THEME.radio_group.container.focused.border,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .radio_group
+            .container
+            .normal
+            .background,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .radio_group
+            .container
+            .focused
+            .border,
     );
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
     assert_colors(
         &app,
-        WIDGETRY_LIGHT_THEME.radio_group.container.normal.background,
-        WIDGETRY_LIGHT_THEME.radio_group.container.normal.border,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .radio_group
+            .container
+            .normal
+            .background,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .radio_group
+            .container
+            .normal
+            .border,
     );
 }
 
@@ -818,7 +868,10 @@ fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
     let children = app.world().get::<Children>(option).unwrap();
     let (indicator, label) = (children[0], children[1]);
     let dot = app.world().get::<Children>(indicator).unwrap()[0];
-    for mode in [WidgetryThemeMode::Dark, WidgetryThemeMode::Light] {
+    for mode in [
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+    ] {
         switch_theme(&mut app, mode);
         for (checked, hovered, disabled) in [
             (false, false, false),
@@ -844,7 +897,7 @@ fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
                     .remove::<InteractionDisabled>();
             }
             app.update();
-            let colors = mode.colors();
+            let colors = mode;
             let border = if disabled {
                 colors.radio_group.container.disabled.border
             } else if hovered {
@@ -893,10 +946,15 @@ fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
     WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
-    switch_theme(&mut app, WidgetryThemeMode::Dark);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_DARK_THEME);
     assert_eq!(
         app.world().get::<BackgroundColor>(dot).unwrap().0,
-        WIDGETRY_DARK_THEME.radio_group.option.checked.normal.dot
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .radio_group
+            .option
+            .checked
+            .normal
+            .dot
     );
 }
 
@@ -1018,14 +1076,14 @@ fn plugin_reuses_dependencies_and_preserves_font_policy() {
         bevy::ui_widgets::RadioGroupPlugin,
         bevy::input_focus::tab_navigation::TabNavigationPlugin,
     ));
-    app.insert_resource(WidgetryThemeMode::Light)
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
         .add_plugins(WidgetryRadioGroupPlugin);
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
     assert_selected(&app, root, 0);
     assert_eq!(
-        *app.world().resource::<WidgetryThemeMode>(),
-        WidgetryThemeMode::Light
+        *app.world().resource::<WidgetryTheme>(),
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
     );
     let option = app.world().get::<Children>(root).unwrap()[0];
     let label = app.world().get::<Children>(option).unwrap()[1];
@@ -1126,7 +1184,7 @@ fn independent_groups_isolate_selection_and_notifications() {
     app.world_mut().flush();
     assert_selected(&app, a, 0);
     assert_selected(&app, b, 1);
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     assert_eq!(
         app.world().resource::<Changes>().indices,
         vec![(a, 2, true), (b, 1, true)]

@@ -322,7 +322,7 @@ mod tests {
     fn shared_today_moves_or_disappears_without_business_events_and_keeps_fixed_icon_tint() {
         use crate::*;
         use bevy_widgetry_core::icon::WidgetryIconColorOverrides;
-        use bevy_widgetry_theme::WidgetryThemeMode;
+        use bevy_widgetry_theme::WidgetryTheme;
         let mut app = bevy_widgetry_test_utils::scene_app();
         app.add_plugins(WidgetryDatePickerPlugin)
             .init_resource::<Changes>();
@@ -362,12 +362,12 @@ mod tests {
             .entity_mut(bounded)
             .insert(bevy::ui::InteractionDisabled);
         for mode in [
-            WidgetryThemeMode::Dark,
-            WidgetryThemeMode::Light,
-            WidgetryThemeMode::PinkDream,
-            WidgetryThemeMode::KamuriViolet,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+            bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+            bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
         ] {
-            WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+            WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
             app.update();
             for root in [selected, bounded] {
                 let ring = rings(&mut app, root)[0];

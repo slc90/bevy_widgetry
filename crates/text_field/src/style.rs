@@ -8,7 +8,7 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::text::{TextColor, TextCursorStyle};
 use bevy::ui::InteractionDisabled;
-use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
 
 type TextFieldStyleData = (
     Entity,
@@ -113,7 +113,7 @@ fn apply_outputs(
 }
 
 pub(super) fn update_widgetry_text_field_style_changed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     input_focus: Res<InputFocus>,
     mut query: ChangedTextFieldStyleQuery<'_, '_>,
     mut frames: Query<(&mut BackgroundColor, &mut BorderColor)>,
@@ -122,14 +122,14 @@ pub(super) fn update_widgetry_text_field_style_changed(
     let focused = input_focus.get();
 
     for item in &mut query {
-        apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)
+        apply_text_field_style(&mode, focused, item, &mut frames, &mut editors)
             .map_err(|error| error.into_bevy_error())?;
     }
     Ok(())
 }
 
 pub(super) fn update_widgetry_text_field_style_focus_changed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     input_focus: Res<InputFocus>,
     mut query: Query<
         TextFieldStyleData,
@@ -148,14 +148,14 @@ pub(super) fn update_widgetry_text_field_style_focus_changed(
     let focused = input_focus.get();
 
     for item in &mut query {
-        apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)
+        apply_text_field_style(&mode, focused, item, &mut frames, &mut editors)
             .map_err(|error| error.into_bevy_error())?;
     }
     Ok(())
 }
 
 pub(super) fn update_widgetry_text_field_style_removed(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     input_focus: Res<InputFocus>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
     mut query: Query<
@@ -172,7 +172,7 @@ pub(super) fn update_widgetry_text_field_style_removed(
 
     for entity in removed_disabled.read() {
         if let Ok(item) = query.get_mut(entity) {
-            apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)
+            apply_text_field_style(&mode, focused, item, &mut frames, &mut editors)
                 .map_err(|error| error.into_bevy_error())?;
         }
     }
@@ -185,7 +185,7 @@ pub(super) fn refresh_text_field_theme(
 ) {
     commands.queue(
         |world: &mut bevy::prelude::World| -> Result<(), bevy::prelude::BevyError> {
-            let theme = world.resource::<WidgetryThemeMode>().colors().text_field;
+            let theme = world.resource::<WidgetryTheme>().text_field;
             let roots = world
                 .query_filtered::<Entity, (
                     With<TextFieldBase>,

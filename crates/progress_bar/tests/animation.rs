@@ -120,7 +120,7 @@ fn first_change_after_idle_does_not_consume_idle_time() {
 #[test]
 fn resizing_and_recoloring_mid_transition_keep_the_target_and_timing() {
     use bevy_widgetry_progress_bar::WidgetryProgressBarColorOverrides;
-    use bevy_widgetry_theme::WidgetryThemeMode;
+
     let (mut app, bar, clip) = fixture(value(0.2));
     WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(0.9)).unwrap();
     app.update();
@@ -128,7 +128,7 @@ fn resizing_and_recoloring_mid_transition_keep_the_target_and_timing() {
     let before = visible(&app, clip);
     app.world_mut().get_mut::<Node>(bar).unwrap().width = px(500);
     app.world_mut().get_mut::<Node>(bar).unwrap().height = px(24);
-    app.insert_resource(WidgetryThemeMode::PinkDream);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME);
     WidgetryProgressBarColorOverrides::set_in_world(
         app.world_mut(),
         bar,
@@ -259,13 +259,13 @@ fn mode_changes_interrupt_and_snap_while_same_indeterminate_does_not_reset_phase
 #[test]
 fn indeterminate_adapts_to_layout_scale_theme_and_partial_colors() {
     use bevy_widgetry_progress_bar::WidgetryProgressBarColorOverrides;
-    use bevy_widgetry_theme::WidgetryThemeMode;
+
     let (mut app, bar, clip) = fixture(WidgetryProgressState::Indeterminate);
     for (scale, mode) in [
-        (1.0, WidgetryThemeMode::Dark),
-        (1.25, WidgetryThemeMode::Light),
-        (1.5, WidgetryThemeMode::PinkDream),
-        (2.0, WidgetryThemeMode::KamuriViolet),
+        (1.0, bevy_widgetry_theme::WIDGETRY_DARK_THEME),
+        (1.25, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME),
+        (1.5, bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME),
+        (2.0, bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME),
     ] {
         app.insert_resource(UiScale(scale)).insert_resource(mode);
         app.world_mut().get_mut::<Node>(bar).unwrap().width = px(420);
@@ -290,7 +290,7 @@ fn indeterminate_adapts_to_layout_scale_theme_and_partial_colors() {
         let fill = app.world().get::<Children>(clip).unwrap()[0];
         assert_eq!(
             app.world().get::<BackgroundColor>(track).unwrap().0,
-            mode.colors().progress_bar.track
+            mode.progress_bar.track
         );
         assert_eq!(
             app.world().get::<BackgroundColor>(fill).unwrap().0,

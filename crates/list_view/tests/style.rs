@@ -11,7 +11,6 @@ use bevy_widgetry_list_view::{
 };
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{scene_app, switch_theme};
-use bevy_widgetry_theme::WidgetryThemeMode;
 
 fn fixture() -> (App, Entity, Entity, Entity) {
     let mut app = scene_app();
@@ -55,7 +54,7 @@ fn row(app: &mut App, index: usize) -> Entity {
 #[test]
 fn shell_and_rows_have_fixed_geometry_and_normal_colors() {
     let (mut app, _, root, _) = fixture();
-    let colors = WidgetryThemeMode::Dark.colors();
+    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     let node = app.world().get::<Node>(root).unwrap();
     assert_eq!(node.border, UiRect::all(px(1)));
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
@@ -93,7 +92,7 @@ fn shell_and_rows_have_fixed_geometry_and_normal_colors() {
 #[test]
 fn row_interactions_and_focus_project_complete_style() {
     let (mut app, source, root, _) = fixture();
-    let colors = WidgetryThemeMode::Dark.colors();
+    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     let selected = app
         .world()
         .get::<WidgetryListModel<String>>(source)
@@ -207,7 +206,7 @@ fn row_interactions_and_focus_project_complete_style() {
 #[test]
 fn disabled_item_preserves_active_border_and_suppresses_background() {
     let (mut app, source, root, _) = fixture();
-    let colors = WidgetryThemeMode::Dark.colors();
+    let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     let id = app
         .world()
         .get::<WidgetryListModel<String>>(source)
@@ -257,12 +256,11 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
             .active,
         Some(id)
     );
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
         BorderColor::all(
-            WidgetryThemeMode::Light
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
                 .list_view
                 .item
                 .disabled_active_border
@@ -272,7 +270,7 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
         app.world().get::<BackgroundColor>(a).unwrap().0,
         Color::NONE
     );
-    switch_theme(&mut app, WidgetryThemeMode::Dark);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_DARK_THEME);
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
     assert_eq!(
@@ -364,8 +362,8 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     app.world_mut().entity_mut(c).insert(Pressed);
     app.update();
     let geometry = app.world().get::<Node>(a).unwrap().clone();
-    switch_theme(&mut app, WidgetryThemeMode::Light);
-    let colors = WidgetryThemeMode::Light.colors();
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
+    let colors = bevy_widgetry_theme::WIDGETRY_LIGHT_THEME;
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
         BorderColor::all(colors.list_view.container.focused.border)
@@ -392,12 +390,11 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     );
     assert_eq!(*app.world().get::<Node>(a).unwrap(), geometry);
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
-    switch_theme(&mut app, WidgetryThemeMode::Dark);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_DARK_THEME);
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
         BorderColor::all(
-            WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .list_view
                 .container
                 .disabled
@@ -410,8 +407,7 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     );
     assert_eq!(
         app.world().get::<ResolvedForeground>(a).unwrap().0,
-        WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .list_view
             .container
             .disabled
@@ -420,7 +416,7 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.world_mut()
         .get_mut::<ScrollPosition>(viewport)
         .unwrap()
@@ -514,8 +510,7 @@ fn reused_identity_and_recreated_rows_receive_current_override_and_content_color
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(selected).unwrap().0,
-        WidgetryThemeMode::Dark
-            .colors()
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
             .list_view
             .item
             .selected

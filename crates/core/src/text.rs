@@ -6,7 +6,7 @@ use crate::{foreground::InheritedForeground, ui::WidgetryUiSystems};
 use bevy::prelude::*;
 use bevy::text::TextSpan;
 use bevy_widgetry_diagnostics::{ErrorFrame, bevy::DiagnosticBatch};
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use std::sync::Arc;
 
 #[derive(Component, FromTemplate, Default, Clone)]
@@ -73,7 +73,7 @@ pub(crate) fn install(app: &mut App) {
 }
 
 fn apply_text_colors(
-    mode: Res<WidgetryThemeMode>,
+    mode: Res<WidgetryTheme>,
     mut query: Query<
         (
             Entity,
@@ -121,7 +121,7 @@ fn apply_text_colors(
             .0
             .recover(|| ErrorFrame::new("Text structure restored").field("entity", entity));
         let disabled = context.disabled;
-        let resolved = overrides.0.resolve(&mode.colors().text);
+        let resolved = overrides.0.resolve(&mode.text);
         let (local, theme) = if disabled {
             (&overrides.0.disabled, resolved.disabled)
         } else {

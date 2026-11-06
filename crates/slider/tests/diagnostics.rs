@@ -253,10 +253,10 @@ fn colors_preserve_core_cause_and_palette_while_valid_operations_stay_silent() {
 #[test]
 fn visual_failures_batch_all_roots_reuse_identity_and_recover() {
     let _guard = TEST_LOCK.lock().unwrap();
-    use bevy_widgetry_theme::WidgetryThemeMode;
+
     let mut app = scene_app();
     app.add_plugins(WidgetrySliderPlugin);
-    app.insert_resource(WidgetryThemeMode::Light);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     app.set_error_handler(ErrorCapture::handler());
     app.edit_schedule(PostUpdate, |schedule| {
         schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
@@ -279,7 +279,7 @@ fn visual_failures_batch_all_roots_reuse_identity_and_recover() {
         diagnostic.origin().clone()
     }).collect();
     assert_eq!(origins.len(), 2);
-    app.insert_resource(WidgetryThemeMode::Dark);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_DARK_THEME);
     logs.run(|| errors.run(|| app.world_mut().run_schedule(PostUpdate)));
     let repeated = errors.take_records();
     for diagnostic in repeated[0].managed().unwrap().diagnostics() {
@@ -297,7 +297,7 @@ fn visual_failures_batch_all_roots_reuse_identity_and_recover() {
     for thumb in thumbs {
         app.world_mut().entity_mut(thumb).insert(Outline::default());
     }
-    app.insert_resource(WidgetryThemeMode::Light);
+    app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     logs.run(|| errors.run(|| app.world_mut().run_schedule(PostUpdate)));
     assert!(errors.take().is_empty());
     for origin in origins {

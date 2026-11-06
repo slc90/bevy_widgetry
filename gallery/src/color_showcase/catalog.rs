@@ -5,7 +5,7 @@ use crate::gallery::GalleryPage;
 use bevy::prelude::*;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::text::WidgetryText;
-use bevy_widgetry::theme::{WidgetryTheme, WidgetryThemeMode};
+use bevy_widgetry::theme::WidgetryTheme;
 use std::collections::BTreeSet;
 
 struct Catalog {
@@ -19,7 +19,7 @@ trait ColorFields {
 
 pub(super) fn rows(
     page: GalleryPage,
-    mode: WidgetryThemeMode,
+    mode: WidgetryTheme,
     expanded: &BTreeSet<String>,
 ) -> Box<dyn SceneList> {
     let WidgetryTheme {
@@ -48,7 +48,7 @@ pub(super) fn rows(
         message_box,
         file_dialog,
         waveform,
-    } = *mode.colors();
+    } = mode;
     let groups = match page {
         GalleryPage::Initializing
         | GalleryPage::Cursor

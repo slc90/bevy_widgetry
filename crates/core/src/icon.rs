@@ -275,7 +275,7 @@ fn materialize_icons(
     mut cache: ResMut<IconImageCache>,
     server: Res<AssetServer>,
     mut redraw: MessageWriter<RequestRedraw>,
-    mode: Res<bevy_widgetry_theme::WidgetryThemeMode>,
+    mode: Res<bevy_widgetry_theme::WidgetryTheme>,
 ) -> Result<(), BevyError> {
     let mut failures = DiagnosticBatch::default();
     for (entity, icon, target, mut node, overrides, foreground, disabled, mut diagnostics) in
@@ -315,7 +315,7 @@ fn materialize_icons(
 
         let mut image_node = ImageNode::new(image_handle.handle);
 
-        let color = resolve_icon_color(&overrides.0, foreground, disabled, mode.colors());
+        let color = resolve_icon_color(&overrides.0, foreground, disabled, &mode);
 
         image_node.color = color;
 
@@ -456,7 +456,7 @@ fn resolve_icon_color(
         })
 }
 fn sync_icon_color(
-    mode: Res<bevy_widgetry_theme::WidgetryThemeMode>,
+    mode: Res<bevy_widgetry_theme::WidgetryTheme>,
     mut icons: Query<(
         Entity,
         &colors::ColorState,
@@ -469,7 +469,7 @@ fn sync_icon_color(
 ) -> Result<(), BevyError> {
     let mut failures = DiagnosticBatch::default();
     for (entity, overrides, inherited, disabled, materialized, mut state) in &mut icons {
-        let color = resolve_icon_color(&overrides.0, inherited, disabled, mode.colors());
+        let color = resolve_icon_color(&overrides.0, inherited, disabled, &mode);
         let Ok(mut image) = image_nodes.get_mut(materialized.image_entity) else {
             let error = state.image.failure(materialized.image_entity, || {
                 Arc::new(failure(
@@ -955,8 +955,7 @@ mod tests {
             icon,
             child,
             &image_a,
-            bevy_widgetry_theme::WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .icon
                 .normal
                 .foreground,
@@ -969,8 +968,7 @@ mod tests {
                 icon,
                 child,
                 &image_a,
-                bevy_widgetry_theme::WidgetryThemeMode::Dark
-                    .colors()
+                bevy_widgetry_theme::WIDGETRY_DARK_THEME
                     .icon
                     .normal
                     .foreground,
@@ -1029,8 +1027,7 @@ mod tests {
             icon,
             child,
             &image_a,
-            bevy_widgetry_theme::WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .icon
                 .normal
                 .foreground,
@@ -1042,8 +1039,7 @@ mod tests {
             icon,
             child,
             &image_a,
-            bevy_widgetry_theme::WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .icon
                 .normal
                 .foreground,
@@ -1058,8 +1054,7 @@ mod tests {
             icon,
             child,
             &image_a,
-            bevy_widgetry_theme::WidgetryThemeMode::Dark
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .icon
                 .normal
                 .foreground,
@@ -1225,8 +1220,7 @@ mod tests {
                             icon,
                             *child,
                             image,
-                            bevy_widgetry_theme::WidgetryThemeMode::Dark
-                                .colors()
+                            bevy_widgetry_theme::WIDGETRY_DARK_THEME
                                 .icon
                                 .normal
                                 .foreground,

@@ -12,7 +12,7 @@ use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::scene::spawn_scene;
 use bevy_widgetry::scroll_area::WidgetryScrollArea;
 use bevy_widgetry::text::WidgetryText;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry::theme::{WidgetryTheme, WidgetryThemeChanged};
 use std::collections::BTreeSet;
 
 pub(crate) use overrides::pair;
@@ -122,7 +122,7 @@ fn refresh(world: &mut World, root: Entity) -> Result {
         return Ok(());
     }
     let content: Box<dyn SceneList> = match section {
-        Section::Catalog => catalog::rows(page, *world.resource::<WidgetryThemeMode>(), &expanded),
+        Section::Catalog => catalog::rows(page, *world.resource::<WidgetryTheme>(), &expanded),
         Section::Examples => examples(world, page),
     };
     let description = match section {

@@ -283,8 +283,7 @@ fn fixture(count: usize) -> Result<Fixture> {
     app.update();
     let color = app
         .world()
-        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-        .colors()
+        .resource::<bevy_widgetry_theme::WidgetryTheme>()
         .icon
         .normal
         .foreground;

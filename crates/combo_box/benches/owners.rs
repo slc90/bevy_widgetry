@@ -11,7 +11,6 @@ use bevy_widgetry_list_view::{WidgetryListModel, WidgetryListView, WidgetryListV
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
 use bevy_widgetry_test_utils::primary_click;
-use bevy_widgetry_theme::WidgetryThemeMode;
 
 #[derive(Resource, Default)]
 struct HoverRequest(Option<(Entity, bool)>);
@@ -122,7 +121,7 @@ fn validate(fixture: &mut Fixture) -> Result<u32> {
         let list = world
             .get::<Children>(popup)
             .ok_or_else(|| missing("Popup children"))?[0];
-        let colors = WidgetryThemeMode::Dark.colors().combo_box;
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.combo_box;
         let expected = if index == 0 && fixture.scroll {
             colors.field.open.background
         } else if index == 0 && fixture.hovered {
@@ -171,7 +170,7 @@ fn validate(fixture: &mut Fixture) -> Result<u32> {
                 world.get::<ScrollPosition>(fixture.viewport)
             )));
         }
-        let colors = WidgetryThemeMode::Dark.colors().combo_box.list.item;
+        let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.combo_box.list.item;
         for (offset, row) in rows.into_iter().enumerate() {
             let item = world
                 .get::<bevy_widgetry_list_view::WidgetryListViewItem>(row)

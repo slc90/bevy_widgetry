@@ -19,7 +19,7 @@ use bevy_widgetry_diagnostics::{
     bevy::{DiagnosticBatch, FailureState},
 };
 use bevy_widgetry_internal_log::widgetry_debug;
-use bevy_widgetry_theme::WidgetryThemeMode;
+use bevy_widgetry_theme::WidgetryTheme;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -202,7 +202,7 @@ enum MaterialFailureKey {
 
 fn update_material(
     time: Res<Time>,
-    theme: Res<WidgetryThemeMode>,
+    theme: Res<WidgetryTheme>,
     mut query: Query<
         (
             Entity,
@@ -286,7 +286,7 @@ fn update_material(
                 continue;
             }
         };
-        let colors = overrides.0.resolve(&theme.colors().hold_button);
+        let colors = overrides.0.resolve(&theme.hold_button);
         let colors_state = if disabled {
             colors.disabled
         } else if state.owner_is_active() {
@@ -541,34 +541,28 @@ mod tests {
                 .unwrap()
         );
         for mode in [
-            WidgetryThemeMode::Light,
-            WidgetryThemeMode::Dark,
-            WidgetryThemeMode::PinkDream,
-            WidgetryThemeMode::KamuriViolet,
+            bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+            bevy_widgetry_theme::WIDGETRY_PINK_DREAM_THEME,
+            bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME,
         ] {
-            WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+            WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
             app.update();
             assert_eq!(material(&app, root).liquid, custom.to_linear().to_vec4());
             assert_eq!(
                 material(&app, root).background,
-                mode.colors()
-                    .hold_button
-                    .normal
-                    .background
-                    .to_linear()
-                    .to_vec4()
+                mode.hold_button.normal.background.to_linear().to_vec4()
             );
             assert_eq!(
                 app.world().get::<ResolvedForeground>(root).unwrap().0,
-                mode.colors().hold_button.normal.foreground
+                mode.hold_button.normal.foreground
             );
         }
         WidgetryHoldButtonColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
         app.update();
         assert_eq!(
             material(&app, root).liquid,
-            WidgetryThemeMode::KamuriViolet
-                .colors()
+            bevy_widgetry_theme::WIDGETRY_KAMURI_VIOLET_THEME
                 .hold_button
                 .normal
                 .liquid
@@ -606,40 +600,24 @@ mod tests {
             .unwrap()
             .successes = 1;
         app.update();
-        let theme = *app.world().resource::<WidgetryThemeMode>();
+        let theme = *app.world().resource::<WidgetryTheme>();
         assert_eq!(
             material(&app, root).border,
-            theme
-                .colors()
-                .hold_button
-                .success_border
-                .to_linear()
-                .to_vec4()
+            theme.hold_button.success_border.to_linear().to_vec4()
         );
         for _ in 0..10 {
             app.update();
         }
         assert_eq!(
             material(&app, root).border,
-            theme
-                .colors()
-                .hold_button
-                .success_border
-                .to_linear()
-                .to_vec4()
+            theme.hold_button.success_border.to_linear().to_vec4()
         );
         for _ in 0..3 {
             app.update();
         }
         assert_eq!(
             material(&app, root).border,
-            theme
-                .colors()
-                .hold_button
-                .normal
-                .border
-                .to_linear()
-                .to_vec4()
+            theme.hold_button.normal.border.to_linear().to_vec4()
         );
         app.world_mut()
             .resource_mut::<Messages<RequestRedraw>>()

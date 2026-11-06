@@ -17,7 +17,7 @@ use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_test_utils::{
     advance_until, press, primary_click, release, scene_app, switch_theme,
 };
-use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
+use bevy_widgetry_theme::WidgetryTheme;
 use rstest::fixture;
 use std::time::Duration;
 
@@ -58,7 +58,10 @@ fn per_state_overrides_clear_to_current_theme_and_do_not_write_idle_outputs() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
-        WIDGETRY_DARK_THEME.button.hovered.background
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .button
+            .hovered
+            .background
     );
     assert_eq!(
         app.world().get::<ResolvedForeground>(root).unwrap().0,
@@ -68,12 +71,16 @@ fn per_state_overrides_clear_to_current_theme_and_do_not_write_idle_outputs() {
     let branch = app.world().get::<Children>(content).unwrap()[0];
     let label = app.world().get::<Children>(branch).unwrap()[0];
     assert_eq!(app.world().get::<TextColor>(label).unwrap().0, Color::BLACK);
-    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
+        .unwrap();
     app.world_mut().entity_mut(root).insert(Pressed);
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
-        WIDGETRY_LIGHT_THEME.button.pressed.background
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .button
+            .pressed
+            .background
     );
     WidgetryButtonColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
     app.world_mut()
@@ -84,7 +91,10 @@ fn per_state_overrides_clear_to_current_theme_and_do_not_write_idle_outputs() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
-        WIDGETRY_LIGHT_THEME.button.normal.background
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .button
+            .normal
+            .background
     );
     app.update();
     assert_eq!(app.world().resource::<Writes>().0, 0);
@@ -117,7 +127,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.normal.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .normal
+                .background,
             &node,
             &children,
         );
@@ -140,7 +153,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.hovered.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .hovered
+                .background,
             &node,
             &children,
         );
@@ -163,7 +179,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.hovered.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .hovered
+                .background,
             &node,
             &children,
         );
@@ -175,7 +194,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.normal.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .normal
+                .background,
             &node,
             &children,
         );
@@ -196,7 +218,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.normal.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .normal
+                .background,
             &node,
             &children,
         );
@@ -208,7 +233,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.pressed.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .pressed
+                .background,
             &node,
             &children,
         );
@@ -231,7 +259,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.pressed.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .pressed
+                .background,
             &node,
             &children,
         );
@@ -243,7 +274,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.normal.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .normal
+                .background,
             &node,
             &children,
         );
@@ -268,7 +302,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.disabled.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .disabled
+                .background,
             &node,
             &children,
         );
@@ -282,7 +319,10 @@ mod background {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.normal.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .normal
+                .background,
             &node,
             &children,
         );
@@ -313,7 +353,10 @@ mod background_priority {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.pressed.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .pressed
+                .background,
             &node,
             &children,
         );
@@ -325,7 +368,10 @@ mod background_priority {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.hovered.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .hovered
+                .background,
             &node,
             &children,
         );
@@ -351,7 +397,10 @@ mod background_priority {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.disabled.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .disabled
+                .background,
             &node,
             &children,
         );
@@ -365,7 +414,10 @@ mod background_priority {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.pressed.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .pressed
+                .background,
             &node,
             &children,
         );
@@ -391,7 +443,10 @@ mod background_priority {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.disabled.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .disabled
+                .background,
             &node,
             &children,
         );
@@ -405,7 +460,10 @@ mod background_priority {
         assert_transition_style(
             &app,
             entity,
-            WIDGETRY_DARK_THEME.button.hovered.background,
+            bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .button
+                .hovered
+                .background,
             &node,
             &children,
         );
@@ -423,7 +481,10 @@ fn widgetry_button_sets_default_foreground() {
     app.update();
     assert_eq!(
         app.world().get::<ResolvedForeground>(button).unwrap().0,
-        WIDGETRY_DARK_THEME.button.normal.foreground
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .button
+            .normal
+            .foreground
     );
 }
 
@@ -455,7 +516,7 @@ fn assert_transition_style(
     expected_node: &Node,
     expected_children: &[Entity],
 ) {
-    let c = &WIDGETRY_DARK_THEME;
+    let c = &bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     let (border, foreground) = if background == c.button.disabled.background {
         (c.button.disabled.border, c.button.disabled.foreground)
     } else if background == c.button.pressed.background {
@@ -482,7 +543,7 @@ fn assert_transition_style(
 #[test]
 fn newly_widgetry_button_uses_current_theme() {
     let mut app = app();
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     let fresh = app
         .world_mut()
         .spawn_scene(bsn! { @WidgetryButton })
@@ -492,9 +553,18 @@ fn newly_widgetry_button_uses_current_theme() {
     assert_style(
         &app,
         fresh,
-        WIDGETRY_LIGHT_THEME.button.normal.background,
-        WIDGETRY_LIGHT_THEME.button.normal.border,
-        WIDGETRY_LIGHT_THEME.button.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .button
+            .normal
+            .background,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .button
+            .normal
+            .border,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .button
+            .normal
+            .foreground,
     );
     let entity = app
         .world_mut()
@@ -507,9 +577,18 @@ fn newly_widgetry_button_uses_current_theme() {
     assert_style(
         &app,
         entity,
-        WIDGETRY_LIGHT_THEME.button.hovered.background,
-        WIDGETRY_LIGHT_THEME.button.hovered.border,
-        WIDGETRY_LIGHT_THEME.button.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .button
+            .hovered
+            .background,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .button
+            .hovered
+            .border,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
+            .button
+            .normal
+            .foreground,
     );
 }
 
@@ -535,13 +614,25 @@ fn theme_switch_immediately_preserves_button_states() {
     assert_style(
         &app,
         hovered,
-        WIDGETRY_DARK_THEME.button.hovered.background,
-        WIDGETRY_DARK_THEME.button.hovered.border,
-        WIDGETRY_DARK_THEME.button.normal.foreground,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .button
+            .hovered
+            .background,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .button
+            .hovered
+            .border,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME
+            .button
+            .normal
+            .foreground,
     );
-    for mode in [WidgetryThemeMode::Light, WidgetryThemeMode::Dark] {
+    for mode in [
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+    ] {
         switch_theme(&mut app, mode);
-        let c = mode.colors();
+        let c = mode;
         assert_style(
             &app,
             hovered,
@@ -630,7 +721,7 @@ fn scene_layout_patch_survives_style_updates() {
         .entity_mut(entity)
         .insert(InteractionDisabled);
     app.update();
-    switch_theme(&mut app, WidgetryThemeMode::Light);
+    switch_theme(&mut app, bevy_widgetry_theme::WIDGETRY_LIGHT_THEME);
     assert_eq!(*app.world().get::<Node>(entity).unwrap(), expected);
 }
 
@@ -665,7 +756,10 @@ fn foreground_propagates_to_children() {
     .unwrap();
     let image = app.world().get::<Children>(children[1]).unwrap()[0];
     let explicit_image = app.world().get::<Children>(children[2]).unwrap()[0];
-    for mode in [WidgetryThemeMode::Dark, WidgetryThemeMode::Light] {
+    for mode in [
+        bevy_widgetry_theme::WIDGETRY_DARK_THEME,
+        bevy_widgetry_theme::WIDGETRY_LIGHT_THEME,
+    ] {
         switch_theme(&mut app, mode);
         for disabled in [false, true, false] {
             if disabled {
@@ -679,9 +773,9 @@ fn foreground_propagates_to_children() {
             }
             app.update();
             let expected = if disabled {
-                mode.colors().button.disabled.foreground
+                mode.button.disabled.foreground
             } else {
-                mode.colors().button.normal.foreground
+                mode.button.normal.foreground
             };
             assert_eq!(
                 app.world()

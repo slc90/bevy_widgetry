@@ -171,8 +171,7 @@ fn main() -> Result {
                             let colors = fixture
                                 .app
                                 .world()
-                                .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-                                .colors()
+                                .resource::<bevy_widgetry_theme::WidgetryTheme>()
                                 .tree
                                 .expander
                                 .collapsed;

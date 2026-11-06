@@ -65,6 +65,6 @@
 - `focus.rs`：跨 Widget Focus 与隐藏 Popup 的输入隔离。
 - `pointer.rs`：真实 Pointer Pipeline 中 Button / CheckBox / Radio 等 Pressed Ownership。
 - `cursor.rs`：基础 Widget Cursor 与继承 Disabled、ReadOnly 的耦合。
-- `color_composition.rs`：嵌套 Widget Foreground Scope、颜色与 Disabled 继承。
+- `color_composition.rs`：嵌套 Widget Foreground Scope、颜色与 Disabled 继承；公开自定义完整 Theme 对既有控件和新内容的前景投影、局部覆盖优先级及 Checked / 正文保留。
 - `taskbar_icon.rs`：Facade Macro 的调用方 PNG 嵌入和失败路径。
 

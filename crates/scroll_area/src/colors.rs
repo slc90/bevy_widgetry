@@ -269,7 +269,7 @@ mod tests {
             for diagnostic in &first {
                 assert!(matches!(diagnostic.source().unwrap().downcast_ref::<ScrollAreaError>(), Some(ScrollAreaError::MissingPart { context, entity, part: "ColorState" }) if roots.contains(entity) && context.root == *entity));
             }
-            bevy_widgetry_theme::WidgetryThemeMode::set_in_world(app.world_mut(), bevy_widgetry_theme::WidgetryThemeMode::Light).unwrap();
+            bevy_widgetry_theme::WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME).unwrap();
             let repeated = errors.take_records();
             let repeated: Vec<_> = repeated[0].managed().unwrap().diagnostics().collect();
             assert_eq!(repeated.len(), 2);

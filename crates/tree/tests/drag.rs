@@ -443,8 +443,7 @@ fn disabled_drop_targets_show_rejected_feedback_without_committing_a_move() {
         app.update();
         let border = app
             .world()
-            .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-            .colors()
+            .resource::<bevy_widgetry_theme::WidgetryTheme>()
             .tree
             .item
             .disabled

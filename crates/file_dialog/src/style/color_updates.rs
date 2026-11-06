@@ -77,7 +77,7 @@ fn collect(
     states: Query<Entity, Changed<WidgetryFileDialogState>>,
     focus: Res<InputFocus>,
     mut previous_focus: Local<Option<Entity>>,
-    theme: Res<bevy_widgetry_theme::WidgetryThemeMode>,
+    theme: Res<bevy_widgetry_theme::WidgetryTheme>,
     roots: Query<Entity, With<WidgetryFileDialog>>,
     mut changes: ResMut<Changes>,
 ) {
@@ -238,8 +238,7 @@ fn apply_pending(
             .is_none_or(|style| style.colors.is_none());
     if resolve {
         let theme = world
-            .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-            .colors()
+            .resource::<bevy_widgetry_theme::WidgetryTheme>()
             .file_dialog;
         let colors = crate::WidgetryFileDialogColorOverrides::get(world, root)?.resolve(&theme);
         let mut style = world.get_mut::<DialogColors>(root).ok_or_else(|| {
@@ -499,8 +498,7 @@ mod tests {
         });
         let colors = app
             .world()
-            .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-            .colors()
+            .resource::<bevy_widgetry_theme::WidgetryTheme>()
             .file_dialog;
         assert_eq!(
             app.world().get::<BackgroundColor>(control).unwrap().0,
@@ -607,8 +605,7 @@ mod tests {
         });
         let colors = app
             .world()
-            .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-            .colors()
+            .resource::<bevy_widgetry_theme::WidgetryTheme>()
             .file_dialog;
         assert_eq!(
             app.world().get::<BackgroundColor>(rows[0].0).unwrap().0,
