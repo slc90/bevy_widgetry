@@ -16,7 +16,7 @@ use bevy::{
     ui_widgets::Activate,
 };
 use bevy_widgetry_core::input_target::WidgetryInputTarget;
-use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 pub(crate) fn step<T: WidgetryNumber>(
     world: &mut World,
@@ -29,7 +29,7 @@ pub(crate) fn step<T: WidgetryNumber>(
     ensure_full::<T>(world, root)?;
     apply_pending(world, root)?;
     let field = field(world, root)?;
-    let text = WidgetryTextField::text(world, field)
+    let text = WidgetryTextFieldHeadless::text(world, field)
         .map_err(|error| text_field(error, root, field, "number_input.step.text"))?;
     let state = state::<T>(world, root)?;
     let start = T::parse_decimal(&text)
@@ -46,7 +46,7 @@ pub(crate) fn step<T: WidgetryNumber>(
     {
         value = max;
     }
-    WidgetryTextField::focus_in_world(world, field)
+    WidgetryTextFieldHeadless::focus_in_world(world, field)
         .map_err(|error| text_field(error, root, field, "number_input.step.focus_in_world"))?;
     WidgetryNumberInput::<T>::set_value_in_world(world, root, value)?;
     Ok(())

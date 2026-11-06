@@ -12,6 +12,7 @@ use bevy::{
 use bevy_widgetry_core::{input_target::WidgetryInputTarget, scene::spawn_scene};
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
 use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 #[derive(Resource, Default)]
 struct Changes(Vec<f64>);
@@ -65,7 +66,7 @@ fn key(app: &mut App, code: KeyCode, logical: Key) {
 }
 
 fn draft(app: &mut App, field: Entity, text: &str) {
-    WidgetryTextField::set_text_in_world(app.world_mut(), field, text).unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, text).unwrap();
 }
 
 #[test]
@@ -77,7 +78,10 @@ fn drafts_enter_escape_and_blur_follow_committed_value_contract() {
         for text in ["", "-", "1e3", "0xFF", "1,000", "NaN", "Infinity", "101"] {
             draft(&mut app, field, text);
             key(&mut app, KeyCode::Enter, Key::Enter);
-            assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), text);
+            assert_eq!(
+                WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+                text
+            );
             assert_eq!(
                 WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
                 10.0
@@ -96,7 +100,7 @@ fn drafts_enter_escape_and_blur_follow_committed_value_contract() {
                 value
             );
             assert_eq!(
-                WidgetryTextField::text(app.world(), field).unwrap(),
+                WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
                 canonical
             );
         }
@@ -104,7 +108,10 @@ fn drafts_enter_escape_and_blur_follow_committed_value_contract() {
         draft(&mut app, field, "23");
         key(&mut app, KeyCode::Escape, Key::Escape);
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
-        assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "12.5");
+        assert_eq!(
+            WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+            "12.5"
+        );
         draft(&mut app, field, "25");
         app.world_mut().resource_mut::<InputFocus>().clear();
         app.update();
@@ -119,7 +126,10 @@ fn drafts_enter_escape_and_blur_follow_committed_value_contract() {
         app.update();
         app.world_mut().resource_mut::<InputFocus>().clear();
         app.update();
-        assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "25.0");
+        assert_eq!(
+            WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+            "25.0"
+        );
         assert_eq!(app.world().resource::<Changes>().0.len(), 5);
     });
     assert!(logs.records().is_empty());
@@ -136,17 +146,23 @@ fn programmatic_writes_override_drafts_and_clear_queued_input_even_for_same_valu
         .push(TextEdit::Insert("stale".into()));
     assert!(!WidgetryNumberInput::<f64>::set_value_in_world(app.world_mut(), root, 10.0).unwrap());
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "10.0");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "10.0"
+    );
     draft(&mut app, field, "draft");
     assert!(WidgetryNumberInput::<f64>::set_value_in_world(app.world_mut(), root, 101.0).is_err());
     assert_eq!(
-        WidgetryTextField::text(app.world(), field).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
         "draft"
     );
     assert!(WidgetryNumberInput::<f64>::set_value_in_world(app.world_mut(), root, 50.0).unwrap());
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "50.0");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "50.0"
+    );
     assert_eq!(app.world().resource::<Changes>().0, vec![50.0]);
 }
 
@@ -170,7 +186,10 @@ fn enter_commits_prior_pending_edits_and_escape_cancels_them() {
         .pending_edits
         .push(TextEdit::Insert("7".into()));
     key(&mut app, KeyCode::Escape, Key::Escape);
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "4.0");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "4.0"
+    );
     assert_eq!(app.world().resource::<Changes>().0, vec![4.0]);
 }
 
@@ -183,7 +202,10 @@ fn numpad_enter_commits_the_same_way_as_main_enter() {
         WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
         42.0
     );
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "42.0");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "42.0"
+    );
     assert_eq!(app.world().resource::<Changes>().0, vec![42.0]);
 }
 
@@ -213,7 +235,10 @@ fn programmatic_write_clears_ime_composition_and_stale_preedit() {
             .is_composing()
     );
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "50.0");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "50.0"
+    );
     assert_eq!(app.world().resource::<Changes>().0, vec![50.0]);
 }
 
@@ -252,7 +277,7 @@ fn same_frame_enter_separates_prior_and_later_keyboard_text() {
         2.0
     );
     assert!(
-        WidgetryTextField::text(app.world(), field)
+        WidgetryTextFieldHeadless::text(app.world(), field)
             .unwrap()
             .contains('5')
     );

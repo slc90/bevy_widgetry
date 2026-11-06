@@ -8,7 +8,7 @@ use bevy::{
 };
 use bevy_widgetry_core::{input_target::WidgetryInputTarget, scene::spawn_scene};
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
-use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_theme::WidgetryTheme;
 
 #[derive(Resource, Default)]
@@ -39,7 +39,7 @@ fn themes_refresh_the_shared_shell_and_owned_children_without_touching_drafts() 
         .resource_mut::<InputFocus>()
         .set(editor, FocusCause::Navigated);
     app.update();
-    WidgetryTextField::set_text_in_world(app.world_mut(), field, "7.").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "7.").unwrap();
     let mut custom = bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     custom.button.normal.background = Color::srgb(0.2, 0.3, 0.4);
     custom.button.normal.foreground = Color::srgb(0.8, 0.7, 0.6);
@@ -74,7 +74,10 @@ fn themes_refresh_the_shared_shell_and_owned_children_without_touching_drafts() 
                 colors.button.normal.foreground
             );
         }
-        assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "7.");
+        assert_eq!(
+            WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+            "7."
+        );
         assert_eq!(
             WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
             10.0

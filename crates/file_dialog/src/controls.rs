@@ -10,6 +10,7 @@ use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf, Prefix};
 
@@ -287,29 +288,26 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
             let changed = world
                 .get::<ProjectedEditor>(entity)
                 .is_some_and(|shown| shown.0 != text);
-            let edit = bevy_widgetry_text_field::WidgetryTextField::editor(world, entity).map_err(
-                |error| {
-                    error
-                        .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                            "file_dialog.text_field.editor",
-                        ))
-                        .into_bevy_error()
-                },
-            )?;
+            let edit = WidgetryTextFieldHeadless::editor(world, entity).map_err(|error| {
+                error
+                    .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                        "file_dialog.text_field.editor",
+                    ))
+                    .into_bevy_error()
+            })?;
             if edit.is_composing() {
                 continue;
             }
             if changed && edit.value().to_string() != text {
-                bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-                    world, entity, &text,
-                )
-                .map_err(|error| {
-                    error
-                        .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                            "file_dialog.text_field.set_text_in_world",
-                        ))
-                        .into_bevy_error()
-                })?;
+                WidgetryTextFieldHeadless::set_text_in_world(world, entity, &text).map_err(
+                    |error| {
+                        error
+                            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                                "file_dialog.text_field.set_text_in_world",
+                            ))
+                            .into_bevy_error()
+                    },
+                )?;
             }
             if changed || world.get::<ProjectedEditor>(entity).is_none() {
                 world.entity_mut(entity).insert(ProjectedEditor(text));
@@ -607,7 +605,7 @@ fn on_action(
                 if control.action == UiAction::FolderCreate
                     && let Some(entity) = part(world, control.root, PartKind::Folder)
                 {
-                    let name = bevy_widgetry_text_field::WidgetryTextField::editor(world, entity)
+                    let name = WidgetryTextFieldHeadless::editor(world, entity)
                         .map_err(|error| {
                             error
                                 .with_context(bevy_widgetry_core::scene::ErrorFrame::new(

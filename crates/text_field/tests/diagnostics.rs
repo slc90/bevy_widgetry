@@ -3,6 +3,7 @@
 use bevy::{prelude::*, text::EditableText};
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture, scene_app};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
     TextFieldError, WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
 };
@@ -25,8 +26,7 @@ fn both_variants_identify_the_missing_editor_and_preserve_diagnostic_origin() {
         app.world_mut().entity_mut(editor).remove::<EditableText>();
         let logs = LogCapture::default();
         logs.run(|| {
-            let error = if read_only { WidgetryReadOnlyTextField::set_text_in_world(app.world_mut(), root, "new") }
-            else { WidgetryTextField::set_text_in_world(app.world_mut(), root, "new") }.unwrap_err();
+            let error = WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(),root,"new").unwrap_err();
             assert!(matches!(error.kind(), TextFieldError::MissingPart { root: owner, entity, component: "EditableText" } if *owner == root && *entity == editor));
             let origin = error.origin().clone();
             let error = error.into_bevy_error();
@@ -52,7 +52,8 @@ fn count_failure_reports_that_content_was_written_and_commands_keep_the_diagnosi
     .unwrap();
     let count = app.world().get::<Children>(root).unwrap()[1];
     app.world_mut().entity_mut(count).remove::<Text>();
-    let error = WidgetryTextField::set_text_in_world(app.world_mut(), root, "after").unwrap_err();
+    let error =
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "after").unwrap_err();
     assert!(
         matches!(error.kind(), TextFieldError::MissingPart { entity, component: "Text", .. } if *entity == count)
     );
@@ -63,12 +64,15 @@ fn count_failure_reports_that_content_was_written_and_commands_keep_the_diagnosi
                 .iter()
                 .any(|(field, value)| field == "text_written" && value == "true")
     }));
-    assert_eq!(WidgetryTextField::text(app.world(), root).unwrap(), "after");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+        "after"
+    );
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
     logs.run(|| {
         errors.run(|| {
-            WidgetryTextField::set_text(&mut app.world_mut().commands(), root, "queued");
+            WidgetryTextFieldHeadless::set_text(&mut app.world_mut().commands(), root, "queued");
             app.world_mut().flush();
         })
     });
@@ -85,7 +89,7 @@ fn count_failure_reports_that_content_was_written_and_commands_keep_the_diagnosi
         1
     );
     assert_eq!(
-        WidgetryTextField::text(app.world(), root).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
         "queued"
     );
 }
@@ -102,21 +106,28 @@ fn missing_resources_fail_before_writing_and_valid_truncation_is_silent() {
     )
     .unwrap();
     let fonts = app.world_mut().remove_resource::<FontCx>().unwrap();
-    let error =
-        WidgetryTextField::set_text_in_world(app.world_mut(), root, "new text").unwrap_err();
+    let error = WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "new text")
+        .unwrap_err();
     assert!(
         matches!(error.kind(), TextFieldError::MissingResource { root: owner, resource: "FontCx" } if *owner == root)
     );
-    assert_eq!(WidgetryTextField::text(app.world(), root).unwrap(), "old");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+        "old"
+    );
     app.insert_resource(fonts);
     let logs = LogCapture::default();
     logs.run(|| {
-        assert!(WidgetryTextField::set_text_in_world(app.world_mut(), root, "新文本过长").unwrap());
         assert!(
-            !WidgetryTextField::set_text_in_world(app.world_mut(), root, "新文本过长").unwrap()
+            WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "新文本过长")
+                .unwrap()
+        );
+        assert!(
+            !WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "新文本过长")
+                .unwrap()
         );
         assert_eq!(
-            WidgetryTextField::text(app.world(), root).unwrap(),
+            WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
             "新文本"
         );
     });

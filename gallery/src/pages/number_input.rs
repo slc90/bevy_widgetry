@@ -337,6 +337,7 @@ fn refresh<T: WidgetryNumber>(world: &mut World) -> Result {
 mod tests {
     use super::*;
     use bevy::input_focus::InputFocus;
+    use bevy_widgetry::text_field::WidgetryTextFieldHeadless;
     use bevy_widgetry::{scene::spawn_scene, text_field::WidgetryTextField};
 
     #[test]
@@ -382,9 +383,9 @@ mod tests {
             .iter()
             .find(|child| app.world().get::<WidgetryTextField>(*child).is_some())
             .unwrap();
-        WidgetryTextField::focus_in_world(app.world_mut(), field).unwrap();
+        WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), field).unwrap();
         app.update();
-        WidgetryTextField::set_text_in_world(app.world_mut(), field, "5").unwrap();
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "5").unwrap();
         app.world_mut()
             .resource_mut::<Messages<bevy::window::RequestRedraw>>()
             .clear();

@@ -14,7 +14,7 @@ use bevy::{
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
 use bevy_widgetry_core::{WidgetryAppExt, input_target::WidgetryInputTarget, scene::spawn_scene};
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
-use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use std::time::Duration;
 
 #[derive(Resource, Default)]
@@ -213,7 +213,7 @@ fn one_outer_shell_and_two_separators_keep_draft_step_focus_at_minimum_width() {
     assert!(f.app.world().get::<Node>(f.increase).unwrap().border.left != px(0));
     f.app.world_mut().get_mut::<Node>(f.root).unwrap().width = px(1);
     settle(&mut f);
-    WidgetryTextField::set_text_in_world(f.app.world_mut(), f.field, "25").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(f.app.world_mut(), f.field, "25").unwrap();
     f.app
         .world_mut()
         .resource_mut::<InputFocus>()
@@ -262,7 +262,7 @@ fn long_numbers_keep_the_official_text_viewport_and_stable_button_geometry() {
     f.app.world_mut().get_mut::<Node>(f.root).unwrap().width = px(1);
     settle(&mut f);
     let buttons = [size(&f, f.decrease).x, size(&f, f.increase).x];
-    let length = WidgetryTextField::text(f.app.world(), f.field)
+    let length = WidgetryTextFieldHeadless::text(f.app.world(), f.field)
         .unwrap()
         .len();
     f.app

@@ -6,6 +6,7 @@ use bevy::{
     prelude::*,
     text::{EditableText, TextEdit},
 };
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin, WidgetryTextFieldPrefix,
 };
@@ -49,7 +50,7 @@ fn optional_count_formats_formal_graphemes_independently_of_the_limit() {
                 _ => "5 / 100",
             };
             assert_eq!(count(app.world(), root).unwrap().1, expected);
-            WidgetryTextField::set_text_in_world(app.world_mut(), root, "旗🇺🇸").unwrap();
+            WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "旗🇺🇸").unwrap();
             assert_eq!(
                 count(app.world(), root).unwrap().1,
                 if max == Some(0) {
@@ -62,7 +63,7 @@ fn optional_count_formats_formal_graphemes_independently_of_the_limit() {
                     "2"
                 }
             );
-            WidgetryTextField::set_text(&mut app.world_mut().commands(), root, "");
+            WidgetryTextFieldHeadless::set_text(&mut app.world_mut().commands(), root, "");
             app.world_mut().flush();
             assert_eq!(
                 count(app.world(), root).unwrap().1,
@@ -91,7 +92,7 @@ fn committed_edits_selection_paste_and_ime_update_the_same_frame() {
         count(app.world(), root).unwrap().1,
         "3 / 3",
         "actual editor: {:?}",
-        WidgetryTextField::text(app.world(), root)
+        WidgetryTextFieldHeadless::text(app.world(), root)
     );
     edit(
         &mut app,
@@ -142,14 +143,14 @@ fn readonly_disabled_theme_and_focus_leave_display_and_editor_state_intact() {
     assert_eq!(count(app.world(), root).unwrap().1, "3");
     edit(&mut app, root, [TextEdit::Insert("ignored".into())]);
     assert_eq!(count(app.world(), root).unwrap().1, "3");
-    WidgetryReadOnlyTextField::set_text_in_world(app.world_mut(), root, "新").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "新").unwrap();
     assert_eq!(count(app.world(), root).unwrap().1, "1");
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
-    WidgetryReadOnlyTextField::focus_in_world(app.world_mut(), root).unwrap();
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), root).unwrap();
     edit(&mut app, root, [TextEdit::SelectAll]);
-    let before = WidgetryReadOnlyTextField::editor(app.world(), root)
+    let before = WidgetryTextFieldHeadless::editor(app.world(), root)
         .unwrap()
         .editor()
         .raw_selection()
@@ -158,7 +159,7 @@ fn readonly_disabled_theme_and_focus_leave_display_and_editor_state_intact() {
     app.update();
     assert_eq!(count(app.world(), root).unwrap().1, "1");
     assert_eq!(
-        WidgetryReadOnlyTextField::editor(app.world(), root)
+        WidgetryTextFieldHeadless::editor(app.world(), root)
             .unwrap()
             .editor()
             .raw_selection()
@@ -189,7 +190,7 @@ fn keyboard_and_unlimited_ime_count_only_formal_text() {
         .unwrap()
         .id();
     app.update();
-    WidgetryTextField::focus_in_world(app.world_mut(), root).unwrap();
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), root).unwrap();
     let focused = app.world().resource::<InputFocus>().get();
     app.world_mut().write_message(KeyboardInput {
         key_code: KeyCode::KeyA,

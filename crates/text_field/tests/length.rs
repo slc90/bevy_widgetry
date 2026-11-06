@@ -6,6 +6,7 @@ use bevy::{
     prelude::*,
     text::{EditableText, EditableTextSystems, TextEdit, TextEditChange},
 };
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
 };
@@ -32,12 +33,12 @@ fn programmatic_replacement_during_hidden_preedit_restores_the_official_caret() 
             .cursor_geometry(1.0)
             .is_none()
     );
-    WidgetryTextField::set_text_in_world(app.world_mut(), entity, "新正文").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), entity, "新正文").unwrap();
     let editor = support::editor(app.world(), entity).unwrap();
     assert!(!editor.is_composing());
     assert!(editor.editor().cursor_geometry(1.0).is_some());
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "新正"
     );
     edit(&mut app, entity, [TextEdit::TextEnd(false)]);
@@ -85,7 +86,10 @@ fn keyboard_and_ime_messages_reach_the_guard_and_plain_editors_remain_unconstrai
         window,
     });
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), entity).unwrap(), "甲");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
+        "甲"
+    );
     app.world_mut().write_message(bevy::window::Ime::Preedit {
         window,
         value: "组合".into(),
@@ -98,7 +102,10 @@ fn keyboard_and_ime_messages_reach_the_guard_and_plain_editors_remain_unconstrai
         value: "乙".into(),
     });
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), entity).unwrap(), "甲");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
+        "甲"
+    );
     edit(&mut app, bare, [TextEdit::Insert("自由输入".into())]);
     assert_eq!(
         support::editor(app.world(), bare)
@@ -141,10 +148,13 @@ fn conflicting_filter_errors_without_letting_other_limited_fields_bypass_the_gua
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].severity(), Severity::Error);
     assert_eq!(
-        WidgetryTextField::text(app.world(), conflicting).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), conflicting).unwrap(),
         ""
     );
-    assert_eq!(WidgetryTextField::text(app.world(), other).unwrap(), "甲");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), other).unwrap(),
+        "甲"
+    );
 }
 
 #[test]
@@ -162,10 +172,16 @@ fn ime_preedit_remains_unlimited_and_only_the_commit_is_constrained() {
         }],
     );
     assert!(support::editor(app.world(), entity).unwrap().is_composing());
-    assert_eq!(WidgetryTextField::text(app.world(), entity).unwrap(), "甲");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
+        "甲"
+    );
     edit(&mut app, entity, [TextEdit::Insert("旧键盘消息".into())]);
     assert!(support::editor(app.world(), entity).unwrap().is_composing());
-    assert_eq!(WidgetryTextField::text(app.world(), entity).unwrap(), "甲");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
+        "甲"
+    );
     edit(
         &mut app,
         entity,
@@ -174,7 +190,7 @@ fn ime_preedit_remains_unlimited_and_only_the_commit_is_constrained() {
         }],
     );
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "甲乙"
     );
     assert!(!support::editor(app.world(), entity).unwrap().is_composing());
@@ -189,7 +205,7 @@ fn ime_preedit_remains_unlimited_and_only_the_commit_is_constrained() {
         ],
     );
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "一二"
     );
 }
@@ -221,7 +237,7 @@ fn native_clipboard_is_read_once_in_queue_order_and_pending_paste_precedes_later
         ],
     );
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "丙丁"
     );
     assert_eq!(
@@ -249,7 +265,7 @@ fn native_clipboard_is_read_once_in_queue_order_and_pending_paste_precedes_later
         ],
     );
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "新二"
     );
     {
@@ -265,7 +281,10 @@ fn native_clipboard_is_read_once_in_queue_order_and_pending_paste_precedes_later
         entity,
         [TextEdit::SelectAll, TextEdit::Insert("末".into())],
     );
-    assert_eq!(WidgetryTextField::text(app.world(), entity).unwrap(), "末");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
+        "末"
+    );
     if let Some(Ok(text)) = old {
         app.world_mut()
             .resource_mut::<Clipboard>()
@@ -299,30 +318,30 @@ fn setter_preserves_legal_selection_clears_old_work_and_validates_at_command_exe
     }
     .unwrap()
     .queue_edit(TextEdit::Insert("stale".into()));
-    assert!(WidgetryTextField::set_text_in_world(app.world_mut(), entity, "wxyz").unwrap());
+    assert!(WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), entity, "wxyz").unwrap());
     let editor = support::editor(app.world(), entity).unwrap();
     assert_eq!(editor.editor().raw_selection().text_range(), 0..1);
     assert!(editor.pending_paste.is_none());
     assert!(editor.pending_edits.is_empty());
     app.world_mut().commands().queue(move |world: &mut World| {
         let mut commands = world.commands();
-        WidgetryTextField::set_text(&mut commands, entity, "好长的内容");
+        WidgetryTextFieldHeadless::set_text(&mut commands, entity, "好长的内容");
     });
     app.world_mut().flush();
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "好长的内"
     );
     let invalid = app.world_mut().spawn_empty().id();
     assert_eq!(
-        WidgetryTextField::set_text_in_world(app.world_mut(), invalid, "bad")
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), invalid, "bad")
             .unwrap_err()
             .into_bevy_error()
             .severity(),
         Severity::Error
     );
     assert_eq!(
-        WidgetryReadOnlyTextField::text(app.world(), entity)
+        WidgetryTextFieldHeadless::text(app.world(), support::editor_entity(app.world(), entity))
             .unwrap_err()
             .into_bevy_error()
             .severity(),
@@ -330,7 +349,7 @@ fn setter_preserves_legal_selection_clears_old_work_and_validates_at_command_exe
     );
     let capture = bevy_widgetry_test_utils::ErrorCapture::default();
     app.set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler());
-    WidgetryTextField::set_text(&mut app.world_mut().commands(), invalid, "bad");
+    WidgetryTextFieldHeadless::set_text(&mut app.world_mut().commands(), invalid, "bad");
     capture.run(|| app.world_mut().flush());
     let errors = capture.take();
     assert_eq!(errors.len(), 1);
@@ -365,12 +384,12 @@ fn initial_and_programmatic_text_use_whole_graphemes() {
     for grapheme in ["中", "e\u{301}", "👍🏽", "🇨🇳", "👨‍👩‍👧‍👦"] {
         let entity = field(&mut app, &format!("{grapheme}尾"), 1);
         assert_eq!(
-            WidgetryTextField::text(app.world(), entity).unwrap(),
+            WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
             grapheme
         );
         app.update();
         assert!(
-            WidgetryTextField::set_text_in_world(
+            WidgetryTextFieldHeadless::set_text_in_world(
                 app.world_mut(),
                 entity,
                 format!("{grapheme}extra")
@@ -378,13 +397,19 @@ fn initial_and_programmatic_text_use_whole_graphemes() {
             .is_ok()
         );
         assert_eq!(
-            WidgetryTextField::text(app.world(), entity).unwrap(),
+            WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
             grapheme
         );
-        assert!(!WidgetryTextField::set_text_in_world(app.world_mut(), entity, grapheme).unwrap());
+        assert!(
+            !WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), entity, grapheme)
+                .unwrap()
+        );
     }
     let zero = field(&mut app, "非空", 0);
-    assert_eq!(WidgetryTextField::text(app.world(), zero).unwrap(), "");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), zero).unwrap(),
+        ""
+    );
 }
 
 #[test]
@@ -399,7 +424,7 @@ fn edits_observe_prior_selection_and_deletion_before_constraining_inserts() {
         [TextEdit::SelectAll, TextEdit::Insert("丙丁戊".into())],
     );
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "丙丁"
     );
     edit(
@@ -412,7 +437,7 @@ fn edits_observe_prior_selection_and_deletion_before_constraining_inserts() {
         ],
     );
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "一丁"
     );
     let edit = support::editor(app.world(), entity).unwrap();
@@ -428,7 +453,7 @@ fn insertion_counts_the_trial_replacement_including_boundary_merges() {
     app.update();
     edit(&mut app, entity, [TextEdit::Insert("\u{301}x".into())]);
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "e\u{301}"
     );
 }
@@ -488,10 +513,10 @@ fn read_only_and_disabled_still_allow_constrained_programmatic_values() {
         })
         .unwrap()
         .id();
-    assert!(WidgetryReadOnlyTextField::set_text_in_world(app.world_mut(), entity, "甲乙").unwrap());
+    assert!(WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), entity, "甲乙").unwrap());
     edit(&mut app, entity, [TextEdit::Insert("丙".into())]);
     assert_eq!(
-        WidgetryReadOnlyTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "甲"
     );
 }

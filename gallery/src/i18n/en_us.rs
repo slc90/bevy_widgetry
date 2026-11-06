@@ -898,6 +898,14 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::CheckBox(CheckBoxKey::OnlyCheckedNormalMark0F766EMovePointer) => {
             "Only checked.normal.mark=#0F766E; move pointer away after Checked, Hover/Disabled still use Theme."
         }
+        TextKey::TextField(TextFieldKey::CustomDescription) => "Custom search · independent Headless and nested Editor",
+        TextKey::TextField(TextFieldKey::CustomHint) => "Type, select and paste · limit 16 graphemes. The icon and hint belong to the application.",
+        TextKey::TextField(TextFieldKey::CustomReadOnlyHint) => "Read-only · select and copy. Programmatic clear and presets remain available.",
+        TextKey::TextField(TextFieldKey::CustomClear) => "Clear",
+        TextKey::TextField(TextFieldKey::CustomFocus) => "Focus editor",
+        TextKey::TextField(TextFieldKey::CustomPreset) => "Set Unicode text",
+        TextKey::TextField(TextFieldKey::CustomDisabled) => "Toggle disabled",
+        TextKey::TextField(TextFieldKey::CustomContent) => "Content: {value}",
         TextKey::TextField(TextFieldKey::OnlyEditableFocusedBorder7C3AedClickTo) => {
             "Only editable.focused.border=#7C3AED; click to focus and type."
         }

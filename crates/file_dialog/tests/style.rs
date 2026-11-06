@@ -4,6 +4,7 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
@@ -335,7 +336,7 @@ fn sidebar_projects_only_available_backend_places_in_fixed_order() {
 
 #[test]
 fn search_suffix_stays_inside_frame_without_taking_input_or_tab_focus() {
-    use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldSuffix};
+    use bevy_widgetry_text_field::WidgetryTextFieldSuffix;
     let mut app = fixture();
     let root = app
         .world_mut()
@@ -363,7 +364,7 @@ fn search_suffix_stays_inside_frame_without_taking_input_or_tab_focus() {
             .get::<bevy::input_focus::tab_navigation::TabIndex>(suffix)
             .is_none()
     );
-    WidgetryTextField::set_text_in_world(
+    WidgetryTextFieldHeadless::set_text_in_world(
         app.world_mut(),
         search,
         "a very long search query that exceeds the available width",
@@ -625,12 +626,8 @@ fn pick_filename_syncs_selection_and_enter_uses_real_identity_and_validation() {
             .to_string(),
         "file_000000.txt"
     );
-    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-        app.world_mut(),
-        editor,
-        "file_000005.txt",
-    )
-    .unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), editor, "file_000005.txt")
+        .unwrap();
     app.update();
     assert!(
         app.world()
@@ -714,12 +711,7 @@ fn clicking_the_selected_file_restores_its_name_after_a_draft_edit() {
                 .to_string(),
             "file_000000.txt"
         );
-        bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-            app.world_mut(),
-            editor,
-            "other.txt",
-        )
-        .unwrap();
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), editor, "other.txt").unwrap();
         app.update();
     }
 }
@@ -784,12 +776,7 @@ fn filename_confirmation_revalidates_a_file_removed_after_snapshot() {
         app.update();
     }
     let editor = named(&mut app, root, "FileDialogFilename");
-    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-        app.world_mut(),
-        editor,
-        "present.txt",
-    )
-    .unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), editor, "present.txt").unwrap();
     app.update();
     let confirm = named(&mut app, root, "FileDialogConfirm");
     app.world_mut()
@@ -956,12 +943,7 @@ fn pick_filename_rejects_missing_directory_and_path_syntax_without_submitting_ol
             finish_selection(&mut app, root);
         }
         let editor = named(&mut app, root, "FileDialogFilename");
-        bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-            app.world_mut(),
-            editor,
-            text,
-        )
-        .unwrap();
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), editor, text).unwrap();
         errors.run(|| app.update());
         assert!(
             errors.take().is_empty(),
@@ -2075,12 +2057,7 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
         app.update();
     }
     let path = named(&mut app, root, "FileDialogPath");
-    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-        app.world_mut(),
-        path,
-        "editing",
-    )
-    .unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), path, "editing").unwrap();
     app.update();
     {
         let input = input_entity(app.world(), path);
@@ -2161,12 +2138,7 @@ fn save_validation_overwrite_no_and_cancel_keep_the_session_contract() {
         app.update();
     }
     let filename = named(&mut app, root, "FileDialogFilename");
-    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-        app.world_mut(),
-        filename,
-        "output.txt",
-    )
-    .unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), filename, "output.txt").unwrap();
     app.update();
     app.world_mut()
         .resource_mut::<InputFocus>()
@@ -2644,12 +2616,7 @@ fn focused_keyboard_moves_active_and_editor_enter_navigates_without_losing_other
     assert_eq!(state.active(), state.visible().last().copied());
     assert!(state.selected().is_empty());
     let path = named(&mut app, first, "FileDialogPath");
-    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-        app.world_mut(),
-        path,
-        "C:/other",
-    )
-    .unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), path, "C:/other").unwrap();
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(path, FocusCause::Navigated);
@@ -2683,12 +2650,7 @@ fn search_editor_updates_query_and_theme_keeps_text_cursor_and_session() {
         app.update();
     }
     let editor = named(&mut app, root, "FileDialogSearch");
-    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
-        app.world_mut(),
-        editor,
-        "hello",
-    )
-    .unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), editor, "hello").unwrap();
     app.update();
     assert_eq!(
         app.world()

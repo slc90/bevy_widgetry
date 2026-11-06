@@ -8,6 +8,7 @@ use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy_widgetry_tabs::{WidgetryTab, WidgetryTabs, WidgetryTabsPlugin};
 use bevy_widgetry_test_utils::{add_keyboard_dispatch, primary_click, text_edit_app};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 #[test]
 fn disabling_a_selected_header_keeps_its_editor_enabled_but_root_disabled_blocks_edits() {
@@ -34,7 +35,7 @@ fn disabling_a_selected_header_keeps_its_editor_enabled_but_root_disabled_blocks
     app.world_mut()
         .entity_mut(header)
         .insert(bevy::ui::InteractionDisabled);
-    WidgetryTextField::focus_in_world(app.world_mut(), field).unwrap();
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), field).unwrap();
     let key = || KeyboardInput {
         key_code: KeyCode::KeyX,
         logical_key: Key::Character("x".into()),
@@ -45,13 +46,19 @@ fn disabling_a_selected_header_keeps_its_editor_enabled_but_root_disabled_blocks
     };
     app.world_mut().write_message(key());
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "x"
+    );
     app.world_mut()
         .entity_mut(root)
         .insert(bevy::ui::InteractionDisabled);
     app.world_mut().write_message(key());
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "x"
+    );
     assert_eq!(WidgetryTabs::selected_index(app.world(), root).unwrap(), 0);
     assert_eq!(
         app.world().get::<Node>(page).unwrap().display,
@@ -169,7 +176,7 @@ fn hidden_text_field_stops_receiving_keys_and_returns_with_its_input_intact() {
     app.update();
     let page = WidgetryTabs::page(app.world(), root, 0).unwrap();
     let field = app.world().get::<Children>(page).unwrap()[0];
-    WidgetryTextField::focus_in_world(app.world_mut(), field).unwrap();
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), field).unwrap();
     let key = |text: &str| KeyboardInput {
         key_code: KeyCode::KeyX,
         logical_key: Key::Character(text.into()),
@@ -180,16 +187,25 @@ fn hidden_text_field_stops_receiving_keys_and_returns_with_its_input_intact() {
     };
     app.world_mut().write_message(key("x"));
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "x"
+    );
     WidgetryTabs::set_selected_in_world(app.world_mut(), root, 1).unwrap();
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
     app.world_mut().write_message(key("hidden"));
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "x"
+    );
     let header = WidgetryTabs::header(app.world(), root, 0).unwrap();
     app.world_mut().trigger(primary_click(header));
     app.world_mut().flush();
     assert_eq!(WidgetryTabs::page(app.world(), root, 0).unwrap(), page);
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "x"
+    );
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
 }

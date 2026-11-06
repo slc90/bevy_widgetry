@@ -14,7 +14,7 @@ use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListProjection, WidgetryListProjectionPolicy,
     WidgetryListView, WidgetryListViewState,
 };
-use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use std::sync::Arc;
 
 pub struct WidgetryComboBoxMatcher<T>(Arc<dyn Fn(&str, &T) -> bool + Send + Sync>);
@@ -95,7 +95,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
             error::failure(fault.into_error::<T>(root), "combo_box.search_state")
         })?;
         Ok(WidgetryComboBoxSearchState {
-            query: WidgetryTextField::text(world, field).map_err(|error| {
+            query: WidgetryTextFieldHeadless::text(world, field).map_err(|error| {
                 error::text(error, root, "combo_box.search").with_context(
                     bevy_widgetry_core::scene::ErrorFrame::new("combo_box.text_field.text"),
                 )
@@ -115,7 +115,7 @@ fn refresh<T: Send + Sync + 'static>(
     root: Entity,
 ) -> Result<(), RuntimeFailure> {
     let (_, field, list) = parts::<T>(world, root)?;
-    let query = WidgetryTextField::text(world, field).map_err(|error| {
+    let query = WidgetryTextFieldHeadless::text(world, field).map_err(|error| {
         error::text(error, root, "combo_box.search").with_context(
             bevy_widgetry_core::scene::ErrorFrame::new("combo_box.text_field.text"),
         )
@@ -211,7 +211,7 @@ pub(crate) fn open<T: Send + Sync + 'static>(
     if world.get::<Visibility>(popup) != Some(&Visibility::Visible) {
         return Ok(());
     }
-    WidgetryTextField::set_text_in_world(world, field, "").map_err(|error| {
+    WidgetryTextFieldHeadless::set_text_in_world(world, field, "").map_err(|error| {
         error::text(error, root, "combo_box.search").with_context(
             bevy_widgetry_core::scene::ErrorFrame::new("combo_box.text_field.set_text_in_world"),
         )
@@ -221,7 +221,7 @@ pub(crate) fn open<T: Send + Sync + 'static>(
     bevy_widgetry_list_view::internal::set_active::<T, WidgetryListItemId>(world, list, None)
         .map_err(|error| error::list(error, root, "combo_box.search"))?;
     navigate::<T>(world, root, list, KeyCode::Home)?;
-    WidgetryTextField::focus_in_world(world, field)
+    WidgetryTextFieldHeadless::focus_in_world(world, field)
         .map_err(|error| {
             error::text(error, root, "combo_box.search").with_context(
                 bevy_widgetry_core::scene::ErrorFrame::new("combo_box.focus_search")

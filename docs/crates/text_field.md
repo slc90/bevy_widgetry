@@ -6,7 +6,32 @@
 
 ## 当前设计思路
 
-文本内容、Caret 与 Selection 使用内部编辑实体上的 Bevy 官方 `EditableText`，Widgetry 根负责外部身份及纵向布局，Frame 负责边框、背景和横向组合。根不再携带 `EditableText` / `TextInput`。Read-only 和 Disabled 是不同的限制：前者保留选择 / 复制，后者阻止用户编辑相关输入。
+文本内容、Caret 与 Selection 使用真实编辑实体上的 Bevy 官方 `EditableText`。公开 Headless 根绑定自己的 Editor；默认 Scene 额外构造纵向 Root、负责边框/背景/横向组合的 Frame、槽位及辅助展示。根不再携带 `EditableText` / `TextInput`。Read-only 和 Disabled 是不同的限制：前者保留选择 / 复制，后者阻止用户编辑相关输入。
+
+## 独立 Root 与 Editor
+
+`@WidgetryTextFieldHeadless { editor: #Editor, @read_only: false }` 初始化行为根和一次性 ReadOnly 配置。`editor` 是公开不可变绑定；`@WidgetryTextFieldEditor { root: #Root, ... }` 在实际编辑位置初始化唯一的官方 `EditableText` / `TextInput`、Caret 和固定长度约束。Editor Props 支持 `value`、`max_length`、`multiline`、`visible_lines`、`visible_width`，正文初始化即按完整字素截断。根和 Editor 的所属关系创建后固定，不支持运行期跨根搬迁/共享编辑器。
+
+Editor 可以位于根下任意装饰容器中。内容与聚焦 API 校验 Editor 身份、双向 Owner 及祖先链；不读取默认 Frame/Parts，也不要求 Count、Hint 或槽位。`WidgetryTextFieldHeadless::editor_entity` 返回经过验证的 Entity，`WidgetryTextFieldEditor::owner` 验证反向映射；`max_length` 和 `is_read_only` 提供只读配置。根的 `WidgetryInputTarget` 由绑定自动投影，供 AcquireFocus、Tab 和 Window InitialFocus 使用；普通子控件继续保留自身焦点。
+
+安装独立 `WidgetryTextFieldHeadlessPlugin` 可使用编辑、长度、ReadOnly/Disabled、根聚焦与文本配置投影，不安装默认 TextField 样式/槽布局/Count/Hint/AutoSize。根没有对应文本配置时，Editor 自己的字体与布局配置保持；根明确设置的配置按原契约投影。安装默认 `WidgetryTextFieldPlugin` 自动确保独立 Plugin，默认普通/只读两种 Scene 组合相同 Headless/Editor，主题样式只作用于默认实例。
+
+```rust
+bsn! {
+    #Root @WidgetryTextFieldHeadless { editor: #Editor }
+    Children [
+        Node { padding: UiRect::all(px(8)) }
+        Children [
+            Node
+            Children [
+                #Editor @WidgetryTextFieldEditor {
+                    root: #Root, @value: {"搜索".to_owned()}, @max_length: {Some(16)}
+                }
+            ]
+        ]
+    ]
+}
+```
 
 ## 主要功能
 
@@ -15,7 +40,7 @@
 - Disabled 过滤用户编辑请求及未处理的 Edit / Paste Queue。
 - Pointer / Keyboard Focus、Caret、Selection 与 Theme 相关颜色同步。
 - 构造 Props 的 `value` 初始化正文，`max_length: Option<usize>` 指定固定的 Unicode 扩展字素簇上限；默认不限制，零表示空文本。
-- `WidgetryTextField` / `WidgetryReadOnlyTextField` 提供以根实体为目标的 `text`、`set_text_in_world` 和排队 `set_text`；超限内容保留可容纳的完整字素簇前缀。
+- `WidgetryTextFieldHeadless` 为默认和自定义根统一提供 `text`、`set_text_in_world` 和排队 `set_text`；超限内容保留可容纳的完整字素簇前缀。
 - `Node` 及官方文本布局、字体配置仍可使用 Bevy 组件设置。
 - 可选 `WidgetryTextFieldPrefix` / `WidgetryTextFieldSuffix` 容器通过 `@children` 接收任意 BSN Children；每类最多一个，声明顺序不影响 Prefix → Editor → Suffix 的位置。重复、同一容器双重标记及不属于槽的直接内容会交给宿主 Error Handler，结构变化时重新验证。
 - 两侧保留自身宽度，编辑器使用剩余宽度；过宽内容不自动缩放、隐藏或建立降级布局。槽内可有多个装饰节点、按钮或其他控件，其文本不进入正文和长度计算。
@@ -28,7 +53,7 @@ ReadOnly 和 Disabled 不禁止通过 Widgetry 内容 API 程序化赋值。Disa
 
 `EditableText` 的正文写入由 TextField 内部托管，外部直接写编辑器、替换组件或排入编辑命令不属于受支持的程序化内容入口。长度上限只在构造时确定，不支持运行时修改。通过 Props 的 `value`、`multiline`（默认 false）、`visible_lines`（默认一行）和 `visible_width` 设置初始内容与原有编辑配置；不再向根添加 `EditableText`。`max_characters` 始终关闭，避免与字素簇约束并存。
 
-根上的 `Node` 控制整体尺寸，根的 `TextFont`、`TextLayout`、`LineHeight`、`FontHinting` 和 `EditableTextFilter` 配置投影到内部编辑实体。主题将 Background / Border 写入 Frame，Text / Caret / Selection 颜色写入 Editor，样式变化不重置编辑状态。
+默认根上的 `Node` 控制整体尺寸，默认和自定义根的 `TextFont`、`TextLayout`、`LineHeight`、`FontHinting` 和 `EditableTextFilter` 配置投影到内部编辑实体。主题将 Background / Border 写入 Frame，Text / Caret / Selection 颜色写入 Editor，样式变化不重置编辑状态。
 
 Workspace 内部组合控件可通过 `internal::frame(&World, root)` 定位现有 Frame，在不替换编辑器的前提下调整组合几何；该查询同时支持普通与只读实例，映射或 Frame 缺失时返回 Error。此接口不经 Facade 导出，不改变正文的托管与公开内容 API。
 
@@ -42,13 +67,13 @@ AutoSize 从 Parley 最新排版读取视觉行数（包括软换行与预编辑
 
 提示使用 `WidgetryTheme::text_field.hint_warning` 的黄色警告语义。Light、Dark、PinkDream、KamuriViolet 各自定义颜色，Disabled 不投影为灰色。主题刷新只改提示颜色；StyleOwner 管理的复合控件由其拥有者投影完整 TextField palette，包括提示警告色，不被全局独立样式覆盖。
 
-`editor` 提供以根为目标的官方编辑状态只读访问，`focus_in_world` / 排队 `focus` 将根映射为真实 InputFocus 目标。根的 `AcquireFocus`、Tab 顺序及 Window InitialFocus 继续使用根作为外部身份；Tab 在真实编辑器、槽中焦点控件与其他控件之间导航。槽内按钮保留自身的点击与焦点，装饰内容不会自动聚焦编辑器，调用方可自行设置拾取穿透或显式调用根聚焦 API。根或祖先的 Disabled 通过继承约束全部内部交互；ReadOnly 仍可选择、导航和复制。
+`editor` 提供以 Headless 根为目标的官方编辑状态只读访问，`focus_in_world` / 排队 `focus` 将根映射为真实 InputFocus 目标。根的 `AcquireFocus`、Tab 顺序及 Window InitialFocus 继续使用根作为外部身份；Tab 在真实编辑器、槽中焦点控件与其他控件之间导航。槽内按钮保留自身的点击与焦点，装饰内容不会自动聚焦编辑器，调用方可自行设置拾取穿透或显式调用根聚焦 API。根或祖先的 Disabled 通过继承约束全部内部交互；ReadOnly 仍可选择、导航和复制。
 
 用户输入在官方编辑提交前按队列顺序约束。先处理选择、删除，再按实际试替换全文确定最长合法插入前缀；键入、粘贴和 IME 正式提交共用该语义。预编辑仍交给官方编辑器，既不提前裁剪，也不计入正式正文。普通非 Widgetry `EditableText` 不受影响。
 
 查询、聚焦、内容、颜色和内部组合查询 API 返回 `TextFieldFailure`（`WidgetryFailure<TextFieldError>`）。同步设置返回 `Ok(true)` / `Ok(false)` 表示正文是否改变，目标类型不符、映射 / 编辑组件 / 必需资源缺失返回可匹配的领域错误；Commands 在执行时验证，并在实际 ECS 边界显式转为 `Severity::Error`。Setter 丢弃旧编辑及待处理粘贴，结束旧组合态，优先保留新正文中仍合法的光标与选区，否则折叠至末尾。官方 `TextEditChange` 保留其正文或光标变化语义，不另建 Widgetry 文本 Authority 或事件转接。
 
-诊断保存 Root、缺失部件实体和类型，以及已知的 editor / frame 与请求操作。AutoSize 配置错误保存 multiline 与原始行数限制，结构查询保留原始 Bevy 查询原因；Core 颜色失败沿原 ID 传播。源头记录一次 ERROR 并保存原始回溯，传播不重复记录。Setter 的计数投影可能在正式文本已写入后失败，错误上下文标明已写入和内容是否变化，不承诺失败时回滚正文或 IME 清理。剪贴板读取实际失败时记录源头并在放弃该次粘贴后记录 DEBUG，继续处理其他编辑。
+诊断保存 Root、缺失部件实体和类型、Editor/Owner/绑定与请求操作；默认样式存在时补充 Frame 上下文，独立行为不要求默认 Parts。AutoSize 配置错误保存 multiline 与原始行数限制，结构查询保留原始 Bevy 查询原因；Core 颜色失败沿原 ID 传播。源头记录一次 ERROR 并保存原始回溯，传播不重复记录。Setter 的计数投影可能在正式文本已写入后失败，错误上下文标明已写入和内容是否变化，不承诺失败时回滚正文或 IME 清理。剪贴板读取实际失败时记录源头并在放弃该次粘贴后记录 DEBUG，继续处理其他编辑。
 
 ```rust
 bsn! {
@@ -80,3 +105,5 @@ bsn! {
 - Clipboard 与 Native IME 的 OS 端行为不能全部通过 Headless 测试覆盖。
 - ReadOnly 仍允许用户 Selection 和 Copy，不应等同 Disabled。
 
+
+[Gallery TextField 页面](../../gallery/src/pages/text_field.rs) 另提供应用自有搜索图标、多层装饰容器、独立提示/正文读数与清空按钮的自定义编辑和只读区域。外部 Style 只组合公开 Headless/Editor，程序预设和聚焦也使用同一根 API，没有隐藏默认输入框。

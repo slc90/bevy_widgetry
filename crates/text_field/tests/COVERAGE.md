@@ -2,7 +2,7 @@
 
 本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
 
-`diagnostics.rs` 保护普通 / 只读编辑器丢失时的领域分类、Root / editor / frame 与操作上下文、共享 origin 与源头一次 ERROR；计数输出失败发生在正文写入之后时，诊断报告真实阶段，Command 保留诊断进入宿主。缺少必需资源在写入前拒绝，正常截断与同值无错误。content Unit Test 区分 Parts 与 LengthLimit 缺失，原有 AutoSize / IME / Count / Style 测试继续覆盖正常契约。
+`diagnostics.rs` 保护普通 / 只读编辑器丢失时的领域分类、Root / editor / frame 与操作上下文、共享 origin 与源头一次 ERROR；计数输出失败发生在正文写入之后时，诊断报告真实阶段，Command 保留诊断进入宿主。缺少必需资源在写入前拒绝，正常截断与同值无错误。content Unit Test 区分 Editor 身份与其 LengthLimit 缺失，原有 AutoSize / IME / Count / Style 测试继续覆盖正常契约。
 
 ## States
 
@@ -55,3 +55,6 @@
 
 Native Clipboard、IME 与真实 OS Focus 仍存在 Headless 验证边界。
 
+
+
+`headless.rs` 使用独立HeadlessPlugin和无默认Frame的三层装饰树，验证Root/Editor双向绑定、完整字素初值/Setter、零上限、选择替换与IME预编辑/正式提交、ReadOnly选择及程序赋值、Disabled丢弃Edit/Paste、Root AcquireFocus/深层子控件自身Focus、根字体投影及Editor自有字体、真实Keyboard路由、默认Plugin共存不写自有颜色，以及跨Root共享/错误Owner/脱离实体树/失效Editor拒绝与queued执行时校验隔离。独立嵌套Editor的原生Windows Clipboard粘贴和只读复制复用真实Bevy Clipboard，完成后恢复原可读文本；OS输入法窗口与候选确认仍不由合成IME请求覆盖。

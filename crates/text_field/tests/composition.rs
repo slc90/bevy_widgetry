@@ -3,6 +3,7 @@
 mod support;
 
 use bevy::{prelude::*, text::EditableText};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
     WidgetryTextField, WidgetryTextFieldPlugin, WidgetryTextFieldPrefix, WidgetryTextFieldSuffix,
 };
@@ -87,8 +88,8 @@ fn callers_can_name_the_composite_before_or_after_its_scene() {
         .id();
     assert_eq!(app.world().get::<Name>(before).unwrap().as_str(), "Before");
     assert_eq!(app.world().get::<Name>(after).unwrap().as_str(), "After");
-    assert!(WidgetryTextField::editor(app.world(), before).is_ok());
-    assert!(WidgetryTextField::editor(app.world(), after).is_ok());
+    assert!(WidgetryTextFieldHeadless::editor(app.world(), before).is_ok());
+    assert!(WidgetryTextFieldHeadless::editor(app.world(), after).is_ok());
 }
 
 #[test]
@@ -110,7 +111,10 @@ fn removing_a_root_filter_restores_the_official_input_pipeline() {
         .unwrap()
         .queue_edit(TextEdit::Insert("x".into()));
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), root).unwrap(), "");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+        ""
+    );
     app.world_mut()
         .entity_mut(root)
         .remove::<EditableTextFilter>();
@@ -119,7 +123,10 @@ fn removing_a_root_filter_restores_the_official_input_pipeline() {
         .unwrap()
         .queue_edit(TextEdit::Insert("x".into()));
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), root).unwrap(), "x");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+        "x"
+    );
 }
 
 #[test]
@@ -150,7 +157,7 @@ fn replacing_a_root_filter_in_one_frame_keeps_the_new_predicate() {
         }
         app.update();
         assert_eq!(
-            WidgetryTextField::text(app.world(), root).unwrap(),
+            WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
             expected
         );
     }
@@ -177,12 +184,12 @@ fn readding_select_all_in_one_frame_preserves_focus_selection_and_later_removal(
         .remove::<SelectAllOnFocus>()
         .insert(SelectAllOnFocus);
     app.update();
-    WidgetryTextField::focus_in_world(app.world_mut(), root).unwrap();
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), root).unwrap();
     for _ in 0..2 {
         app.update();
     }
     assert_eq!(
-        WidgetryTextField::editor(app.world(), root)
+        WidgetryTextFieldHeadless::editor(app.world(), root)
             .unwrap()
             .editor()
             .raw_selection()
@@ -310,7 +317,10 @@ fn missing_and_single_slots_keep_only_their_own_content() {
             .unwrap()
             .id();
         app.update();
-        assert_eq!(WidgetryTextField::text(app.world(), root).unwrap(), "");
+        assert_eq!(
+            WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+            ""
+        );
         let frame = support::frame_entity(app.world(), root);
         assert_eq!(
             app.world().get::<Children>(frame).unwrap().len(),
@@ -432,7 +442,7 @@ fn tab_moves_from_editor_to_slot_control_then_to_the_next_field() {
         .entity_mut(group)
         .add_children(&[first, second]);
     app.update();
-    WidgetryTextField::focus_in_world(app.world_mut(), first).unwrap();
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), first).unwrap();
     let frame = support::frame_entity(app.world(), first);
     let slot = app.world().get::<Children>(frame).unwrap()[1];
     let control = app.world().get::<Children>(slot).unwrap()[0];
@@ -472,10 +482,15 @@ fn slots_have_fixed_order_and_content_api_keeps_the_root_identity() {
         .id();
     app.update();
     assert!(app.world().get::<EditableText>(root).is_none());
-    assert_eq!(WidgetryTextField::text(app.world(), root).unwrap(), "正文");
-    assert!(WidgetryTextField::set_text_in_world(app.world_mut(), root, "新正文尾").unwrap());
     assert_eq!(
-        WidgetryTextField::text(app.world(), root).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+        "正文"
+    );
+    assert!(
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "新正文尾").unwrap()
+    );
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
         "新正文"
     );
     let frame = app.world().get::<Children>(root).unwrap()[0];

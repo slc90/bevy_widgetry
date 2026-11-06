@@ -4,6 +4,7 @@ use bevy_widgetry::diagnostics::{ErrorFrame, WidgetryFailure};
 use bevy_widgetry::list_view::WidgetryListItemId;
 use bevy_widgetry::table::WidgetryTableEditorReadError;
 use bevy_widgetry::table::WidgetryTableSubmitEdit;
+use bevy_widgetry::text_field::WidgetryTextFieldHeadless;
 
 #[derive(Debug)]
 struct EditorMappingError {
@@ -77,7 +78,7 @@ fn descendant<C: Component>(world: &World, root: Entity) -> Option<Entity> {
 fn text(world: &World, root: Entity) -> Result<String, WidgetryTableEditorReadError> {
     let field = descendant::<WidgetryTextField>(world, root)
         .ok_or_else(|| missing_editor(root, "TextField"))?;
-    WidgetryTextField::text(world, field).map_err(WidgetryTableEditorReadError::diagnostic)
+    WidgetryTextFieldHeadless::text(world, field).map_err(WidgetryTableEditorReadError::diagnostic)
 }
 
 fn text_scene(value: String, multiline: bool, name: &'static str) -> impl Scene {
@@ -357,7 +358,7 @@ mod tests {
             .unwrap()
             .editor();
         let field = descendant::<WidgetryTextField>(app.world(), editor).unwrap();
-        WidgetryTextField::set_text_in_world(app.world_mut(), field, value).unwrap();
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, value).unwrap();
         assert!(WidgetryTable::<DemoRow>::submit_edit(app.world_mut(), root).unwrap());
         app.world_mut().flush();
         app.update();

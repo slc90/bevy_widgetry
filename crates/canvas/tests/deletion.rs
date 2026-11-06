@@ -11,6 +11,7 @@ use bevy::{
 };
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::{add_keyboard_dispatch, pointer_ids, queue_key, queue_pointer};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 mod common;
 use common::*;
 
@@ -269,7 +270,10 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
     );
     update(&mut app);
     delete(&mut app, window);
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "bc");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "bc"
+    );
     assert!(
         app.world()
             .get::<CanvasGeometry>(shape)

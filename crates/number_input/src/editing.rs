@@ -14,6 +14,7 @@ use bevy::{
 };
 use bevy_widgetry_core::{disabled::WidgetryEffectiveDisabled, input_target::WidgetryInputTarget};
 use bevy_widgetry_diagnostics::ErrorFrame;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{WidgetryReadOnlyTextField, WidgetryTextField};
 
 #[derive(Component, FromTemplate)]
@@ -121,25 +122,35 @@ pub(crate) fn field(world: &World, root: Entity) -> Result<Entity, NumberInputFa
 
 pub(crate) fn editor(world: &World, root: Entity) -> Result<Entity, NumberInputFailure> {
     let field = field(world, root)?;
-    let editor = world
+    let target = world
         .get::<WidgetryInputTarget>(field)
         .ok_or_else(|| missing(root, field, "WidgetryInputTarget", "number_input.editor"))?
         .target;
-    if world.get::<ReadOnly>(root).is_some() {
-        WidgetryReadOnlyTextField::editor(world, field)
-            .map_err(|error| text_field(error, root, field, "number_input.editor"))?;
-    } else {
-        WidgetryTextField::editor(world, field)
-            .map_err(|error| text_field(error, root, field, "number_input.editor"))?;
-    }
-    if world.get::<EditableText>(editor).is_none() {
+    let bound = WidgetryTextFieldHeadless::editor_entity(world, field)
+        .map_err(|error| text_field(error, root, field, "number_input.editor"))?;
+    if world.get::<EditableText>(target).is_none() {
         return Err(
-            missing(root, editor, "EditableText", "number_input.editor").with_context(
+            missing(root, target, "EditableText", "number_input.editor").with_context(
                 ErrorFrame::new("number_input.validate_input_target").field("field", field),
             ),
         );
     }
-    Ok(editor)
+    if target != bound {
+        return Err(text_field(
+            bevy_widgetry_text_field::TextFieldFailure::new(
+                bevy_widgetry_text_field::TextFieldError::InvalidEditorBinding {
+                    root: field,
+                    editor: target,
+                    bound,
+                },
+                ErrorFrame::new("number_input.validate_input_target"),
+            ),
+            root,
+            field,
+            "number_input.editor",
+        ));
+    }
+    Ok(bound)
 }
 
 pub(crate) fn project<T: WidgetryNumber>(
@@ -185,11 +196,7 @@ pub(crate) fn project<T: WidgetryNumber>(
 
 pub(crate) fn text(world: &World, root: Entity) -> Result<String, NumberInputFailure> {
     let field = field(world, root)?;
-    let result = if world.get::<ReadOnly>(root).is_some() {
-        WidgetryReadOnlyTextField::text(world, field)
-    } else {
-        WidgetryTextField::text(world, field)
-    };
+    let result = WidgetryTextFieldHeadless::text(world, field);
     result.map_err(|error| text_field(error, root, field, "number_input.read_text"))
 }
 fn set_text(
@@ -198,11 +205,7 @@ fn set_text(
     field: Entity,
     text: String,
 ) -> Result<(), NumberInputFailure> {
-    let result = if world.get::<ReadOnly>(root).is_some() {
-        WidgetryReadOnlyTextField::set_text_in_world(world, field, text)
-    } else {
-        WidgetryTextField::set_text_in_world(world, field, text)
-    };
+    let result = WidgetryTextFieldHeadless::set_text_in_world(world, field, text);
     result.map_err(|error| text_field(error, root, field, "number_input.set_text"))?;
     Ok(())
 }

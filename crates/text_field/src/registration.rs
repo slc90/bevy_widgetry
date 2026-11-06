@@ -6,8 +6,9 @@ use bevy_widgetry_internal_log::widgetry_debug;
 use bevy_widgetry_theme::WidgetryThemePlugin;
 
 pub struct WidgetryTextFieldPlugin;
+pub struct WidgetryTextFieldHeadlessPlugin;
 
-impl Plugin for WidgetryTextFieldPlugin {
+impl Plugin for WidgetryTextFieldHeadlessPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
             app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
@@ -15,16 +16,10 @@ impl Plugin for WidgetryTextFieldPlugin {
         if !app.is_plugin_added::<TabNavigationPlugin>() {
             app.add_plugins(TabNavigationPlugin);
         }
-        if !app.is_plugin_added::<WidgetryThemePlugin>() {
-            app.add_plugins(WidgetryThemePlugin);
-        }
-
-        app.add_observer(style::refresh_text_field_theme);
         app.init_resource::<bevy::text::FontCx>()
             .init_resource::<bevy::text::LayoutCx>();
         app.add_observer(input::focus_text_field_on_press);
         app.add_observer(input::retain_text_field_focus_on_acquire);
-        app.add_observer(input::contain_slot_focus);
         app.add_observer(input::redirect_gained_focus);
         app.add_observer(input::navigate_from_editor);
         app.add_systems(
@@ -33,11 +28,7 @@ impl Plugin for WidgetryTextFieldPlugin {
         );
         app.add_systems(
             PostUpdate,
-            (
-                composition::configure_slots,
-                composition::project_text_configuration,
-            )
-                .chain()
+            composition::project_text_configuration
                 .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Materialize)
                 .before(bevy::input_focus::InputFocusSystems::FocusChangeEvents),
         );
@@ -60,6 +51,25 @@ impl Plugin for WidgetryTextFieldPlugin {
                 .before(EditableTextSystems),
         );
 
+        widgetry_debug!("WidgetryTextFieldHeadlessPlugin 注册完成");
+    }
+}
+impl Plugin for WidgetryTextFieldPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryTextFieldHeadlessPlugin>() {
+            app.add_plugins(WidgetryTextFieldHeadlessPlugin);
+        }
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
+        }
+        app.add_observer(style::refresh_text_field_theme);
+        app.add_observer(input::contain_slot_focus);
+        app.add_systems(
+            PostUpdate,
+            composition::configure_slots
+                .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Materialize)
+                .before(bevy::input_focus::InputFocusSystems::FocusChangeEvents),
+        );
         app.add_systems(
             PostUpdate,
             (auto_size::resize_editors, count::sync_count)

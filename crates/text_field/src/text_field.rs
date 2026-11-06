@@ -1,7 +1,6 @@
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::text::{EditableText, TextCursorStyle};
-use bevy_widgetry_core::input_target::WidgetryInputTarget;
+use bevy::text::EditableText;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(crate::WidgetryTextFieldProps)]
@@ -41,10 +40,7 @@ pub(crate) struct Parts {
     pub(crate) frame: Entity,
 }
 
-#[derive(Component, FromTemplate)]
-pub(crate) struct TextFieldEditor {
-    pub(crate) root: Entity,
-}
+pub(crate) use crate::headless::WidgetryTextFieldEditor as TextFieldEditor;
 
 #[derive(Component, FromTemplate)]
 pub(crate) struct TextFieldFrame {
@@ -96,7 +92,6 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
         Node { width: percent(100), flex_shrink: 0.0, margin: UiRect::top(px(4)) }
         }
     });
-    let read_only = read_only.then_some(bsn! { ReadOnly });
     let hint = props.hint_text.map(|text| {
         bsn! {
             crate::hint::HintDisplay Text(text)
@@ -115,10 +110,8 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
         @root_reference(#TextFieldRoot)
         template(move |context| crate::auto_size::Configuration::new(props.multiline, props.auto_size).map_err(|error| error.with_context(bevy_widgetry_diagnostics::ErrorFrame::new("text_field.initialize").field("root", context.entity.id())).into_bevy_error()))
         TextFieldBase
-        @{read_only}
+        @crate::WidgetryTextFieldHeadless {editor:#TextFieldEditor,@read_only:read_only}
         Parts { editor: #TextFieldEditor, frame: #TextFieldFrame }
-        WidgetryInputTarget { target: #TextFieldEditor }
-        template(move |_| Ok(crate::length::LengthLimit(props.max_length)))
         template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
         Hovered(false)
         Node { flex_direction: FlexDirection::Column, min_width: px(0) }
@@ -131,9 +124,7 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
             }
             BackgroundColor BorderColor
             Children [
-                #TextFieldEditor TextFieldEditor { root: #TextFieldRoot }
-                template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Text)))
-                ~{editable} bevy::ui_widgets::TextInput TextCursorStyle
+                #TextFieldEditor @TextFieldEditor { root:#TextFieldRoot, @value:{props.value}, @max_length:{props.max_length}, @multiline:{props.multiline}, @visible_lines:{editable.visible_lines}, @visible_width:{props.visible_width} }
                 Node { min_width: px(0), align_self: editor_alignment, flex_grow: 1.0, flex_basis: px(0) }--
                 {props.children}
             ]

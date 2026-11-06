@@ -8,6 +8,7 @@ use bevy_widgetry_collapsible::{
 };
 use bevy_widgetry_core::disabled::WidgetryEffectiveDisabled;
 use bevy_widgetry_test_utils::{ErrorCapture, scene_app};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 #[derive(Resource, Default)]
 struct Changes(usize);
@@ -157,7 +158,7 @@ fn header_disabled_preserves_content_text_input_but_root_disabled_blocks_it() {
     app.update();
     let content = app.world().get::<Children>(root).unwrap()[1];
     let field = app.world().get::<Children>(content).unwrap()[0];
-    WidgetryTextField::focus_in_world(app.world_mut(), field).unwrap();
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), field).unwrap();
     let key = || bevy::input::keyboard::KeyboardInput {
         key_code: KeyCode::KeyX,
         logical_key: bevy::input::keyboard::Key::Character("x".into()),
@@ -168,17 +169,26 @@ fn header_disabled_preserves_content_text_input_but_root_disabled_blocks_it() {
     };
     app.world_mut().write_message(key());
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "x"
+    );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.world_mut().write_message(key());
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "x"
+    );
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
     app.world_mut().write_message(key());
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "xx");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "xx"
+    );
     assert!(WidgetryCollapsible::header_disabled(app.world(), root).unwrap());
 }
 

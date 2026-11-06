@@ -16,6 +16,7 @@ use bevy::{
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
 use bevy_widgetry_core::{WidgetryAppExt, input_target::WidgetryInputTarget, scene::spawn_scene};
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{WidgetryReadOnlyTextField, WidgetryTextField};
 use std::time::Duration;
 
@@ -217,7 +218,7 @@ fn read_only_reuses_selection_but_rejects_text_arrows_buttons_and_hold() {
 fn disabled_discards_drafts_ime_and_pending_input_before_blur_or_reenable() {
     for inherited in [false, true] {
         let mut f = fixture(false);
-        WidgetryTextField::set_text_in_world(f.app.world_mut(), f.field, "25").unwrap();
+        WidgetryTextFieldHeadless::set_text_in_world(f.app.world_mut(), f.field, "25").unwrap();
         f.app
             .world_mut()
             .get_mut::<EditableText>(f.editor)
@@ -394,13 +395,7 @@ fn initially_disabled_scenes_wait_for_internal_construction_without_host_errors(
             );
             assert!(f.app.world().get::<InteractionDisabled>(target).is_some());
             let field = f.app.world().get::<Children>(target).unwrap()[1];
-            let get_text = |world: &World| {
-                if read_only {
-                    WidgetryReadOnlyTextField::text(world, field).unwrap()
-                } else {
-                    WidgetryTextField::text(world, field).unwrap()
-                }
-            };
+            let get_text = |world: &World| WidgetryTextFieldHeadless::text(world, field).unwrap();
             assert_eq!(get_text(f.app.world()), "1.23");
             assert!(
                 WidgetryNumberInput::<f64>::set_value_in_world(f.app.world_mut(), target, 2.345678)
@@ -434,7 +429,7 @@ fn enabling_before_first_materialization_preserves_new_keyboard_input() {
         .get::<WidgetryInputTarget>(f.field)
         .unwrap()
         .target;
-    WidgetryTextField::set_text_in_world(f.app.world_mut(), f.field, "").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(f.app.world_mut(), f.field, "").unwrap();
     f.app
         .world_mut()
         .resource_mut::<InputFocus>()

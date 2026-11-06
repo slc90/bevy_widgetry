@@ -438,6 +438,14 @@ pub(crate) enum ComboBoxKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TextFieldKey {
+    CustomDescription,
+    CustomHint,
+    CustomReadOnlyHint,
+    CustomClear,
+    CustomFocus,
+    CustomPreset,
+    CustomDisabled,
+    CustomContent,
     OnlyEditableFocusedBorder7C3AedClickTo,
     OnlyReadOnlyFocusedBorder7C3AedSelect,
 }

@@ -18,6 +18,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 use bevy_widgetry_test_utils::{primary_press, scene_app, text_input_app};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
 };
@@ -304,7 +305,7 @@ fn read_only_allows_programmatic_changes() {
         })
         .unwrap()
         .id();
-    WidgetryReadOnlyTextField::set_text_in_world(app.world_mut(), entity, "after").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), entity, "after").unwrap();
     app.update();
     assert_eq!(
         support::editor(app.world(), entity)

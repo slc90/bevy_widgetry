@@ -14,6 +14,7 @@ use bevy_widgetry_test_utils::{
     add_keyboard_dispatch, primary_click, primary_press, queue_key, text_edit_app,
 };
 use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 #[derive(Resource, Default)]
 struct Changes(Vec<Option<WidgetryListItemId>>);
@@ -219,15 +220,15 @@ fn search_rows_fill_popup_width_after_filtering_empty_recovery_and_resize() {
 
     let mut f = fixture(20);
     assert_full_width(&mut f, 20);
-    WidgetryTextField::set_text_in_world(f.app.world_mut(), f.input, "00001").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(f.app.world_mut(), f.input, "00001").unwrap();
     assert_full_width(&mut f, 1);
-    WidgetryTextField::set_text_in_world(f.app.world_mut(), f.input, "missing").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(f.app.world_mut(), f.input, "missing").unwrap();
     f.app.update();
     assert_eq!(
         f.app.world().get::<Node>(f.list).unwrap().display,
         Display::None
     );
-    WidgetryTextField::set_text_in_world(f.app.world_mut(), f.input, "").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(f.app.world_mut(), f.input, "").unwrap();
     assert_full_width(&mut f, 20);
     f.app.world_mut().get_mut::<Node>(f.root).unwrap().width = px(380);
     assert_full_width(&mut f, 20);
@@ -265,7 +266,7 @@ fn edits_keep_caret_semantics_and_ime_enter_does_not_confirm() {
     key(&mut f, KeyCode::Backspace, None);
     f.app.update();
     assert_eq!(
-        WidgetryTextField::text(f.app.world(), f.input).unwrap(),
+        WidgetryTextFieldHeadless::text(f.app.world(), f.input).unwrap(),
         "2"
     );
     let window = f
@@ -281,7 +282,7 @@ fn edits_keep_caret_semantics_and_ime_enter_does_not_confirm() {
     });
     f.app.update();
     assert!(
-        WidgetryTextField::editor(f.app.world(), f.input)
+        WidgetryTextFieldHeadless::editor(f.app.world(), f.input)
             .unwrap()
             .is_composing()
     );
@@ -329,7 +330,10 @@ fn confirm_precedes_later_text_in_the_same_batch() {
     key(&mut f, KeyCode::KeyZ, Some("z"));
     f.app.update();
     assert_eq!(selected(&f), first);
-    assert_eq!(WidgetryTextField::text(f.app.world(), f.input).unwrap(), "");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(f.app.world(), f.input).unwrap(),
+        ""
+    );
     f.app.world_mut().trigger(Activate { entity: f.field });
     f.app.world_mut().flush();
     f.app.update();
@@ -345,7 +349,7 @@ fn confirm_precedes_later_text_in_the_same_batch() {
     f.app.update();
     assert_eq!(selected(&f), last);
     assert_eq!(
-        WidgetryTextField::text(f.app.world(), f.input).unwrap(),
+        WidgetryTextFieldHeadless::text(f.app.world(), f.input).unwrap(),
         "00003"
     );
     assert_eq!(
@@ -419,8 +423,8 @@ fn query_and_model_changes_coalesce_and_stable_frames_do_not_rematch() {
         .query_filtered::<Entity, With<WidgetryTextField>>()
         .single(app.world())
         .unwrap();
-    WidgetryTextField::set_text_in_world(app.world_mut(), input, "a").unwrap();
-    WidgetryTextField::set_text_in_world(app.world_mut(), input, "Ban").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), input, "a").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), input, "Ban").unwrap();
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
@@ -581,7 +585,10 @@ fn no_results_model_changes_escape_and_disabled_preserve_selection() {
         f.app.world().get::<Visibility>(f.popup),
         Some(&Visibility::Hidden)
     );
-    assert_eq!(WidgetryTextField::text(f.app.world(), f.input).unwrap(), "");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(f.app.world(), f.input).unwrap(),
+        ""
+    );
 }
 
 #[test]
@@ -665,7 +672,7 @@ fn local_search_filters_one_projection_without_losing_hidden_selection() {
         .query_filtered::<Entity, With<WidgetryTextField>>()
         .single(app.world())
         .unwrap();
-    WidgetryTextField::set_text_in_world(app.world_mut(), input, "ban").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), input, "ban").unwrap();
     app.update();
     let search = WidgetryComboBox::<String>::search_state(app.world(), first).unwrap();
     assert_eq!(search.query, "ban");

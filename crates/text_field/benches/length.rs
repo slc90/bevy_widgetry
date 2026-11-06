@@ -7,6 +7,7 @@ use bevy::{
     prelude::*,
     text::{EditableText, TextEdit},
 };
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -36,11 +37,11 @@ fn length(c: &mut Criterion) {
                     .pending_edits
                     .extend([TextEdit::SelectAll, TextEdit::Insert(input.as_str().into())]);
                 app.update();
-                std::hint::black_box(WidgetryTextField::text(app.world(), entity).unwrap());
+                std::hint::black_box(WidgetryTextFieldHeadless::text(app.world(), entity).unwrap());
             });
         });
         assert_eq!(
-            WidgetryTextField::text(app.world(), entity).unwrap(),
+            WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
             "文".repeat(20)
         );
     }

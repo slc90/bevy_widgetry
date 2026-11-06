@@ -6,6 +6,7 @@ use bevy::{
     prelude::*,
     text::{EditableText, LineHeight, TextEdit},
 };
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
     AutoSize, WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
     WidgetryTextFieldPrefix,
@@ -38,29 +39,30 @@ fn default_rows_grow_cap_scroll_and_shrink_after_setters_and_edits() {
     }).unwrap().id();
     let min = settle(&mut app, root);
     assert_eq!(
-        WidgetryTextField::editor(app.world(), root)
+        WidgetryTextFieldHeadless::editor(app.world(), root)
             .unwrap()
             .visible_lines,
         Some(2.0)
     );
-    WidgetryTextField::set_text_in_world(app.world_mut(), root, "one\ntwo\nthree").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "one\ntwo\nthree").unwrap();
     let middle = settle(&mut app, root);
     assert!(middle > min);
     assert_eq!(
-        WidgetryTextField::editor(app.world(), root)
+        WidgetryTextFieldHeadless::editor(app.world(), root)
             .unwrap()
             .visible_lines,
         Some(3.0)
     );
-    WidgetryTextField::set_text_in_world(app.world_mut(), root, "1\n2\n3\n4\n5\n6\n7\n8").unwrap();
-    WidgetryTextField::focus_in_world(app.world_mut(), root).unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "1\n2\n3\n4\n5\n6\n7\n8")
+        .unwrap();
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), root).unwrap();
     let editor = support::editor_entity(app.world(), root);
     app.world_mut()
         .get_mut::<EditableText>(editor)
         .unwrap()
         .queue_edit(TextEdit::TextEnd(false));
     let max = settle(&mut app, root);
-    let edit = WidgetryTextField::editor(app.world(), root).unwrap();
+    let edit = WidgetryTextFieldHeadless::editor(app.world(), root).unwrap();
     assert_eq!(edit.visible_lines, Some(6.0));
     assert!(max > middle);
     assert!(
@@ -74,7 +76,10 @@ fn default_rows_grow_cap_scroll_and_shrink_after_setters_and_edits() {
         .pending_edits
         .extend([TextEdit::SelectAll, TextEdit::Insert("short".into())]);
     assert_eq!(settle(&mut app, root), min);
-    assert_eq!(WidgetryTextField::text(app.world(), root).unwrap(), "short");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+        "short"
+    );
 }
 
 #[test]
@@ -121,15 +126,15 @@ fn readonly_custom_rows_and_count_do_not_change_the_editable_height_policy() {
         }).unwrap().id();
         heights.push(settle(&mut app, root));
         assert_eq!(
-            WidgetryReadOnlyTextField::editor(app.world(), root)
+            WidgetryTextFieldHeadless::editor(app.world(), root)
                 .unwrap()
                 .visible_lines,
             Some(3.0)
         );
-        WidgetryReadOnlyTextField::set_text_in_world(app.world_mut(), root, "").unwrap();
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "").unwrap();
         settle(&mut app, root);
         assert_eq!(
-            WidgetryReadOnlyTextField::editor(app.world(), root)
+            WidgetryTextFieldHeadless::editor(app.world(), root)
                 .unwrap()
                 .visible_lines,
             Some(1.0)
@@ -157,26 +162,27 @@ fn default_single_line_and_fixed_multiline_keep_their_sizing() {
         .id();
     settle(&mut app, single);
     let height = settle(&mut app, fixed);
-    WidgetryTextField::set_text_in_world(app.world_mut(), fixed, "a\nb\nc\nd\ne\nf\ng").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), fixed, "a\nb\nc\nd\ne\nf\ng")
+        .unwrap();
     assert_eq!(settle(&mut app, fixed), height);
     assert_eq!(
-        WidgetryTextField::editor(app.world(), single)
+        WidgetryTextFieldHeadless::editor(app.world(), single)
             .unwrap()
             .visible_lines,
         Some(1.0)
     );
     assert!(
-        !WidgetryTextField::editor(app.world(), single)
+        !WidgetryTextFieldHeadless::editor(app.world(), single)
             .unwrap()
             .allow_newlines
     );
     assert!(
-        WidgetryTextField::editor(app.world(), fixed)
+        WidgetryTextFieldHeadless::editor(app.world(), fixed)
             .unwrap()
             .allow_newlines
     );
     assert_eq!(
-        WidgetryTextField::editor(app.world(), fixed)
+        WidgetryTextFieldHeadless::editor(app.world(), fixed)
             .unwrap()
             .visible_lines,
         Some(4.0)
@@ -270,7 +276,7 @@ fn fixed_root_height_conflict_reaches_the_host_once_and_recovers_when_auto() {
     app.world_mut().get_mut::<Node>(root).unwrap().height = Val::Auto;
     logs.run(|| settle(&mut app, root));
     assert_eq!(
-        WidgetryTextField::editor(app.world(), root)
+        WidgetryTextFieldHeadless::editor(app.world(), root)
             .unwrap()
             .visible_lines,
         Some(2.0)

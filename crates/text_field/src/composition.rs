@@ -122,12 +122,15 @@ fn projection_target(
     if world.get_entity(root).is_err() {
         return Ok(false);
     }
-    if world.get::<TextFieldEditor>(editor).is_none() {
-        return Err(missing(
-            root,
-            editor,
-            "TextFieldEditor",
-            "text_field.project_configuration",
+    let bound = crate::WidgetryTextFieldHeadless::editor_entity(world, root)?;
+    if bound != editor {
+        return Err(failure(
+            TextFieldError::InvalidEditorBinding {
+                root,
+                editor,
+                bound,
+            },
+            ErrorFrame::new("text_field.project_configuration"),
         ));
     }
     Ok(true)
@@ -152,14 +155,24 @@ fn remove_projection<T: Component>(commands: &mut Commands, root: Entity, editor
 }
 
 pub(crate) fn project_text_configuration(
-    fonts: Query<(Entity, &Parts, &TextFont), Changed<TextFont>>,
-    layouts: Query<(Entity, &Parts, &TextLayout), Changed<TextLayout>>,
-    lines: Query<(Entity, &Parts, &LineHeight), Changed<LineHeight>>,
-    hints: Query<(Entity, &Parts, &FontHinting), Changed<FontHinting>>,
-    filters: Query<(Entity, &Parts, &EditableTextFilter), Changed<EditableTextFilter>>,
-    select_all: Query<(Entity, &Parts), Added<bevy::ui_widgets::SelectAllOnFocus>>,
+    fonts: Query<(Entity, &crate::WidgetryTextFieldHeadless, &TextFont), Changed<TextFont>>,
+    layouts: Query<(Entity, &crate::WidgetryTextFieldHeadless, &TextLayout), Changed<TextLayout>>,
+    lines: Query<(Entity, &crate::WidgetryTextFieldHeadless, &LineHeight), Changed<LineHeight>>,
+    hints: Query<(Entity, &crate::WidgetryTextFieldHeadless, &FontHinting), Changed<FontHinting>>,
+    filters: Query<
+        (
+            Entity,
+            &crate::WidgetryTextFieldHeadless,
+            &EditableTextFilter,
+        ),
+        Changed<EditableTextFilter>,
+    >,
+    select_all: Query<
+        (Entity, &crate::WidgetryTextFieldHeadless),
+        Added<bevy::ui_widgets::SelectAllOnFocus>,
+    >,
     roots: Query<(
-        &Parts,
+        &crate::WidgetryTextFieldHeadless,
         Has<EditableTextFilter>,
         Has<bevy::ui_widgets::SelectAllOnFocus>,
     )>,

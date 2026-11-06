@@ -12,6 +12,7 @@ use bevy::{
 use bevy_widgetry_core::{input_target::WidgetryInputTarget, scene::spawn_scene};
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
 use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 #[derive(Resource, Default)]
 struct Changes(Vec<f64>);
@@ -109,20 +110,20 @@ fn keyboard_uses_current_value_and_reachable_endpoints_with_one_notification() {
 #[test]
 fn valid_and_invalid_drafts_step_directly_to_one_final_value() {
     let (mut app, root, _, field, _) = fixture(10.0, 100.0, 5.0);
-    WidgetryTextField::set_text_in_world(app.world_mut(), field, "5").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "5").unwrap();
     key(&mut app, true, false);
     assert_eq!(
         WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
         10.0
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
-    WidgetryTextField::set_text_in_world(app.world_mut(), field, "25").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "25").unwrap();
     key(&mut app, true, false);
     assert_eq!(
         WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
         30.0
     );
-    WidgetryTextField::set_text_in_world(app.world_mut(), field, "abc").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "abc").unwrap();
     key(&mut app, true, false);
     assert_eq!(
         WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
@@ -149,7 +150,7 @@ fn arrows_leave_active_and_pending_ime_composition_owned_by_the_editor() {
         }
         key(&mut app, true, false);
         assert!(
-            WidgetryTextField::editor(app.world(), field)
+            WidgetryTextFieldHeadless::editor(app.world(), field)
                 .unwrap()
                 .is_composing()
         );
@@ -160,7 +161,7 @@ fn arrows_leave_active_and_pending_ime_composition_owned_by_the_editor() {
         assert!(app.world().resource::<Changes>().0.is_empty());
         key(&mut app, false, false);
         assert!(
-            WidgetryTextField::editor(app.world(), field)
+            WidgetryTextFieldHeadless::editor(app.world(), field)
                 .unwrap()
                 .is_composing()
         );
@@ -257,7 +258,7 @@ fn singleton_ranges_and_unsigned_type_limits_remain_stable() {
 #[test]
 fn internal_button_keeps_editor_focus_and_does_not_commit_an_intermediate_draft() {
     let (mut app, root, window, field, editor) = fixture(10.0, 100.0, 5.0);
-    WidgetryTextField::set_text_in_world(app.world_mut(), field, "25").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "25").unwrap();
     let pointer = bevy_widgetry_test_utils::pointer_ids()[1];
     app.world_mut().spawn(pointer);
     let at = Location {

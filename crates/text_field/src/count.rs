@@ -2,7 +2,7 @@ use crate::{
     TextFieldFailure,
     error::{missing, query},
 };
-use crate::{length::LengthLimit, text_field::Parts};
+use crate::{WidgetryTextFieldHeadless, length::LengthLimit};
 use bevy::{prelude::*, text::EditableText};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -19,23 +19,33 @@ pub(crate) fn label(edit: &EditableText, max: Option<usize>) -> String {
 
 pub(crate) fn sync_count(
     mut displays: Query<(&ChildOf, &mut Text), With<CountDisplay>>,
-    roots: Query<(&Parts, &LengthLimit)>,
-    edits: Query<&EditableText, Changed<EditableText>>,
+    roots: Query<&WidgetryTextFieldHeadless>,
+    edits: Query<(Ref<EditableText>, &LengthLimit)>,
 ) -> Result {
     for (parent, mut text) in &mut displays {
         let root = parent.parent();
-        let (parts, limit) = roots.get(root).map_err(|source| {
+        let binding = roots.get(root).map_err(|source| {
             query(
                 root,
                 root,
-                "Parts / LengthLimit",
+                "WidgetryTextFieldHeadless",
                 source,
                 "text_field.sync_count",
             )
             .into_bevy_error()
         })?;
-        if let Ok(edit) = edits.get(parts.editor) {
-            text.set_if_neq(Text(label(edit, limit.0)));
+        let (edit, limit) = edits.get(binding.editor).map_err(|source| {
+            query(
+                root,
+                binding.editor,
+                "EditableText / LengthLimit",
+                source,
+                "text_field.sync_count",
+            )
+            .into_bevy_error()
+        })?;
+        if edit.is_changed() {
+            text.set_if_neq(Text(label(&edit, limit.0)));
         }
     }
     Ok(())
@@ -50,13 +60,10 @@ pub(crate) fn refresh_in_world(world: &mut World, root: Entity) -> Result<(), Te
     let Some(display) = display else {
         return Ok(());
     };
-    let parts = world
-        .get::<Parts>(root)
-        .ok_or_else(|| missing(root, root, "Parts", "text_field.refresh_count"))?;
+    let editor = WidgetryTextFieldHeadless::editor_entity(world, root)?;
     let limit = world
-        .get::<LengthLimit>(root)
-        .ok_or_else(|| missing(root, root, "LengthLimit", "text_field.refresh_count"))?;
-    let editor = parts.editor;
+        .get::<LengthLimit>(editor)
+        .ok_or_else(|| missing(root, editor, "LengthLimit", "text_field.refresh_count"))?;
     let edit = world
         .get::<EditableText>(editor)
         .ok_or_else(|| missing(root, editor, "EditableText", "text_field.refresh_count"))?;

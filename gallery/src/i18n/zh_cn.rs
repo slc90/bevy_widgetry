@@ -902,6 +902,20 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::CheckBox(CheckBoxKey::OnlyCheckedNormalMark0F766EMovePointer) => {
             "仅 checked.normal.mark=#0F766E；Checked 后移开 pointer，Hover/Disabled 仍取 Theme。"
         }
+        TextKey::TextField(TextFieldKey::CustomDescription) => {
+            "自定义搜索：独立 Headless 与多层嵌套编辑器"
+        }
+        TextKey::TextField(TextFieldKey::CustomHint) => {
+            "可输入、选择和粘贴，上限 16 个字素簇。图标及提示由应用绘制。"
+        }
+        TextKey::TextField(TextFieldKey::CustomReadOnlyHint) => {
+            "只读：允许选择与复制；程序清空与预设仍可使用。"
+        }
+        TextKey::TextField(TextFieldKey::CustomClear) => "清空",
+        TextKey::TextField(TextFieldKey::CustomFocus) => "聚焦编辑器",
+        TextKey::TextField(TextFieldKey::CustomPreset) => "设置 Unicode 文本",
+        TextKey::TextField(TextFieldKey::CustomDisabled) => "切换禁用",
+        TextKey::TextField(TextFieldKey::CustomContent) => "正文：{value}",
         TextKey::TextField(TextFieldKey::OnlyEditableFocusedBorder7C3AedClickTo) => {
             "仅 editable.focused.border=#7C3AED；点击取得 focus 后输入。"
         }

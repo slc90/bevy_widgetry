@@ -334,9 +334,11 @@ pub mod file_dialog {
 pub mod text_field {
     pub use bevy_widgetry_text_field::{
         AutoSize, TextFieldError, TextFieldFailure, WidgetryReadOnlyTextField, WidgetryTextField,
-        WidgetryTextFieldColorOverrides, WidgetryTextFieldInteractionColorOverrides,
-        WidgetryTextFieldPlugin, WidgetryTextFieldPrefix, WidgetryTextFieldProps,
-        WidgetryTextFieldStateColorOverrides, WidgetryTextFieldSuffix,
+        WidgetryTextFieldColorOverrides, WidgetryTextFieldEditor, WidgetryTextFieldEditorProps,
+        WidgetryTextFieldHeadless, WidgetryTextFieldHeadlessPlugin, WidgetryTextFieldHeadlessProps,
+        WidgetryTextFieldInteractionColorOverrides, WidgetryTextFieldPlugin,
+        WidgetryTextFieldPrefix, WidgetryTextFieldProps, WidgetryTextFieldStateColorOverrides,
+        WidgetryTextFieldSuffix,
     };
 }
 

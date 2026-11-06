@@ -1,4 +1,5 @@
-use crate::text_field::{Parts, ReadOnly, TextFieldEditor};
+use crate::WidgetryTextFieldHeadless;
+use crate::text_field::{ReadOnly, TextFieldEditor};
 use bevy::input_focus::{AcquireFocus, FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::text::{EditableText, TextEdit};
@@ -58,7 +59,7 @@ pub(super) fn focus_text_field_on_press(
 pub(super) fn retain_text_field_focus_on_acquire(
     mut event: On<AcquireFocus>,
     text_fields: Query<(), (With<TextFieldEditor>, Without<InteractionDisabled>)>,
-    roots: Query<&Parts, Without<InteractionDisabled>>,
+    roots: Query<&WidgetryTextFieldHeadless, Without<InteractionDisabled>>,
     mut focus: ResMut<InputFocus>,
 ) {
     if let Ok(parts) = roots.get(event.focused_entity) {
@@ -89,7 +90,10 @@ pub(crate) fn contain_slot_focus(
     }
 }
 
-pub(crate) fn redirect_root_focus(roots: Query<&Parts>, mut focus: ResMut<InputFocus>) {
+pub(crate) fn redirect_root_focus(
+    roots: Query<&WidgetryTextFieldHeadless>,
+    mut focus: ResMut<InputFocus>,
+) {
     if let Some(current) = focus.get()
         && let Ok(parts) = roots.get(current)
     {
@@ -99,7 +103,7 @@ pub(crate) fn redirect_root_focus(roots: Query<&Parts>, mut focus: ResMut<InputF
 
 pub(crate) fn redirect_gained_focus(
     event: On<bevy::input_focus::FocusGained>,
-    roots: Query<&Parts>,
+    roots: Query<&WidgetryTextFieldHeadless>,
     mut focus: ResMut<InputFocus>,
 ) {
     if focus.get() == Some(event.entity)
@@ -112,7 +116,7 @@ pub(crate) fn redirect_gained_focus(
 pub(crate) fn navigate_from_editor(
     mut event: On<bevy::input_focus::FocusedInput<bevy::input::keyboard::KeyboardInput>>,
     editors: Query<(&TextFieldEditor, &EditableText)>,
-    roots: Query<&Parts>,
+    roots: Query<&WidgetryTextFieldHeadless>,
     nav: bevy::input_focus::tab_navigation::TabNavigation,
     keys: Res<ButtonInput<KeyCode>>,
     mut focus: ResMut<InputFocus>,

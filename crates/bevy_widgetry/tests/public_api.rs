@@ -18,6 +18,7 @@
 ))]
 
 use bevy::text::FontSource;
+use bevy_widgetry::text_field::WidgetryTextFieldHeadless;
 
 #[test]
 #[cfg(feature = "slider")]
@@ -548,17 +549,19 @@ fn text_field_content_api_is_available_through_facade() {
         .unwrap()
         .id();
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "姓名"
     );
-    assert!(WidgetryTextField::set_text_in_world(app.world_mut(), entity, "新姓名").unwrap());
-    WidgetryTextField::set_text(&mut app.world_mut().commands(), entity, "排队更新");
+    assert!(
+        WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), entity, "新姓名").unwrap()
+    );
+    WidgetryTextFieldHeadless::set_text(&mut app.world_mut().commands(), entity, "排队更新");
     app.world_mut().flush();
     assert_eq!(
-        WidgetryTextField::text(app.world(), entity).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), entity).unwrap(),
         "排队"
     );
-    WidgetryTextField::focus(&mut app.world_mut().commands(), entity);
+    WidgetryTextFieldHeadless::focus(&mut app.world_mut().commands(), entity);
     app.world_mut().flush();
     assert_eq!(
         app.world()
@@ -1202,4 +1205,29 @@ fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
             .unwrap()
             .active,
     }
+}
+
+#[test]
+fn independent_text_field_bindings_are_available_through_facade() {
+    use bevy_widgetry::text_field::{WidgetryTextFieldEditor, WidgetryTextFieldHeadlessPlugin};
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryTextFieldHeadlessPlugin);
+    let root=app.world_mut().spawn_scene(bsn! {
+        #Root @WidgetryTextFieldHeadless {editor:#Editor}
+        Children [Node Children [#Editor @WidgetryTextFieldEditor {root:#Root,@value:{"开放编辑".to_owned()},@max_length:{Some(2)}}]]
+    }).unwrap().id();
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+        "开放"
+    );
+    assert_eq!(
+        WidgetryTextFieldHeadless::max_length(app.world(), root).unwrap(),
+        Some(2)
+    );
+    let editor = WidgetryTextFieldHeadless::editor_entity(app.world(), root).unwrap();
+    assert_eq!(
+        WidgetryTextFieldEditor::owner(app.world(), editor).unwrap(),
+        root
+    );
+    assert!(app.world().get::<WidgetryTextField>(root).is_none());
 }

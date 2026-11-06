@@ -11,6 +11,7 @@ use bevy::{
     ui::InteractionDisabled,
 };
 use bevy_widgetry_test_utils::scene_app;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
 use support::editing_app;
 
@@ -145,7 +146,7 @@ fn disabled_text_field_still_allows_programmatic_value_changes() {
 
     app.update();
 
-    WidgetryTextField::set_text_in_world(app.world_mut(), entity, "after").unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), entity, "after").unwrap();
 
     app.update();
 

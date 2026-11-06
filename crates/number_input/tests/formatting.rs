@@ -8,6 +8,7 @@ use bevy::{
 use bevy_widgetry_core::{input_target::WidgetryInputTarget, scene::spawn_scene};
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
 use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 #[derive(Resource, Default)]
 struct Count(usize);
@@ -39,18 +40,24 @@ fn focus_displays_full_value_without_committing_rounded_text_or_erasing_pending_
     for _ in 0..6 {
         app.update();
     }
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "0.30");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "0.30"
+    );
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(editor, FocusCause::Navigated);
     app.update();
     assert_eq!(
-        WidgetryTextField::text(app.world(), field).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
         "0.30000000000000004"
     );
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "0.30");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "0.30"
+    );
     assert_eq!(
         WidgetryNumberInput::<f64>::value(app.world(), root)
             .unwrap()
@@ -80,7 +87,7 @@ fn focus_displays_full_value_without_committing_rounded_text_or_erasing_pending_
         .push(TextEdit::Insert("7".into()));
     app.update();
     assert!(
-        WidgetryTextField::text(app.world(), field)
+        WidgetryTextFieldHeadless::text(app.world(), field)
             .unwrap()
             .contains('7')
     );
@@ -91,12 +98,15 @@ fn focus_displays_full_value_without_committing_rounded_text_or_erasing_pending_
     assert_eq!(app.world().resource::<Count>().0, 0);
     WidgetryNumberInput::<f64>::set_value_in_world(app.world_mut(), root, 1.234567).unwrap();
     assert_eq!(
-        WidgetryTextField::text(app.world(), field).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
         "1.234567"
     );
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "1.23");
+    assert_eq!(
+        WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+        "1.23"
+    );
     assert_eq!(
         WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
         1.234567
@@ -198,7 +208,7 @@ fn extreme_floats_focus_and_blur_without_losing_bits_or_using_exponents() {
                     .resource_mut::<InputFocus>()
                     .set(editor, FocusCause::Pressed);
                 app.update();
-                let text = WidgetryTextField::text(app.world(), field).unwrap();
+                let text = WidgetryTextFieldHeadless::text(app.world(), field).unwrap();
                 assert!(!text.contains(['e', 'E']));
                 assert_eq!(text.parse::<$t>().unwrap().to_bits(), value.to_bits());
                 app.world_mut().resource_mut::<InputFocus>().clear();

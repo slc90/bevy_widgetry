@@ -6,6 +6,7 @@ use bevy::{
     prelude::*,
     text::{EditableText, TextEdit},
 };
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
     AutoSize, WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
     WidgetryTextFieldPrefix, WidgetryTextFieldSuffix,
@@ -63,8 +64,11 @@ fn hint_is_optional_and_follows_the_frame_or_count_without_entering_content() {
             }
             let entity = display.last().unwrap().0;
             assert!(!app.world().get::<Pickable>(entity).unwrap().is_hoverable);
-            assert_eq!(WidgetryTextField::text(app.world(), root).unwrap(), "");
-            WidgetryTextField::set_text_in_world(app.world_mut(), root, "value").unwrap();
+            assert_eq!(
+                WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
+                ""
+            );
+            WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), root, "value").unwrap();
             app.update();
             assert_eq!(displays(app.world(), root).last().unwrap().1, hint);
         }
@@ -90,11 +94,7 @@ fn focus_preedit_readonly_and_disabled_keep_the_hint_visible() {
                 .id()
         };
         settle(&mut app);
-        if readonly {
-            WidgetryReadOnlyTextField::focus_in_world(app.world_mut(), root).unwrap();
-        } else {
-            WidgetryTextField::focus_in_world(app.world_mut(), root).unwrap();
-        }
+        WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), root).unwrap();
         let editor = support::editor_entity(app.world(), root);
         app.world_mut()
             .get_mut::<EditableText>(editor)
@@ -139,7 +139,7 @@ fn all_four_themes_refresh_warning_without_changing_editor_state() {
         .unwrap()
         .queue_edit(TextEdit::SelectAll);
     app.update();
-    let selection = WidgetryTextField::editor(app.world(), root)
+    let selection = WidgetryTextFieldHeadless::editor(app.world(), root)
         .unwrap()
         .editor()
         .raw_selection()
@@ -158,11 +158,11 @@ fn all_four_themes_refresh_warning_without_changing_editor_state() {
             mode.text_field.hint_warning
         );
         assert_eq!(
-            WidgetryTextField::text(app.world(), root).unwrap(),
+            WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
             "selected"
         );
         assert_eq!(
-            WidgetryTextField::editor(app.world(), root)
+            WidgetryTextFieldHeadless::editor(app.world(), root)
                 .unwrap()
                 .editor()
                 .raw_selection()
@@ -267,7 +267,7 @@ fn all_five_features_keep_hint_wrapping_outside_auto_size_and_official_text() {
     assert_eq!(display[0].1, "3 / 3");
     assert_eq!(display[1].1, hint);
     assert_eq!(
-        WidgetryTextField::text(app.world(), root).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
         "中e\u{301}👍🏽"
     );
     let (_, initial_height) = (
@@ -311,7 +311,7 @@ fn all_five_features_keep_hint_wrapping_outside_auto_size_and_official_text() {
             > initial_height
     );
     assert_eq!(
-        WidgetryTextField::editor(app.world(), root)
+        WidgetryTextFieldHeadless::editor(app.world(), root)
             .unwrap()
             .visible_lines,
         Some(2.0)
@@ -338,7 +338,7 @@ fn all_five_features_keep_hint_wrapping_outside_auto_size_and_official_text() {
         });
     settle(&mut app);
     assert_eq!(
-        WidgetryTextField::text(app.world(), root).unwrap(),
+        WidgetryTextFieldHeadless::text(app.world(), root).unwrap(),
         "甲乙丙"
     );
     assert_eq!(displays(app.world(), root)[0].1, "3 / 3");

@@ -16,6 +16,7 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_scroll_area::{WidgetryScrollArea, WidgetryScrollAreaPlugin};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
     WidgetryTextField, WidgetryTextFieldPlugin, WidgetryTextFieldSuffix,
 };
@@ -522,16 +523,15 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
     if path_changed {
         if let Some(path_entity) = path_entity {
             let path = state.current_path().map(display_path).unwrap_or_default();
-            let edit = bevy_widgetry_text_field::WidgetryTextField::editor(world, path_entity)
-                .map_err(|error| {
-                    error
-                        .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                            "file_dialog.text_field.editor",
-                        ))
-                        .into_bevy_error()
-                })?;
+            let edit = WidgetryTextFieldHeadless::editor(world, path_entity).map_err(|error| {
+                error
+                    .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                        "file_dialog.text_field.editor",
+                    ))
+                    .into_bevy_error()
+            })?;
             if edit.value().to_string() != path {
-                WidgetryTextField::set_text_in_world(world, path_entity, &path).map_err(
+                WidgetryTextFieldHeadless::set_text_in_world(world, path_entity, &path).map_err(
                     |error| {
                         error
                             .with_context(bevy_widgetry_core::scene::ErrorFrame::new(

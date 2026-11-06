@@ -6,6 +6,7 @@ use bevy_widgetry_number_input::{
     NumberInputError, NumberInputRejection, NumberInputValue, WidgetryNumberInput,
 };
 use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture, scene_app};
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -252,7 +253,7 @@ fn text_field_failure_keeps_source_origin_and_both_operation_contexts() {
             .unwrap()
             .is::<TextFieldError>()
     );
-    for operation in ["text_field.editor", "number_input.editor"] {
+    for operation in ["text_field.editor_binding", "number_input.editor"] {
         assert!(
             diagnostic
                 .contexts()
@@ -305,8 +306,8 @@ fn invalid_input_target_is_rejected_even_when_the_text_fields_own_editor_is_vali
         app.world_mut()
             .entity_mut(field)
             .insert(WidgetryInputTarget { target });
-        assert!(WidgetryTextField::editor(app.world(), field).is_ok());
-        let before = WidgetryTextField::text(app.world(), field).unwrap();
+        assert!(WidgetryTextFieldHeadless::editor(app.world(), field).is_ok());
+        let before = WidgetryTextFieldHeadless::text(app.world(), field).unwrap();
         let logs = LogCapture::default();
         logs.run(|| {
             let error = WidgetryNumberInput::<f64>::set_value_in_world(app.world_mut(), root, 2.0).unwrap_err();
@@ -317,6 +318,9 @@ fn invalid_input_target_is_rejected_even_when_the_text_fields_own_editor_is_vali
             WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
             1.0
         );
-        assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), before);
+        assert_eq!(
+            WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+            before
+        );
     }
 }

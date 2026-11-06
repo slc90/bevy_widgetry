@@ -63,22 +63,64 @@ fn replacement_prefix<'a>(
     ""
 }
 
+fn input_binding(
+    roots: &Query<&crate::WidgetryTextFieldHeadless>,
+    root: Entity,
+    editor: Entity,
+) -> Result<(), crate::TextFieldFailure> {
+    let binding = roots.get(root).map_err(|_| {
+        missing(
+            root,
+            root,
+            "WidgetryTextFieldHeadless",
+            "text_field.input_binding",
+        )
+    })?;
+    if binding.editor != editor {
+        return Err(failure(
+            TextFieldError::InvalidEditorBinding {
+                root,
+                editor,
+                bound: binding.editor,
+            },
+            ErrorFrame::new("text_field.input_binding"),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn initialize_limits(
-    mut query: Query<(&TextFieldEditor, &mut EditableText), Added<TextFieldEditor>>,
-    limits: Query<&LengthLimit>,
+    mut query: Query<
+        (
+            Entity,
+            &TextFieldEditor,
+            &mut EditableText,
+            Option<&LengthLimit>,
+        ),
+        Added<TextFieldEditor>,
+    >,
+    roots: Query<&crate::WidgetryTextFieldHeadless>,
 ) -> Result {
     let mut failures = DiagnosticBatch::default();
-    for (owner, mut edit) in &mut query {
-        let Ok(limit) = limits.get(owner.root) else {
-            edit.pending_edits.clear();
-            edit.pending_paste = None;
-            failures.push(missing(
-                owner.root,
-                owner.root,
-                "LengthLimit",
-                "text_field.apply_length_limit",
-            ));
-            continue;
+    for (entity, owner, mut edit, limit) in &mut query {
+        let validated = input_binding(&roots, owner.root, entity).and_then(|()| {
+            limit.ok_or_else(|| {
+                missing(
+                    owner.root,
+                    entity,
+                    "LengthLimit",
+                    "text_field.initialize_limit",
+                )
+            })
+        });
+        let limit = match validated {
+            Ok(limit) => limit,
+            Err(error) => {
+                edit.pending_edits.clear();
+                edit.pending_paste = None;
+                failures.push(error);
+                continue;
+            }
         };
         edit.max_characters = None;
         let text = edit.value().to_string();
@@ -101,6 +143,7 @@ pub(crate) fn apply_limited_edits(
         With<TextFieldEditor>,
     >,
     limits: Query<&LengthLimit>,
+    roots: Query<&crate::WidgetryTextFieldHeadless>,
     fonts: Option<ResMut<FontCx>>,
     layout: Option<ResMut<LayoutCx>>,
     clipboard: Option<ResMut<Clipboard>>,
@@ -114,12 +157,18 @@ pub(crate) fn apply_limited_edits(
         if edit.pending_edits.is_empty() && edit.pending_paste.is_none() {
             continue;
         }
-        let Ok(limit) = limits.get(owner.root) else {
+        if let Err(error) = input_binding(&roots, owner.root, entity) {
+            edit.pending_edits.clear();
+            edit.pending_paste = None;
+            failures.push(error);
+            continue;
+        }
+        let Ok(limit) = limits.get(entity) else {
             edit.pending_edits.clear();
             edit.pending_paste = None;
             failures.push(missing(
                 owner.root,
-                owner.root,
+                entity,
                 "LengthLimit",
                 "text_field.apply_length_limit",
             ));

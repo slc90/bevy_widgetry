@@ -28,6 +28,15 @@ pub enum TextFieldError {
         root: Entity,
         height: Val,
     },
+    EditorOutsideRoot {
+        root: Entity,
+        editor: Entity,
+    },
+    InvalidEditorBinding {
+        root: Entity,
+        editor: Entity,
+        bound: Entity,
+    },
     InvalidEditorOwner {
         root: Entity,
         editor: Entity,
@@ -83,7 +92,9 @@ impl fmt::Display for TextFieldError {
             Self::HeightConflict { .. } => {
                 f.write_str("TextField AutoSize 要求根 Node.height 为 Auto")
             }
-            Self::InvalidEditorOwner { .. } => f.write_str("TextField AutoSize 编辑器身份不匹配"),
+            Self::InvalidEditorOwner { .. } => f.write_str("TextField 编辑器身份不匹配"),
+            Self::InvalidEditorBinding { .. } => f.write_str("TextField 编辑器未绑定到声明的根"),
+            Self::EditorOutsideRoot { .. } => f.write_str("TextField 编辑器不属于根的实体树"),
             Self::InvalidSlots { .. } => {
                 f.write_str("TextField 内容必须是唯一的 Prefix 或 Suffix 容器")
             }

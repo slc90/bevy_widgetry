@@ -10,7 +10,7 @@ use bevy_widgetry_list_view::{
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
 use bevy_widgetry_test_utils::primary_click;
-use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 struct Fixture {
     app: App,
@@ -114,15 +114,14 @@ fn main() -> Result {
             |f, i| {
                 let query = ["00001", "Item", "missing", "99"][i % 4];
                 f.expected = f.counts[i % 4];
-                WidgetryTextField::set_text_in_world(f.app.world_mut(), f.input, query).map_err(
-                    |error| {
+                WidgetryTextFieldHeadless::set_text_in_world(f.app.world_mut(), f.input, query)
+                    .map_err(|error| {
                         error
                             .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
                                 "combo_box.text_field.set_text_in_world",
                             ))
                             .into_bevy_error()
-                    },
-                )?;
+                    })?;
                 f.app.update();
                 // A result-count change alters popup geometry, consumed by virtualization on the next frame.
                 f.app.update();

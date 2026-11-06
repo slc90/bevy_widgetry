@@ -7,6 +7,7 @@ mod content;
 mod error;
 pub use error::{TextFieldError, TextFieldFailure};
 mod count;
+mod headless;
 mod hint;
 mod input;
 mod length;
@@ -15,7 +16,11 @@ mod style;
 mod text_field;
 
 pub use auto_size::AutoSize;
-pub use registration::WidgetryTextFieldPlugin;
+pub use headless::{
+    WidgetryTextFieldEditor, WidgetryTextFieldEditorProps, WidgetryTextFieldHeadless,
+    WidgetryTextFieldHeadlessProps,
+};
+pub use registration::{WidgetryTextFieldHeadlessPlugin, WidgetryTextFieldPlugin};
 pub use text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPrefix, WidgetryTextFieldSuffix,
 };

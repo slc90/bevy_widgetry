@@ -2,6 +2,7 @@ use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry::button::WidgetryButton;
+use bevy_widgetry::text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry::text_field::{
     AutoSize, WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPrefix,
     WidgetryTextFieldSuffix,
@@ -18,13 +19,14 @@ fn clear_slot_text(
         .find(|&entity| roots.contains(entity));
     commands.queue(move |world: &mut World| -> Result {
         let root = root.ok_or_else(|| crate::diagnostics::error("组合 TextField 根实体缺失"))?;
-        let changed = WidgetryTextField::set_text_in_world(world, root, "").map_err(|error| {
-            error
-                .with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
-                    "gallery.text_field.set_text_in_world",
-                ))
-                .into_bevy_error()
-        })?;
+        let changed =
+            WidgetryTextFieldHeadless::set_text_in_world(world, root, "").map_err(|error| {
+                error
+                    .with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
+                        "gallery.text_field.set_text_in_world",
+                    ))
+                    .into_bevy_error()
+            })?;
         info!(changed, "清空组合 TextField 正文");
         Ok(())
     });
@@ -44,10 +46,13 @@ fn toggle_auto_width(
     Ok(())
 }
 
+mod custom;
+
 pub(crate) struct TextFieldDemoPlugin;
 
 impl Plugin for TextFieldDemoPlugin {
     fn build(&self, app: &mut App) {
+        custom::install(app);
         app.add_systems(OnEnter(GalleryPage::TextField), enter)
             .add_systems(OnExit(GalleryPage::TextField), exit);
     }
@@ -64,6 +69,7 @@ fn exit(world: &mut World) -> Result {
 
 pub(crate) fn scene() -> impl SceneList {
     bsn_list! {
+        @custom::scene()--
         @WidgetryTextField { @value: {("Single line").to_owned()}, @show_count: true }
             Node { margin: UiRect::bottom(px(16)) }
         --

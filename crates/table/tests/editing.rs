@@ -2,6 +2,7 @@
 mod common;
 use bevy::prelude::*;
 use bevy_widgetry_table::*;
+use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 
 #[derive(Component)]
 struct Draft(String);
@@ -22,7 +23,8 @@ fn text_field_read_failure_reaches_host_with_original_diagnostic_instead_of_vali
         |value: &String| bsn_list! { @WidgetryTextField { @value: {value.clone()} } },
         |world, editor| {
             let field = world.get::<Children>(editor).unwrap()[0];
-            WidgetryTextField::text(world, field).map_err(WidgetryTableEditorReadError::diagnostic)
+            WidgetryTextFieldHeadless::text(world, field)
+                .map_err(WidgetryTableEditorReadError::diagnostic)
         },
     ));
     app.world_mut()
@@ -824,7 +826,7 @@ fn real_textfield_propagates_native_enter_and_control_enter_to_the_edit_transact
             move |v:&String|bsn_list!{@WidgetryTextField{@value:{v.clone()},@multiline:multiline}},
             |world,root| {
                 let field=world.get::<Children>(root).unwrap()[0];
-                WidgetryTextField::text(world,field).map_err(WidgetryTableEditorReadError::diagnostic)
+                WidgetryTextFieldHeadless::text(world,field).map_err(WidgetryTableEditorReadError::diagnostic)
             }));
         app.world_mut()
             .entity_mut(root)
@@ -878,7 +880,7 @@ fn real_textfield_propagates_native_enter_and_control_enter_to_the_edit_transact
             .queue_edit(bevy::text::TextEdit::Insert("X".into()));
         queue_key(&mut app, input);
         app.update();
-        let expected = WidgetryTextField::text(app.world(), field).unwrap();
+        let expected = WidgetryTextFieldHeadless::text(app.world(), field).unwrap();
         assert!(expected.contains('X'));
         assert_eq!(
             app.world()
