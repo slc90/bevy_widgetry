@@ -2,7 +2,9 @@ use crate::i18n::{Language, NumberInputKey, TextKey, localized, tr_args};
 use bevy::prelude::*;
 use bevy::text::TextCursorStyle;
 use bevy_widgetry::{
-    number_input::{WidgetryNumberInputEditor, WidgetryNumberInputHeadless},
+    number_input::{
+        WidgetryNumberInputEditor, WidgetryNumberInputHeadless, WidgetryNumberInputStep,
+    },
     text::WidgetryText,
     text_field::{WidgetryTextFieldEditor, WidgetryTextFieldHeadless},
     theme::WidgetryTheme,
@@ -12,6 +14,9 @@ use bevy_widgetry::{
 struct Status {
     root: Entity,
 }
+
+#[derive(Component)]
+struct StepAppearance;
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
@@ -32,7 +37,45 @@ pub(super) fn scene() -> impl Scene {
                     TextFont {font_size:FontSize::Px(20.0)}
                 ]]
             ]--
-            Status {root:#Root} Name::new("NumberCustomStatus") Text::new("") WidgetryText
+            Status {root:#Root} Name::new("NumberCustomStatus") Text::new("") WidgetryText--
+            @stepped_scene()
+        ]
+    }
+}
+
+fn stepped_scene() -> impl Scene {
+    bsn! {
+        Node {flex_direction:FlexDirection::Column,row_gap:px(8)}
+        Children [
+            @localized(TextKey::NumberInput(NumberInputKey::CustomStepping)) WidgetryText--
+            #Root @WidgetryNumberInputHeadless<f64> {@value:{Some(10.0)},@min:{Some(0.0)},@max:{Some(100.0)},@step:5.0}
+            WidgetryNumberInputEditor {field:#Field} Name::new("NumberCustomStep") on(committed)
+            Node {width:px(300),padding:UiRect::all(px(12)),column_gap:px(8),align_items:AlignItems::Center,border:UiRect::bottom(px(3)),border_radius:BorderRadius::all(px(12))}
+            BackgroundColor BorderColor
+            Children [
+                #Field @WidgetryTextFieldHeadless {editor:#Editor}
+                Node {flex_grow:1.0,min_width:px(0)}
+                Children [Node {width:percent(100)} Children [
+                    #Editor @WidgetryTextFieldEditor {root:#Field}
+                    Name::new("NumberCustomStepEditor") Node {width:percent(100),min_height:px(28)} TextFont {font_size:FontSize::Px(20.0)}
+                ]]--
+                Node {flex_direction:FlexDirection::Column,row_gap:px(4),width:px(36),flex_shrink:0.0}
+                Children [
+                    WidgetryNumberInputStep {root:#Root,increase:true} Name::new("NumberCustomIncrease")
+                    template(|_|Ok(StepAppearance))
+                    bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
+                    bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
+                    Node {width:percent(100),height:px(24),justify_content:JustifyContent::Center,align_items:AlignItems::Center,border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4))} BorderColor BackgroundColor
+                    Children [Text::new("+") WidgetryText Pickable::IGNORE]--
+                    WidgetryNumberInputStep {root:#Root,increase:false} Name::new("NumberCustomDecrease")
+                    template(|_|Ok(StepAppearance))
+                    bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
+                    bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
+                    Node {width:percent(100),height:px(24),justify_content:JustifyContent::Center,align_items:AlignItems::Center,border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4))} BorderColor BackgroundColor
+                    Children [Text::new("−") WidgetryText Pickable::IGNORE]
+                ]
+            ]--
+            Status {root:#Root} Name::new("NumberCustomStepStatus") Text::new("") WidgetryText
         ]
     }
 }
@@ -89,6 +132,25 @@ pub(super) fn refresh(world: &mut World) -> Result {
         if let Some(mut border) = world.get_mut::<BorderColor>(root) {
             border.set_if_neq(BorderColor::all(theme.text_field.editable.focused.border));
         }
+    }
+    for (hovered, pressed, mut background, mut border) in world
+        .query_filtered::<(
+            &bevy::picking::hover::Hovered,
+            Has<bevy::ui::Pressed>,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ), With<StepAppearance>>()
+        .iter_mut(world)
+    {
+        let colors = if pressed {
+            theme.button.pressed
+        } else if hovered.0 {
+            theme.button.hovered
+        } else {
+            theme.button.normal
+        };
+        background.set_if_neq(BackgroundColor(colors.background));
+        border.set_if_neq(BorderColor::all(theme.text_field.editable.focused.border));
     }
     if changed {
         world.write_message(bevy::window::RequestRedraw);

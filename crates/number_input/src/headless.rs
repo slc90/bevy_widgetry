@@ -35,6 +35,20 @@ fn bind_input_target(mut world: DeferredWorld, context: HookContext) {
 }
 
 impl<T: WidgetryNumber> WidgetryNumberInputHeadless<T> {
+    pub fn step_in_world(
+        world: &mut World,
+        root: Entity,
+        increase: bool,
+    ) -> Result<bool, NumberInputFailure> {
+        crate::input::step::<T>(world, root, increase)
+    }
+    pub fn step(commands: &mut Commands, root: Entity, increase: bool) {
+        commands.queue(move |world: &mut World| {
+            Self::step_in_world(world, root, increase)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
+    }
     pub fn value(world: &World, root: Entity) -> Result<T, NumberInputFailure> {
         Ok(crate::value::state::<T>(world, root)?.value)
     }

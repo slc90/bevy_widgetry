@@ -14,6 +14,7 @@ bevy_widgetry_theme = { path = "../theme" }
 
 [dev-dependencies]
 bevy_widgetry_asset = { path = "../asset" }
+bevy_widgetry_button = { path = "../button" }
 bevy_widgetry_scroll_area = { path = "../scroll_area" }
 bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
 

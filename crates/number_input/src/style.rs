@@ -1,6 +1,7 @@
+use crate::WidgetryNumberInputStep;
 use crate::{
     NumberInputFailure,
-    editing::{Parts, ReadOnly, StepButton},
+    editing::{Parts, ReadOnly},
     error::{missing, text_field},
 };
 use bevy::{
@@ -38,9 +39,9 @@ fn update(
     focus: Res<InputFocus>,
     roots: Query<Entity, With<Parts>>,
     changed: Query<Entity, (With<Parts>, Or<(Added<Parts>, Added<InteractionDisabled>)>)>,
-    buttons: Query<&StepButton>,
+    buttons: Query<&WidgetryNumberInputStep>,
     changed_buttons: Query<
-        &StepButton,
+        &WidgetryNumberInputStep,
         Or<(Changed<Hovered>, Added<Pressed>, Added<InteractionDisabled>)>,
     >,
     fields: Query<&WidgetryStyleOwner<WidgetryTextField>>,

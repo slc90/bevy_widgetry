@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{
     WidgetryNumber, WidgetryNumberInputEditor, WidgetryNumberInputHeadless,
-    WidgetryNumberInputProps,
+    WidgetryNumberInputProps, WidgetryNumberInputStep,
     value::{State, state},
 };
 use bevy::{
@@ -23,12 +23,6 @@ pub(crate) struct Parts {
     pub(crate) field: Entity,
     pub(crate) decrease: Entity,
     pub(crate) increase: Entity,
-}
-
-#[derive(Component, FromTemplate)]
-pub(crate) struct StepButton {
-    pub(crate) root: Entity,
-    pub(crate) increase: bool,
 }
 
 #[derive(Component, Default)]
@@ -50,6 +44,7 @@ pub(crate) fn behavior<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) ->
         template(move |context| State::new(&props).map_err(|error| error.with_context(ErrorFrame::new("number_input.initialize").field("root", context.entity.id())).into_bevy_error()))
         template(|_|Ok(DisplayFocus::default()))
         template(|_|Ok(PendingInitialization))
+        template(|_|Ok(crate::input::StepTarget(crate::input::step::<T>)))
         @{read_only}
     }
 }
@@ -82,7 +77,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
         BorderColor
         BackgroundColor
         Children [
-            #NumberInputDecrease StepButton {root:#NumberInputRoot,increase:false}
+            #NumberInputDecrease WidgetryNumberInputStep {root:#NumberInputRoot,increase:false}
             @{disabled_button}
             crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
@@ -95,7 +90,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             bevy::input_focus::tab_navigation::TabIndex(0)
             TextLayout {justify:Justify::Center}
             Node {flex_grow:1.0,flex_basis:px(0),min_width:px(60)}--
-            #NumberInputIncrease StepButton {root:#NumberInputRoot,increase:true}
+            #NumberInputIncrease WidgetryNumberInputStep {root:#NumberInputRoot,increase:true}
             @{disabled_increase}
             crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
@@ -279,7 +274,7 @@ pub(crate) fn can_edit(world: &World, root: Entity) -> bool {
     world.get::<ReadOnly>(root).is_none() && !is_disabled(world, root)
 }
 
-fn is_disabled(world: &World, root: Entity) -> bool {
+pub(crate) fn is_disabled(world: &World, root: Entity) -> bool {
     world.get::<bevy::ui::InteractionDisabled>(root).is_some()
         || world
             .get::<WidgetryEffectiveDisabled>(root)

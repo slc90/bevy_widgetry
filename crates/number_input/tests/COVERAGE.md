@@ -1,5 +1,13 @@
 # NumberInput 覆盖模型
 
+`custom_step.rs` 通过只安装 Headless Plugin 的外部多层 Editor 与根外单按钮，覆盖公开直接/排队步进、合法/非法草稿合并、端点静默、真实 Picking 按下单步和释放不加步、焦点保留、方向键重复、ReadOnly/根及 Editor Disabled/待处理 IME 守卫、程序设置权限、失效触发器宿主 Error Severity，以及 f64/u128 混合根的精确调度与通知归属。默认原类型饱和、全部布局/长按/样式回归继续由原文件负责。
+
+带 TabIndex、释放时激活的外部触发器还验证 AcquireFocus 事件目标重定向；在全局重定向之后运行真实原生 tab-focus Observer，保护 Observer 顺序变化时的 Editor 焦点与草稿单次合并，按下不提前提交、释放只通知最终步进结果。
+
+释放激活组合使用真实 WidgetryButtonHeadless；另明确区分空 IME 清理与非空预编辑/活动组词，空清理不阻断有效步进。
+
+仅禁用 TextField 或 Editor、数值根仍启用时，实际 Picking 点击带 TabIndex 的外部触发器应保留 Editor 焦点和旧草稿，不经失焦间接提交，且不通知。
+
 `headless.rs` 从外部使用公开数值根与 TextField 绑定，验证没有默认 Frame/按钮的多层 Editor 的初始化、原类型 API 身份、精度切换、草稿/正式值分离、Enter/非法保留/Esc/失焦提交、根 source/final 通知，以及只读和祖先禁用期间程序设置、同值清理与解除禁用不补交。
 
 公开绑定同时覆盖全部 14 种数值类型、u128 精确极值、跨根绑定及只读模式不一致的写入前拒绝。长度受限或多行 Editor 的配置单独拒绝，保护完整数值投影与 Enter 提交，失败保持原数值和草稿。

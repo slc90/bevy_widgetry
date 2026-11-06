@@ -180,6 +180,7 @@ pub(crate) enum CollapsibleKey {
 pub(crate) enum NumberInputKey {
     Description,
     CustomEditing,
+    CustomStepping,
     CustomDraftStatus,
     Signed,
     Unsigned,

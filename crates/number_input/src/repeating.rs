@@ -1,4 +1,4 @@
-use crate::editing::StepButton;
+use crate::WidgetryNumberInputStep;
 use bevy::{
     prelude::*,
     time::TimeUpdateStrategy,
@@ -23,7 +23,7 @@ fn tick(
     strategy: Res<TimeUpdateStrategy>,
     mut buttons: Query<(
         Entity,
-        &StepButton,
+        &WidgetryNumberInputStep,
         Has<Pressed>,
         Has<InteractionDisabled>,
         &mut Repeat,

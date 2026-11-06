@@ -204,6 +204,9 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         },
         TextKey::Navigation(NavigationKey::NumberInput) => "数值输入",
         TextKey::NumberInput(key) => match key {
+            super::NumberInputKey::CustomStepping => {
+                "自定义数字框 · 步长 5 · 右侧独立按钮 · 按下单步"
+            }
             super::NumberInputKey::CustomEditing => {
                 "自定义数字框 · 仅编辑区 · Enter 提交，Esc 恢复"
             }
