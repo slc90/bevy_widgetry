@@ -8,6 +8,18 @@
 
 二态 Checkbox 复用 Bevy 官方 `Checked` State。三态 Checkbox 由 Widgetry 自有 `WidgetryCheckState` 管理状态，并提供专用的 Setter、Cycle 操作及状态通知。两套状态来源不强行统一。
 
+二态行为可独立安装 `WidgetryCheckBoxHeadlessPlugin`，在 BSN 中组合 `WidgetryCheckBoxHeadless` 与自有 Node/Children。Headless 提供官方 Checkbox、Node、Hovered、Pointer Pressed 协调及默认 `TabIndex(-1)`，保持官方 Checkbox 的无障碍语义，不创建默认方框、勾选 SVG、颜色状态或前景输出，也不安装 Icon Plugin。Facade 的 `check_box` 模块导出这些入口。
+
+```rust
+bsn! {
+    @WidgetryCheckBoxHeadless
+    Node { width: px(96), height: px(36) }
+    Checked
+}
+```
+
+`WidgetryCheckBoxPlugin` 自动安装二态 HeadlessPlugin，并保留默认二态/三态 Style。默认二态控件在原根组合同一行为，不增加布局层。自更新 Observer 只处理具备 Headless 身份的官方 `ValueChange<bool>` 请求，且只安装一次；不接管其他原生 Checkbox。外部无需默认 Indicator 即可使用输入，即使 App 同时安装默认 Style，也不会接受默认结构检查或被改写颜色。
+
 ## 主要功能
 
 - 二态 Checked / Unchecked 显示与输入。
@@ -19,6 +31,8 @@
 ## 行为与状态契约
 
 三态默认 Unchecked；其真实状态改变时先提交再发送 `ValueChange`，同值不通知。`Commands` 操作在真正执行时才更新。Disabled 阻止用户操作，但不阻止合约允许的程序化设置。二态仍遵循官方 `Checked` 的使用方式。
+
+二态的 `ValueChange<bool>` 保持官方输入请求语义，不是 Widgetry 提交后通知；不承诺该请求的多个 Observer 执行顺序。Checked 是唯一状态，调用方可以直接用 BSN / World / Commands 增删；这些直接操作不产生输入请求。Disabled 阻止用户输入，不阻止原生 Checked 写入。Gallery 的自定义开关通过公开 Headless、原生 Checked 和自有 Track/Thumb 展示这些差异。
 
 ## 边界情况与错误处理
 

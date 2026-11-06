@@ -439,6 +439,13 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Button(ButtonKey::TextIcon) => "文本 + 图标",
         TextKey::Common(CommonKey::Icon) => "图标",
         TextKey::CheckBox(CheckBoxKey::ReceiveUpdates) => "接收更新",
+        TextKey::CheckBox(CheckBoxKey::SwitchDescription) => {
+            "自定义二态开关：点击或按 Enter / Space；直接设置 Checked 不产生输入请求。"
+        }
+        TextKey::CheckBox(CheckBoxKey::SwitchFocus) => "聚焦开关",
+        TextKey::CheckBox(CheckBoxKey::SwitchDisabled) => "切换开关禁用",
+        TextKey::CheckBox(CheckBoxKey::SwitchSet) => "设置 / 清除 Checked",
+        TextKey::CheckBox(CheckBoxKey::SwitchStatus) => "{state} · 输入请求 {count} 次",
         TextKey::CheckBox(CheckBoxKey::Unchecked) => "未勾选",
         TextKey::CheckBox(CheckBoxKey::Checked) => "已勾选",
         TextKey::CheckBox(CheckBoxKey::Indeterminate) => "不确定",

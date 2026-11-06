@@ -9,12 +9,10 @@ mod style;
 mod tri_state;
 
 use bevy::prelude::*;
-use bevy::ui_widgets::CheckboxPlugin;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
-use bevy_widgetry_core::ui::WidgetryUiPlugin;
 use bevy_widgetry_internal_log::widgetry_debug;
-pub use checkbox::WidgetryCheckBox;
+pub use checkbox::{WidgetryCheckBox, WidgetryCheckBoxHeadless, WidgetryCheckBoxHeadlessPlugin};
 pub use error::{CheckBoxError, CheckBoxFailure};
 pub use tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
 
@@ -22,11 +20,8 @@ pub struct WidgetryCheckBoxPlugin;
 
 impl Plugin for WidgetryCheckBoxPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<WidgetryUiPlugin>() {
-            app.add_plugins(WidgetryUiPlugin);
-        }
-        if !app.is_plugin_added::<CheckboxPlugin>() {
-            app.add_plugins(CheckboxPlugin);
+        if !app.is_plugin_added::<WidgetryCheckBoxHeadlessPlugin>() {
+            app.add_plugins(WidgetryCheckBoxHeadlessPlugin);
         }
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);

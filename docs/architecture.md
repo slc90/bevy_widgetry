@@ -59,6 +59,8 @@ HoldButton 直接使用 Diagnostics 保存构造、颜色及已拥有材质/渲�
 
 ToggleButton 的 Headless/独立 HeadlessPlugin 组合官方 Checkbox 输入与唯一 Checked 状态，拥有查询、World/Commands 设置和提交后 Changed 通知；默认八态颜色及前景传播仅识别同根组合 Headless 的默认控件。Waveform 的测量工具通过 Headless 状态 API 操作其默认按钮。
 
+CheckBox 二态 Headless/独立 HeadlessPlugin 复用官方 Checkbox、Checked 和自更新 Observer；默认 Plugin 组合这套行为与原有二态/三态 Indicator、颜色及 Icon 管理。只安装二态行为不要求默认 Icon/Indicator，默认样式结构诊断继续按默认控件身份执行。
+
 CheckBox 直接使用 Diagnostics 保留二态/三态的领域错误与 mark/colors 持续异常，批量失败完整传播到宿主。
 
 RadioGroup 直接使用 Diagnostics 保存 Group/Option 归属、选择和样式诊断；选择历史与 Checked 修复继续复用 Core，结构和配色仍由各自的变更集合驱动。
