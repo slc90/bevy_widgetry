@@ -6,10 +6,12 @@
 
 当前提供横向 / 竖向输入与浮块式主题外观、可选水平等宽模式，并在 Gallery 独立页面展示。
 
+`WidgetrySegmentedHeadless` / `WidgetrySegmentedOptionHeadless` 与独立 `WidgetrySegmentedHeadlessPlugin` 提供选择、输入和结构维护，不要求默认颜色或浮块。默认控件在同一 Root 组合行为，默认 Plugin 自动确保行为 Plugin。Headless Group Props 只有构造时 `orientation`；等宽和布局留在默认 Style。外部可用自己的 Node、下划线和内容组合，并与默认 Option 混用。
+
 ## 选择与输入契约
 
 - Checked 是唯一选择权威。初始无 Checked 时选择首项；一个初始 Checked 时采用指定项；多个初始 Checked 报错，不覆盖冲突声明。修复冲突标记后可恢复。
-- 初始化完成后通过 `WidgetrySegmented::set_selected(&mut Commands, root, index)` 更新，不直接插入或移除 Checked 绕过单选约束；没有清空选择 API。
+- 初始化完成后通过 `WidgetrySegmentedHeadless::set_selected(&mut Commands, root, index)` 更新，不直接插入或移除 Checked 绕过单选约束；没有清空选择 API。
 - 用户点击非禁用项时提交选择，再发送来源为 Root 的 `ValueChange<usize>`；同项点击、程序化设置、初始化及结构修复静默。Observer 可以读取已经提交的 Checked。
 - 点击 Option 或内容可使 Group 获得 Focus；有焦点时横向使用左右方向键、竖向使用上下方向键跳过禁用项，到首尾停止不循环，非对应轴 / Home / End 不改选。失焦及整体 Disabled 时不响应导航。Group 默认 `TabIndex(-1)`，Tab / Shift+Tab 跳过；程序设置不抢焦点。
 - Disabled 沿用 Core 的继承 OR 语义。禁用不清除选中项，不限制合法程序选择或删除后的自动补选。
@@ -33,6 +35,8 @@ Segmented 与 RadioGroup 共用 Core 的结构历史和互斥 Checked 提交。R
 四套主题具有独立 Segmented Colors。Root Focus 使用容器边框；Option Hover 提供轻反馈，实际 Disabled 优先于 Hover，选中禁用仍保留淡化高亮。Style 不修改 Checked。
 
 Root / Option Props 的 colors 仅初始化；运行时通过 WidgetrySegmentedColorOverrides / WidgetrySegmentedOptionColorOverrides 的 get、set[_in_world]、clear[_in_world] 更新。优先级为 Option 字段覆盖 → Group Option 字段覆盖 → Theme；非法颜色及托管目标拒绝写入。通过 Core 的 ResolvedForeground 向 WidgetryText / WidgetryIcon 传播默认前景，保留外部独立视觉配置。
+
+默认 Style 只处理默认 Group / Option，不改写自定义选项的颜色或结构。默认 Option 的父级只带 Group Headless 时，没有父颜色配置是合法组合，直接回退 Theme；父级带默认 Group 身份时仍要求其 ColorState。缺少 Headless 父级仍报告归属错误。
 
 样式按输入变化、主题通知、Focus 与托管输出生命周期维护，稳定帧不重复解析颜色。托管背景 / 前景 / 边框缺失会报告去重错误，恢复输出后重算。
 

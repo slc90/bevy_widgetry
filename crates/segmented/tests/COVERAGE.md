@@ -21,6 +21,8 @@
 
 ## Coverage Map
 
+- `external.rs`：独立行为插件、四种默认/自定义 Group/Option 组合的真实 Mouse/Custom Picking 和焦点、两轴不循环键盘及通知内已提交 Checked；自定义 Option 不被默认样式写入、纯 Headless 父级 Theme 回退、动态成员静默修复、布局 Patch 不改变键盘轴及独立初始冲突恢复。不安装原生 RadioGroup/RadioButton。
+
 - `diagnostics.rs`：多个无效组与孤立 Option 的批量归属、稳定帧零检查、持续失败重查复用 ID / origin、修复 INFO、初始 Checked 冲突身份、独立程序请求的索引与新 ID，以及多个样式失败在 Theme 重算与修复中的诊断生命周期。
 - `headless.rs`：初始化、结构、输入、Disabled、事件、队列错误、场景组合与嵌套组隔离；两方向输入轴、首尾 / Disabled、Tab 跳过、结构回退语义一致。
 - `group.rs` Unit Test：稳定结构不重复校验、受影响组局部维护、后装 Plugin 和无效初始化请求。

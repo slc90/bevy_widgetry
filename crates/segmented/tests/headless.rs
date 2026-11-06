@@ -10,6 +10,7 @@ use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_segmented::{
     SegmentedOrientation, WidgetrySegmented, WidgetrySegmentedOption, WidgetrySegmentedPlugin,
 };
+use bevy_widgetry_segmented::{WidgetrySegmentedHeadless, WidgetrySegmentedOptionHeadless};
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_click, primary_press,
     scene_app,
@@ -69,7 +70,7 @@ fn default_selection_and_queued_programmatic_selection_are_exclusive() {
         .id();
     app.update();
     selected(&app, root, 0);
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     selected(&app, root, 1);
 }
@@ -220,7 +221,7 @@ fn clicks_from_content_commit_before_notification_and_same_value_is_silent() {
         selected(&app, other, 0);
         assert_eq!(app.world().resource::<Changes>().0, vec![(root, 2, true)]);
     }
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 0);
+    WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 0);
     app.world_mut().flush();
     selected(&app, root, 0);
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
@@ -239,7 +240,7 @@ fn disabled_input_is_blocked_while_programmatic_and_repair_selection_remain_lega
     app.world_mut().trigger(primary_click(children[1]));
     app.world_mut().flush();
     selected(&app, root, 0);
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     selected(&app, root, 1);
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
@@ -247,7 +248,7 @@ fn disabled_input_is_blocked_while_programmatic_and_repair_selection_remain_lega
     app.world_mut().trigger(primary_click(children[2]));
     app.world_mut().flush();
     selected(&app, root, 1);
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 2);
+    WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 2);
     app.world_mut().flush();
     selected(&app, root, 2);
     app.world_mut().despawn(children[2]);
@@ -318,7 +319,7 @@ fn focused_axis_keys_skip_disabled_stop_at_edges_and_ignore_other_axes() {
         app.world_mut().entity_mut(root).insert(InteractionDisabled);
         press_key(&mut app, window, forward);
         selected(&app, root, 0);
-        WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+        WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
         app.world_mut().flush();
         selected(&app, root, 1);
         assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, -1);
@@ -379,7 +380,7 @@ fn dynamic_removal_addition_and_full_replacement_are_silent() {
             .unwrap()
             .id();
         app.update();
-        WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+        WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
         app.world_mut().flush();
         let children = app.world().get::<Children>(root).unwrap().to_vec();
         app.world_mut().despawn(children[1]);
@@ -417,33 +418,33 @@ fn invalid_queued_requests_do_not_partially_change_state_or_notify() {
         app.update();
         let children = app.world().get::<Children>(root).unwrap().to_vec();
         match case {
-            0 => WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 3),
+            0 => WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 3),
             1 => {
                 app.world_mut()
                     .commands()
                     .entity(root)
-                    .remove::<WidgetrySegmented>();
-                WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+                    .remove::<WidgetrySegmentedHeadless>();
+                WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
             }
             2 => {
                 app.world_mut().commands().entity(root).despawn();
-                WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+                WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
             }
             3 => {
                 app.world_mut()
                     .commands()
                     .entity(children[2])
-                    .remove::<WidgetrySegmentedOption>();
-                WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+                    .remove::<WidgetrySegmentedOptionHeadless>();
+                WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
             }
             _ => {
                 for child in children {
                     app.world_mut().despawn(child);
                 }
-                WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 0);
+                WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 0);
             }
         }
-        WidgetrySegmented::set_selected(&mut app.world_mut().commands(), healthy, 2);
+        WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), healthy, 2);
         let errors = ErrorCapture::default();
         let logs = LogCapture::default();
         errors.run(|| logs.run(|| app.world_mut().flush()));
@@ -472,7 +473,7 @@ fn queued_selection_uses_current_children_and_same_value_preserves_checked_tick(
     app.update();
     let first = app.world().get::<Children>(root).unwrap()[0];
     app.world_mut().commands().entity(first).despawn();
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     selected(&app, root, 1);
     let chosen = app.world().get::<Children>(root).unwrap()[1];
@@ -482,7 +483,7 @@ fn queued_selection_uses_current_children_and_same_value_preserves_checked_tick(
         .get_ref::<Checked>()
         .unwrap()
         .last_changed();
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     assert_eq!(
         app.world()

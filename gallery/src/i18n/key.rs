@@ -720,6 +720,9 @@ pub(crate) enum CursorKey {
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SegmentedKey {
     Description,
+    CustomShapes,
+    DefaultChoice,
+    Mixed,
     Basic,
     Natural,
     Equal,

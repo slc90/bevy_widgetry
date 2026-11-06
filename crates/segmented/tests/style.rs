@@ -7,6 +7,7 @@ use bevy_widgetry_segmented::{
 use bevy_widgetry_test_utils::scene_app;
 use bevy_widgetry_theme::WidgetryTheme;
 
+use bevy_widgetry_segmented::WidgetrySegmentedHeadless;
 #[test]
 fn checked_background_moves_in_one_update_without_changing_the_selection() {
     let mut app = scene_app();
@@ -30,7 +31,7 @@ fn checked_background_moves_in_one_update_without_changing_the_selection() {
         app.world().get::<BackgroundColor>(children[0]).unwrap().0,
         colors.option.checked.normal.background
     );
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
     assert!(app.world().get::<Checked>(children[1]).is_some());

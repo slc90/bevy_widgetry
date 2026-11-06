@@ -7,6 +7,7 @@ use bevy_widgetry_segmented::{
 use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
 use bevy_widgetry_theme::WidgetryTheme;
 
+use bevy_widgetry_segmented::WidgetrySegmentedHeadless;
 fn fixture(equal_width: bool) -> (App, Entity, Vec<Entity>) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
@@ -59,7 +60,7 @@ fn equal_width_distributes_patched_container_width_independent_of_content() {
             .entity_mut(children[1])
             .insert(InteractionDisabled);
         app.world_mut().entity_mut(root).insert(InteractionDisabled);
-        WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 2);
+        WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 2);
         WidgetryTheme::set_in_world(app.world_mut(), mode).unwrap();
         app.update();
         assert_eq!(widths(&app, &children), initial);

@@ -15,8 +15,37 @@ use bevy_widgetry_core::ui::WidgetryUiPlugin;
 use bevy_widgetry_internal_log::widgetry_debug;
 pub use colors::*;
 pub use error::{SegmentedError, SegmentedFailure};
-pub use group::WidgetrySegmented;
-pub use option::{WidgetrySegmentedOption, WidgetrySegmentedOptionProps};
+pub use group::{WidgetrySegmented, WidgetrySegmentedHeadless};
+pub use option::{
+    WidgetrySegmentedOption, WidgetrySegmentedOptionHeadless, WidgetrySegmentedOptionProps,
+};
+
+#[derive(Default, Clone, Debug)]
+pub struct WidgetrySegmentedHeadlessProps {
+    pub orientation: SegmentedOrientation,
+}
+
+pub struct WidgetrySegmentedHeadlessPlugin;
+impl Plugin for WidgetrySegmentedHeadlessPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
+        }
+        if !app.is_plugin_added::<TabNavigationPlugin>() {
+            app.add_plugins(TabNavigationPlugin);
+        }
+        group::install(app);
+        app.add_observer(input::on_click)
+            .add_observer(input::on_key);
+        app.add_systems(
+            PreUpdate,
+            group::initialize
+                .before(InputFocusSystems::Dispatch)
+                .before(PickingSystems::Hover),
+        );
+        widgetry_debug!("WidgetrySegmentedHeadlessPlugin 注册完成");
+    }
+}
 
 #[derive(Default, Clone, Debug)]
 pub struct WidgetrySegmentedProps {
@@ -29,25 +58,13 @@ pub struct WidgetrySegmentedPlugin;
 
 impl Plugin for WidgetrySegmentedPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<WidgetryUiPlugin>() {
-            app.add_plugins(WidgetryUiPlugin);
-        }
-        if !app.is_plugin_added::<TabNavigationPlugin>() {
-            app.add_plugins(TabNavigationPlugin);
+        if !app.is_plugin_added::<WidgetrySegmentedHeadlessPlugin>() {
+            app.add_plugins(WidgetrySegmentedHeadlessPlugin);
         }
         if !app.is_plugin_added::<bevy_widgetry_theme::WidgetryThemePlugin>() {
             app.add_plugins(bevy_widgetry_theme::WidgetryThemePlugin);
         }
-        group::install(app);
         style::install(app);
-        app.add_observer(input::on_click)
-            .add_observer(input::on_key);
-        app.add_systems(
-            PreUpdate,
-            group::initialize
-                .before(InputFocusSystems::Dispatch)
-                .before(PickingSystems::Hover),
-        );
         widgetry_debug!("WidgetrySegmentedPlugin 注册完成");
     }
 }

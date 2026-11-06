@@ -1,4 +1,4 @@
-use crate::WidgetrySegmentedOption;
+use crate::WidgetrySegmentedOptionHeadless;
 use crate::{
     SegmentedError, SegmentedFailure,
     error::{collect, core, failure},
@@ -15,12 +15,25 @@ use bevy_widgetry_diagnostics::{
 use std::sync::Arc;
 
 #[derive(SceneComponent, Default, Clone)]
+#[scene(crate::WidgetrySegmentedHeadlessProps)]
+#[require(Node, TabIndex(-1), GroupDiagnostics, crate::OrientationState)]
+pub struct WidgetrySegmentedHeadless;
+
+impl WidgetrySegmentedHeadless {
+    fn scene(props: crate::WidgetrySegmentedHeadlessProps) -> impl Scene {
+        bsn! {
+            template(move |_| Ok(crate::OrientationState(props.orientation)))
+            template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioGroup))))
+        }
+    }
+}
+
+#[derive(SceneComponent, Default, Clone)]
 #[scene(crate::WidgetrySegmentedProps)]
 #[require(
-    GroupDiagnostics,
+    WidgetrySegmentedHeadless,
     crate::colors::ColorState,
-    crate::style::StyleDiagnostics,
-    crate::OrientationState
+    crate::style::StyleDiagnostics
 )]
 pub struct WidgetrySegmented;
 
@@ -58,11 +71,11 @@ pub(crate) fn install(app: &mut App) {
         .add_observer(on_initial_checked_discarded);
     let world = app.world_mut();
     let groups = world
-        .query_filtered::<Entity, With<WidgetrySegmented>>()
+        .query_filtered::<Entity, With<WidgetrySegmentedHeadless>>()
         .iter(world)
         .collect::<EntityHashSet>();
     let options = world
-        .query_filtered::<Entity, With<WidgetrySegmentedOption>>()
+        .query_filtered::<Entity, With<WidgetrySegmentedOptionHeadless>>()
         .iter(world)
         .collect::<EntityHashSet>();
     let mut changes = world.resource_mut::<StructureChanges>();
@@ -79,7 +92,7 @@ fn invalidate_group(entity: Entity, children: &Query<&Children>, changes: &mut S
 
 fn on_initial_checked_inserted(
     event: On<Insert<Checked>>,
-    options: Query<&ChildOf, With<WidgetrySegmentedOption>>,
+    options: Query<&ChildOf, With<WidgetrySegmentedOptionHeadless>>,
     initialized: Query<(), With<Initialized>>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -92,7 +105,7 @@ fn on_initial_checked_inserted(
 
 fn on_initial_checked_discarded(
     event: On<Discard<Checked>>,
-    options: Query<&ChildOf, With<WidgetrySegmentedOption>>,
+    options: Query<&ChildOf, With<WidgetrySegmentedOptionHeadless>>,
     initialized: Query<(), With<Initialized>>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -104,7 +117,7 @@ fn on_initial_checked_discarded(
 }
 
 fn on_group_inserted(
-    event: On<Insert<WidgetrySegmented>>,
+    event: On<Insert<WidgetrySegmentedHeadless>>,
     children: Query<&Children>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -112,7 +125,7 @@ fn on_group_inserted(
 }
 
 fn on_group_removed(
-    event: On<Remove<WidgetrySegmented>>,
+    event: On<Remove<WidgetrySegmentedHeadless>>,
     children: Query<&Children>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -128,7 +141,7 @@ fn invalidate_option(entity: Entity, parents: &Query<&ChildOf>, changes: &mut St
 }
 
 fn on_option_inserted(
-    event: On<Insert<WidgetrySegmentedOption>>,
+    event: On<Insert<WidgetrySegmentedOptionHeadless>>,
     parents: Query<&ChildOf>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -136,7 +149,7 @@ fn on_option_inserted(
 }
 
 fn on_option_removed(
-    event: On<Remove<WidgetrySegmentedOption>>,
+    event: On<Remove<WidgetrySegmentedOptionHeadless>>,
     parents: Query<&ChildOf>,
     mut changes: ResMut<StructureChanges>,
 ) {
@@ -145,8 +158,8 @@ fn on_option_removed(
 
 fn invalidate_parent(
     entity: Entity,
-    parents: &Query<(Has<WidgetrySegmentedOption>, &ChildOf)>,
-    groups: &Query<(), With<WidgetrySegmented>>,
+    parents: &Query<(Has<WidgetrySegmentedOptionHeadless>, &ChildOf)>,
+    groups: &Query<(), With<WidgetrySegmentedHeadless>>,
     changes: &mut StructureChanges,
 ) {
     if let Ok((option, parent)) = parents.get(entity) {
@@ -161,8 +174,8 @@ fn invalidate_parent(
 
 fn on_parent_inserted(
     event: On<Insert<ChildOf>>,
-    parents: Query<(Has<WidgetrySegmentedOption>, &ChildOf)>,
-    groups: Query<(), With<WidgetrySegmented>>,
+    parents: Query<(Has<WidgetrySegmentedOptionHeadless>, &ChildOf)>,
+    groups: Query<(), With<WidgetrySegmentedHeadless>>,
     mut changes: ResMut<StructureChanges>,
 ) {
     invalidate_parent(event.entity, &parents, &groups, &mut changes);
@@ -170,8 +183,8 @@ fn on_parent_inserted(
 
 fn on_parent_discarded(
     event: On<Discard<ChildOf>>,
-    parents: Query<(Has<WidgetrySegmentedOption>, &ChildOf)>,
-    groups: Query<(), With<WidgetrySegmented>>,
+    parents: Query<(Has<WidgetrySegmentedOptionHeadless>, &ChildOf)>,
+    groups: Query<(), With<WidgetrySegmentedHeadless>>,
     checked: Query<(), With<Checked>>,
     mut initialized: Query<&mut Initialized>,
     mut changes: ResMut<StructureChanges>,
@@ -198,7 +211,7 @@ pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
     };
     let mut batch = DiagnosticBatch::default();
     for root in roots {
-        if world.get::<WidgetrySegmented>(root).is_none() {
+        if world.get::<WidgetrySegmentedHeadless>(root).is_none() {
             continue;
         }
         #[cfg(test)]
@@ -208,7 +221,10 @@ pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
         collect(&mut batch, initialize_group(world, root));
     }
     for option in options {
-        if world.get::<WidgetrySegmentedOption>(option).is_none() {
+        if world
+            .get::<WidgetrySegmentedOptionHeadless>(option)
+            .is_none()
+        {
             continue;
         }
         let parent = world.get::<ChildOf>(option).map(ChildOf::parent);
@@ -221,7 +237,7 @@ pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
                 .field("option", option)
                 .field("parent", format_args!("{parent:?}"))
         };
-        if parent.is_some_and(|parent| world.get::<WidgetrySegmented>(parent).is_some()) {
+        if parent.is_some_and(|parent| world.get::<WidgetrySegmentedHeadless>(parent).is_some()) {
             if let Some(mut diagnostics) = world.get_mut::<OwnershipDiagnostics>(option) {
                 diagnostics.0.recover(frame);
             }
@@ -263,7 +279,11 @@ pub(crate) fn initialize_group(world: &mut World, root: Entity) -> Result<(), Wi
     } else {
         children
             .iter()
-            .find(|child| world.get::<WidgetrySegmentedOption>(**child).is_none())
+            .find(|child| {
+                world
+                    .get::<WidgetrySegmentedOptionHeadless>(**child)
+                    .is_none()
+            })
             .map(|child| {
                 (
                     GroupFailureKey::Child(*child),
@@ -325,7 +345,7 @@ pub(crate) fn initialize_group(world: &mut World, root: Entity) -> Result<(), Wi
     Ok(())
 }
 
-impl WidgetrySegmented {
+impl WidgetrySegmentedHeadless {
     pub fn set_selected(commands: &mut Commands, entity: Entity, selected: usize) {
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
             let (children, target) = selection_target(world, entity, selected)
@@ -346,15 +366,15 @@ impl WidgetrySegmented {
             Ok(())
         });
     }
+}
 
+impl WidgetrySegmented {
     fn scene(props: crate::WidgetrySegmentedProps) -> impl Scene {
         let horizontal = props.orientation == crate::SegmentedOrientation::Horizontal;
         let equal_width = horizontal && props.equal_width;
         bsn! {
             template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
-            template(move |_| Ok(crate::OrientationState(props.orientation)))
-            TabIndex(-1)
-            template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioGroup))))
+            @WidgetrySegmentedHeadless { @orientation: {props.orientation} }
             Node {
                 display: {if equal_width { Display::Grid } else { Display::Flex }},
                 grid_auto_flow: GridAutoFlow::Column,
@@ -385,7 +405,7 @@ pub(crate) fn selection_target(
                 .field("index", index),
         )
     };
-    if world.get::<WidgetrySegmented>(root).is_none() {
+    if world.get::<WidgetrySegmentedHeadless>(root).is_none() {
         return Err(invalid(SegmentedError::InvalidTarget {
             entity: root,
             widget: "Segmented",
@@ -396,7 +416,10 @@ pub(crate) fn selection_target(
         .filter(|children| !children.is_empty())
         .ok_or_else(|| invalid(SegmentedError::EmptyGroup { group: root }))?;
     for &option in children {
-        if world.get::<WidgetrySegmentedOption>(option).is_none() {
+        if world
+            .get::<WidgetrySegmentedOptionHeadless>(option)
+            .is_none()
+        {
             return Err(invalid(SegmentedError::InvalidChild {
                 group: root,
                 option,
@@ -417,6 +440,7 @@ pub(crate) fn selection_target(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+    use crate::WidgetrySegmentedOption;
     use bevy_widgetry_test_utils::{ErrorCapture, scene_app};
 
     #[test]
@@ -459,19 +483,21 @@ mod tests {
         }
         initialize(app.world_mut()).unwrap();
         let root = roots[0];
-        WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+        WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
         app.world_mut().flush();
         std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
         app.world_mut()
             .entity_mut(root)
-            .remove::<WidgetrySegmented>();
+            .remove::<WidgetrySegmentedHeadless>();
         assert_eq!(
             initialize(app.world_mut()).unwrap_err().severity(),
             bevy::ecs::error::Severity::Error
         );
         let checked = std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
         assert_eq!((checked.groups_checked, checked.options_checked), (0, 3));
-        app.world_mut().entity_mut(root).insert(WidgetrySegmented);
+        app.world_mut()
+            .entity_mut(root)
+            .insert(WidgetrySegmentedHeadless);
         initialize(app.world_mut()).unwrap();
         let checked = std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
         assert_eq!((checked.groups_checked, checked.options_checked), (1, 3));
@@ -520,9 +546,9 @@ mod tests {
             if invalid_structure {
                 app.world_mut()
                     .entity_mut(children[0])
-                    .remove::<WidgetrySegmentedOption>();
+                    .remove::<WidgetrySegmentedOptionHeadless>();
             }
-            WidgetrySegmented::set_selected(
+            WidgetrySegmentedHeadless::set_selected(
                 &mut app.world_mut().commands(),
                 root,
                 if invalid_structure { 1 } else { 2 },

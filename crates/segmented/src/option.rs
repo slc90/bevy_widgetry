@@ -1,9 +1,24 @@
 use bevy::prelude::*;
 
 #[derive(SceneComponent, Default, Clone)]
+#[require(
+    Node,
+    bevy::ui::Checkable,
+    bevy::picking::hover::Hovered,
+    bevy_widgetry_core::pointer::WidgetryPointerPressed,
+    crate::group::OwnershipDiagnostics
+)]
+pub struct WidgetrySegmentedOptionHeadless;
+impl WidgetrySegmentedOptionHeadless {
+    fn scene() -> impl Scene {
+        bsn! { template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioButton)))) }
+    }
+}
+
+#[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetrySegmentedOptionProps)]
 #[require(
-    crate::group::OwnershipDiagnostics,
+    WidgetrySegmentedOptionHeadless,
     crate::colors::OptionColorState,
     crate::style::StyleDiagnostics
 )]
@@ -18,10 +33,7 @@ impl WidgetrySegmentedOption {
     fn scene(props: WidgetrySegmentedOptionProps) -> impl Scene {
         bsn! {
             template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
-            bevy::ui::Checkable
-            template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioButton))))
-            bevy::picking::hover::Hovered(false)
-            bevy_widgetry_core::pointer::WidgetryPointerPressed
+            @WidgetrySegmentedOptionHeadless
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             Node {
                 min_width: px(24), min_height: px(26),

@@ -100,9 +100,10 @@ fn removed_input(
             BorderColor,
             ResolvedForeground,
             WidgetrySegmented,
+            crate::WidgetrySegmentedHeadless,
         )>,
     >,
-    groups: Query<&Children, With<WidgetrySegmented>>,
+    groups: Query<&Children, With<crate::WidgetrySegmentedHeadless>>,
     mut changes: ResMut<StyleChanges>,
 ) {
     changes.0.insert(event.entity);
@@ -142,8 +143,12 @@ fn collect_changes(
     groups: Query<
         &Children,
         (
-            With<WidgetrySegmented>,
-            Or<(Added<WidgetrySegmented>, Changed<ColorState>)>,
+            With<crate::WidgetrySegmentedHeadless>,
+            Or<(
+                Added<crate::WidgetrySegmentedHeadless>,
+                Added<WidgetrySegmented>,
+                Changed<ColorState>,
+            )>,
         ),
     >,
     focus: Res<InputFocus>,
@@ -234,22 +239,30 @@ fn apply(world: &mut World, entity: Entity) -> Result<(), StyleIssue> {
                 option: entity,
                 parent: None,
             })?;
-        if world.get::<WidgetrySegmented>(root).is_none() {
+        if world
+            .get::<crate::WidgetrySegmentedHeadless>(root)
+            .is_none()
+        {
             return Err(StyleIssue::Parent {
                 option: entity,
                 parent: Some(root),
             });
         }
-        let colors = world
-            .get::<ColorState>(root)
-            .ok_or_else(|| missing(root, Some(entity), root, "ColorState"))?
-            .0
-            .resolve(&theme);
+        let colors = if world.get::<WidgetrySegmented>(root).is_some() {
+            world
+                .get::<ColorState>(root)
+                .ok_or_else(|| missing(root, Some(entity), root, "ColorState"))?
+                .0
+                .resolve(&theme)
+                .option
+        } else {
+            theme.option
+        };
         let colors = world
             .get::<OptionColorState>(entity)
             .ok_or_else(|| missing(root, Some(entity), entity, "OptionColorState"))?
             .0
-            .resolve(&colors.option);
+            .resolve(&colors);
         let colors = if world.get::<Checked>(entity).is_some() {
             colors.checked
         } else {

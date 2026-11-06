@@ -284,6 +284,9 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             }
         },
         TextKey::Navigation(NavigationKey::Segmented) => "Segmented",
+        TextKey::Segmented(super::SegmentedKey::DefaultChoice) => "Default",
+        TextKey::Segmented(super::SegmentedKey::CustomShapes) => "Corner shape: capsule / square / rounded · Middle option disabled",
+        TextKey::Segmented(super::SegmentedKey::Mixed) => "Mixed vertical · Default block and custom shapes",
         TextKey::Segmented(super::SegmentedKey::Description) => {
             "Click a segment to focus its group. Use Left / Right horizontally or Up / Down vertically; skip disabled options and stop at the edges. Tab skips every group."
         }

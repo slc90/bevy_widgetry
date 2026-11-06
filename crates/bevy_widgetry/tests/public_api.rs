@@ -18,6 +18,23 @@
 ))]
 
 use bevy::text::FontSource;
+
+#[test]
+#[cfg(feature = "segmented")]
+fn segmented_headless_scene_api_is_usable() {
+    use bevy_widgetry::segmented::{
+        SegmentedOrientation, WidgetrySegmentedHeadless, WidgetrySegmentedHeadlessPlugin,
+        WidgetrySegmentedOptionHeadless,
+    };
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetrySegmentedHeadlessPlugin);
+    let root=app.world_mut().spawn_scene(bsn! { @WidgetrySegmentedHeadless { @orientation: SegmentedOrientation::Vertical } Children [@WidgetrySegmentedOptionHeadless-- @WidgetrySegmentedOptionHeadless] }).unwrap().id();
+    app.update();
+    WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    let selected = app.world().get::<Children>(root).unwrap()[1];
+    assert!(app.world().get::<bevy::ui::Checked>(selected).is_some());
+}
 use bevy::{app::App, color::Color, ecs::entity::Entity, prelude::*};
 use bevy_widgetry::button::{WidgetryButton, WidgetryButtonLoadingChanged, WidgetryButtonPlugin};
 use bevy_widgetry::button::{WidgetryButtonHeadless, WidgetryButtonLoading};

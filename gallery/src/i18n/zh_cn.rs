@@ -296,6 +296,11 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             }
         },
         TextKey::Navigation(NavigationKey::Segmented) => "Segmented",
+        TextKey::Segmented(super::SegmentedKey::DefaultChoice) => "默认",
+        TextKey::Segmented(super::SegmentedKey::CustomShapes) => {
+            "圆角形状：胶囊 / 方角 / 圆角 · 中项禁用"
+        }
+        TextKey::Segmented(super::SegmentedKey::Mixed) => "竖向混合 · 默认浮块与自定义胶囊",
         TextKey::Segmented(super::SegmentedKey::Description) => {
             "点击选项获得组焦点；横向用左右键，竖向用上下键，跳过禁用项并在首尾停止。Tab 跳过所有分段组。"
         }

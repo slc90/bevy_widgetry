@@ -7,15 +7,18 @@ use bevy_widgetry::{
     button::WidgetryButton,
     segmented::{
         SegmentedOrientation, WidgetrySegmented, WidgetrySegmentedColorOverrides,
-        WidgetrySegmentedOption, WidgetrySegmentedOptionColorOverrides,
+        WidgetrySegmentedHeadless, WidgetrySegmentedOption, WidgetrySegmentedOptionColorOverrides,
     },
     text::WidgetryText,
 };
+
+mod custom;
 
 pub(crate) struct SegmentedDemoPlugin;
 
 impl Plugin for SegmentedDemoPlugin {
     fn build(&self, app: &mut App) {
+        custom::install(app);
         app.register_type::<SegmentedDemoState>()
             .add_systems(OnEnter(GalleryPage::Segmented), enter)
             .add_systems(OnExit(GalleryPage::Segmented), exit);
@@ -122,7 +125,8 @@ fn scene() -> impl Scene {
                 @action(SegmentedKey::ToggleDisabled, "SegmentedToggleDisabled") on(toggle_disabled)
             ]--
             Node { column_gap: px(24), row_gap: px(20), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Start }
-            Children [{examples}]
+            Children [{examples}]--
+            @custom::scene()
         ]
     }
 }
@@ -248,7 +252,7 @@ fn select_next(
     for root in &targets {
         commands.queue(move |world: &mut World| -> Result {
             let index = selected_index(world, root)?;
-            WidgetrySegmented::set_selected(&mut world.commands(), root, (index + 1) % 3);
+            WidgetrySegmentedHeadless::set_selected(&mut world.commands(), root, (index + 1) % 3);
             world
                 .commands()
                 .queue(move |world: &mut World| report(world, root, false));

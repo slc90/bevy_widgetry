@@ -1,5 +1,5 @@
 use crate::error::core;
-use crate::{WidgetrySegmented, WidgetrySegmentedOption, group};
+use crate::{WidgetrySegmentedHeadless, WidgetrySegmentedOptionHeadless, group};
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::FocusedInput;
 use bevy::picking::{events::PointerClick, pointer::PointerButton};
@@ -11,8 +11,8 @@ use bevy_widgetry_diagnostics::ErrorFrame;
 
 pub(crate) fn on_click(
     mut event: On<PointerClick>,
-    options: Query<(&ChildOf, Has<InteractionDisabled>), With<WidgetrySegmentedOption>>,
-    groups: Query<(), With<WidgetrySegmented>>,
+    options: Query<(&ChildOf, Has<InteractionDisabled>), With<WidgetrySegmentedOptionHeadless>>,
+    groups: Query<(), With<WidgetrySegmentedHeadless>>,
     mut commands: Commands,
 ) {
     let Ok((parent, disabled)) = options.get(event.entity) else {
@@ -31,9 +31,12 @@ pub(crate) fn on_key(
     mut event: On<FocusedInput<KeyboardInput>>,
     groups: Query<
         (&Children, &crate::OrientationState),
-        (With<WidgetrySegmented>, Without<InteractionDisabled>),
+        (
+            With<WidgetrySegmentedHeadless>,
+            Without<InteractionDisabled>,
+        ),
     >,
-    options: Query<(Has<Checked>, Has<InteractionDisabled>), With<WidgetrySegmentedOption>>,
+    options: Query<(Has<Checked>, Has<InteractionDisabled>), With<WidgetrySegmentedOptionHeadless>>,
     mut commands: Commands,
 ) {
     let Ok((children, orientation)) = groups.get(event.focused_entity) else {
@@ -74,7 +77,7 @@ pub(crate) fn on_key(
 }
 
 fn commit(world: &mut World, root: Entity, target: Entity) -> Result<(), BevyError> {
-    if world.get::<WidgetrySegmented>(root).is_none()
+    if world.get::<WidgetrySegmentedHeadless>(root).is_none()
         || world
             .get::<ChildOf>(target)
             .is_none_or(|parent| parent.parent() != root)

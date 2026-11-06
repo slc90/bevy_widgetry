@@ -5,6 +5,7 @@ use bevy::ui::Checked;
 use bevy_widgetry_segmented::{
     SegmentedError, WidgetrySegmented, WidgetrySegmentedOption, WidgetrySegmentedPlugin,
 };
+use bevy_widgetry_segmented::{WidgetrySegmentedHeadless, WidgetrySegmentedOptionHeadless};
 use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
 
 #[test]
@@ -87,12 +88,14 @@ fn every_invalid_group_and_option_reaches_the_host_without_polling_or_recreating
             app.world_mut().run_schedule(PreUpdate);
             assert!(errors.take_records().is_empty());
             for root in &groups {
-                app.world_mut().entity_mut(*root).insert(WidgetrySegmented);
+                app.world_mut()
+                    .entity_mut(*root)
+                    .insert(WidgetrySegmentedHeadless);
             }
             for option in &options {
                 app.world_mut()
                     .entity_mut(*option)
-                    .insert(WidgetrySegmentedOption);
+                    .insert(WidgetrySegmentedOptionHeadless);
             }
             app.world_mut().run_schedule(PreUpdate);
             let records = errors.take_records();
@@ -198,7 +201,7 @@ fn independent_commands_keep_requested_index_and_each_new_identity() {
     logs.run(|| {
         errors.run(|| {
             for _ in 0..2 {
-                WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 7);
+                WidgetrySegmentedHeadless::set_selected(&mut app.world_mut().commands(), root, 7);
             }
             app.world_mut().flush();
         })
