@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-为各 Native Window 独立管理 OS Mouse Cursor，默认选择 System。外部主题使用公开数据把官方系统语义或 Widgetry 扩展 Hint 映射为系统光标或静态图片。显式启用默认关闭的 `kamuri_cursor` Feature 后，既有 Kamuri 动画提供方仍可使用。
+为各 Native Window 独立管理 OS Mouse Cursor，默认选择 System。外部主题使用公开数据把官方系统语义或 Widgetry 扩展 Hint 映射为系统光标、静态图片或图集动画。显式启用默认关闭的 `kamuri_cursor` Feature 后，既有 Kamuri 数据适配仍可使用。
 
 ## 当前设计思路
 
@@ -12,9 +12,11 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 
 当前资源只读查询 `styles()` / `is_system()`，通过同步 `set_in_world` 或执行时提交的 `set(Commands, theme)` 切换；同值不标记变化，不新增业务事件。`system()` 构造空映射；开启 `kamuri_cursor` 时 `kamuri()` 构造临时内置提供方。名称和菜单属于应用。显式 `EntityCursor::Custom` 不被主题映射替换，Loading / Disabled 的既有语义优先级仍有效。
 
-静态图片目前不支持原生光标的同 Handle 像素热更新：修改像素或同尺寸恢复后，Windows 光标可能继续显示首次缓存的位图。需要替换位图时应使用新的 Image Handle。Bevy 原生光标缓存的刷新与回收问题暂缓处理，库未引入 vendor 或依赖补丁。
+图片目前不支持原生光标的同 Handle 像素热更新：修改像素或同尺寸恢复后，Windows 光标可能继续显示首次缓存的位图，包括已缓存的动画帧。需要替换位图时应使用新的 Image Handle。Bevy 原生光标缓存的刷新与回收问题暂缓处理，库未引入 vendor 或依赖补丁。
 
-`kamuri_cursor` 同时开启 Asset 的同名资源 Feature。关闭时不编译 Kamuri 专用播放器、缓存和动画唤醒，也不安装其内建 Asset 支持；通用静态加载和诊断始终可用。宿主有 AssetServer 和 Image 能力时自动确保 Atlas 支持，静态区域使用按尺寸、区域及热点复用的 Layout 身份，避免 Bevy 原生缓存忽略 hotspot 而沿用旧作用点。System 在缺少 Asset/Image 环境时仍可使用，外部图片回退对应系统语义。Facade 提供同名转发 Feature，Gallery 显式启用以保留既有演示。
+`CursorStyle::Animation(CursorAnimation)` 只接受图集。定义包含资产来源、图集尺寸、按播放顺序排列的 `CursorAnimationFrame`（区域与独立 `Duration`）、固定热点和可选静态 `CursorImage` 后备。重复区域可表达重放或任意帧序，画布尺寸须一致。`frame_at(elapsed)` 与 `atlas_layout()` 供预览共享帧定义；独立无效时序的帧查询返回 `None`，主题构造则明确拒绝。空帧、零时长、总时长溢出、越界区域/热点、非法来源及后备均在构造边界校验。
+
+`kamuri_cursor` 同时开启 Asset 的同名资源 Feature，只提供 Kamuri 数据和内建 Asset 支持；通用静态与动画播放、缓存、诊断和必要唤醒始终可用。宿主有 AssetServer 和 Image 能力时自动确保 Atlas 支持，区域及热点区分 Layout 身份，避免 Bevy 原生缓存忽略 hotspot 而沿用旧作用点。System 在缺少 Asset/Image 环境时仍可使用，外部图片回退对应系统语义。Facade 提供同名转发 Feature，Gallery 显式启用以保留既有演示。
 
 ## 主要功能
 
@@ -32,7 +34,7 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 
 动画目录由 Asset 层的 `BuiltinCursorAnimation` 提供语义标识、时序、热点、图集布局和帧计算，OS 播放与 Gallery 预览共用。每种动画独立图集，按实际出现的语义懒加载并缓存，主题选择仅预载静态后备图集。后备图集的每项均为对应动画首帧，画布及热点不变。制作工具与逐种动作说明见 [素材工具说明](../../crates/asset/tools/README.md)。
 
-每个窗口独立记录当前语义及进入时间，使用真实时间推进，不受虚拟时间暂停或单帧上限影响。只有有焦点的有效 Mouse 目标窗口及有效 Drag Lease 会保持动画唤醒；清除 Hover 不会结束仍有效的 Lease / Capture。普通页面没有有效 Mouse 位置、窗口失焦、原生窗口操作或当前语义失效时停止播放和额外重绘。资源正在加载且当前窗口确实需要该语义时，保留必要更新直至进入Loaded或Failed，避免反应式窗口停在回退图。加载完成后按动画更新；失败、已加载但CPU图像不可用、失焦或语义失效时不维持加载唤醒。静态或System回退本身不产生持续动画重绘。
+每个窗口独立记录当前语义、有效动画定义及进入时间，使用真实时间推进，不受虚拟时间暂停或单帧上限影响。同值主题刷新不重置相位；同语义更换动画或素材会从首帧开始。只有有焦点的有效 Mouse 目标窗口及有效 Drag Lease 会保持动画唤醒；清除 Hover 不会结束仍有效的 Lease / Capture。普通页面没有有效 Mouse 位置、窗口失焦、原生窗口操作或当前语义失效时停止播放和额外重绘。资源正在加载且当前窗口确实需要该语义时，保留必要更新直至进入Loaded或Failed，避免反应式窗口停在回退图。加载完成后按动画更新；失败、已加载但CPU图像不可用、失焦或语义失效时不维持加载唤醒。静态或System回退本身不产生持续动画重绘。
 
 ## 边界情况与错误处理
 

@@ -1,3 +1,4 @@
+mod animated;
 mod diagnostics;
 #[cfg(feature = "kamuri_cursor")]
 mod kamuri;
@@ -16,22 +17,21 @@ pub(crate) struct Presentation<'w, 's> {
     layouts: Option<ResMut<'w, Assets<TextureAtlasLayout>>>,
     images: static_image::StaticPresentation<'w, 's>,
     redraw: MessageWriter<'w, RequestRedraw>,
-    #[cfg(feature = "kamuri_cursor")]
-    kamuri: kamuri::KamuriPresentation<'w, 's>,
+    animated: animated::AnimatedPresentation<'w, 's>,
 }
 
 impl Presentation<'_, '_> {
     pub(crate) fn prepare(&mut self) {
         #[cfg(feature = "kamuri_cursor")]
-        self.kamuri.prepare();
+        if *self.theme == WidgetryCursorTheme::kamuri() {
+            self.images.preload(&kamuri::fallback_source());
+        }
     }
-    pub(crate) fn retain_windows(&mut self, _exists: impl Fn(Entity) -> bool) {
-        #[cfg(feature = "kamuri_cursor")]
-        self.kamuri.retain_windows(_exists);
+    pub(crate) fn retain_windows(&mut self, exists: impl Fn(Entity) -> bool) {
+        self.animated.retain_windows(exists);
     }
-    pub(crate) fn stop(&mut self, _window: Entity) {
-        #[cfg(feature = "kamuri_cursor")]
-        self.kamuri.stop(_window);
+    pub(crate) fn stop(&mut self, window: Entity) {
+        self.animated.stop(window);
     }
     pub(crate) fn map(&mut self, window: Entity, intent: CursorIntent, active: bool) -> CursorIcon {
         let semantic = match &intent {
@@ -46,32 +46,41 @@ impl Presentation<'_, '_> {
             self.stop(window);
             return intent.fallback();
         }
-        if let Some(style) = self.theme.styles().get(&semantic).cloned() {
-            self.stop(window);
+        let style = self.theme.styles().get(&semantic).cloned();
+        #[cfg(feature = "kamuri_cursor")]
+        let style = style.or_else(|| {
+            (*self.theme == WidgetryCursorTheme::kamuri())
+                .then(|| kamuri::style(&intent))
+                .flatten()
+        });
+        if let Some(style) = style {
             return match style {
-                CursorStyle::System(icon) => CursorIcon::System(icon),
-                CursorStyle::Image(image) => self.images.map(
+                CursorStyle::System(icon) => {
+                    self.stop(window);
+                    CursorIcon::System(icon)
+                }
+                CursorStyle::Image(image) => {
+                    self.stop(window);
+                    self.images.map(
+                        window,
+                        &image,
+                        &intent,
+                        self.layouts.as_deref_mut(),
+                        &mut self.redraw,
+                    )
+                }
+                CursorStyle::Animation(animation) => self.animated.map(
                     window,
-                    &image,
+                    semantic,
+                    &animation,
                     &intent,
+                    &mut self.images,
                     self.layouts.as_deref_mut(),
                     &mut self.redraw,
                 ),
             };
         }
-        #[cfg(feature = "kamuri_cursor")]
-        {
-            self.kamuri.map(
-                window,
-                intent,
-                active,
-                self.layouts.as_deref_mut(),
-                &mut self.redraw,
-            )
-        }
-        #[cfg(not(feature = "kamuri_cursor"))]
-        {
-            intent.fallback()
-        }
+        self.stop(window);
+        intent.fallback()
     }
 }

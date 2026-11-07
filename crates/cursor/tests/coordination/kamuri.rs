@@ -162,7 +162,17 @@ fn assert_static_sprite(app: &App, window: Entity, animation: Animation) {
         Some(&BuiltinCursorImage::KamuriStaticAtlas.path())
     );
     let index = Animation::ALL.iter().position(|a| *a == animation).unwrap();
-    assert_eq!(image.texture_atlas.as_ref().unwrap().index, index);
+    let atlas = image.texture_atlas.as_ref().unwrap();
+    assert_eq!(
+        app.world()
+            .resource::<Assets<TextureAtlasLayout>>()
+            .get(&atlas.layout)
+            .unwrap()
+            .textures[atlas.index],
+        BuiltinCursorImage::KamuriStaticAtlas
+            .atlas_layout()
+            .textures[index]
+    );
     assert_eq!(image.hotspot, animation.hotspot());
 }
 

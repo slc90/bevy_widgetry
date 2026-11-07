@@ -103,7 +103,7 @@ Canvas 默认保留 Document、View/Renderer 与 SVG；默认关闭的 `png_expo
 
 Theme 默认仅包含 Dark 配色，Facade 的 `light`、`pink_dream` 独立转发到 Theme 同名 Feature；它们不控制 Cursor。Gallery 显式选择这两个可选预设，并在应用主题模块中完整定义 Kamuri Violet，库不再提供该配色专用 Feature 或数据入口。`test_utils` 通过默认关闭的主题转发和 `all_themes` 集合供各 crate 的测试依赖选择，不向库的生产依赖路径启用额外主题。
 
-Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活，并传递到 Asset 的同名嵌入资源 Feature。Facade 提供同名入口，Gallery 显式启用；Core 使用 Cursor 不会自动启用 Kamuri。通用静态主题直接使用 Bevy Asset / Image，不依赖 Kamuri Feature 或 Widgetry Asset 的内建图像。具备 AssetServer 与 Image 能力时确保图集支持，以区域和热点区分原生缓存身份；无 Image 能力的 System-only Cursor 不安装图集支持，Core 原有的字体、图标等 Asset 依赖保留。
+Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活，并传递到 Asset 的同名嵌入资源 Feature。Facade 提供同名入口，Gallery 显式启用；Core 使用 Cursor 不会自动启用 Kamuri。通用静态/图集动画主题直接使用 Bevy Asset / Image，不依赖 Kamuri Feature 或 Widgetry Asset 的内建图像。具备 AssetServer 与 Image 能力时确保图集支持，以区域和热点区分原生缓存身份；无 Image 能力的 System-only Cursor 不安装图集支持，Core 原有的字体、图标等 Asset 依赖保留。
 
 本节概述各 Workspace 成员的职责。各库 crate 的具体功能、设计思路、行为契约和已知限制见对应的独立功能文档；Gallery 的展示与交互以应用实现为准。
 
@@ -120,7 +120,7 @@ Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活�
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识，包括 Kamuri 45 种动画的共享时序、热点与图集目录。 |
 | [theme](crates/theme.md) | 提供完整 Theme 数据、预设配色及原子主题切换；Gallery 自行管理预设名称与配置。 |
-| [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 语义、外部静态主题映射及可选 Kamuri Cursor。 |
+| [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 语义、外部静态/图集动画主题映射及可选 Kamuri 数据适配。 |
 | [tray](crates/tray.md) | 可选 Windows 常驻托盘图标、静态嵌入 ICO 与 Tooltip、原生右键菜单、主线程生命周期及唤醒反应式循环的点击通知。 |
 | [power_inhibit](crates/power_inhibit.md) | 默认关闭的 Windows Display/System 电源请求、同步开关及 Resource RAII 清理。 |
 | [hold_button](crates/hold_button.md) | 提供独立长按确认、输入取消、圆形 Picking 与液面材质。 |

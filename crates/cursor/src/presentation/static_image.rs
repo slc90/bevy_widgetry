@@ -15,6 +15,7 @@ use std::{collections::HashMap, sync::Arc};
 struct Cache {
     paths: HashMap<String, Handle<Image>>,
     images: HashMap<AssetId<Image>, FailureState<FailureKey>>,
+    dimensions: HashMap<(AssetId<Image>, UVec2), FailureState<UVec2>>,
     regions: HashMap<CursorImage, FailureState<(UVec2, URect)>>,
     layouts: HashMap<(UVec2, URect, (u16, u16)), Handle<TextureAtlasLayout>>,
 }
@@ -26,7 +27,104 @@ pub(super) struct StaticPresentation<'w, 's> {
     cache: Local<'s, Cache>,
 }
 
+pub(super) struct ImageStatus {
+    pub handle: Handle<Image>,
+    pub size: UVec2,
+    pub ready: bool,
+    pub loading: bool,
+}
+
 impl StaticPresentation<'_, '_> {
+    pub(super) fn preload(&mut self, source: &CursorImageSource) -> Option<Handle<Image>> {
+        let server = self.server.as_ref()?;
+        self.images.as_ref()?;
+        Some(match source {
+            CursorImageSource::Handle(handle) => handle.clone(),
+            CursorImageSource::Path(path) => self
+                .cache
+                .paths
+                .entry(path.clone())
+                .or_insert_with(|| server.load(path.clone()))
+                .clone(),
+        })
+    }
+
+    pub(super) fn status(
+        &mut self,
+        source: &CursorImageSource,
+        expected: Option<UVec2>,
+    ) -> Option<ImageStatus> {
+        let handle = self.preload(source)?;
+        let server = self.server.as_ref()?;
+        let images = self.images.as_ref()?;
+        let size = images.get(&handle).map_or(UVec2::ZERO, Image::size);
+        let mut ready = usable(
+            server,
+            images,
+            &handle,
+            size,
+            self.cache.images.entry(handle.id()).or_default(),
+        );
+        if ready && let Some(expected) = expected {
+            let dimensions = self
+                .cache
+                .dimensions
+                .entry((handle.id(), expected))
+                .or_default();
+            if size != expected {
+                dimensions.failure(size, || {
+                    Arc::new(CursorThemeFailure::new(
+                        CursorThemeError::UnexpectedAtlasSize {
+                            expected,
+                            actual: size,
+                        },
+                        ErrorFrame::new("cursor.atlas_size")
+                            .field("asset", format_args!("{:?}", handle.id()))
+                            .field("path", format_args!("{:?}", handle.path()))
+                            .field("expected", expected)
+                            .field("actual", size),
+                    ))
+                });
+                ready = false;
+            } else {
+                dimensions.recover(|| {
+                    ErrorFrame::new("cursor.atlas_size")
+                        .field("asset", format_args!("{:?}", handle.id()))
+                });
+            }
+        }
+        let loading =
+            !ready && matches!(server.get_load_state(handle.id()), Some(LoadState::Loading));
+        Some(ImageStatus {
+            handle,
+            size,
+            ready,
+            loading,
+        })
+    }
+
+    pub(super) fn handled(
+        &self,
+        handle: &Handle<Image>,
+        expected: Option<UVec2>,
+        window: Entity,
+        outcome: &str,
+    ) {
+        if let Some(issue) = self.cache.images.get(&handle.id()) {
+            handled(issue, window, outcome);
+        }
+        if let Some(expected) = expected
+            && let Some(issue) = self.cache.dimensions.get(&(handle.id(), expected))
+        {
+            for diagnostic in issue.diagnostics() {
+                diagnostic.record_handled(
+                    "选择可用的光标回退",
+                    &format!("window={window:?}; {outcome}"),
+                );
+            }
+        }
+    }
+
     pub(super) fn map(
         &mut self,
         window: Entity,
@@ -35,32 +133,31 @@ impl StaticPresentation<'_, '_> {
         layouts: Option<&mut Assets<TextureAtlasLayout>>,
         redraw: &mut MessageWriter<RequestRedraw>,
     ) -> CursorIcon {
-        let (Some(server), Some(images), Some(layouts)) = (&self.server, &self.images, layouts)
-        else {
+        let Some(layouts) = layouts else {
             return intent.fallback();
         };
-        let cache = &mut *self.cache;
-        let handle = match &definition.source {
-            CursorImageSource::Handle(handle) => handle.clone(),
-            CursorImageSource::Path(path) => cache
-                .paths
-                .entry(path.clone())
-                .or_insert_with(|| server.load(path.clone()))
-                .clone(),
+        let Some(status) = self.status(&definition.source, None) else {
+            return intent.fallback();
         };
-        let issue = cache.images.entry(handle.id()).or_default();
-        let size = images.get(&handle).map_or(UVec2::ZERO, Image::size);
-        if !usable(server, images, &handle, size, issue) {
-            if matches!(server.get_load_state(handle.id()), Some(LoadState::Loading)) {
+        let ImageStatus {
+            handle,
+            size,
+            ready,
+            loading,
+        } = status;
+        if !ready {
+            if loading {
                 redraw.write(RequestRedraw);
             }
-            handled(
-                issue,
+            self.handled(
+                &handle,
+                None,
                 window,
                 &format!("system cursor={:?}", intent.fallback()),
             );
             return intent.fallback();
         }
+        let cache = &mut *self.cache;
         let rect = definition.rect.unwrap_or(URect {
             min: UVec2::ZERO,
             max: size,

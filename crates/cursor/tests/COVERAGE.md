@@ -59,3 +59,5 @@ Headless 测试保护 ECS 请求与渲染配置，不证明系统级 Cursor 的�
 `coordination.rs` 的PNG真实解码失败验证每个资产源头一次ERROR、实际System回退一次关联DEBUG与停止唤醒；同一损坏动画由两个Window先后消费时共用身份，实际静态回退后才handled，恢复一次INFO。presentation内部单测验证expected/actual尺寸、format、CPU字节数、独立资产/原因键、等待不恢复，以及真实Loader返回的受管诊断集合不重建origin/source。
 
 安装冲突回归在两种 Plugin 顺序下检查统一 WidgetryEcsError、Severity::Error、原始捕获栈及关联 ID 的一次源头 ERROR，Lease 和现有写入让权语义保持。
+
+`animation.rs` 在默认Feature下使用小型合成RGBA图集验证任意帧区域/时长/热点、真实时间相位、同值不重启/换素材重启、窗口独立进入、无Hover有效Lease、Native/Cancel/Blur/System/Despawn停止唤醒、共享图片的像素与声明尺寸诊断隔离、静态/System后备和恢复，以及真实外部路径惰性冷加载成功/失败。无OS位图热更新结论，原生缓存限制见功能文档。

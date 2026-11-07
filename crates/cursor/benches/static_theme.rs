@@ -10,8 +10,8 @@ use bevy::{
     window::{CursorIcon, CustomCursor, SystemCursorIcon},
 };
 use bevy_widgetry_cursor::{
-    CursorImage, CursorImageSource, CursorSemantic, CursorStyle, WidgetryCursorPlugin,
-    WidgetryCursorTheme,
+    CursorAnimation, CursorAnimationFrame, CursorImage, CursorImageSource, CursorSemantic,
+    CursorStyle, WidgetryCursorPlugin, WidgetryCursorTheme,
 };
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run};
 
@@ -21,9 +21,13 @@ struct Fixture {
     camera: Entity,
     target: Entity,
     expected: Handle<Image>,
+    animated: bool,
 }
-fn fixture(windows: usize, depth: usize) -> Result<Fixture> {
+fn fixture(windows: usize, depth: usize, animated: bool) -> Result<Fixture> {
     let mut app = App::new();
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_millis(17),
+    ));
     app.add_plugins((
         MinimalPlugins,
         AssetPlugin::default(),
@@ -55,11 +59,31 @@ fn fixture(windows: usize, depth: usize) -> Result<Fixture> {
         ));
     let theme = WidgetryCursorTheme::new([(
         CursorSemantic::System(SystemCursorIcon::Pointer),
-        CursorStyle::Image(CursorImage {
-            source: CursorImageSource::Handle(handle.clone()),
-            rect: None,
-            hotspot: (7, 9),
-        }),
+        if animated {
+            CursorStyle::Animation(CursorAnimation {
+                source: CursorImageSource::Handle(handle.clone()),
+                size: UVec2::new(32, 24),
+                frames: (0..12)
+                    .map(|index| CursorAnimationFrame {
+                        rect: URect::new(
+                            index % 4 * 8,
+                            index / 4 * 8,
+                            index % 4 * 8 + 8,
+                            index / 4 * 8 + 8,
+                        ),
+                        duration: std::time::Duration::from_millis(20),
+                    })
+                    .collect(),
+                hotspot: (3, 5),
+                fallback: None,
+            })
+        } else {
+            CursorStyle::Image(CursorImage {
+                source: CursorImageSource::Handle(handle.clone()),
+                rect: None,
+                hotspot: (7, 9),
+            })
+        },
     )])
     .map_err(|error| error.into_bevy_error())?;
     WidgetryCursorTheme::set_in_world(app.world_mut(), theme);
@@ -76,16 +100,20 @@ fn fixture(windows: usize, depth: usize) -> Result<Fixture> {
         camera,
         target,
         expected: handle,
+        animated,
     })
 }
 fn main() -> Result {
     let mut harness = Harness::new("cursor-static-criterion")?;
-    for (windows, depth) in [(1, 1), (8, 64)] {
+    for (windows, depth, animated) in [(1, 1, false), (8, 64, false), (1, 1, true), (8, 64, true)] {
         run(
             &mut harness,
-            &format!("cursor-static/w{windows}_d{depth}/mouse_update"),
+            &format!(
+                "cursor-{}/w{windows}_d{depth}/mouse_update",
+                if animated { "atlas" } else { "static" }
+            ),
             false,
-            || fixture(windows, depth),
+            || fixture(windows, depth, animated),
             |fixture, _| {
                 let target = bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(
                     fixture.window,
@@ -110,11 +138,11 @@ fn main() -> Result {
                 ));
                 fixture.app.update();
                 let valid = fixture.app.world().get::<CursorIcon>(fixture.window).is_some_and(|cursor| {
-                    matches!(cursor, CursorIcon::Custom(CustomCursor::Image(image)) if image.handle == fixture.expected && image.hotspot == (7, 9)
-                        && image.texture_atlas.as_ref().and_then(|atlas| atlas.texture_rect(fixture.app.world().resource::<Assets<TextureAtlasLayout>>())) == Some(URect::new(0, 0, 32, 24)))
+                    matches!(cursor, CursorIcon::Custom(CustomCursor::Image(image)) if image.handle == fixture.expected && image.hotspot == if fixture.animated {(3,5)} else {(7,9)}
+                        && image.texture_atlas.as_ref().and_then(|atlas| atlas.texture_rect(fixture.app.world().resource::<Assets<TextureAtlasLayout>>())).is_some_and(|rect| rect.size() == if fixture.animated {UVec2::splat(8)} else {UVec2::new(32,24)}))
                 });
                 if !valid {
-                    return Err(missing("requested static cursor"));
+                    return Err(missing("requested cursor style"));
                 }
                 Ok(())
             },
