@@ -4,6 +4,11 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 mod animation;
 mod colors;
 mod error;
+mod headless;
+pub use headless::{
+    WidgetryProgressBarHeadless, WidgetryProgressBarHeadlessPlugin,
+    WidgetryProgressBarHeadlessProps,
+};
 mod progress;
 mod style;
 
@@ -18,11 +23,9 @@ pub struct WidgetryProgressBarPlugin;
 
 impl Plugin for WidgetryProgressBarPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
-            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
+        if !app.is_plugin_added::<WidgetryProgressBarHeadlessPlugin>() {
+            app.add_plugins(WidgetryProgressBarHeadlessPlugin);
         }
-        app.register_type::<progress::ProgressState>()
-            .register_type::<WidgetryProgressState>();
         style::install(app);
         widgetry_debug!("WidgetryProgressBarPlugin 注册完成");
     }

@@ -35,14 +35,13 @@ pub(crate) fn scene(props: WidgetryProgressBarProps) -> impl Scene {
     let (left, fraction) = Animation::new(value).window();
     bsn! {
         template(move |ctx| {
-            value.validate().map_err(|error| error.with_context(ErrorFrame::new("progress_bar.initialize").field("root", ctx.entity.id())).into_bevy_error())?;
             if !height.is_finite() || height <= 0.0 {
                 return Err(failure(ProgressBarError::InvalidHeight { height }, ErrorFrame::new("progress_bar.initialize").field("root", ctx.entity.id())).into_bevy_error());
             }
-            Ok(ProgressState(value))
+            Ok(Diagnostics::default())
         })
+        @crate::WidgetryProgressBarHeadless {@state:{value}}
         template(move |ctx| colors.clone().initial(ctx.entity.id()).map_err(|error| error.into_bevy_error()))
-        template(|_| Ok(Diagnostics::default()))
         template(move |_| Ok(Animation::new(value)))
         Parts { track: #ProgressTrack, fill: #ProgressFill, clip: #ProgressClip }
         Pickable::IGNORE

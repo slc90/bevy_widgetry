@@ -202,6 +202,7 @@ pub(crate) enum NumberInputKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ProgressBarKey {
+    Ring,
     Description,
     Increase,
     Decrease,

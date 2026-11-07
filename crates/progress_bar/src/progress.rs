@@ -32,7 +32,11 @@ impl WidgetryProgressState {
 }
 
 fn state(world: &World, entity: Entity) -> Result<&ProgressState, ProgressBarFailure> {
-    if world.get::<WidgetryProgressBar>(entity).is_none() {
+    if world
+        .get::<crate::WidgetryProgressBarHeadless>(entity)
+        .is_none()
+        && world.get::<WidgetryProgressBar>(entity).is_none()
+    {
         return Err(failure(
             ProgressBarError::InvalidRoot { root: entity },
             ErrorFrame::new("progress_bar.state"),
@@ -149,7 +153,7 @@ mod tests {
     fn same_value_does_not_dirty_state_and_incomplete_targets_are_rejected() {
         let mut world = World::new();
         let entity = world
-            .spawn((WidgetryProgressBar, ProgressState(default())))
+            .spawn((crate::WidgetryProgressBarHeadless, ProgressState(default())))
             .id();
         world.clear_trackers();
         assert!(!WidgetryProgressBar::set_state_in_world(&mut world, entity, default()).unwrap());
@@ -166,7 +170,7 @@ mod tests {
         world
             .entity_mut(entity)
             .insert(ProgressState(default()))
-            .remove::<WidgetryProgressBar>();
+            .remove::<crate::WidgetryProgressBarHeadless>();
         assert!(WidgetryProgressBar::state(&world, entity).is_err());
         assert!(WidgetryProgressBar::set_state_in_world(&mut world, entity, default()).is_err());
     }

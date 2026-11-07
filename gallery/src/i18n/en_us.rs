@@ -251,6 +251,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         },
         TextKey::Navigation(NavigationKey::ProgressBar) => "ProgressBar",
         TextKey::ProgressBar(key) => match key {
+            super::ProgressBarKey::Ring => "Custom progress ring · independent state and animation",
             super::ProgressBarKey::Description => {
                 "Adjust progress with the external buttons to see smooth filling, backward updates and the indeterminate loop. In unknown mode, +/− changes the simulated input; switching back immediately shows that known ratio."
             }

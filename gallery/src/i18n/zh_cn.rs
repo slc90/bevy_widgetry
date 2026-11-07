@@ -277,6 +277,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         },
         TextKey::Navigation(NavigationKey::ProgressBar) => "进度条",
         TextKey::ProgressBar(key) => match key {
+            super::ProgressBarKey::Ring => "自定义进度圆环 · 独立状态与动画",
             super::ProgressBarKey::Description => {
                 "使用外部按钮调整进度，观察平滑填充、倒退和未知进度循环。未知模式下加减会调整示例的模拟输入；切回确定模式后直接显示该比例。"
             }

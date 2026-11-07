@@ -4,11 +4,15 @@ use crate::i18n::{
 };
 use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::{button::WidgetryButton, progress_bar::*, text::WidgetryText};
+mod benchmark;
+mod ring;
 
 pub(crate) struct ProgressBarDemoPlugin;
 
 impl Plugin for ProgressBarDemoPlugin {
     fn build(&self, app: &mut App) {
+        ring::install(app);
+        benchmark::install(app);
         app.add_systems(OnEnter(GalleryPage::ProgressBar), enter)
             .add_systems(OnExit(GalleryPage::ProgressBar), exit)
             .add_systems(
@@ -72,7 +76,8 @@ fn scene() -> impl Scene {
             #Status Name::new("ProgressBarStatus")
             @localized_args(TextKey::ProgressBar(ProgressBarKey::Percentage), vec![("percent", "0".to_owned())]) WidgetryText--
             #Progress Name::new("ProgressBarMain") @WidgetryProgressBar--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap, max_width: percent(100) } Children [{controls}]
+            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap, max_width: percent(100) } Children [{controls}]--
+            @ring::scene()
         ]
     }
 }

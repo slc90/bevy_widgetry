@@ -17,3 +17,5 @@
 循环动画覆盖初始直接可见、向右移动与跨周期、双向模式即时交接、同值保持相位、退出停止重绘、三套内置主题 / UI Scale / 局部覆盖及尺寸变化；状态始终为调用方最后提交值。Unit Test 检查窗口有界和跨模式丢弃旧计时。
 
 `diagnostics.rs` 验证非法请求保留实际浮点位、Root / 缺失状态分类、Core 颜色原因链与字段；域失败转换保留共享 origin，源头 ERROR 单次且不含完整栈，合法切换与同值无日志。Deferred 高度 Template 错误经 Scene 桥进入宿主且清理根。样式覆盖多个损坏 Root 的完整聚合、持续失败复用身份、恢复 INFO 及恢复后重新失败创建新诊断。
+
+`independent.rs` installs only HeadlessPlugin and constructs roots without visual Children. It protects immediate true-state reads, queued writes, both modes, no-op and invalid input preservation, invalid initialization cleanup, stale queued targets and absence of animation RequestRedraw. Existing default-style tests protect shared diagnostics, geometry and all animation timing independently of the new marker.
