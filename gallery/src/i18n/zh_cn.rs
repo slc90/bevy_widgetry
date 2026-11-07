@@ -22,6 +22,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         },
         TextKey::Navigation(NavigationKey::DatePicker) => "日期选择",
         TextKey::DatePicker(key) => match key {
+            super::DatePickerKey::CustomNavigation => "自定义日历导航",
+            super::DatePickerKey::CustomNavigationDescription => {
+                "点击标题浏览月份与年份；确认月份才提交日历显示年月。"
+            }
             super::DatePickerKey::DateOnly => "自定义日期区域",
             super::DatePickerKey::DateOnlyDescription => {
                 "独立日期模型：只显示日期，选择和清空不依赖月份或年份候选面板。"

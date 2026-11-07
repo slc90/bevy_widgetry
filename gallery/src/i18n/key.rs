@@ -97,6 +97,8 @@ pub(crate) enum NavigationKey {
 pub(crate) enum DatePickerKey {
     DateOnly,
     DateOnlyDescription,
+    CustomNavigation,
+    CustomNavigationDescription,
     Description,
     Main,
     Unselected,

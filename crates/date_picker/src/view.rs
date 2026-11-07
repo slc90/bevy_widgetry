@@ -1,8 +1,9 @@
 use crate::{
-    DatePickerError, DatePickerFailure, WidgetryDatePicker,
+    DatePickerError, DatePickerFailure, WidgetryDatePicker, WidgetryDatePickerNavigation as Nav,
     colors::ColorState,
     error::{core, failure, missing},
     model::State,
+    navigation::{DatePickerView as View, Navigation, navigation},
 };
 use bevy::{
     ecs::entity::EntityHashSet,
@@ -64,17 +65,6 @@ enum Part {
     Candidate(usize),
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
-enum View {
-    #[default]
-    Days,
-    Months(i32),
-    Years(i32),
-}
-
-#[derive(Component, Default)]
-struct Navigation(View);
-
 #[derive(Component, Clone, Copy)]
 enum Panel {
     Days,
@@ -83,38 +73,6 @@ enum Panel {
 
 #[derive(Component)]
 struct TodayRing(usize);
-
-fn navigation(world: &World, root: Entity) -> Result<View, DatePickerFailure> {
-    world
-        .get::<Navigation>(root)
-        .map(|nav| nav.0)
-        .ok_or_else(|| missing(root, root, "Navigation", "date_picker.navigation"))
-}
-
-fn year_page(year: i32) -> i32 {
-    year.div_euclid(12) * 12
-}
-
-fn shifted_month(month: crate::DatePickerMonth, delta: i32) -> crate::DatePickerMonth {
-    let total = month.year * 12 + month.month as i32 - 1 + delta;
-    crate::DatePickerMonth {
-        year: total.div_euclid(12),
-        month: crate::Month::January.nth_next(total.rem_euclid(12) as u8),
-    }
-}
-
-fn shifted_view(view: View, delta: i32) -> Option<View> {
-    let (start, end, candidate) = match view {
-        View::Days => return None,
-        View::Months(year) => (year + delta, year + delta, View::Months(year + delta)),
-        View::Years(start) => (
-            start + delta * 12,
-            start + delta * 12 + 11,
-            View::Years(start + delta * 12),
-        ),
-    };
-    (end >= crate::Date::MIN.year() && start <= crate::Date::MAX.year()).then_some(candidate)
-}
 
 pub(crate) fn scene() -> impl Scene {
     let weekdays: Vec<_> = (0..7)
@@ -132,7 +90,7 @@ pub(crate) fn scene() -> impl Scene {
         })
         .collect();
     bsn! {
-        template(|_| Ok(Navigation::default()))
+        @Nav
         Node { width: px(304), height: px(352), padding: UiRect::all(px(10)), flex_direction: FlexDirection::Column, flex_shrink: 0.0, border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(8)) }
         BackgroundColor BorderColor
         Children [
@@ -221,7 +179,7 @@ fn update(
     mode: Res<WidgetryTheme>,
     today: Res<crate::today::Today>,
     language: Res<WidgetryDatePickerLanguage>,
-    roots: Query<(Entity, Ref<State>, Ref<ColorState>, Ref<Navigation>)>,
+    roots: Query<(Entity, Ref<State>, Ref<ColorState>, Ref<Navigation>), With<WidgetryDatePicker>>,
     root_markers: Query<(), With<WidgetryDatePicker>>,
     changed: Query<
         Entity,
@@ -306,51 +264,33 @@ fn activate(world: &mut World, target: Entity) -> Result<(), DatePickerFailure> 
         return Ok(());
     };
     let view = navigation(world, root)?;
-    let mut next_view = None;
     match part {
         Part::Previous | Part::Next => {
-            let delta = if matches!(part, Part::Previous) {
-                -1
-            } else {
-                1
-            };
-            if view == View::Days {
-                let state = crate::model::state(world, root)?;
-                if state.represents(shifted_month(state.displayed, delta)) {
-                    WidgetryDatePicker::shift_month_in_world(world, root, delta)?;
-                }
-            } else {
-                next_view = shifted_view(view, delta);
-            }
+            Nav::browse_in_world(
+                world,
+                root,
+                if matches!(part, Part::Previous) {
+                    -1
+                } else {
+                    1
+                },
+            )?;
         }
         Part::Title => {
-            next_view = match view {
-                View::Days => Some(View::Months(
-                    WidgetryDatePicker::displayed_month(world, root)?.year,
-                )),
-                View::Months(year) => Some(View::Years(year_page(year))),
-                View::Years(_) => None,
-            };
+            Nav::enter_parent_in_world(world, root)?;
         }
-        Part::Candidate(index) => match view {
-            View::Months(year) => {
-                let month = crate::DatePickerMonth {
-                    year,
-                    month: crate::Month::January.nth_next(index as u8),
-                };
-                if crate::model::state(world, root)?.represents(month) {
-                    WidgetryDatePicker::set_displayed_month_in_world(world, root, month)?;
-                    next_view = Some(View::Days);
+        Part::Candidate(index) => {
+            if let Some(candidate) = Nav::candidates(world, root)?.get(index) {
+                match candidate.value {
+                    crate::DatePickerCandidateValue::Month(month) => {
+                        Nav::choose_month_in_world(world, root, month.month)?;
+                    }
+                    crate::DatePickerCandidateValue::Year(year) => {
+                        Nav::choose_year_in_world(world, root, year)?;
+                    }
                 }
             }
-            View::Years(start) => {
-                let year = start + index as i32;
-                if (crate::Date::MIN.year()..=crate::Date::MAX.year()).contains(&year) {
-                    next_view = Some(View::Months(year));
-                }
-            }
-            View::Days => {}
-        },
+        }
         Part::Clear if view == View::Days => {
             crate::WidgetryDatePickerHeadless::choose_date_in_world(world, root, None)?;
         }
@@ -366,14 +306,6 @@ fn activate(world: &mut World, target: Entity) -> Result<(), DatePickerFailure> 
         }
         _ => {}
     }
-    if let Some(next) = next_view
-        && world.entities().contains(root)
-    {
-        world
-            .get_mut::<Navigation>(root)
-            .ok_or_else(|| missing(root, root, "Navigation", "date_picker.navigation"))?
-            .0 = next;
-    }
     Ok(())
 }
 
@@ -387,24 +319,9 @@ fn apply(world: &mut World, root: Entity) -> Result<(), DatePickerFailure> {
     let selected = state.selected.is_some();
     let week_start = state.week_start.number_days_from_monday() as usize;
     let view = navigation(world, root)?;
-    let previous = match view {
-        View::Days => state.represents(shifted_month(displayed, -1)),
-        _ => shifted_view(view, -1).is_some(),
-    };
-    let next = match view {
-        View::Days => state.represents(shifted_month(displayed, 1)),
-        _ => shifted_view(view, 1).is_some(),
-    };
-    let candidate_selectable: [bool; 12] = std::array::from_fn(|index| match view {
-        View::Months(year) => state.represents(crate::DatePickerMonth {
-            year,
-            month: crate::Month::January.nth_next(index as u8),
-        }),
-        View::Years(start) => {
-            (crate::Date::MIN.year()..=crate::Date::MAX.year()).contains(&(start + index as i32))
-        }
-        View::Days => false,
-    });
+    let previous = Nav::can_browse(world, root, -1)?;
+    let next = Nav::can_browse(world, root, 1)?;
+    let candidates = Nav::candidates(world, root)?;
     let days = WidgetryDatePicker::days(world, root, world.resource::<crate::today::Today>().0)?;
     let colors = crate::WidgetryDatePickerColorOverrides::get(world, root)?
         .resolve(&world.resource::<WidgetryTheme>().date_picker);
@@ -485,16 +402,16 @@ fn apply(world: &mut World, root: Entity) -> Result<(), DatePickerFailure> {
                 )
             }
             Part::Candidate(index) => match view {
-                View::Months(year) => (
+                View::Months(_) => (
                     language.month(index),
-                    candidate_selectable[index],
-                    displayed.year == year && displayed.month as usize == index + 1,
+                    candidates[index].is_selectable,
+                    candidates[index].is_current,
                     false,
                 ),
                 View::Years(start) => (
                     language.year(start + index as i32),
-                    candidate_selectable[index],
-                    displayed.year == start + index as i32,
+                    candidates[index].is_selectable,
+                    candidates[index].is_current,
                     false,
                 ),
                 View::Days => (String::new(), false, false, false),

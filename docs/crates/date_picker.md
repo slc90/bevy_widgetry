@@ -39,3 +39,11 @@ Headless Scene 只创建日期状态和必要根 Node，不创建日期格、月
 `WidgetryDatePickerHeadless::is_selectable(world, root, date)` 查询范围资格。外部按钮通过 `choose_date_in_world` / `choose_date` 提交真实 Date 或 None；这些用户操作遵守有效 Disabled 与可选范围，正常拒绝返回未变化，程序 Setter 仍独立允许 Disabled 下合法赋值并对非法范围报错。用户与程序操作共享唯一 State 和既有已提交变化通知。
 
 `WidgetryDatePickerHeadless::today(world)` 只读取 App 共享的可信缓存，未就绪/本地读取失败返回 None，不另读时钟或伪造 Today；现有一分钟采样、Reactive 唤醒、失败身份和恢复语义保持。默认笔圈仍由默认 Style 单独构造。Gallery 的独立日期区域通过公开 days/choose_date 与日期读数工作，不创建月份或年份面板。
+
+## 可选导航
+
+在日期 Headless 根上额外组合 `@WidgetryDatePickerNavigation`，即可复用三级浏览，无需安装默认 Style 或创建任何节点。日期-only 根不需要此能力。`view` 返回只读 `DatePickerView::Days / Months(year) / Years(page_start)`；`candidates` 返回真实月份或年份、可用资格和已提交年月高亮，日期视图返回空列表。
+
+`enter_parent_in_world`、`browse_in_world(delta)`、`choose_year_in_world(year)` 和 `choose_month_in_world(month)` 提供用户语义操作，也有同名无后缀的 Commands 入口。它们遵守有效 Disabled 和当前视图资格；不属于当前候选页、超出日历表示范围的候选及无法继续的翻页合法拒绝，返回未变化。失效根或缺少导航能力明确返回诊断。月份/年份浏览只更新导航状态，确认月份才提交正式显示年月并返回日期视图；同月确认只改变视图，不产生显示月份事件。合法程序 Setter 不受导航/Disabled 限制，也不重置未提交的导航位置。
+
+导航状态不修改 Node 或创建 UI；默认 Style 只消费同一状态投影原位面板。Gallery 同时保留日期-only区域与自有标题/候选布局，中英文切换不会重置候选浏览。

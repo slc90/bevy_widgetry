@@ -5,8 +5,12 @@ mod colors;
 mod error;
 mod headless;
 mod model;
+mod navigation;
 pub use headless::{
     WidgetryDatePickerHeadless, WidgetryDatePickerHeadlessPlugin, WidgetryDatePickerHeadlessProps,
+};
+pub use navigation::{
+    DatePickerCandidate, DatePickerCandidateValue, DatePickerView, WidgetryDatePickerNavigation,
 };
 mod today;
 mod view;

@@ -6,7 +6,10 @@ use bevy::{
 };
 use bevy_widgetry::{
     button::{WidgetryButton, WidgetryButtonHeadless},
-    date_picker::{Date, DatePickerMonth, Month, WidgetryDatePickerHeadless as Picker},
+    date_picker::{
+        Date, DatePickerCandidateValue, DatePickerMonth, DatePickerView, Month,
+        WidgetryDatePickerHeadless as Picker, WidgetryDatePickerNavigation as Nav,
+    },
     text::WidgetryText,
     theme::WidgetryTheme,
 };
@@ -26,6 +29,29 @@ struct Day {
 #[derive(Component, FromTemplate)]
 struct Target {
     root: Entity,
+}
+
+#[derive(Component, FromTemplate)]
+struct NavigationAction {
+    root: Entity,
+    step: i32,
+}
+#[derive(Component, FromTemplate)]
+struct NavigationTitle {
+    root: Entity,
+}
+#[derive(Component, FromTemplate)]
+struct NavigationPanel {
+    root: Entity,
+    days: bool,
+}
+#[derive(Component, FromTemplate)]
+struct Candidate {
+    root: Entity,
+    index: usize,
+    value: Option<DatePickerCandidateValue>,
+    selectable: bool,
+    text: Entity,
 }
 
 pub(super) fn install(app: &mut App) {
@@ -59,6 +85,164 @@ pub(super) fn scene() -> impl Scene {
             ]
         ]
     }
+}
+
+pub(super) fn navigation_scene() -> impl Scene {
+    bsn! {
+        Node {flex_direction:FlexDirection::Column,row_gap:px(10),align_items:AlignItems::Start}
+        Children [
+            @localized(TextKey::DatePicker(DatePickerKey::CustomNavigation)) WidgetryText--
+            @localized(TextKey::DatePicker(DatePickerKey::CustomNavigationDescription)) WidgetryText--
+            #Root @Picker {@displayed_month:{Some(DatePickerMonth {year:2026,month:Month::October})}}
+            @Nav DateRegion Name::new("DateCustomNavigation")
+            Node {width:px(320),flex_direction:FlexDirection::Column,row_gap:px(8),padding:UiRect::all(px(8))}
+            Children [
+                Node {width:percent(100),justify_content:JustifyContent::SpaceBetween} Children [
+                    @WidgetryButtonHeadless NavigationAction {root:#Root,step:-1} Name::new("DateCustomPrevious")
+                    Node {width:px(40),height:px(36),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(browse)
+                    Children [Text("‹") WidgetryText Pickable::IGNORE]--
+                    @WidgetryButtonHeadless NavigationTitle {root:#Root} Name::new("DateCustomTitle")
+                    Node {flex_grow:1.0,height:px(36),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(enter_parent)
+                    Children [Text("") WidgetryText Pickable::IGNORE]--
+                    @WidgetryButtonHeadless NavigationAction {root:#Root,step:1} Name::new("DateCustomNext")
+                    Node {width:px(40),height:px(36),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(browse)
+                    Children [Text("›") WidgetryText Pickable::IGNORE]
+                ]--
+                @grid(#Root) NavigationPanel {root:#Root,days:true}--
+                NavigationPanel {root:#Root,days:false}
+                Node {display:Display::Grid,grid_template_columns:{vec![RepeatedGridTrack::px(3,90.0)]},column_gap:px(8),row_gap:px(8)}
+                @candidate_cells(#Root)--
+                Target {root:#Root} Readout Text("") WidgetryText--
+                @WidgetryButton {@children:{Some(Box::new(bsn_list!{@localized(TextKey::Common(CommonKey::ClearSelection)) WidgetryText}) as Box<dyn SceneList>)}}
+                Target {root:#Root} on(clear)
+            ]
+        ]
+    }
+}
+
+fn candidate_cells(root: bevy::ecs::template::EntityTemplate) -> impl Scene {
+    let candidates = (0usize..12).map(|index| bsn! {
+        @WidgetryButtonHeadless Candidate {root:{root},index:index,value:None,selectable:true,text:#Text}
+        Name({format!("DateCustomCandidate{index}")})
+        Node {width:px(90),height:px(40),align_items:AlignItems::Center,justify_content:JustifyContent::Center,border_radius:BorderRadius::all(px(8))}
+        BackgroundColor on(confirm_candidate)
+        Children [#Text Text("") WidgetryText TextFont {font_size:px(14)} Pickable::IGNORE]
+    }).collect::<Vec<_>>();
+    bsn! {Children [{candidates}]}
+}
+
+fn browse(event: On<Activate>, actions: Query<&NavigationAction>, mut commands: Commands) {
+    if let Ok(action) = actions.get(event.entity) {
+        Nav::browse(&mut commands, action.root, action.step);
+        info!(root=?action.root,step=action.step,"请求浏览自定义日历");
+    }
+}
+fn enter_parent(event: On<Activate>, titles: Query<&NavigationTitle>, mut commands: Commands) {
+    if let Ok(title) = titles.get(event.entity) {
+        Nav::enter_parent(&mut commands, title.root);
+        info!(root=?title.root,"请求进入自定义日历上级视图");
+    }
+}
+fn confirm_candidate(event: On<Activate>, candidates: Query<&Candidate>, mut commands: Commands) {
+    let Ok(candidate) = candidates.get(event.entity) else {
+        return;
+    };
+    match candidate.value {
+        Some(DatePickerCandidateValue::Month(month)) => {
+            Nav::choose_month(&mut commands, candidate.root, month.month)
+        }
+        Some(DatePickerCandidateValue::Year(year)) => {
+            Nav::choose_year(&mut commands, candidate.root, year)
+        }
+        None => return,
+    }
+    info!(root=?candidate.root,value=?candidate.value,"请求确认自定义日历候选");
+}
+
+fn refresh_navigation(world: &mut World, root: Entity, language: crate::i18n::Language) -> Result {
+    let view = Nav::view(world, root).map_err(|error| error.into_bevy_error())?;
+    let month = Picker::displayed_month(world, root).map_err(|error| error.into_bevy_error())?;
+    let title = match (view, language) {
+        (DatePickerView::Days, _) => format!("{} / {:02}", month.year, month.month as u8),
+        (DatePickerView::Months(year), crate::i18n::Language::SimplifiedChinese) => {
+            format!("{year}年")
+        }
+        (DatePickerView::Months(year), _) => year.to_string(),
+        (DatePickerView::Years(start), _) => format!("{start} – {}", start + 11),
+    };
+    let titles = world
+        .query::<(Entity, &NavigationTitle, &Children)>()
+        .iter(world)
+        .filter(|(_, binding, _)| binding.root == root)
+        .map(|(_, _, children)| children[0])
+        .collect::<Vec<_>>();
+    for entity in titles {
+        if let Some(mut text) = world.get_mut::<Text>(entity) {
+            text.set_if_neq(Text::new(title.clone()));
+        }
+    }
+    let panels = world
+        .query::<(Entity, &NavigationPanel)>()
+        .iter(world)
+        .filter(|(_, panel)| panel.root == root)
+        .map(|(entity, panel)| (entity, panel.days))
+        .collect::<Vec<_>>();
+    for (entity, days) in panels {
+        if let Some(mut node) = world.get_mut::<Node>(entity) {
+            let display = if days != (view == DatePickerView::Days) {
+                Display::None
+            } else {
+                Display::Grid
+            };
+            if node.display != display {
+                node.display = display;
+            }
+        }
+    }
+    let values = Nav::candidates(world, root).map_err(|error| error.into_bevy_error())?;
+    let candidates = world
+        .query::<(Entity, &Candidate)>()
+        .iter(world)
+        .filter(|(_, binding)| binding.root == root)
+        .map(|(entity, binding)| (entity, binding.index, binding.text, binding.selectable))
+        .collect::<Vec<_>>();
+    let theme = world.resource::<WidgetryTheme>().date_picker;
+    for (entity, index, text_entity, was_selectable) in candidates {
+        let value = values.get(index);
+        if let Some(mut binding) = world.get_mut::<Candidate>(entity) {
+            binding.value = value.map(|value| value.value);
+            binding.selectable = value.is_some_and(|value| value.is_selectable);
+        }
+        let text = match value.map(|value| value.value) {
+            Some(DatePickerCandidateValue::Year(year)) => year.to_string(),
+            Some(DatePickerCandidateValue::Month(month)) => match language {
+                crate::i18n::Language::SimplifiedChinese => format!("{}月", month.month as u8),
+                _ => month.month.to_string(),
+            },
+            None => String::new(),
+        };
+        if let Some(mut target) = world.get_mut::<Text>(text_entity) {
+            target.set_if_neq(Text::new(text));
+        }
+        let selectable = value.is_some_and(|value| value.is_selectable);
+        if was_selectable != selectable {
+            if selectable {
+                world.entity_mut(entity).remove::<InteractionDisabled>();
+            } else {
+                world.entity_mut(entity).insert(InteractionDisabled);
+            }
+        }
+        if let Some(mut background) = world.get_mut::<BackgroundColor>(entity) {
+            background.set_if_neq(BackgroundColor(
+                if value.is_some_and(|value| value.is_current) {
+                    theme.selected
+                } else {
+                    Color::NONE
+                },
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn grid(root: bevy::ecs::template::EntityTemplate) -> impl Scene {
@@ -126,6 +310,9 @@ fn refresh(world: &mut World) -> Result {
         let selected =
             Picker::selected_date(world, root).map_err(|error| error.into_bevy_error())?;
         let language = *world.resource::<crate::i18n::Language>();
+        if world.get::<Nav>(root).is_some() {
+            refresh_navigation(world, root, language)?;
+        }
         let readouts = world
             .query_filtered::<(Entity, &Target), With<Readout>>()
             .iter(world)

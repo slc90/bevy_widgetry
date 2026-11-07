@@ -130,7 +130,8 @@ fn scene(selected: Option<Date>) -> impl Scene {
                 }, vec![], false, true)--
                 @example("DatePickerDisabled", DatePickerKey::Disabled, WidgetryDatePickerProps {selected_date: Some(date!(2026-10-15)), ..default()}, vec![Action::SetDisabled], true, true)
             ]--
-            @custom::scene()
+            @custom::scene()--
+            @custom::navigation_scene()
         ]
     }
 }
