@@ -6,14 +6,10 @@ edition.workspace = true
 
 [features]
 default = []
-kamuri_cursor = []
 
 [dependencies]
 bevy_widgetry_internal_log = { path = "../internal_log" }
 bevy.workspace = true
-
-[dev-dependencies]
-image.workspace = true
 
 [lints]
 workspace = true

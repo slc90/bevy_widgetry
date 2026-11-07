@@ -5,7 +5,6 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-kamuri_cursor = ["bevy_widgetry_cursor/kamuri_cursor"]
 light = ["bevy_widgetry_theme/light"]
 pink_dream = ["bevy_widgetry_theme/pink_dream"]
 default = [

@@ -1,3 +1,4 @@
+use crate::assets::{GalleryCursorAnimation, GalleryCursorImage};
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::CursorKey;
 use crate::i18n::{LocalizedText, TextKey, localized, localized_binding};
@@ -9,12 +10,11 @@ use bevy::{
 use bevy_widgetry::{
     button::WidgetryButton,
     cursor::{
-        CursorImage, CursorImageSource, CursorSemantic, CursorStyle, WidgetryCursorHint,
-        WidgetryCursorTheme,
+        CursorAnimation, CursorImage, CursorImageSource, CursorSemantic, CursorStyle,
+        WidgetryCursorHint, WidgetryCursorTheme,
     },
     text::WidgetryText,
 };
-use bevy_widgetry_asset::{BuiltinCursorAnimation, BuiltinCursorImage};
 use std::collections::HashMap;
 
 pub(crate) struct CursorDemoPlugin;
@@ -26,11 +26,14 @@ struct ThemeChoice(WidgetryCursorTheme, &'static str);
 struct CursorThemeLabel;
 
 #[derive(Component)]
-struct CursorPreview(BuiltinCursorAnimation);
+struct CursorPreview(GalleryCursorAnimation);
 
 #[derive(Resource)]
 struct CursorPreviewAssets {
-    animations: HashMap<BuiltinCursorAnimation, (Handle<Image>, Handle<TextureAtlasLayout>)>,
+    animations: HashMap<
+        GalleryCursorAnimation,
+        (Handle<Image>, Handle<TextureAtlasLayout>, CursorAnimation),
+    >,
     fallback: Handle<Image>,
     fallback_layout: Handle<TextureAtlasLayout>,
 }
@@ -48,26 +51,29 @@ impl Plugin for CursorDemoPlugin {
 }
 
 fn enter(world: &mut World) -> Result {
+    let kamuri = crate::cursor_theme::kamuri()?;
     let server = world.resource::<AssetServer>().clone();
     let mut layouts = world.resource_mut::<Assets<TextureAtlasLayout>>();
     let assets = CursorPreviewAssets {
-        animations: BuiltinCursorAnimation::ALL
+        animations: GalleryCursorAnimation::ALL
             .into_iter()
             .map(|animation| {
+                let definition = animation.definition();
                 (
                     animation,
                     (
                         server.load(animation.path()),
-                        layouts.add(animation.atlas_layout()),
+                        layouts.add(definition.atlas_layout()),
+                        definition,
                     ),
                 )
             })
             .collect(),
-        fallback: server.load(BuiltinCursorImage::KamuriStaticAtlas.path()),
-        fallback_layout: layouts.add(BuiltinCursorImage::KamuriStaticAtlas.atlas_layout()),
+        fallback: server.load(GalleryCursorImage::KamuriStaticAtlas.path()),
+        fallback_layout: layouts.add(GalleryCursorImage::KamuriStaticAtlas.atlas_layout()),
     };
     world.insert_resource(assets);
-    let result = mount_page(world, GalleryPage::Cursor, bsn_list! { @scene() });
+    let result = mount_page(world, GalleryPage::Cursor, bsn_list! { @scene(kamuri) });
     if result.is_err() {
         release_previews(world);
     }
@@ -83,21 +89,21 @@ fn exit(world: &mut World) -> Result {
 fn release_previews(world: &mut World) {
     if let Some(assets) = world.remove_resource::<CursorPreviewAssets>() {
         let mut layouts = world.resource_mut::<Assets<TextureAtlasLayout>>();
-        for (_, layout) in assets.animations.values() {
+        for (_, layout, _) in assets.animations.values() {
             layouts.remove(layout.id());
         }
         layouts.remove(assets.fallback_layout.id());
     }
 }
 
-fn scene() -> impl Scene {
+fn scene(kamuri: WidgetryCursorTheme) -> impl Scene {
     bsn! {
         #CursorDemo
         Node { flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
             @localized(TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation)) WidgetryText--
             Node { column_gap: px(12) }
-            Children [@theme_button(WidgetryCursorTheme::system(), "System")-- @theme_button(WidgetryCursorTheme::kamuri(), "Kamuri")]--
+            Children [@theme_button(WidgetryCursorTheme::system(), "System")-- @theme_button(kamuri.clone(), "Kamuri")]--
             @static_pointer_button()--
             @localized_binding(LocalizedText::with_args(TextKey::Cursor(CursorKey::CursorTheme), vec![("theme", String::new())]))
             template(|_| Ok(CursorThemeLabel)) WidgetryText--
@@ -164,7 +170,7 @@ fn static_pointer_button() -> impl Scene {
 
 fn select_static_pointer(_: On<Activate>, mut commands: Commands) {
     commands.queue(|world: &mut World| {
-        set_static_pointer(world, BuiltinCursorAnimation::Pointer.hotspot())
+        set_static_pointer(world, GalleryCursorAnimation::Pointer.hotspot())
     });
 }
 
@@ -173,7 +179,7 @@ fn select_static_hotspot(_: On<Activate>, mut commands: Commands) {
 }
 
 fn set_static_pointer(world: &mut World, hotspot: (u16, u16)) -> Result {
-    let rect = BuiltinCursorImage::KamuriStaticAtlas
+    let rect = GalleryCursorImage::KamuriStaticAtlas
         .atlas_layout()
         .textures
         .get(1)
@@ -188,7 +194,7 @@ fn set_static_pointer(world: &mut World, hotspot: (u16, u16)) -> Result {
         CursorSemantic::System(SystemCursorIcon::Pointer),
         CursorStyle::Image(CursorImage {
             source: CursorImageSource::Path(
-                BuiltinCursorImage::KamuriStaticAtlas.path().to_string(),
+                GalleryCursorImage::KamuriStaticAtlas.path().to_string(),
             ),
             rect: Some(rect),
             hotspot,
@@ -214,7 +220,7 @@ fn target(
         @{hint.map(|hint| bsn! { template(move |_| Ok(hint)) })}
         Children [
             Name({format!("CursorPreview{label}")})
-            template(move |_| Ok(CursorPreview(BuiltinCursorAnimation::ALL[index])))
+            template(move |_| Ok(CursorPreview(GalleryCursorAnimation::ALL[index])))
             template(move |context| {
                 let assets = context.resource::<CursorPreviewAssets>();
                 Ok(ImageNode::from_atlas_image(assets.fallback.clone(), TextureAtlas { layout: assets.fallback_layout.clone(), index }))
@@ -331,7 +337,7 @@ fn hint_targets() -> Vec<impl Scene> {
 fn sync_theme_label(
     theme: Res<WidgetryCursorTheme>,
     mut labels: Query<&mut LocalizedText, With<CursorThemeLabel>>,
-) {
+) -> Result {
     for mut label in &mut labels {
         if !theme.is_changed() && !label.is_added() {
             continue;
@@ -342,7 +348,7 @@ fn sync_theme_label(
                 "theme",
                 if theme.is_system() {
                     "System"
-                } else if *theme == WidgetryCursorTheme::kamuri() {
+                } else if *theme == crate::cursor_theme::kamuri()? {
                     "Kamuri"
                 } else {
                     "Static Pointer"
@@ -351,6 +357,7 @@ fn sync_theme_label(
             )],
         );
     }
+    Ok(())
 }
 
 fn animate_previews(
@@ -367,7 +374,7 @@ fn animate_previews(
     }
     let mut needs_redraw = false;
     for (preview, mut node) in &mut previews {
-        let Some((image, layout)) = assets.animations.get(&preview.0) else {
+        let Some((image, layout, definition)) = assets.animations.get(&preview.0) else {
             continue;
         };
         if !images
@@ -380,6 +387,9 @@ fn animate_previews(
             );
             continue;
         }
+        let Some(index) = definition.frame_at(time.elapsed()) else {
+            continue;
+        };
         needs_redraw = true;
         node.reborrow()
             .map_unchanged(|n| &mut n.image)
@@ -387,7 +397,7 @@ fn animate_previews(
         node.map_unchanged(|n| &mut n.texture_atlas)
             .set_if_neq(Some(TextureAtlas {
                 layout: layout.clone(),
-                index: preview.0.frame_at(time.elapsed()),
+                index,
             }));
     }
     if needs_redraw {

@@ -1,4 +1,8 @@
 mod constants;
+mod cursor_animation;
+mod cursors;
+pub(crate) use cursor_animation::GalleryCursorAnimation;
+pub(crate) use cursors::GalleryCursorImage;
 
 use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
@@ -48,6 +52,7 @@ impl Plugin for GalleryAssetPlugin {
     fn build(&self, app: &mut App) {
         {
             let embedded = app.world_mut().resource_mut::<EmbeddedAssetRegistry>();
+            cursors::register(&embedded);
             for (path, bytes) in [
                 LOGO_ICON,
                 BUTTON_STAR_ICON,

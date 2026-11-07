@@ -28,11 +28,11 @@ Widget 使用 BSN Scene 与一次性 Props 构造。运行时 State、通知与�
 
 ## 按需编译
 
-`canvas` 默认保留 Canvas 绘制、Document 与 SVG。默认关闭的 `canvas_png_export` 同时启用 `canvas` 并转发 Canvas 的 `png_export`，提供异步 PNG API 和导出系统。Gallery 显式开启；该开关与颜色主题及 `kamuri_cursor` 独立。
+`canvas` 默认保留 Canvas 绘制、Document 与 SVG。默认关闭的 `canvas_png_export` 同时启用 `canvas` 并转发 Canvas 的 `png_export`，提供异步 PNG API 和导出系统。Gallery 显式开启；该开关与颜色主题及 Cursor 外观独立。
 
 颜色主题默认只编译 Dark。默认关闭的 `light`、`pink_dream` 分别转发到 Theme 的对应开关；关闭时对应公开预设常量不可用；当前 Theme 由完整配色 Resource 保存，支持外部数据设置，不使用固定模式枚举。二者可以独立组合，不启用 Kamuri Cursor。Gallery 使用这三套内置预设和自身定义的 Kamuri Violet，保持四个选择项。
 
-`kamuri_cursor` 默认关闭，转发 Cursor 与 Asset 的 Kamuri 呈现及嵌入资源开关。默认保留 System Cursor、全部 Hint 和 Lease；关闭时 `WidgetryCursorTheme::kamuri()` 不存在；公开静态/图集动画主题始终可用。它与颜色 Theme 独立，Gallery 显式启用。
+Cursor 的公开静态/图集动画主题始终可用，默认仍为 System，保留全部 Hint 与 Lease。库不提供 Kamuri 专用接口或 Feature；Gallery 自行用公开描述定义并选择完整角色主题，且与应用 UI 配色独立。
 
 默认 Feature 启用全部 24 个控件模块，原有默认用法保持可用。每个控件的 Feature、公开模块和直接可选依赖一一对应：`button`、`hold_button`、`toggle_button`、`check_box`、`radio_group`、`segmented`、`tabs`、`collapsible`、`slider`、`number_input`、`progress_bar`、`splitter`、`text_field`、`combo_box`、`tooltip`、`scroll_area`、`list_view`、`tree`、`table`、`waveform`、`canvas`、`window`、`message_box`、`file_dialog`。
 

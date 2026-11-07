@@ -16,8 +16,6 @@ use bevy::{
     ui::InteractionDisabled,
     window::{CursorIcon, CursorSystems, SystemCursorIcon, WindowClosed, WindowFocused},
 };
-#[cfg(feature = "kamuri_cursor")]
-use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_internal_log::widgetry_debug;
 
 pub struct WidgetryCursorPlugin;
@@ -27,15 +25,6 @@ struct CursorWriterEnabled(bool);
 
 impl Plugin for WidgetryCursorPlugin {
     fn build(&self, app: &mut App) {
-        #[cfg(feature = "kamuri_cursor")]
-        if app.world().contains_resource::<AssetServer>() {
-            if !app.is_plugin_added::<WidgetryAssetPlugin>() {
-                app.add_plugins(WidgetryAssetPlugin);
-            }
-            if !app.is_plugin_added::<bevy::image::TextureAtlasPlugin>() {
-                app.add_plugins(bevy::image::TextureAtlasPlugin);
-            }
-        }
         if app.world().contains_resource::<AssetServer>()
             && app.world().contains_resource::<Assets<Image>>()
             && !app.is_plugin_added::<bevy::image::TextureAtlasPlugin>()
@@ -230,7 +219,6 @@ fn coordinate(
         .and_then(|entity| resolve(entity, &nodes))
         .unwrap_or_default();
     {
-        presentation.prepare();
         presentation.retain_windows(|entity| windows.contains(entity));
     }
     for (entity, window, current) in &mut windows {

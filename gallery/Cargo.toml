@@ -11,7 +11,6 @@ bevy_brp_runtime.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry", features = [
   "app_logging",
   "canvas_png_export",
-  "kamuri_cursor",
   "light",
   "pink_dream",
   "tray",
@@ -40,6 +39,7 @@ bevy_widgetry_app_icon_build = { path = "../crates/app_icon_build" }
 workspace = true
 
 [dev-dependencies]
+image.workspace = true
 tempfile.workspace = true
 bevy_widgetry_test_utils = { path = "../crates/test_utils" }
 ureq.workspace = true

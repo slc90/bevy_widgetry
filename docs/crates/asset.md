@@ -2,13 +2,13 @@
 
 ## 功能概述
 
-集中管理 Widgetry 内建 Font、SVG Icon 与 Kamuri Cursor 图集，并通过语义标识向使用方提供可加载的 Asset Path。
+集中管理 Widgetry 内建 Font、SVG Icon 与 Shader，并通过语义标识向使用方提供可加载的 Asset Path。
 
 ## 当前设计思路
 
-内建素材由 `WidgetryAssetPlugin` 注册为 Embedded Asset。其他 crate 依靠 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage`、`BuiltinCursorAnimation` 等标识获取路径，不自行依赖素材的实际目录布局。注册与加载是不同阶段。
+内建素材由 `WidgetryAssetPlugin` 注册为 Embedded Asset。其他 crate 依靠 `BuiltinFont`、`BuiltinIcon`、`BuiltinShader` 等标识获取路径，不自行依赖素材的实际目录布局。注册与加载是不同阶段。
 
-Kamuri 资源由默认关闭的 `kamuri_cursor` Feature 控制。只有开启时才提供 `BuiltinCursorImage`、`BuiltinCursorAnimation` 并嵌入、注册静态后备图集和 45 种动画；关闭时这些类型及对应 `include_bytes!` 不参与编译。Font、Icon 和 Shader 保持可用。
+Kamuri Cursor 素材和元数据属于 Gallery，由应用 Asset Plugin 注册；库的 Asset crate 不包含角色图像、动画目录或对应 Feature。
 
 ## 主要功能
 
@@ -16,14 +16,14 @@ Kamuri 资源由默认关闭的 `kamuri_cursor` Feature 控制。只有开启时
 - 提供 CheckBox、Tree、Window、FileDialog、Table 排序及筛选、Playback 播放/暂停等内建 SVG Icon 的语义路径。
 - FileDialog 的后退、前进、上一级、刷新和搜索使用 Fluent 20 Regular 图形，按控件前景色着色；素材来源版本及随附许可证见 `crates/asset/LICENSES/README.md`。
 - `BuiltinIcon::DatePickerToday` 提供 DatePicker 固定朱红色透明笔圈 SVG；笔触与颜色由素材本身确定。
-- `BuiltinCursorAnimation` 提供 Kamuri 全部 45 种语义的独立动画图集、帧数、时长、热点及帧计算，包括 ReadOnly 扫描文档与蓝白挂锁动画。
-- 动画与静态后备帧均为 80×80 RGBA 切片。动画图集为 8 列、行数随帧数确定，Layout 仅包含实际动画帧；静态后备图集为 8×6，Layout 仅包含 45 项。
+
+
 
 ## 行为与状态契约
 
 `path()` 获取的是可交给 `AssetServer` 的标识，不表示图像、字体已加载。调用方必须先保证 Embedded Source 注册，再依赖正常 Asset 生命周期完成实际加载。内建字体注册不意味着强行替应用设置默认字体。
 
-`BuiltinCursorImage::KamuriStaticAtlas` 的每项均为对应动画的首帧，使用相同的画布和热点。Cursor 播放与 Gallery 预览共用动画目录，不在调用方复制素材或时序表。
+
 
 ## 边界情况与错误处理
 
@@ -33,7 +33,7 @@ Kamuri 资源由默认关闭的 `kamuri_cursor` Feature 控制。只有开启时
 
 - 只负责素材与 Embedded 注册，不负责上层 SVG 渲染和布局。
 - 不管理 Gallery 的应用专属素材。
-- 目录提供动画元数据与帧计算，不持有窗口播放原点、Cursor 控制权或重绘生命周期；这些由 Cursor 或 Gallery 消费者管理。
+
 
 
 `BuiltinShader::HoldButton` 提供长按控件内建液面 WESL Shader 的语义路径，由 Asset Plugin 注册。

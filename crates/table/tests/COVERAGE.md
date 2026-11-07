@@ -4,7 +4,7 @@
 
 `editing.rs` 还验证 TextField read 失败经 Table Editor 回调进入宿主，保留原始诊断和 Table 上下文、仅源头一次 ERROR，不显示为普通解析反馈，也不发起 Pending 提交。
 
-只读单元格的 Kamuri 光标回归通过语义资产身份区分 ReadOnly 独立动画图集与静态后备图集：动画使用有效帧索引和对应帧数布局，后备图使用 ReadOnly 语义槽，两者热点均与当前资产元数据一致；随后验证 Disabled 和关闭编辑资格恢复系统光标。
+只读单元格的外部光标回归使用公开主题描述与小型合成图集，验证 ReadOnly Hint 映射到指定 Image、有效帧与固定热点；随后验证 Disabled 和关闭编辑资格恢复系统光标。
 
 `column_order.rs` 保护默认关闭与程序启停、主体阈值/插入线/合法释放、Resize及排序筛选按钮分区、跨冻结边界、共享View独立顺序、Model增列追加/删列修复/移列与行修改保留偏好、行投影独立、重置幂等/queued校验/状态先于通知、同Source替换Model实例后清空偏好并显示新值，以及范围/导航/TSV按显示顺序取值。生命周期覆盖Cancel/禁用/无效落点/销毁/虚拟化/重置释放capture及插入线，真实PointerInput覆盖Move+Release同帧与跨帧且不误选整列；DPI、UiScale、非零Camera viewport与分数两轴滚动保持冻结与有限Shell。源码ViewState单元测试保护同tick结构修改时手动顺序的稳定ID和新列追加。原生Mouse cursor lease只在模拟Window输入组合中验证清理，不代表OS交互。
 
@@ -72,7 +72,7 @@
 - 编辑组合回归使用真实 TextField 验证本帧 pending text edit 与 Enter / Ctrl+Enter 的请求值一致，使用真实已打开 ComboBox 验证 Esc 取消整个 Table 草稿；Cell/Body 局部 Disabled 阻止请求并丢弃草稿。
 - 三个 View 同帧排队提交、应用首个请求 Observer 关闭整个页面时，后续提交跳过已销毁 View，不 panic，也不销毁共享 Model。
 
-- `editing.rs`：默认关闭、类型默认及 Source/Column 覆盖、错误类型只读、ReadOnly Hint 与 Disabled guard；真实 UI Mouse picking 后解析 System Cell / Kamuri 挂锁图集、Disabled 优先、编辑开关恢复默认及再次进入只读；Enter/双击启动、Esc/外部 Press 取消、编辑器及锚定 Popup 内部 Press 保留、多行 Ctrl+Enter、解析失败；Pending 先于强类型通知、重复提交及 Pending 取消 guard、Rejected 重试、新旧 request ID、错误 View/已删除 Row 回执拒绝；Revision 和虚拟化保留编辑器，Accepted 结束，不由 Table 写 Model。
+- `editing.rs`：默认关闭、类型默认及 Source/Column 覆盖、错误类型只读、ReadOnly Hint 与 Disabled guard；真实 UI Mouse picking 后解析 System Cell / 外部合成图集、Disabled 优先、编辑开关恢复默认及再次进入只读；Enter/双击启动、Esc/外部 Press 取消、编辑器及锚定 Popup 内部 Press 保留、多行 Ctrl+Enter、解析失败；Pending 先于强类型通知、重复提交及 Pending 取消 guard、Rejected 重试、新旧 request ID、错误 View/已删除 Row 回执拒绝；Revision 和虚拟化保留编辑器，Accepted 结束，不由 Table 写 Model。
 
 Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽和区域 Style。Renderer 仍按 App 的值类型注册；逐 View Column Schema 和 Renderer 不在当前能力内。BRP 可自动验证 Custom Pointer 与键盘交互，OS Mouse 及实际显示性能不由这些 Headless 用例证明。
 

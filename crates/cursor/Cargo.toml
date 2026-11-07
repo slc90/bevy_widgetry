@@ -6,13 +6,11 @@ edition.workspace = true
 
 [features]
 default = []
-kamuri_cursor = ["dep:bevy_widgetry_asset", "bevy_widgetry_asset/kamuri_cursor"]
 
 [dependencies]
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 bevy.workspace = true
 bevy_widgetry_internal_log = { path = "../internal_log" }
-bevy_widgetry_asset = { path = "../asset", optional = true }
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
@@ -20,7 +18,6 @@ bevy_widgetry_test_utils = { path = "../test_utils" }
 [[bench]]
 name = "coordination"
 harness = false
-required-features = ["kamuri_cursor"]
 
 [lints]
 workspace = true

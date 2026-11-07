@@ -1,5 +1,42 @@
-use super::*;
-use bevy_widgetry_asset::{BuiltinCursorAnimation as Animation, BuiltinCursorImage};
+#![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+use crate::assets::{GalleryAssetPlugin, GalleryCursorAnimation as Animation, GalleryCursorImage};
+use bevy::{
+    picking::{
+        InteractionPlugin, PickingPlugin,
+        backend::{HitData, PointerHits},
+        cursor::EntityCursor,
+        hover::PointerCaptureMap,
+        pointer::{Location, PointerAction, PointerButton, PointerId, PointerInput},
+    },
+    prelude::*,
+    window::{CursorIcon, SystemCursorIcon},
+};
+use bevy_widgetry::cursor::{
+    CursorLease, WidgetryCursorHint, WidgetryCursorPlugin, WidgetryCursorTheme,
+};
+fn location(window: Entity) -> Location {
+    Location {
+        target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+            .normalize(None)
+            .unwrap(),
+        position: Vec2::splat(20.0),
+    }
+}
+
+fn hover(app: &mut App, window: Entity, camera: Entity, entity: Entity) {
+    app.world_mut().write_message(PointerInput::new(
+        PointerId::Mouse,
+        location(window),
+        PointerAction::Move { delta: Vec2::ONE },
+    ));
+    app.world_mut().write_message(PointerHits::new(
+        PointerId::Mouse,
+        vec![(entity, HitData::new(camera, 0.0, None, None))],
+        0.0,
+    ));
+    app.update();
+}
+
 use std::time::{Duration, Instant};
 
 const SYSTEM_ANIMATIONS: [(SystemCursorIcon, Animation); 34] = [
@@ -81,6 +118,7 @@ fn animation_app_with_loader(register_loader: bool) -> App {
     app.add_plugins((
         MinimalPlugins,
         AssetPlugin::default(),
+        GalleryAssetPlugin,
         bevy::image::ImagePlugin::default(),
         bevy::image::TextureAtlasPlugin,
         PickingPlugin,
@@ -92,7 +130,7 @@ fn animation_app_with_loader(register_loader: bool) -> App {
             bevy::image::CompressedImageFormats::NONE,
         ));
     }
-    WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::kamuri());
+    WidgetryCursorTheme::set_in_world(app.world_mut(), crate::cursor_theme::kamuri().unwrap());
     app.world_mut().spawn(PointerId::Mouse);
     app
 }
@@ -109,7 +147,7 @@ fn animation_fixture() -> (App, Entity, Entity, Entity) {
     let handles: Vec<Handle<Image>> = Animation::ALL
         .into_iter()
         .map(|a| server.load(a.path()))
-        .chain([server.load(BuiltinCursorImage::KamuriStaticAtlas.path())])
+        .chain([server.load(GalleryCursorImage::KamuriStaticAtlas.path())])
         .collect();
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
@@ -159,7 +197,7 @@ fn assert_static_sprite(app: &App, window: Entity, animation: Animation) {
     .unwrap();
     assert_eq!(
         image.handle.path(),
-        Some(&BuiltinCursorImage::KamuriStaticAtlas.path())
+        Some(&GalleryCursorImage::KamuriStaticAtlas.path())
     );
     let index = Animation::ALL.iter().position(|a| *a == animation).unwrap();
     let atlas = image.texture_atlas.as_ref().unwrap();
@@ -169,7 +207,7 @@ fn assert_static_sprite(app: &App, window: Entity, animation: Animation) {
             .get(&atlas.layout)
             .unwrap()
             .textures[atlas.index],
-        BuiltinCursorImage::KamuriStaticAtlas
+        GalleryCursorImage::KamuriStaticAtlas
             .atlas_layout()
             .textures[index]
     );
@@ -250,7 +288,7 @@ fn all_45_semantics_animate_with_independent_timing_and_restart_only_on_semantic
             app.world().get::<CursorIcon>(window),
             Some(&CursorIcon::System(hint.system_fallback()))
         );
-        WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::kamuri());
+        WidgetryCursorTheme::set_in_world(app.world_mut(), crate::cursor_theme::kamuri().unwrap());
     }
 }
 
@@ -301,7 +339,10 @@ fn system_and_custom_cursors_never_start_kamuri_playback_or_change_caller_images
         hotspot: (2, 3),
         ..default()
     });
-    for theme in [WidgetryCursorTheme::kamuri(), WidgetryCursorTheme::system()] {
+    for theme in [
+        crate::cursor_theme::kamuri().unwrap(),
+        WidgetryCursorTheme::system(),
+    ] {
         WidgetryCursorTheme::set_in_world(app.world_mut(), theme);
         app.world_mut()
             .entity_mut(target)
@@ -387,12 +428,12 @@ fn animation_obeys_native_lease_drag_capture_disabled_loading_and_window_lifecyc
     );
     app.world_mut()
         .entity_mut(target)
-        .insert(bevy_widgetry_cursor::WidgetryCursorLoading);
+        .insert(bevy_widgetry::cursor::WidgetryCursorLoading);
     tick(&mut app, window, camera, target, 0);
     assert_eq!(animation_frame(&app, window, Animation::Wait), Some(0));
     app.world_mut().entity_mut(target).remove::<(
         bevy::ui::InteractionDisabled,
-        bevy_widgetry_cursor::WidgetryCursorLoading,
+        bevy_widgetry::cursor::WidgetryCursorLoading,
     )>();
     let captured = app.world_mut().spawn(WidgetryCursorHint::ReadOnly).id();
     app.world_mut().resource_mut::<PointerCaptureMap>().capture(
@@ -446,7 +487,7 @@ fn missing_and_invalid_frames_use_static_then_system_and_restart_on_recovery() {
         let fallback: Handle<Image> = app
             .world()
             .resource::<AssetServer>()
-            .load(BuiltinCursorImage::KamuriStaticAtlas.path());
+            .load(GalleryCursorImage::KamuriStaticAtlas.path());
         let saved = app
             .world_mut()
             .resource_mut::<Assets<Image>>()
@@ -501,7 +542,7 @@ fn failed_png_decodes_keep_correlated_source_and_actual_fallback_without_waking(
     });
     let paths = [
         Animation::Pointer.path(),
-        BuiltinCursorImage::KamuriStaticAtlas.path(),
+        GalleryCursorImage::KamuriStaticAtlas.path(),
     ];
     for path in &paths {
         app.world()
@@ -647,14 +688,14 @@ fn shared_invalid_animation_reports_one_source_and_only_records_an_actual_static
 }
 
 #[test]
-fn theme_selection_preloads_only_static_fallback_and_active_semantics_are_lazy() {
+fn theme_selection_is_lazy_and_only_active_semantics_load_with_their_fallback() {
     let mut app = animation_app();
     app.update();
     assert!(
         app.world()
             .resource::<AssetServer>()
-            .get_handle::<Image>(BuiltinCursorImage::KamuriStaticAtlas.path())
-            .is_some()
+            .get_handle::<Image>(GalleryCursorImage::KamuriStaticAtlas.path())
+            .is_none()
     );
     for animation in Animation::ALL {
         assert!(
@@ -694,7 +735,7 @@ fn cold_stationary_load_keeps_updates_until_ready_or_failed_and_obeys_focus() {
         if !valid {
             for path in [
                 Animation::Wait.path(),
-                BuiltinCursorImage::KamuriStaticAtlas.path(),
+                GalleryCursorImage::KamuriStaticAtlas.path(),
             ] {
                 app.world()
                     .resource::<bevy::asset::io::embedded::EmbeddedAssetRegistry>()
@@ -727,7 +768,7 @@ fn cold_stationary_load_keeps_updates_until_ready_or_failed_and_obeys_focus() {
         WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::system());
         tick(&mut app, window, camera, target, 0);
         assert!(!has_redraw(&app));
-        WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::kamuri());
+        WidgetryCursorTheme::set_in_world(app.world_mut(), crate::cursor_theme::kamuri().unwrap());
         tick(&mut app, window, camera, target, 0);
         assert!(has_redraw(&app));
         app.register_asset_loader(bevy::image::ImageLoader::new(

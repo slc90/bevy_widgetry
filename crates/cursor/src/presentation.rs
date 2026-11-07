@@ -1,7 +1,5 @@
 mod animated;
 mod diagnostics;
-#[cfg(feature = "kamuri_cursor")]
-mod kamuri;
 mod static_image;
 
 use crate::{CursorSemantic, CursorStyle, WidgetryCursorTheme, theme::CursorIntent};
@@ -21,12 +19,6 @@ pub(crate) struct Presentation<'w, 's> {
 }
 
 impl Presentation<'_, '_> {
-    pub(crate) fn prepare(&mut self) {
-        #[cfg(feature = "kamuri_cursor")]
-        if *self.theme == WidgetryCursorTheme::kamuri() {
-            self.images.preload(&kamuri::fallback_source());
-        }
-    }
     pub(crate) fn retain_windows(&mut self, exists: impl Fn(Entity) -> bool) {
         self.animated.retain_windows(exists);
     }
@@ -47,12 +39,6 @@ impl Presentation<'_, '_> {
             return intent.fallback();
         }
         let style = self.theme.styles().get(&semantic).cloned();
-        #[cfg(feature = "kamuri_cursor")]
-        let style = style.or_else(|| {
-            (*self.theme == WidgetryCursorTheme::kamuri())
-                .then(|| kamuri::style(&intent))
-                .flatten()
-        });
         if let Some(style) = style {
             return match style {
                 CursorStyle::System(icon) => {

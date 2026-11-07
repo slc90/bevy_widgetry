@@ -84,14 +84,14 @@ fn enable_cursor(
     splash: Option<Res<crate::splash::SplashEnabled>>,
     page: Res<State<crate::gallery::GalleryPage>>,
     content: Query<&crate::gallery::GalleryPageContent>,
-) {
+) -> Result {
     if startup.presented.load(Ordering::Acquire) {
         if ready.is_none() {
             commands.insert_resource(GalleryFirstFrameReady {
                 window: startup.window,
                 background: startup.background,
             });
-            WidgetryCursorTheme::set(&mut commands, WidgetryCursorTheme::kamuri());
+            WidgetryCursorTheme::set(&mut commands, crate::cursor_theme::kamuri()?);
         }
         if splash.is_none()
             && *page.get() != crate::gallery::GalleryPage::Initializing
@@ -105,6 +105,7 @@ fn enable_cursor(
     } else {
         redraw.write(RequestRedraw);
     }
+    Ok(())
 }
 
 fn extract_startup(

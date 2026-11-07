@@ -1879,7 +1879,6 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_widgetry_internal_log",
- "image",
 ]
 
 [[package]]
@@ -1988,7 +1987,6 @@ name = "bevy_widgetry_cursor"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_widgetry_asset",
  "bevy_widgetry_diagnostics",
  "bevy_widgetry_internal_log",
  "bevy_widgetry_test_utils",
@@ -7213,6 +7211,7 @@ dependencies = [
  "bevy_widgetry_waveform_file",
  "futures-timer",
  "futures-util",
+ "image",
  "raw-window-handle",
  "ron",
  "serde",

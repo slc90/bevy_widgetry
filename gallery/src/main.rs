@@ -10,6 +10,7 @@ mod canvas_experiment;
 mod close;
 mod color_showcase;
 mod config;
+mod cursor_theme;
 mod diagnostics;
 mod file_dialog_benchmark;
 mod gallery;

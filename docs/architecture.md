@@ -103,7 +103,7 @@ Canvas 默认保留 Document、View/Renderer 与 SVG；默认关闭的 `png_expo
 
 Theme 默认仅包含 Dark 配色，Facade 的 `light`、`pink_dream` 独立转发到 Theme 同名 Feature；它们不控制 Cursor。Gallery 显式选择这两个可选预设，并在应用主题模块中完整定义 Kamuri Violet，库不再提供该配色专用 Feature 或数据入口。`test_utils` 通过默认关闭的主题转发和 `all_themes` 集合供各 crate 的测试依赖选择，不向库的生产依赖路径启用额外主题。
 
-Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活，并传递到 Asset 的同名嵌入资源 Feature。Facade 提供同名入口，Gallery 显式启用；Core 使用 Cursor 不会自动启用 Kamuri。通用静态/图集动画主题直接使用 Bevy Asset / Image，不依赖 Kamuri Feature 或 Widgetry Asset 的内建图像。具备 AssetServer 与 Image 能力时确保图集支持，以区域和热点区分原生缓存身份；无 Image 能力的 System-only Cursor 不安装图集支持，Core 原有的字体、图标等 Asset 依赖保留。
+Cursor 通过 Bevy Asset / Image 提供通用静态与图集动画主题，不依赖 Widgetry Asset 或任何角色专用 Feature。具备 AssetServer 与 Image 能力时确保图集支持，以区域和热点区分原生缓存身份；无 Image 能力的 System-only Cursor 不安装图集支持。Gallery 自行嵌入 Kamuri 的45份动画及静态后备，使用公开主题数据定义完整映射，预览和 OS 播放共享帧定义；素材、生成工具、名称和选择菜单都属于应用。Core 原有的字体、图标等 Asset 依赖保留。
 
 本节概述各 Workspace 成员的职责。各库 crate 的具体功能、设计思路、行为契约和已知限制见对应的独立功能文档；Gallery 的展示与交互以应用实现为准。
 
@@ -118,9 +118,9 @@ Cursor 的 Asset 直接依赖由默认关闭的 `kamuri_cursor` Feature 激活�
 | [job](crates/job.md) | 实例级 Job 控制核心，基于 Bevy I/O、CPU 任务池及受管命名线程提供统一身份、状态、协作取消、真实退出收割、全局关闭与显式记录移除；Plugin 安装唯一 App Resource 并合并 Winit Reactive 唤醒。通过 async-broadcast 提供有界 Arc 结果广播与独立订阅；依赖 Bevy、diagnostics 的 Bevy 桥接、内部日志、Tracing、Futures Util/Timer、Event Listener、async-broadcast 与安全 Windows 句柄等待 win-custody。 |
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |
-| [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识，包括 Kamuri 45 种动画的共享时序、热点与图集目录。 |
+| [asset](crates/asset.md) | 统一管理 Widgetry 内建 Font、Icon 和 Shader 的 Embedded 注册及语义标识。 |
 | [theme](crates/theme.md) | 提供完整 Theme 数据、预设配色及原子主题切换；Gallery 自行管理预设名称与配置。 |
-| [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 语义、外部静态/图集动画主题映射及可选 Kamuri 数据适配。 |
+| [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 语义、外部静态/图集动画主题映射及播放生命周期。 |
 | [tray](crates/tray.md) | 可选 Windows 常驻托盘图标、静态嵌入 ICO 与 Tooltip、原生右键菜单、主线程生命周期及唤醒反应式循环的点击通知。 |
 | [power_inhibit](crates/power_inhibit.md) | 默认关闭的 Windows Display/System 电源请求、同步开关及 Resource RAII 清理。 |
 | [hold_button](crates/hold_button.md) | 提供独立长按确认、输入取消、圆形 Picking 与液面材质。 |

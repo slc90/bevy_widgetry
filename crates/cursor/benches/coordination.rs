@@ -8,7 +8,10 @@ use bevy::{
     prelude::*,
     window::{CursorIcon, SystemCursorIcon, WindowRef},
 };
-use bevy_widgetry_cursor::{WidgetryCursorPlugin, WidgetryCursorTheme};
+use bevy_widgetry_cursor::{
+    CursorAnimation, CursorAnimationFrame, CursorImageSource, CursorSemantic, CursorStyle,
+    WidgetryCursorPlugin, WidgetryCursorTheme,
+};
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run};
 use std::hint::black_box;
 
@@ -17,21 +20,67 @@ struct Fixture {
     windows: Vec<Entity>,
     camera: Entity,
     candidates: Vec<Entity>,
+    animation_image: Option<Handle<Image>>,
 }
 
-fn fixture(windows: usize, candidates: usize, depth: usize, kamuri: bool) -> Result<Fixture> {
+fn fixture(windows: usize, candidates: usize, depth: usize, animated: bool) -> Result<Fixture> {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
-    if kamuri {
+    let mut animation_image = None;
+    if animated {
         app.add_plugins((
             AssetPlugin::default(),
             bevy::image::ImagePlugin::default(),
             bevy::image::TextureAtlasPlugin,
         ));
-        app.register_asset_loader(bevy::image::ImageLoader::new(
-            bevy::image::CompressedImageFormats::NONE,
-        ));
-        WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::kamuri());
+        let image = app
+            .world_mut()
+            .resource_mut::<Assets<Image>>()
+            .add(Image::new_fill(
+                bevy::render::render_resource::Extent3d {
+                    width: 16,
+                    height: 16,
+                    depth_or_array_layers: 1,
+                },
+                bevy::render::render_resource::TextureDimension::D2,
+                &[255; 4],
+                bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+                default(),
+            ));
+        WidgetryCursorTheme::set_in_world(
+            app.world_mut(),
+            WidgetryCursorTheme::new(
+                [
+                    (SystemCursorIcon::Pointer, 2, 70),
+                    (SystemCursorIcon::Wait, 4, 65),
+                ]
+                .into_iter()
+                .map(|(icon, count, ms)| {
+                    (
+                        CursorSemantic::System(icon),
+                        CursorStyle::Animation(CursorAnimation {
+                            source: CursorImageSource::Handle(image.clone()),
+                            size: UVec2::splat(16),
+                            frames: (0..count)
+                                .map(|index| CursorAnimationFrame {
+                                    rect: URect::new(
+                                        index % 2 * 8,
+                                        index / 2 * 8,
+                                        index % 2 * 8 + 8,
+                                        index / 2 * 8 + 8,
+                                    ),
+                                    duration: std::time::Duration::from_millis(ms),
+                                })
+                                .collect(),
+                            hotspot: (2, 3),
+                            fallback: None,
+                        }),
+                    )
+                }),
+            )
+            .map_err(|error| error.into_bevy_error())?,
+        );
+        animation_image = Some(image);
         app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
             std::time::Duration::from_millis(125),
         ));
@@ -63,6 +112,7 @@ fn fixture(windows: usize, candidates: usize, depth: usize, kamuri: bool) -> Res
         windows,
         camera,
         candidates: entities,
+        animation_image,
     })
 }
 
@@ -129,16 +179,10 @@ fn main() -> Result {
         )?;
     }
     for icon in [SystemCursorIcon::Pointer, SystemCursorIcon::Wait] {
-        let (group, asset) = if icon == SystemCursorIcon::Pointer {
-            (
-                "cursor_animation",
-                bevy_widgetry_asset::BuiltinCursorAnimation::Pointer,
-            )
+        let group = if icon == SystemCursorIcon::Pointer {
+            "cursor_animation"
         } else {
-            (
-                "cursor_wait_animation",
-                bevy_widgetry_asset::BuiltinCursorAnimation::Wait,
-            )
+            "cursor_wait_animation"
         };
         for windows in [1, 2, 8] {
             for active in [true, false] {
@@ -172,23 +216,12 @@ fn main() -> Result {
                             std::time::Instant::now() + std::time::Duration::from_secs(10);
                         loop {
                             animation_update(&mut fixture)?;
-                            if matches!(fixture.app.world().get::<CursorIcon>(window), Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) if image.texture_atlas.is_some() && image.handle.path() == Some(&asset.path()))
-                            && fixture.app.world().resource::<Assets<Image>>().contains(
-                                fixture
-                                    .app
-                                    .world()
-                                    .resource::<AssetServer>()
-                                    .load::<Image>(
-                                        bevy_widgetry_asset::BuiltinCursorImage::KamuriStaticAtlas
-                                            .path(),
-                                    )
-                                    .id(),
-                            )
-                        {
-                            break;
-                        }
+                            if matches!(fixture.app.world().get::<CursorIcon>(window), Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) if image.texture_atlas.is_some() && fixture.animation_image.as_ref() == Some(&image.handle))
+                            {
+                                break;
+                            }
                             if std::time::Instant::now() > deadline {
-                                return Err(missing("loaded Kamuri animation atlas"));
+                                return Err(missing("loaded animation atlas"));
                             }
                             std::thread::sleep(std::time::Duration::from_millis(5));
                         }
@@ -208,7 +241,7 @@ fn main() -> Result {
                             .world()
                             .get::<CursorIcon>(fixture.windows[0])
                             .ok_or_else(|| missing("window cursor"))?;
-                        let animated = matches!(cursor, CursorIcon::Custom(bevy::window::CustomCursor::Image(image)) if image.texture_atlas.is_some() && image.handle.path() == Some(&asset.path()));
+                        let animated = matches!(cursor, CursorIcon::Custom(bevy::window::CustomCursor::Image(image)) if image.texture_atlas.is_some() && fixture.animation_image.as_ref() == Some(&image.handle));
                         if animated != active {
                             return Err(missing("expected animation state"));
                         }

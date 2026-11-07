@@ -2,18 +2,11 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod constants;
-#[cfg(feature = "kamuri_cursor")]
-mod cursor_animation;
-
-#[cfg(feature = "kamuri_cursor")]
-pub use cursor_animation::BuiltinCursorAnimation;
 
 use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_debug;
-#[cfg(feature = "kamuri_cursor")]
-use constants::KAMURI_STATIC_ATLAS;
 use constants::{
     CHECKBOX_CHECK_ICON, CHECKBOX_INDETERMINATE_ICON, CHEVRON_DOWN_ICON, CHEVRON_UP_ICON,
     DEFAULT_FONT, EMBEDDED_SOURCE, FILE_DIALOG_BACK_ICON, FILE_DIALOG_FILE_ICON,
@@ -70,32 +63,6 @@ pub enum BuiltinIcon {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinFont {
     Default,
-}
-
-#[cfg(feature = "kamuri_cursor")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum BuiltinCursorImage {
-    KamuriStaticAtlas,
-}
-
-#[cfg(feature = "kamuri_cursor")]
-impl BuiltinCursorImage {
-    pub fn atlas_layout(self) -> TextureAtlasLayout {
-        match self {
-            Self::KamuriStaticAtlas => {
-                let mut layout = TextureAtlasLayout::from_grid(UVec2::splat(80), 8, 6, None, None);
-                layout.textures.truncate(45);
-                layout
-            }
-        }
-    }
-
-    pub fn path(self) -> AssetPath<'static> {
-        let path = match self {
-            Self::KamuriStaticAtlas => embedded_path!(KAMURI_STATIC_ATLAS.0),
-        };
-        AssetPath::from_path_buf(path).with_source(EMBEDDED_SOURCE)
-    }
 }
 
 impl BuiltinFont {
@@ -168,13 +135,7 @@ impl Plugin for WidgetryAssetPlugin {
             CHEVRON_UP_ICON,
             TREE_EXPAND_ICON,
             TREE_COLLAPSE_ICON,
-            #[cfg(feature = "kamuri_cursor")]
-            KAMURI_STATIC_ATLAS,
         ] {
-            embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
-        }
-        #[cfg(feature = "kamuri_cursor")]
-        for (path, bytes) in cursor_animation::KAMURI_ANIMATIONS {
             embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
         }
         widgetry_debug!("WidgetryAssetPlugin 注册完成");

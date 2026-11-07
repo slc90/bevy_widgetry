@@ -1,63 +1,27 @@
-# cursor Integration Test Coverage
+# Cursor Integration Test Coverage
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+## States / Stimuli / Guards
 
-## States
+- Default、Hover、Dragging、Native 控制权，System、外部静态与图集动画，Asset 等待/失败/恢复及每窗口真实时间相位。
+- PointerInput、Hover Hits、Capture、Loading、祖先 Disabled、Theme 切换、Owner/Window 生命周期。
+- 仅 Mouse 取得 OS Cursor/Lease；最近有效声明优先，同实体 EntityCursor 优于 Hint；Native Move/Resize 让权。
 
-- Default / Hover / Dragging / Native 光标控制权。
-- System / Kamuri、动画当前语义和图集就绪状态。
-- 多 Native Window 与 Mouse / Custom / Touch。
+## Transitions / Invariants / Couplings
 
-## Stimuli
-
-- 真实 PointerInput、Hover Hits、Disabled、Owner / Window 生命周期。
-- Cursor Theme 切换、Asset 就绪 / 失败和受控动画时间前进。
-
-## Guards
-
-- 只有 Mouse 可以改变 OS Cursor / 获取 Lease。
-- 最近有效声明及 Owner 优先；原生 Move / Resize 期间让权。
-
-## Transitions
-
-- Hover 继承与遮挡切换。
-- Drag 取得 / 释放 Lease，取消 / 失焦 / Despawn 清理。
-- 全部45种语义进入、保持、切换、退出，静态 / System Fallback。
-
-## Invariants
-
-- 不同 Window 隔离，失效 Lease 不残留。
-- 同帧不重复写入Cursor；System、Custom、无Mouse位置、未指向窗口及素材回退不维持动画重绘。
-- 45种动画各自的Frame原点、帧边界、速率和两轮循环正确；丢失 Asset 时保留业务语义回退。
-- 与 Bevy Cursor Writer 冲突时报告，不同时写入。
-- Capture 优先于可见 Hit，Lease 校验所属按键和 Owner；Cursor 在 Last 阶段同帧消费，前方遮挡不泄漏后方声明。
-- 34种系统语义与11种Hint的动画身份独立；动画与 Native、Blur、Disabled、Capture、Custom Pointer、Window 生命周期交错时停止或恢复正确语义。
-
-## Couplings
-
-- 公开 Loading 声明（不要求另有 Cursor Component）在后代命中与祖先 Disabled 下优先 Wait，撤销后恢复 NotAllowed / 最近声明。
-- Disabled × 光标继承、Capture × Hover、Native × Lease。
-- Kamuri Theme × Atlas Readiness / Animation / Fallback。
+- Hover 继承与遮挡，Lease 取得/取消/Release/Blur/Despawn；无 Hover 时有效 Lease/Capture 保持。
+- 窗口隔离，Owner 和 Window 失效不残留 Lease；Custom/Touch 不改变原生 Cursor。
+- Loading 优先 Wait，Disabled 继承优先 NotAllowed，撤销后恢复最近声明。ReadOnly 默认 Cell，不附带编辑资格。
+- 同帧不重复写 Cursor；System、显式 Custom、无 Mouse 位置、失焦、Native 操作和失败图集停止动画唤醒。
+- 同值主题不重启，新语义/动画重新进入首帧；真实时间不受 Virtual 暂停或单帧上限影响。
+- 共享图片像素故障复用资产诊断；动画声明尺寸故障独立，避免静态后备误报恢复。源头/实际后备/恢复按身份关联且只记录一次。
 
 ## Coverage Map
 
-- `static_theme.rs`：未启用Kamuri的单语义自定义图片/区域/热点、缺项Hint系统回退、显式Custom与Loading/Disabled优先级、无Asset环境、queued提交、多窗口与失焦隔离，以及非法定义/像素/热点的回退、关联诊断、恢复和停止唤醒。真实外部路径验证未使用语义不加载，静止Mouse加载持续至成功或失败，稳定后停止额外重绘。
-- 非法 AssetPath 语法在构造边界拒绝并保留解析 source；同图同区域异热点必须拥有不同原生缓存身份，切回时复用既有身份，避免只验证 ECS hotspot 而漏掉 Winit 缓存行为。
+- `coordination.rs`：继承、遮挡、所有 Hint 系统后备、Loading/Disabled、窗口隔离、Lease/Capture/Native、Custom Pointer 隔离及两种安装顺序的 writer 冲突。冲突检查 Severity::Error、源头诊断及栈；System-only 不安装无用 Atlas。
+- `static_theme.rs`：部分映射、整图/区域/热点、显式 Custom、无 Asset、queued 提交、多窗口、非法路径/定义与真实来源错误、像素及热点故障、恢复及停止唤醒。同图异热点具有不同原生缓存身份，切回复用原身份。外部路径冷加载在静止 Mouse 下持续至成功或失败，未使用语义不加载。
+- `animation.rs`：小型合成 RGBA 图集的任意区域顺序、独立 Duration、帧边界/循环/极大时间、同值保持/换源重启、窗口进入相位、无 Hover 有效 Lease、Blur/Native/Cancel/System/Despawn 停止唤醒；非法定义、共享尺寸诊断、CPU/格式失败、静态/System 后备与恢复、真实路径惰性冷加载。
+- `presentation/diagnostics` 单测：RGBA 格式/CPU 长度、独立资产与原因键、等待不恢复、真实 Loader 受管诊断集合保留原 source/origin。
 
-- `coordination.rs`：Hover、窗口隔离、Lease、Native 让权、动画、素材回退、安装冲突及播放资格/惰性加载不变量。
-- ReadOnly 在 System/Kamuri 的独立动画身份、Cell回退及素材恢复，最近声明/同实体官方声明优先、祖先 Disabled、Capture、Native Lease 和 Custom Pointer 隔离；同一帧不重写Cursor，只有有效动画继续唤醒。真实系统光标外观由 Gallery 的 Windows Mouse 验收补充。
+全部库回归使用通用语义及合成素材，不依赖任何角色。真实45项角色素材、完整映射及对应生命周期覆盖属于 Gallery 的 `assets/cursors/tests.rs` 与 `cursor_theme/tests.rs`。
 
-## 覆盖边界
-
-默认构建运行 System、Hint、Lease、Disabled、Loading、窗口隔离和 writer 冲突回归，并验证不安装 Atlas 支持且保留调用方 Custom 图像。`coordination/kamuri.rs` 仅在 `kamuri_cursor` 开启时运行动画、资源失败及播放生命周期回归；基础 Hint 测试在该配置下同时验证 Kamuri 的 System 回退。
-
-Headless 测试保护 ECS 请求与渲染配置，不证明系统级 Cursor 的真实视觉表现。
-
-
-冷加载回归使用尚未注册的PNG Loader确定性保持Loading，再在鼠标静止且无新PointerInput下注册Loader，检查更新持续到Loaded/Failed；失焦、System主题及失败后停止额外重绘。已加载但CPU图像缺失/损坏与真正Loading分别覆盖。
-
-`coordination.rs` 的PNG真实解码失败验证每个资产源头一次ERROR、实际System回退一次关联DEBUG与停止唤醒；同一损坏动画由两个Window先后消费时共用身份，实际静态回退后才handled，恢复一次INFO。presentation内部单测验证expected/actual尺寸、format、CPU字节数、独立资产/原因键、等待不恢复，以及真实Loader返回的受管诊断集合不重建origin/source。
-
-安装冲突回归在两种 Plugin 顺序下检查统一 WidgetryEcsError、Severity::Error、原始捕获栈及关联 ID 的一次源头 ERROR，Lease 和现有写入让权语义保持。
-
-`animation.rs` 在默认Feature下使用小型合成RGBA图集验证任意帧区域/时长/热点、真实时间相位、同值不重启/换素材重启、窗口独立进入、无Hover有效Lease、Native/Cancel/Blur/System/Despawn停止唤醒、共享图片的像素与声明尺寸诊断隔离、静态/System后备和恢复，以及真实外部路径惰性冷加载成功/失败。无OS位图热更新结论，原生缓存限制见功能文档。
+Headless 测试证明 ECS 请求与配置，不证明原生位图/桌面 Focus。OS 验收使用真实 Windows Mouse；同 Handle 位图热更新及缓存回收限制见功能文档。

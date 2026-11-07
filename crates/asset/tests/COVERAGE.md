@@ -9,11 +9,11 @@
 
 ## Stimuli
 
-- 注册 `WidgetryAssetPlugin`；通过 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage`、`BuiltinCursorAnimation`、`BuiltinShader` 加载与解码。
+- 注册 `WidgetryAssetPlugin`；通过 `BuiltinFont`、`BuiltinIcon`、`BuiltinShader` 加载与解码。
 
 ## Guards
 
-- 默认配置验证 Font、Icon 和 Shader；Cursor 图集、解码和时序回归仅在 `kamuri_cursor` 开启时运行。
+- 验证 Font、Icon 和 Shader；真实 Kamuri 图集、解码和时序覆盖随素材归属移入 Gallery。
 
 - 素材必须经 Embedded Source 寻址，不从磁盘回退。
 

@@ -30,7 +30,6 @@ fn fixture() -> (App, Entity, Entity) {
 }
 
 #[test]
-#[cfg(not(feature = "kamuri_cursor"))]
 fn system_only_keeps_native_custom_images_without_installing_atlas_support() {
     let mut app = App::new();
     app.add_plugins((
@@ -725,11 +724,7 @@ fn extended_hints_use_nearest_declaration_and_entity_cursor_wins_ties() {
         .world_mut()
         .spawn((ChildOf(parent), WidgetryCursorHint::PanReady))
         .id();
-    let themes = [
-        WidgetryCursorTheme::system(),
-        #[cfg(feature = "kamuri_cursor")]
-        WidgetryCursorTheme::kamuri(),
-    ];
+    let themes = [WidgetryCursorTheme::system()];
     for (hint, fallback) in [
         (WidgetryCursorHint::AddSelection, SystemCursorIcon::Copy),
         (
@@ -782,7 +777,3 @@ fn extended_hints_use_nearest_declaration_and_entity_cursor_wins_ties() {
         Some(&CursorIcon::System(SystemCursorIcon::NotAllowed))
     );
 }
-
-#[cfg(feature = "kamuri_cursor")]
-#[path = "coordination/kamuri.rs"]
-mod kamuri;

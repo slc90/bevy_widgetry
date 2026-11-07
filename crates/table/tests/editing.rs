@@ -97,11 +97,13 @@ fn editor() -> WidgetryTableCellEditor<String> {
 }
 
 #[test]
-fn readonly_cell_resolves_to_lock_cursor_and_restores_default_when_editing_is_off() {
+fn readonly_cell_resolves_to_external_cursor_and_restores_default_when_editing_is_off() {
     use bevy::picking::pointer::{Location, PointerAction, PointerId};
     use bevy::window::{CursorIcon, SystemCursorIcon};
-    use bevy_widgetry_asset::{BuiltinCursorAnimation, BuiltinCursorImage};
-    use bevy_widgetry_cursor::WidgetryCursorTheme;
+    use bevy_widgetry_cursor::{
+        CursorAnimation, CursorAnimationFrame, CursorImageSource, CursorSemantic, CursorStyle,
+        WidgetryCursorHint, WidgetryCursorTheme,
+    };
     use bevy_widgetry_test_utils::queue_pointer;
 
     let (mut app, _, root, _) = common::fixture(1, 1);
@@ -160,49 +162,62 @@ fn readonly_cell_resolves_to_lock_cursor_and_restores_default_when_editing_is_of
         Some(&CursorIcon::System(SystemCursorIcon::Cell))
     );
 
-    app.register_asset_loader(bevy::image::ImageLoader::new(
-        bevy::image::CompressedImageFormats::NONE,
-    ));
-    app.insert_resource(WidgetryCursorTheme::Kamuri);
-    let animation = BuiltinCursorAnimation::ReadOnly;
-    let static_index = BuiltinCursorAnimation::ALL
-        .iter()
-        .position(|item| *item == animation)
-        .unwrap();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        app.update();
-        if let Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) =
-            app.world().get::<CursorIcon>(window)
-        {
-            let atlas = image.texture_atlas.as_ref().unwrap();
-            assert_eq!(image.hotspot, animation.hotspot());
-            if image.handle.path() == Some(&animation.path()) {
-                assert!(atlas.index < animation.frame_count());
-                let layout = app
-                    .world()
-                    .resource::<Assets<TextureAtlasLayout>>()
-                    .get(&atlas.layout)
-                    .unwrap();
-                assert_eq!(layout.textures.len(), animation.frame_count());
-                break;
-            }
-            assert_eq!(
-                image.handle.path(),
-                Some(&BuiltinCursorImage::KamuriStaticAtlas.path())
-            );
-            assert_eq!(atlas.index, static_index);
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "ReadOnly Kamuri animation did not load"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
+    let source = app
+        .world_mut()
+        .resource_mut::<Assets<Image>>()
+        .add(Image::new_fill(
+            bevy::render::render_resource::Extent3d {
+                width: 16,
+                height: 8,
+                depth_or_array_layers: 1,
+            },
+            bevy::render::render_resource::TextureDimension::D2,
+            &[255; 4],
+            bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+            default(),
+        ));
+    WidgetryCursorTheme::set_in_world(
+        app.world_mut(),
+        WidgetryCursorTheme::new([(
+            CursorSemantic::Hint(WidgetryCursorHint::ReadOnly),
+            CursorStyle::Animation(CursorAnimation {
+                source: CursorImageSource::Handle(source.clone()),
+                size: UVec2::new(16, 8),
+                frames: (0..2)
+                    .map(|index| CursorAnimationFrame {
+                        rect: URect::new(index * 8, 0, index * 8 + 8, 8),
+                        duration: std::time::Duration::from_millis(70),
+                    })
+                    .collect(),
+                hotspot: (3, 5),
+                fallback: None,
+            }),
+        )])
+        .unwrap(),
+    );
+    app.update();
+    let Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) =
+        app.world().get::<CursorIcon>(window)
+    else {
+        panic!("ReadOnly external animation missing");
+    };
+    assert_eq!(image.handle, source);
+    assert_eq!(image.hotspot, (3, 5));
+    let atlas = image.texture_atlas.as_ref().unwrap();
+    assert!(atlas.index < 2);
+    assert_eq!(
+        app.world()
+            .resource::<Assets<TextureAtlasLayout>>()
+            .get(&atlas.layout)
+            .unwrap()
+            .textures
+            .len(),
+        2
+    );
     app.world_mut()
         .entity_mut(root)
         .insert(bevy::ui::InteractionDisabled);
-    app.insert_resource(WidgetryCursorTheme::System);
+    WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::system());
     app.update();
     assert_eq!(
         app.world().get::<CursorIcon>(window),

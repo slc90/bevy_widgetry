@@ -8,7 +8,7 @@
 
 Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 的样式更新。当前 `WidgetryTheme` Resource 保存完整配色，是唯一主题状态。每个消费者从它和自身状态选择颜色输出；外部可复制任一预设、修改字段，再通过相同 Setter 应用。Theme 仅包含颜色，不管理布局、尺寸或动画。
 
-每个可选主题控制整套公开常量、各控件的配色常量与公共色值。关闭时这些 API 不存在，不在运行时回退 Dark；`WidgetryTheme` 的完整字段结构保持稳定。Facade 转发两个同名 Feature，两个开关可以独立组合，且与 `kamuri_cursor` 无关；Gallery 自行定义 Kamuri Violet，并显式启用另外两个预设。Cargo Feature 在依赖图中累加，精简构建需使用独立调用方验证。
+每个可选主题控制整套公开常量、各控件的配色常量与公共色值。关闭时这些 API 不存在，不在运行时回退 Dark；`WidgetryTheme` 的完整字段结构保持稳定。Facade 转发两个同名 Feature，两个开关可以独立组合，且与 Cursor 外观独立；Gallery 自行定义 Kamuri Violet，并显式启用另外两个预设。Cargo Feature 在依赖图中累加，精简构建需使用独立调用方验证。
 
 ## 主要功能
 
