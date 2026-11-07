@@ -93,7 +93,7 @@ fn run(
     app.insert_resource(loaded.config.theme.colors());
     i18n::install(&mut app);
     app.insert_resource(WinitSettings::desktop_app());
-    app.insert_resource(WidgetryCursorTheme::System);
+    WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::system());
     app.add_plugins(
         DefaultPlugins
             .build()

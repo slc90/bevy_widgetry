@@ -138,6 +138,8 @@ def load_targets(path):
         for field in ("columns", "frames"):
             if type(target.get(field)) is not int or target[field] <= 0:
                 raise ValueError(f"{name}: {field} must be a positive integer")
+        if type(target.get("animated", True)) is not bool:
+            raise ValueError(f"{name}: animated must be a boolean")
         durations(target)
         atlas = target.get("atlas")
         if not isinstance(atlas, str) or not atlas:
@@ -216,8 +218,11 @@ def validate_capture(target, records):
         raise ValueError(f"{name}: native cursor size differs from {target['frame_size']}")
     if not all(r["hotspot"] == target["hotspot"] for r in records):
         raise ValueError(f"{name}: native cursor hotspot differs from {target['hotspot']}")
-    if len({r.get("sha256") for r in records}) < 2:
+    unique = len({r.get("sha256") for r in records})
+    if target.get("animated", True) and unique < 2:
         raise ValueError(f"{name}: native cursor did not animate")
+    if not target.get("animated", True) and unique != 1:
+        raise ValueError(f"{name}: static native cursor pixels changed")
     if not all(r["matches_source_frame"] for r in records):
         raise ValueError(f"{name}: native pixels do not match the semantic atlas")
 

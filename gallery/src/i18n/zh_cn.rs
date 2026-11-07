@@ -833,6 +833,11 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10) => {
             "压力实时 · 64 kHz · 64 通道"
         }
+        TextKey::Cursor(CursorKey::StaticPointer) => "静态 Pointer",
+        TextKey::Cursor(CursorKey::StaticPointerHotspot) => "Pointer 热点 (10,12)",
+        TextKey::Cursor(CursorKey::StaticPointerDescription) => {
+            "只替换 Pointer，其余语义使用系统光标。"
+        }
         TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation) => {
             "Cursor · 真实 Windows Mouse 验证"
         }

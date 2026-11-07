@@ -715,7 +715,7 @@ fn extended_hints_use_nearest_declaration_and_entity_cursor_wins_ties() {
     let (mut app, window, camera) = fixture();
     assert_eq!(
         *app.world().resource::<WidgetryCursorTheme>(),
-        WidgetryCursorTheme::System
+        WidgetryCursorTheme::system()
     );
     let parent = app
         .world_mut()
@@ -726,9 +726,9 @@ fn extended_hints_use_nearest_declaration_and_entity_cursor_wins_ties() {
         .spawn((ChildOf(parent), WidgetryCursorHint::PanReady))
         .id();
     let themes = [
-        WidgetryCursorTheme::System,
+        WidgetryCursorTheme::system(),
         #[cfg(feature = "kamuri_cursor")]
-        WidgetryCursorTheme::Kamuri,
+        WidgetryCursorTheme::kamuri(),
     ];
     for (hint, fallback) in [
         (WidgetryCursorHint::AddSelection, SystemCursorIcon::Copy),
@@ -755,8 +755,8 @@ fn extended_hints_use_nearest_declaration_and_entity_cursor_wins_ties() {
         (WidgetryCursorHint::Panning, SystemCursorIcon::Grabbing),
         (WidgetryCursorHint::ReadOnly, SystemCursorIcon::Cell),
     ] {
-        for theme in themes {
-            app.world_mut().insert_resource(theme);
+        for theme in &themes {
+            WidgetryCursorTheme::set_in_world(app.world_mut(), theme.clone());
             app.world_mut().entity_mut(child).insert(hint);
             hover(&mut app, window, camera, child);
             assert_eq!(

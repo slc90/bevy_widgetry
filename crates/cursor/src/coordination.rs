@@ -1,5 +1,4 @@
 use crate::lease::{CursorLease, LeaseMode};
-#[cfg(feature = "kamuri_cursor")]
 use crate::presentation::Presentation;
 use crate::theme::CursorIntent;
 use crate::{WidgetryCursorHint, WidgetryCursorLoading, WidgetryCursorTheme};
@@ -36,6 +35,12 @@ impl Plugin for WidgetryCursorPlugin {
             if !app.is_plugin_added::<bevy::image::TextureAtlasPlugin>() {
                 app.add_plugins(bevy::image::TextureAtlasPlugin);
             }
+        }
+        if app.world().contains_resource::<AssetServer>()
+            && app.world().contains_resource::<Assets<Image>>()
+            && !app.is_plugin_added::<bevy::image::TextureAtlasPlugin>()
+        {
+            app.add_plugins(bevy::image::TextureAtlasPlugin);
         }
         app.init_resource::<WidgetryCursorTheme>()
             .register_type::<WidgetryCursorTheme>()
@@ -110,7 +115,7 @@ fn coordinate(
     mut raw: Local<Vec<PointerInput>>,
     mut inactive: Local<EntityHashSet>,
     mut active: Local<EntityHashMap<(Entity, LeaseMode)>>,
-    #[cfg(feature = "kamuri_cursor")] mut presentation: Presentation,
+    mut presentation: Presentation,
 ) {
     raw.clear();
     raw.extend(
@@ -224,7 +229,6 @@ fn coordinate(
     let hover_cursor = entity
         .and_then(|entity| resolve(entity, &nodes))
         .unwrap_or_default();
-    #[cfg(feature = "kamuri_cursor")]
     {
         presentation.prepare();
         presentation.retain_windows(|entity| windows.contains(entity));
@@ -232,7 +236,6 @@ fn coordinate(
     for (entity, window, current) in &mut windows {
         let next = match active.get(&entity).map(|(_, mode)| mode) {
             Some(LeaseMode::Native) => {
-                #[cfg(feature = "kamuri_cursor")]
                 presentation.stop(entity);
                 continue;
             }
@@ -242,9 +245,6 @@ fn coordinate(
             }
             None => CursorIntent::default(),
         };
-        #[cfg(not(feature = "kamuri_cursor"))]
-        let next = next.fallback();
-        #[cfg(feature = "kamuri_cursor")]
         let next = presentation.map(
             entity,
             next,

@@ -1,19 +1,170 @@
 use bevy::{prelude::*, window::SystemCursorIcon};
+use std::collections::HashMap;
 
-#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
+#[derive(Resource, Default, Clone, Debug, PartialEq, Eq, Reflect)]
 #[reflect(Resource, Default)]
-pub enum WidgetryCursorTheme {
-    #[default]
-    System,
+pub struct WidgetryCursorTheme {
+    styles: HashMap<CursorSemantic, CursorStyle>,
     #[cfg(feature = "kamuri_cursor")]
-    Kamuri,
+    kamuri: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
+pub enum CursorSemantic {
+    System(SystemCursorIcon),
+    Hint(WidgetryCursorHint),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Reflect)]
+pub enum CursorImageSource {
+    Path(String),
+    Handle(Handle<Image>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Reflect)]
+pub struct CursorImage {
+    pub source: CursorImageSource,
+    pub rect: Option<URect>,
+    pub hotspot: (u16, u16),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Reflect)]
+pub enum CursorStyle {
+    System(SystemCursorIcon),
+    Image(CursorImage),
+}
+
+#[derive(Debug)]
+pub enum CursorThemeError {
+    EmptyImagePath,
+    InvalidImagePath {
+        path: String,
+        source: bevy::asset::ParseAssetPathError,
+    },
+    InvalidRegion {
+        rect: URect,
+    },
+    UnavailableRegion {
+        rect: URect,
+        size: UVec2,
+    },
+    InvalidHotspot {
+        hotspot: (u16, u16),
+        size: UVec2,
+    },
+}
+impl std::fmt::Display for CursorThemeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyImagePath => f.write_str("Cursor 图像路径不能为空"),
+            Self::InvalidImagePath { path, source } => {
+                write!(f, "Cursor 图像路径无效: {path}: {source}")
+            }
+            Self::InvalidRegion { .. } => f.write_str("Cursor 图像区域必须为正数尺寸"),
+            Self::UnavailableRegion { .. } => f.write_str("Cursor 图像区域超出实际图像范围"),
+            Self::InvalidHotspot { .. } => f.write_str("Cursor 热点必须位于图像区域内"),
+        }
+    }
+}
+impl std::error::Error for CursorThemeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidImagePath { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+pub type CursorThemeFailure = bevy_widgetry_diagnostics::WidgetryFailure<CursorThemeError>;
+
+impl WidgetryCursorTheme {
+    pub fn system() -> Self {
+        Self::default()
+    }
+    #[cfg(feature = "kamuri_cursor")]
+    pub fn kamuri() -> Self {
+        Self {
+            kamuri: true,
+            ..default()
+        }
+    }
+    pub fn new(
+        styles: impl IntoIterator<Item = (CursorSemantic, CursorStyle)>,
+    ) -> Result<Self, CursorThemeFailure> {
+        let styles: HashMap<_, _> = styles.into_iter().collect();
+        for (semantic, style) in &styles {
+            if let CursorStyle::Image(image) = style {
+                if let CursorImageSource::Path(path) = &image.source
+                    && let Err(source) = bevy::asset::AssetPath::try_parse(path)
+                {
+                    return Err(CursorThemeFailure::new(
+                        CursorThemeError::InvalidImagePath {
+                            path: path.clone(),
+                            source,
+                        },
+                        bevy_widgetry_diagnostics::ErrorFrame::new("cursor.theme")
+                            .field("semantic", format_args!("{semantic:?}")),
+                    ));
+                }
+                let invalid = match &image.source {
+                    CursorImageSource::Path(path) if path.trim().is_empty() => {
+                        Some(CursorThemeError::EmptyImagePath)
+                    }
+                    _ => match image.rect {
+                        Some(rect) if !rect.max.cmpgt(rect.min).all() => {
+                            Some(CursorThemeError::InvalidRegion { rect })
+                        }
+                        Some(rect)
+                            if u32::from(image.hotspot.0) >= rect.width()
+                                || u32::from(image.hotspot.1) >= rect.height() =>
+                        {
+                            Some(CursorThemeError::InvalidHotspot {
+                                hotspot: image.hotspot,
+                                size: rect.size(),
+                            })
+                        }
+                        _ => None,
+                    },
+                };
+                if let Some(error) = invalid {
+                    return Err(CursorThemeFailure::new(
+                        error,
+                        bevy_widgetry_diagnostics::ErrorFrame::new("cursor.theme")
+                            .field("semantic", format_args!("{semantic:?}"))
+                            .field("image", format_args!("{image:?}")),
+                    ));
+                }
+            }
+        }
+        Ok(Self {
+            styles,
+            ..default()
+        })
+    }
+    pub fn styles(&self) -> &HashMap<CursorSemantic, CursorStyle> {
+        &self.styles
+    }
+    pub fn is_system(&self) -> bool {
+        self == &Self::system()
+    }
+    pub fn set_in_world(world: &mut World, theme: Self) -> bool {
+        if world.get_resource::<Self>() == Some(&theme) {
+            return false;
+        }
+        world.insert_resource(theme);
+        true
+    }
+    pub fn set(commands: &mut Commands, theme: Self) {
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, theme);
+        });
+    }
 }
 
 #[derive(Component, Default, Clone, Copy, Debug, Reflect)]
 #[reflect(Component, Default)]
 pub struct WidgetryCursorLoading;
 
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
 #[reflect(Component)]
 pub enum WidgetryCursorHint {
     AddSelection,

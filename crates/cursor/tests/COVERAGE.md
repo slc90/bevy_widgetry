@@ -41,6 +41,9 @@
 
 ## Coverage Map
 
+- `static_theme.rs`：未启用Kamuri的单语义自定义图片/区域/热点、缺项Hint系统回退、显式Custom与Loading/Disabled优先级、无Asset环境、queued提交、多窗口与失焦隔离，以及非法定义/像素/热点的回退、关联诊断、恢复和停止唤醒。真实外部路径验证未使用语义不加载，静止Mouse加载持续至成功或失败，稳定后停止额外重绘。
+- 非法 AssetPath 语法在构造边界拒绝并保留解析 source；同图同区域异热点必须拥有不同原生缓存身份，切回时复用既有身份，避免只验证 ECS hotspot 而漏掉 Winit 缓存行为。
+
 - `coordination.rs`：Hover、窗口隔离、Lease、Native 让权、动画、素材回退、安装冲突及播放资格/惰性加载不变量。
 - ReadOnly 在 System/Kamuri 的独立动画身份、Cell回退及素材恢复，最近声明/同实体官方声明优先、祖先 Disabled、Capture、Native Lease 和 Custom Pointer 隔离；同一帧不重写Cursor，只有有效动画继续唤醒。真实系统光标外观由 Gallery 的 Windows Mouse 验收补充。
 

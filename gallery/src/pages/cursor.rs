@@ -8,7 +8,10 @@ use bevy::{
 };
 use bevy_widgetry::{
     button::WidgetryButton,
-    cursor::{WidgetryCursorHint, WidgetryCursorTheme},
+    cursor::{
+        CursorImage, CursorImageSource, CursorSemantic, CursorStyle, WidgetryCursorHint,
+        WidgetryCursorTheme,
+    },
     text::WidgetryText,
 };
 use bevy_widgetry_asset::{BuiltinCursorAnimation, BuiltinCursorImage};
@@ -17,7 +20,7 @@ use std::collections::HashMap;
 pub(crate) struct CursorDemoPlugin;
 
 #[derive(Component)]
-struct ThemeChoice(WidgetryCursorTheme);
+struct ThemeChoice(WidgetryCursorTheme, &'static str);
 
 #[derive(Component)]
 struct CursorThemeLabel;
@@ -94,7 +97,8 @@ fn scene() -> impl Scene {
         Children [
             @localized(TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation)) WidgetryText--
             Node { column_gap: px(12) }
-            Children [@theme_button(WidgetryCursorTheme::System, "System")-- @theme_button(WidgetryCursorTheme::Kamuri, "Kamuri")]--
+            Children [@theme_button(WidgetryCursorTheme::system(), "System")-- @theme_button(WidgetryCursorTheme::kamuri(), "Kamuri")]--
+            @static_pointer_button()--
             @localized_binding(LocalizedText::with_args(TextKey::Cursor(CursorKey::CursorTheme), vec![("theme", String::new())]))
             template(|_| Ok(CursorThemeLabel)) WidgetryText--
             @localized(TextKey::Cursor(CursorKey::AnimationLoops)) WidgetryText--
@@ -122,26 +126,78 @@ fn scene() -> impl Scene {
 
 fn theme_button(theme: WidgetryCursorTheme, label: &'static str) -> impl Scene {
     bsn! {
-        Name({format!("CursorTheme{theme:?}")})
+        Name({format!("CursorTheme{label}")})
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text(label) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
-        template(move |_| Ok(ThemeChoice(theme)))
+        template(move |_| Ok(ThemeChoice(theme.clone(),label)))
         on(select_theme)
         Node { width: px(140), height: px(36), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
 
     }
 }
 
-fn select_theme(
-    event: On<Activate>,
-    choices: Query<&ThemeChoice>,
-    mut theme: ResMut<WidgetryCursorTheme>,
-) {
+fn select_theme(event: On<Activate>, choices: Query<&ThemeChoice>, mut commands: Commands) {
     let Ok(choice) = choices.get(event.entity) else {
         return;
     };
-    if theme.set_if_neq(choice.0) {
-        info!(theme = ?choice.0, "切换 Cursor theme");
+    let theme = choice.0.clone();
+    let label = choice.1;
+    commands.queue(move |world: &mut World| {
+        let changed = WidgetryCursorTheme::set_in_world(world, theme);
+        info!(theme = label, changed, "切换 Cursor theme");
+    });
+}
+
+fn static_pointer_button() -> impl Scene {
+    bsn! {
+        Node {column_gap:px(12),align_items:AlignItems::Center,flex_wrap:FlexWrap::Wrap}
+        Children [
+            Name::new("CursorStaticPointer")
+            @WidgetryButton {@children:{Some(Box::new(bsn_list!{@localized(TextKey::Cursor(CursorKey::StaticPointer)) WidgetryText}) as Box<dyn SceneList>)}}
+            on(select_static_pointer)--
+            Name::new("CursorStaticHotspot")
+            @WidgetryButton {@children:{Some(Box::new(bsn_list!{@localized(TextKey::Cursor(CursorKey::StaticPointerHotspot)) WidgetryText}) as Box<dyn SceneList>)}}
+            on(select_static_hotspot)--
+            @localized(TextKey::Cursor(CursorKey::StaticPointerDescription)) WidgetryText
+        ]
     }
+}
+
+fn select_static_pointer(_: On<Activate>, mut commands: Commands) {
+    commands.queue(|world: &mut World| {
+        set_static_pointer(world, BuiltinCursorAnimation::Pointer.hotspot())
+    });
+}
+
+fn select_static_hotspot(_: On<Activate>, mut commands: Commands) {
+    commands.queue(|world: &mut World| set_static_pointer(world, (10, 12)));
+}
+
+fn set_static_pointer(world: &mut World, hotspot: (u16, u16)) -> Result {
+    let rect = BuiltinCursorImage::KamuriStaticAtlas
+        .atlas_layout()
+        .textures
+        .get(1)
+        .copied()
+        .ok_or_else(|| {
+            crate::diagnostics::at(
+                "静态Pointer帧缺失",
+                bevy_widgetry::diagnostics::ErrorFrame::new("cursor.static_example"),
+            )
+        })?;
+    let theme = WidgetryCursorTheme::new([(
+        CursorSemantic::System(SystemCursorIcon::Pointer),
+        CursorStyle::Image(CursorImage {
+            source: CursorImageSource::Path(
+                BuiltinCursorImage::KamuriStaticAtlas.path().to_string(),
+            ),
+            rect: Some(rect),
+            hotspot,
+        }),
+    )])
+    .map_err(|error| error.into_bevy_error())?;
+    let changed = WidgetryCursorTheme::set_in_world(world, theme);
+    info!(changed, ?hotspot, "试用静态Pointer主题映射");
+    Ok(())
 }
 
 fn target(
@@ -282,7 +338,17 @@ fn sync_theme_label(
         }
         *label = LocalizedText::with_args(
             TextKey::Cursor(CursorKey::CursorTheme),
-            vec![("theme", format!("{:?}", *theme))],
+            vec![(
+                "theme",
+                if theme.is_system() {
+                    "System"
+                } else if *theme == WidgetryCursorTheme::kamuri() {
+                    "Kamuri"
+                } else {
+                    "Static Pointer"
+                }
+                .to_owned(),
+            )],
         );
     }
 }

@@ -24,3 +24,7 @@ required-features = ["kamuri_cursor"]
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "static_theme"
+harness = false

@@ -115,3 +115,5 @@ Gallery可设置`GALLERY_CURSOR_BENCH_OUTPUT`为一个尚不存在的CSV路径�
 | PanReady | 40 | 70 | (25, 54) | A relaxed palm awaits a pan; a map contour circles behind it. |
 | Panning | 32 | 55 | (25, 54) | A gripped map flows beneath the fixed panning anchor. |
 | ReadOnly | 48 | 80 | (25, 56) | A light scans a locked page; the closed shackle and keyhole never move. |
+
+静态原生光标目标可显式设置 `animated: false`（JSON布尔值）。此模式仍校验可见性、尺寸、热点和源帧匹配，但要求全部采样位图保持同一SHA256；默认仍为动画验证。验证首帧时可使用原动画Atlas与 `frames: 1`，复用其首帧而不生成新素材。

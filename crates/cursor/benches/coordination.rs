@@ -31,7 +31,7 @@ fn fixture(windows: usize, candidates: usize, depth: usize, kamuri: bool) -> Res
         app.register_asset_loader(bevy::image::ImageLoader::new(
             bevy::image::CompressedImageFormats::NONE,
         ));
-        app.insert_resource(WidgetryCursorTheme::Kamuri);
+        WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::kamuri());
         app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
             std::time::Duration::from_millis(125),
         ));
@@ -193,7 +193,10 @@ fn main() -> Result {
                             std::thread::sleep(std::time::Duration::from_millis(5));
                         }
                         if !active {
-                            fixture.app.insert_resource(WidgetryCursorTheme::System);
+                            WidgetryCursorTheme::set_in_world(
+                                fixture.app.world_mut(),
+                                WidgetryCursorTheme::system(),
+                            );
                             animation_update(&mut fixture)?;
                         }
                         Ok(fixture)

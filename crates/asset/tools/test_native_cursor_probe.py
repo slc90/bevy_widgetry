@@ -73,6 +73,15 @@ class NativeCursorProbeTests(unittest.TestCase):
             with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                 probe.validate_capture(self.target, records)
 
+    def test_static_capture_requires_unchanged_native_pixels(self):
+        target = dict(self.target, animated=False)
+        good = [dict(visible=True, size=[2, 2], hotspot=[1, 0], sha256="same",
+                     matches_source_frame=True) for _ in range(3)]
+        probe.validate_capture(target, good)
+        changing = [dict(record, sha256=str(i)) for i, record in enumerate(good)]
+        with self.assertRaisesRegex(ValueError, "static"):
+            probe.validate_capture(target, changing)
+
     def native_patches(self, *, fail=False, topmost=False):
         hashes = sorted(probe.source_hashes(self.target, self.directory))
         records = [dict(visible=True, size=[2, 2], hotspot=[1, 0], sha256=h,

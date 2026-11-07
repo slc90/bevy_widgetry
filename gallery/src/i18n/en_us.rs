@@ -815,6 +815,9 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10) => {
             "Stress Live · 64 kHz · 64 channels"
         }
+        TextKey::Cursor(CursorKey::StaticPointer) => "Static Pointer",
+        TextKey::Cursor(CursorKey::StaticPointerHotspot) => "Pointer hotspot (10,12)",
+        TextKey::Cursor(CursorKey::StaticPointerDescription) => "Replace only Pointer; use system cursors for other semantics.",
         TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation) => {
             "Cursor · Real Windows Mouse validation"
         }

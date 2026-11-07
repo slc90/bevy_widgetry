@@ -79,7 +79,6 @@ pub(crate) fn install(app: &mut App) -> Result {
 fn enable_cursor(
     mut commands: Commands,
     startup: Res<StartupCursor>,
-    mut theme: ResMut<WidgetryCursorTheme>,
     mut redraw: MessageWriter<RequestRedraw>,
     ready: Option<Res<GalleryFirstFrameReady>>,
     splash: Option<Res<crate::splash::SplashEnabled>>,
@@ -92,7 +91,7 @@ fn enable_cursor(
                 window: startup.window,
                 background: startup.background,
             });
-            *theme = WidgetryCursorTheme::Kamuri;
+            WidgetryCursorTheme::set(&mut commands, WidgetryCursorTheme::kamuri());
         }
         if splash.is_none()
             && *page.get() != crate::gallery::GalleryPage::Initializing

@@ -238,7 +238,8 @@ pub mod disabled {
 
 pub mod cursor {
     pub use bevy_widgetry_cursor::{
-        CursorLease, WidgetryCursorHint, WidgetryCursorLoading, WidgetryCursorPlugin,
+        CursorImage, CursorImageSource, CursorLease, CursorSemantic, CursorStyle, CursorThemeError,
+        CursorThemeFailure, WidgetryCursorHint, WidgetryCursorLoading, WidgetryCursorPlugin,
         WidgetryCursorTheme,
     };
 }

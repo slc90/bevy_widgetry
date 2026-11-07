@@ -67,7 +67,7 @@ impl fmt::Display for CursorError {
             }
             Self::Pixels { pixels, path } => write!(
                 f,
-                "Cursor requires expected RGBA8 dimensions and CPU pixels: {pixels:?} ({path:?})"
+                "Cursor requires expected RGBA dimensions and CPU pixels: {pixels:?} ({path:?})"
             ),
         }
     }
@@ -114,13 +114,18 @@ pub(super) fn usable(
         format: image.texture_descriptor.format,
         bytes: image.data.as_ref().map(Vec::len),
     };
-    if pixels.actual != expected
-        || !matches!(
-            pixels.format,
-            TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb
-        )
-        || pixels.bytes != Some((u64::from(expected.x) * u64::from(expected.y) * 4) as usize)
-    {
+    let bytes_per_pixel = match pixels.format {
+        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => Some(4),
+        TextureFormat::Rgba32Float => Some(16),
+        _ => None,
+    };
+    let expected_bytes = bytes_per_pixel.and_then(|bytes| {
+        u64::from(expected.x)
+            .checked_mul(u64::from(expected.y))
+            .and_then(|area| area.checked_mul(bytes))
+            .and_then(|bytes| usize::try_from(bytes).ok())
+    });
+    if pixels.actual != expected || expected_bytes.is_none() || pixels.bytes != expected_bytes {
         state.failure(FailureKey::Pixels(pixels), || {
             Arc::new(WidgetryFailure::new(
                 CursorError::Pixels {

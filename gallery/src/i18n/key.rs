@@ -744,6 +744,9 @@ pub(crate) enum WaveformKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CursorKey {
+    StaticPointer,
+    StaticPointerHotspot,
+    StaticPointerDescription,
     CursorRealWindowsMouseValidation,
     CursorTheme,
     AnimationLoops,

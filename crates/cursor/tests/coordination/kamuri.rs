@@ -92,7 +92,7 @@ fn animation_app_with_loader(register_loader: bool) -> App {
             bevy::image::CompressedImageFormats::NONE,
         ));
     }
-    app.insert_resource(WidgetryCursorTheme::Kamuri);
+    WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::kamuri());
     app.world_mut().spawn(PointerId::Mouse);
     app
 }
@@ -234,13 +234,13 @@ fn all_45_semantics_animate_with_independent_timing_and_restart_only_on_semantic
     for (hint, animation) in HINT_ANIMATIONS {
         app.world_mut().entity_mut(target).insert(hint);
         assert_loop(&mut app, window, camera, target, animation);
-        app.insert_resource(WidgetryCursorTheme::System);
+        WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::system());
         tick(&mut app, window, camera, target, 0);
         assert_eq!(
             app.world().get::<CursorIcon>(window),
             Some(&CursorIcon::System(hint.system_fallback()))
         );
-        app.insert_resource(WidgetryCursorTheme::Kamuri);
+        WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::kamuri());
     }
 }
 
@@ -291,8 +291,8 @@ fn system_and_custom_cursors_never_start_kamuri_playback_or_change_caller_images
         hotspot: (2, 3),
         ..default()
     });
-    for theme in [WidgetryCursorTheme::Kamuri, WidgetryCursorTheme::System] {
-        app.insert_resource(theme);
+    for theme in [WidgetryCursorTheme::kamuri(), WidgetryCursorTheme::system()] {
+        WidgetryCursorTheme::set_in_world(app.world_mut(), theme);
         app.world_mut()
             .entity_mut(target)
             .insert(EntityCursor::Custom(custom.clone()));
@@ -714,10 +714,10 @@ fn cold_stationary_load_keeps_updates_until_ready_or_failed_and_obeys_focus() {
         tick(&mut app, window, camera, target, 0);
         assert!(!has_redraw(&app));
         app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
-        app.insert_resource(WidgetryCursorTheme::System);
+        WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::system());
         tick(&mut app, window, camera, target, 0);
         assert!(!has_redraw(&app));
-        app.insert_resource(WidgetryCursorTheme::Kamuri);
+        WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::kamuri());
         tick(&mut app, window, camera, target, 0);
         assert!(has_redraw(&app));
         app.register_asset_loader(bevy::image::ImageLoader::new(

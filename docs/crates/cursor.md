@@ -2,13 +2,19 @@
 
 ## 功能概述
 
-为各 Native Window 独立管理 OS Mouse Cursor，默认只编译 System 主题。显式启用默认关闭的 `kamuri_cursor` Feature 后，可在 System 与 Kamuri 之间切换。Widget 可以通过官方 Cursor 声明或 Widgetry 扩展 Hint 请求相应样式。
+为各 Native Window 独立管理 OS Mouse Cursor，默认选择 System。外部主题使用公开数据把官方系统语义或 Widgetry 扩展 Hint 映射为系统光标或静态图片。显式启用默认关闭的 `kamuri_cursor` Feature 后，既有 Kamuri 动画提供方仍可使用。
 
 ## 当前设计思路
 
 Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mouse 身份驱动。Drag 使用有 Owner 的 `CursorLease` 临时固定样式；原生窗口 Move / Resize 期间让出 Cursor 控制权。展示主题与颜色 Theme 相互独立。
 
-`kamuri_cursor` 同时开启 Asset 的同名资源 Feature。关闭时 `WidgetryCursorTheme::Kamuri` 不存在，播放状态、资源加载、图集诊断和动画唤醒代码不参与编译，也不安装 Kamuri 专用 Asset / Atlas 支持。System、全部 Hint、Lease、Loading 优先级与调用方的原生 Custom Cursor 始终可用。Facade 提供同名转发 Feature，Gallery 显式启用以保留演示。
+`WidgetryCursorTheme::new` 接收 `CursorSemantic` 到 `CursorStyle` 的映射。`CursorStyle::System` 直接选择系统样式，`Image(CursorImage)` 描述资产路径或 Image Handle、可选 `URect` 区域及区域内热点。路径保留 Bevy 的资产来源语法；定义不加载图片，实际语义出现时才按需加载和缓存。主题可以只定义一项，缺项按原语义回退到 System，Hint 使用既有 `system_fallback`。静态图片无需 `kamuri_cursor`，尺寸不限制为80×80；支持 RGBA8 / RGBA32Float 及可用 CPU 像素。
+
+当前资源只读查询 `styles()` / `is_system()`，通过同步 `set_in_world` 或执行时提交的 `set(Commands, theme)` 切换；同值不标记变化，不新增业务事件。`system()` 构造空映射；开启 `kamuri_cursor` 时 `kamuri()` 构造临时内置提供方。名称和菜单属于应用。显式 `EntityCursor::Custom` 不被主题映射替换，Loading / Disabled 的既有语义优先级仍有效。
+
+静态图片目前不支持原生光标的同 Handle 像素热更新：修改像素或同尺寸恢复后，Windows 光标可能继续显示首次缓存的位图。需要替换位图时应使用新的 Image Handle。Bevy 原生光标缓存的刷新与回收问题暂缓处理，库未引入 vendor 或依赖补丁。
+
+`kamuri_cursor` 同时开启 Asset 的同名资源 Feature。关闭时不编译 Kamuri 专用播放器、缓存和动画唤醒，也不安装其内建 Asset 支持；通用静态加载和诊断始终可用。宿主有 AssetServer 和 Image 能力时自动确保 Atlas 支持，静态区域使用按尺寸、区域及热点复用的 Layout 身份，避免 Bevy 原生缓存忽略 hotspot 而沿用旧作用点。System 在缺少 Asset/Image 环境时仍可使用，外部图片回退对应系统语义。Facade 提供同名转发 Feature，Gallery 显式启用以保留既有演示。
 
 ## 主要功能
 
@@ -29,6 +35,8 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 每个窗口独立记录当前语义及进入时间，使用真实时间推进，不受虚拟时间暂停或单帧上限影响。只有有焦点的有效 Mouse 目标窗口及有效 Drag Lease 会保持动画唤醒；清除 Hover 不会结束仍有效的 Lease / Capture。普通页面没有有效 Mouse 位置、窗口失焦、原生窗口操作或当前语义失效时停止播放和额外重绘。资源正在加载且当前窗口确实需要该语义时，保留必要更新直至进入Loaded或Failed，避免反应式窗口停在回退图。加载完成后按动画更新；失败、已加载但CPU图像不可用、失焦或语义失效时不维持加载唤醒。静态或System回退本身不产生持续动画重绘。
 
 ## 边界情况与错误处理
+
+主题构造拒绝空图片路径、非法 Bevy AssetPath 语法、空/反向区域和已知区域内越界热点，返回 `CursorThemeFailure` / `CursorThemeError` 并保留实际参数及路径解析原错误。图片加载后的区域/热点边界另按实际尺寸校验；加载、像素和区域故障区分记录，共享图片故障按资产复用诊断。有效加载期间请求必要更新，静态可用、失败或窗口失效后不维持无限重绘；恢复后重新使用图片。设置主题不改变 Widget 业务状态。
 
 `WidgetryCursorHint::ReadOnly` 表达可选择、可复制但不可编辑的区域，与 Disabled 独立。System Theme 或 Kamuri 素材不可用时回退 `SystemCursorIcon::Cell`；Kamuri 使用扫描文档与闭合蓝白挂锁的循环动画，热点 `(25,56)` 固定于锁孔。Hint 只声明光标语义，应用仍负责实际编辑资格；未启用编辑的普通表格不应自动声明 ReadOnly。编辑器内部光标由编辑器自己的最近声明控制。
 
