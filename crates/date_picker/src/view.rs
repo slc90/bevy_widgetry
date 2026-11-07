@@ -352,12 +352,16 @@ fn activate(world: &mut World, target: Entity) -> Result<(), DatePickerFailure> 
             View::Days => {}
         },
         Part::Clear if view == View::Days => {
-            WidgetryDatePicker::set_selected_date_in_world(world, root, None)?;
+            crate::WidgetryDatePickerHeadless::choose_date_in_world(world, root, None)?;
         }
         Part::Day(index) if view == View::Days => {
             let day = WidgetryDatePicker::days(world, root, None)?[index];
             if day.is_selectable {
-                WidgetryDatePicker::set_selected_date_in_world(world, root, Some(day.date))?;
+                crate::WidgetryDatePickerHeadless::choose_date_in_world(
+                    world,
+                    root,
+                    Some(day.date),
+                )?;
             }
         }
         _ => {}

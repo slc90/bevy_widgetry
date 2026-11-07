@@ -1,6 +1,6 @@
 # DatePicker
 
-`bevy_widgetry_date_picker` 提供 BSN `WidgetryDatePicker`、`WidgetryDatePickerProps` 和 `WidgetryDatePickerPlugin`，Facade 通过独立 `date_picker` Feature 与同名模块导出。
+`bevy_widgetry_date_picker` 提供独立 `WidgetryDatePickerHeadless` / `WidgetryDatePickerHeadlessProps` / `WidgetryDatePickerHeadlessPlugin`，以及默认 BSN `WidgetryDatePicker`、`WidgetryDatePickerProps` 和 `WidgetryDatePickerPlugin`，Facade 通过独立 `date_picker` Feature 与同名模块导出。
 
 选中日期 `Option<Date>` 与显示年月 `DatePickerMonth { year, month }` 是两项独立私有状态。Props 仅初始化一次；显示年月优先显式值、初始选中日期、本地今天。本地日期不可用时保留时钟失败诊断，回退到 `min_date` 或当前 UTC 日期的月份，并以 DEBUG 记录采用的回退；不自动选中也不伪造 Today。
 
@@ -31,3 +31,11 @@ Plugin 共享可信本地日期缓存，使用系统单调时钟约每 60 秒检
 为使可休眠宿主实际执行检查，Plugin 在 Last 阶段将 Winit 两种 Reactive 模式的等待上限设为距下一次采样截止时间的一半，按秒向上取整、最长 30 秒，为 Windows 下 Bevy 0.20 的请求重绘及后续 App 更新各预留一次等待预算。保留宿主原有的更短等待、Continuous 及事件响应选项；临时缩短的等待在下一次采样后按原策略恢复，宿主更新等待策略时重新合并。没有 Winit 的 Headless App 仍在宿主驱动更新时检查日期。
 
 宿主改变一种模式时保留另一模式的原始等待策略；仅修改事件响应选项也保留原等待时长。若检测到写入而两种模式的值均未改变，由于 Bevy 只提供 Resource 级变更检测，将其视为重新声明当前两种配置。
+
+## 外部日期模型与日期区域
+
+Headless Scene 只创建日期状态和必要根 Node，不创建日期格、月份/年份候选、颜色或 Today 图标；安装 HeadlessPlugin 即可操作，不需要默认 Plugin。默认 `WidgetryDatePicker` 组合相同状态并保留完整三级视图。两种根使用相同选择/显示月份/42日计算及同步、Commands API，State 不要求默认 Part、颜色或图标存在。
+
+`WidgetryDatePickerHeadless::is_selectable(world, root, date)` 查询范围资格。外部按钮通过 `choose_date_in_world` / `choose_date` 提交真实 Date 或 None；这些用户操作遵守有效 Disabled 与可选范围，正常拒绝返回未变化，程序 Setter 仍独立允许 Disabled 下合法赋值并对非法范围报错。用户与程序操作共享唯一 State 和既有已提交变化通知。
+
+`WidgetryDatePickerHeadless::today(world)` 只读取 App 共享的可信缓存，未就绪/本地读取失败返回 None，不另读时钟或伪造 Today；现有一分钟采样、Reactive 唤醒、失败身份和恢复语义保持。默认笔圈仍由默认 Style 单独构造。Gallery 的独立日期区域通过公开 days/choose_date 与日期读数工作，不创建月份或年份面板。

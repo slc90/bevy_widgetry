@@ -22,6 +22,8 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         },
         TextKey::Navigation(NavigationKey::DatePicker) => "DatePicker",
         TextKey::DatePicker(key) => match key {
+            super::DatePickerKey::DateOnly => "Custom date region",
+            super::DatePickerKey::DateOnlyDescription => "Independent date model: choose dates and clear without month or year candidate panels.",
             super::DatePickerKey::Description => "Browse months without changing selection. Click the title for month/year navigation. Only committed changes enter the event history; Today never selects a date.",
             super::DatePickerKey::Main => "Interactive calendar",
             super::DatePickerKey::Unselected => "Initially unselected",

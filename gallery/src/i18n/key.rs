@@ -95,6 +95,8 @@ pub(crate) enum NavigationKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum DatePickerKey {
+    DateOnly,
+    DateOnlyDescription,
     Description,
     Main,
     Unselected,

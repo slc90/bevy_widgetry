@@ -4,7 +4,7 @@ use crate::{
 };
 use bevy::prelude::*;
 use bevy_widgetry_diagnostics::{ErrorFrame, bevy::WidgetryEcsError};
-use time::{Date, Month, OffsetDateTime, Weekday};
+use time::{Date, Month, Weekday};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DatePickerMonth {
@@ -79,7 +79,10 @@ pub struct WidgetryDatePickerDisplayedMonthChanged {
 }
 
 pub(crate) fn state(world: &World, root: Entity) -> Result<&State, DatePickerFailure> {
-    if world.get::<WidgetryDatePicker>(root).is_none() {
+    if world
+        .get::<crate::WidgetryDatePickerHeadless>(root)
+        .is_none()
+    {
         return Err(failure(
             DatePickerError::InvalidRoot { root },
             ErrorFrame::new("date_picker.state"),
@@ -91,8 +94,8 @@ pub(crate) fn state(world: &World, root: Entity) -> Result<&State, DatePickerFai
 }
 
 impl State {
-    fn new(
-        props: WidgetryDatePickerProps,
+    pub(crate) fn new(
+        props: crate::WidgetryDatePickerHeadlessProps,
         local: impl FnOnce() -> Result<Date, WidgetryEcsError>,
         utc: impl FnOnce() -> Date,
     ) -> Result<Self, DatePickerFailure> {
@@ -220,11 +223,10 @@ impl WidgetryDatePicker {
         let colors = props.colors.clone();
         bsn! {
             template(move |context| colors.clone().initial(context.entity.id()).map_err(DatePickerFailure::into_bevy_error))
-            template(move |context| {
-                let root = context.entity.id();
-                State::new(props.clone(), || context.entity.world_scope(crate::today::local_date), || OffsetDateTime::now_utc().date())
-                    .map_err(|error| error.with_context(ErrorFrame::new("date_picker.initialize").field("root", root)).into_bevy_error())
-            })
+            @crate::WidgetryDatePickerHeadless {
+                @selected_date:{props.selected_date},@displayed_month:{props.displayed_month},
+                @min_date:{props.min_date},@max_date:{props.max_date},@week_start:{props.week_start},
+            }
             @crate::view::scene()
         }
     }
@@ -436,7 +438,7 @@ mod tests {
             let state = logs
                 .run(|| {
                     State::new(
-                        WidgetryDatePickerProps {
+                        crate::WidgetryDatePickerHeadlessProps {
                             displayed_month: explicit,
                             selected_date: selected,
                             min_date: min,
@@ -485,7 +487,7 @@ mod tests {
             }
         }
         let state = State::new(
-            default(),
+            crate::WidgetryDatePickerHeadlessProps::default(),
             || Ok(date!(2024 - 07 - 05)),
             || date!(2023 - 06 - 20),
         )

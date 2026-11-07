@@ -6,10 +6,13 @@ use bevy::{prelude::*, ui::InteractionDisabled, ui_widgets::Activate};
 use bevy_widgetry::{button::WidgetryButton, date_picker::*, text::WidgetryText};
 use time::macros::date;
 
+mod custom;
+
 pub(crate) struct DatePickerDemoPlugin;
 
 impl Plugin for DatePickerDemoPlugin {
     fn build(&self, app: &mut App) {
+        custom::install(app);
         app.add_plugins(WidgetryDatePickerPlugin)
             .register_type::<DatePickerDemoState>()
             .add_systems(OnEnter(GalleryPage::DatePicker), enter)
@@ -126,7 +129,8 @@ fn scene(selected: Option<Date>) -> impl Scene {
                     selected_date: Some(date!(2026-10-15)), min_date: Some(date!(2026-10-10)), max_date: Some(date!(2026-10-20)), ..default()
                 }, vec![], false, true)--
                 @example("DatePickerDisabled", DatePickerKey::Disabled, WidgetryDatePickerProps {selected_date: Some(date!(2026-10-15)), ..default()}, vec![Action::SetDisabled], true, true)
-            ]
+            ]--
+            @custom::scene()
         ]
     }
 }
