@@ -1,7 +1,6 @@
-use crate::headless::{HideTooltip, ShowTooltip, Tooltip, TooltipPlugin};
+use crate::headless::{ShowTooltip, WidgetryTooltipHeadless, WidgetryTooltipHeadlessPlugin};
 use crate::{TooltipError, TooltipFailure, error::failure};
 use bevy::{
-    picking::PickingSystems,
     prelude::*,
     ui::OverrideClip,
     ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverPlugin, PopoverSide},
@@ -83,7 +82,7 @@ impl WidgetryTooltip {
                 if missing_content {
                     return Err(failure(TooltipError::MissingContent {anchor:context.entity.id()}, ErrorFrame::new("tooltip.initialize")).into_bevy_error());
                 }
-                Ok(Tooltip)
+                Ok(WidgetryTooltipHeadless)
             })
             template(move |_| Ok(TooltipContent(props.content.clone())))
         }
@@ -124,54 +123,42 @@ fn popup_scene(
     }
 }
 
-fn show_tooltip(
-    event: On<ShowTooltip>,
-    mode: Res<WidgetryTheme>,
-    anchors: Query<
-        (
-            &TooltipContent,
-            Option<&Children>,
-            Option<&crate::colors::ColorState>,
-        ),
-        With<WidgetryTooltip>,
-    >,
-    popups: Query<(), With<TooltipPopup>>,
-    mut commands: Commands,
-) -> Result<(), BevyError> {
-    let Ok((content, children, overrides)) = anchors.get(event.source) else {
-        return Ok(());
-    };
-    if children.is_some_and(|children| children.iter().any(|child| popups.contains(child))) {
-        return Ok(());
-    }
-    let overrides = overrides.ok_or_else(|| {
-        failure(
-            TooltipError::AnchorColors {
-                anchor: event.source,
-                popup: None,
-                source: None,
-            },
-            ErrorFrame::new("tooltip.show"),
-        )
-        .into_bevy_error()
-    })?;
-    let anchor = event.source;
-    let content = content
-        .0
-        .build(anchor)
-        .map_err(TooltipFailure::into_bevy_error)?;
-    let colors = overrides.0.resolve(&mode.tooltip);
-    let popup = commands.spawn_empty().id();
-    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        if !world.entities().contains(anchor) {
-            world.despawn(popup);
+fn show_tooltip(event: On<ShowTooltip>, mut commands: Commands) {
+    let show = *event;
+    commands.queue(move |world: &mut World| -> Result {
+        if !show.is_current(world)
+            || show.popup(world).is_some()
+            || world.get::<WidgetryTooltip>(show.source).is_none()
+        {
             return Ok(());
         }
-        let Ok(mut entity) = world.get_entity_mut(popup) else {
+        let anchor = show.source;
+        let Some(content) = world.get::<TooltipContent>(anchor) else {
             return Ok(());
         };
+        let content = content.0.clone();
+        let overrides = world
+            .get::<crate::colors::ColorState>(anchor)
+            .ok_or_else(|| {
+                failure(
+                    TooltipError::AnchorColors {
+                        anchor,
+                        popup: None,
+                        source: None,
+                    },
+                    ErrorFrame::new("tooltip.show"),
+                )
+                .into_bevy_error()
+            })?;
+        let colors = overrides
+            .0
+            .resolve(&world.resource::<WidgetryTheme>().tooltip);
+        let content = content
+            .build(anchor)
+            .map_err(TooltipFailure::into_bevy_error)?;
+        let popup = world.spawn_empty().id();
         let result = bevy_widgetry_core::scene::apply_scene(
-            &mut entity,
+            &mut world.entity_mut(popup),
             popup_scene(anchor, content, colors),
         );
         if let Err(error) = result {
@@ -184,27 +171,11 @@ fn show_tooltip(
                 )
                 .into_bevy_error());
         }
+        show.register_popup(world, popup)
+            .map_err(TooltipFailure::into_bevy_error)?;
         Ok(())
     });
-    Ok(())
 }
-
-fn hide_tooltip(
-    event: On<HideTooltip>,
-    anchors: Query<&Children>,
-    popups: Query<(), With<TooltipPopup>>,
-    mut commands: Commands,
-) {
-    let Ok(children) = anchors.get(event.source) else {
-        return;
-    };
-    for child in children.iter() {
-        if popups.contains(child) {
-            commands.entity(child).despawn();
-        }
-    }
-}
-
 fn apply_tooltip_colors(
     colors: &bevy_widgetry_theme::WidgetryTooltipColors,
     (mut background, mut border, mut foreground): (
@@ -361,30 +332,13 @@ fn update_tooltip_colors(
     }
 }
 
-fn ignore_tooltip_descendants(
-    added: Query<(Entity, &ChildOf), Added<ChildOf>>,
-    parents: Query<&ChildOf>,
-    popups: Query<(), With<TooltipPopup>>,
-    mut commands: Commands,
-) {
-    for (entity, parent) in &added {
-        if popups.contains(parent.parent())
-            || parents
-                .iter_ancestors(parent.parent())
-                .any(|ancestor| popups.contains(ancestor))
-        {
-            commands.entity(entity).insert(Pickable::IGNORE);
-        }
-    }
-}
-
 impl Plugin for WidgetryTooltipPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);
         }
-        if !app.is_plugin_added::<TooltipPlugin>() {
-            app.add_plugins(TooltipPlugin);
+        if !app.is_plugin_added::<WidgetryTooltipHeadlessPlugin>() {
+            app.add_plugins(WidgetryTooltipHeadlessPlugin);
         }
         if !app.is_plugin_added::<PopoverPlugin>() {
             app.add_plugins(PopoverPlugin);
@@ -397,12 +351,7 @@ impl Plugin for WidgetryTooltipPlugin {
             update_tooltip_colors.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
         app.add_observer(show_tooltip)
-            .add_observer(hide_tooltip)
-            .add_observer(refresh_tooltip_theme)
-            .add_systems(
-                PreUpdate,
-                ignore_tooltip_descendants.before(PickingSystems::Backend),
-            );
+            .add_observer(refresh_tooltip_theme);
         widgetry_debug!("WidgetryTooltipPlugin 注册完成");
     }
 }
@@ -458,7 +407,7 @@ mod tests {
         let logs = LogCapture::default();
         logs.run(|| {
             errors.run(|| {
-                app.world_mut().trigger(ShowTooltip { source: anchor });
+                crate::headless::trigger_show(app.world_mut(), anchor);
                 app.world_mut().flush();
             })
         });
@@ -512,16 +461,12 @@ mod tests {
         let logs = LogCapture::default();
         logs.run(|| {
             for _ in 0..2 {
-                app.world_mut().trigger(ShowTooltip { source: anchor });
+                crate::headless::trigger_show(app.world_mut(), anchor);
                 app.world_mut().flush();
             }
-            app.world_mut().trigger(HideTooltip { source: anchor });
-            app.world_mut().trigger(ShowTooltip {
-                source: Entity::PLACEHOLDER,
-            });
-            app.world_mut().trigger(HideTooltip {
-                source: Entity::PLACEHOLDER,
-            });
+            crate::headless::trigger_hide(app.world_mut(), anchor);
+            crate::headless::trigger_show(app.world_mut(), Entity::PLACEHOLDER);
+            crate::headless::trigger_hide(app.world_mut(), Entity::PLACEHOLDER);
             app.world_mut().flush();
         });
         assert!(logs.records().iter().all(|record| record.phase().is_none()));
@@ -540,7 +485,15 @@ mod tests {
         let a = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
         let b = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
         for anchor in [a, b] {
-            app.world_mut().trigger(ShowTooltip { source: anchor });
+            bevy_widgetry_core::scene::spawn_scene(
+                app.world_mut(),
+                popup_scene(
+                    anchor,
+                    Box::new(bsn_list! {Node}),
+                    bevy_widgetry_theme::WIDGETRY_DARK_THEME.tooltip,
+                ),
+            )
+            .unwrap();
         }
         app.world_mut().flush();
         let popups = app
@@ -667,7 +620,7 @@ mod tests {
         let calls = Arc::new(AtomicUsize::new(0));
         let a = spawn_tooltip(&mut app, calls.clone());
         let b = spawn_tooltip(&mut app, calls.clone());
-        app.world_mut().trigger(ShowTooltip { source: a });
+        crate::headless::trigger_show(app.world_mut(), a);
         app.world_mut().flush();
         let popup = popup(&mut app);
         app.update();
@@ -714,7 +667,7 @@ mod tests {
         colors.popup.normal.foreground = Some(Color::srgb(0.8, 0.6, 0.4));
         crate::WidgetryTooltipColorOverrides::set_in_world(app.world_mut(), anchor, colors.clone())
             .unwrap();
-        app.world_mut().trigger(ShowTooltip { source: anchor });
+        crate::headless::trigger_show(app.world_mut(), anchor);
         app.world_mut().flush();
         let popup = popup(&mut app);
         assert_eq!(
@@ -764,7 +717,7 @@ mod tests {
         }).unwrap().id();
         let errors = ErrorCapture::default();
         errors.run(|| {
-            app.world_mut().trigger(ShowTooltip { source: anchor });
+            crate::headless::trigger_show(app.world_mut(), anchor);
             app.world_mut().flush();
         });
         let errors = errors.take();
@@ -787,7 +740,7 @@ mod tests {
             .add_plugins(WidgetryTooltipPlugin);
         let anchor = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
         assert!(app.world().get::<WidgetryTooltip>(anchor).is_some());
-        assert!(app.world().get::<Tooltip>(anchor).is_some());
+        assert!(app.world().get::<WidgetryTooltipHeadless>(anchor).is_some());
         assert_eq!(
             app.world_mut()
                 .query_filtered::<Entity, With<TooltipPopup>>()
@@ -805,7 +758,7 @@ mod tests {
             .add_plugins(WidgetryTooltipPlugin);
         let calls = Arc::new(AtomicUsize::new(0));
         let anchor = spawn_tooltip(&mut app, calls.clone());
-        app.world_mut().trigger(ShowTooltip { source: anchor });
+        crate::headless::trigger_show(app.world_mut(), anchor);
         app.world_mut().flush();
         let popup = popup(&mut app);
         assert_eq!(app.world().get::<ChildOf>(popup).unwrap().parent(), anchor);
@@ -907,15 +860,15 @@ mod tests {
             .add_plugins(WidgetryTooltipPlugin);
         let calls = Arc::new(AtomicUsize::new(0));
         let anchor = spawn_tooltip(&mut app, calls.clone());
-        app.world_mut().trigger(ShowTooltip { source: anchor });
+        crate::headless::trigger_show(app.world_mut(), anchor);
         app.world_mut().flush();
         let first_popup = popup(&mut app);
         let first_content = app.world().get::<Children>(first_popup).unwrap()[0];
-        app.world_mut().trigger(HideTooltip { source: anchor });
+        crate::headless::trigger_hide(app.world_mut(), anchor);
         app.world_mut().flush();
         assert!(app.world().get_entity(first_popup).is_err());
         assert!(app.world().get_entity(first_content).is_err());
-        app.world_mut().trigger(ShowTooltip { source: anchor });
+        crate::headless::trigger_show(app.world_mut(), anchor);
         app.world_mut().flush();
         assert_ne!(popup(&mut app), first_popup);
         assert_eq!(calls.load(Ordering::Relaxed), 2);
@@ -927,7 +880,7 @@ mod tests {
         app.init_resource::<bevy::picking::hover::HoverMap>()
             .add_plugins(WidgetryTooltipPlugin);
         let anchor = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
-        app.world_mut().trigger(ShowTooltip { source: anchor });
+        crate::headless::trigger_show(app.world_mut(), anchor);
         app.world_mut().flush();
         let popup = popup(&mut app);
         let content = app.world().get::<Children>(popup).unwrap()[0];
@@ -943,7 +896,7 @@ mod tests {
         app.init_resource::<bevy::picking::hover::HoverMap>()
             .add_plugins(WidgetryTooltipPlugin);
         let anchor = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
-        app.world_mut().trigger(ShowTooltip { source: anchor });
+        crate::headless::trigger_show(app.world_mut(), anchor);
         app.world_mut().flush();
         let popup = popup(&mut app);
         WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)

@@ -18,10 +18,17 @@ const COLD_WARMUP: Duration = Duration::from_millis(200);
 const WARM_DELAY: Duration = Duration::from_millis(50);
 const COOLDOWN: Duration = Duration::from_millis(300);
 
-#[derive(Component, Default, Clone)]
-pub(crate) struct Tooltip;
+#[derive(SceneComponent, Default, Clone)]
+#[require(Node)]
+pub struct WidgetryTooltipHeadless;
 
-pub(crate) struct TooltipPlugin;
+impl WidgetryTooltipHeadless {
+    fn scene() -> impl Scene {
+        bsn! {}
+    }
+}
+
+pub struct WidgetryTooltipHeadlessPlugin;
 
 #[derive(Resource)]
 pub(crate) struct TooltipState {
@@ -29,6 +36,9 @@ pub(crate) struct TooltipState {
     cancelled: HashSet<PointerId>,
     candidate: Option<Entity>,
     visible: Option<Entity>,
+    current: Option<ShowTooltip>,
+    next_revision: u64,
+    popup: Option<(ShowTooltip, Entity)>,
     show_elapsed: Duration,
     show_delay: Duration,
     cooldown_remaining: Duration,
@@ -41,6 +51,9 @@ impl Default for TooltipState {
             cancelled: HashSet::default(),
             candidate: None,
             visible: None,
+            current: None,
+            next_revision: 0,
+            popup: None,
             show_elapsed: Duration::ZERO,
             show_delay: COLD_WARMUP,
             cooldown_remaining: Duration::ZERO,
@@ -49,6 +62,25 @@ impl Default for TooltipState {
 }
 
 impl TooltipState {
+    fn begin(&mut self, source: Entity) -> ShowTooltip {
+        self.next_revision = self.next_revision.wrapping_add(1);
+        let event = ShowTooltip {
+            source,
+            revision: self.next_revision,
+        };
+        self.current = Some(event);
+        event
+    }
+
+    fn hide(&mut self, commands: &mut Commands) {
+        if let Some(show) = self.current.take() {
+            commands.trigger(HideTooltip {
+                source: show.source,
+                revision: show.revision,
+            });
+        }
+    }
+
     fn change_owner(
         &mut self,
         owner: Option<(PointerId, NormalizedRenderTarget)>,
@@ -57,9 +89,8 @@ impl TooltipState {
         if self.owner == owner {
             return;
         }
-        if let Some(source) = self.visible.take() {
-            commands.trigger(HideTooltip { source });
-        }
+        self.visible = None;
+        self.hide(commands);
         self.owner = owner;
         self.candidate = None;
         self.show_elapsed = Duration::ZERO;
@@ -68,23 +99,157 @@ impl TooltipState {
     }
 }
 
-#[derive(EntityEvent)]
-pub(crate) struct ShowTooltip {
+#[derive(EntityEvent, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShowTooltip {
     #[event_target]
-    pub(crate) source: Entity,
+    pub source: Entity,
+    revision: u64,
 }
 
-#[derive(EntityEvent)]
-pub(crate) struct HideTooltip {
+impl ShowTooltip {
+    pub fn is_current(&self, world: &World) -> bool {
+        world.get::<WidgetryTooltipHeadless>(self.source).is_some()
+            && world
+                .get_resource::<TooltipState>()
+                .is_some_and(|state| state.current == Some(*self))
+    }
+
+    pub fn popup(&self, world: &World) -> Option<Entity> {
+        world
+            .get_resource::<TooltipState>()?
+            .popup
+            .filter(|(show, popup)| show == self && world.get_entity(*popup).is_ok())
+            .map(|(_, popup)| popup)
+    }
+
+    pub fn register_popup(
+        &self,
+        world: &mut World,
+        popup: Entity,
+    ) -> Result<bool, crate::TooltipFailure> {
+        if popup == self.source || world.get_entity(popup).is_err() {
+            return Err(crate::error::failure(
+                crate::TooltipError::InvalidPopup {
+                    anchor: self.source,
+                    popup,
+                },
+                bevy_widgetry_diagnostics::ErrorFrame::new("tooltip.register_popup"),
+            ));
+        }
+        if world.get::<TooltipPopupOwner>(popup).is_some() {
+            return Ok(false);
+        }
+        if !self.is_current(world) || self.popup(world).is_some() {
+            world.despawn(popup);
+            return Ok(false);
+        }
+        let previous = world
+            .resource_mut::<TooltipState>()
+            .popup
+            .replace((*self, popup));
+        if let Some((_, old)) = previous
+            && world.get_entity(old).is_ok()
+        {
+            world.despawn(old);
+        }
+        world
+            .entity_mut(popup)
+            .insert((TooltipPopupOwner(*self), Pickable::IGNORE));
+        Ok(true)
+    }
+}
+
+#[derive(Component)]
+pub struct TooltipPopupOwner(ShowTooltip);
+
+impl TooltipPopupOwner {
+    pub fn source(&self) -> Entity {
+        self.0.source
+    }
+    pub fn presentation(&self) -> ShowTooltip {
+        self.0
+    }
+}
+
+#[derive(EntityEvent, Clone, Copy, Debug)]
+pub struct HideTooltip {
     #[event_target]
-    pub(crate) source: Entity,
+    pub source: Entity,
+    revision: u64,
+}
+
+impl HideTooltip {
+    pub fn presentation(&self) -> ShowTooltip {
+        ShowTooltip {
+            source: self.source,
+            revision: self.revision,
+        }
+    }
+}
+
+fn hide_popup(event: On<HideTooltip>, mut commands: Commands) {
+    let event = *event;
+    commands.queue(move |world: &mut World| {
+        let show = event.presentation();
+        let mut state = world.resource_mut::<TooltipState>();
+        if state.current == Some(show) {
+            state.current = None;
+        }
+        let popup = if state.popup.is_some_and(|(owner, _)| owner == show) {
+            state.popup.take().map(|(_, popup)| popup)
+        } else {
+            None
+        };
+        if let Some(popup) = popup
+            && world.get_entity(popup).is_ok()
+        {
+            world.despawn(popup);
+        }
+    });
+}
+
+#[cfg(test)]
+pub(crate) fn trigger_show(world: &mut World, source: Entity) {
+    let mut state = world.resource_mut::<TooltipState>();
+    let event = match state.current.filter(|show| show.source == source) {
+        Some(event) => event,
+        None => state.begin(source),
+    };
+    world.trigger(event);
+}
+
+#[cfg(test)]
+pub(crate) fn trigger_hide(world: &mut World, source: Entity) {
+    let revision = world
+        .resource::<TooltipState>()
+        .current
+        .filter(|show| show.source == source)
+        .map_or(0, |show| show.revision);
+    world.trigger(HideTooltip { source, revision });
+}
+
+fn ignore_popup_descendants(
+    added: Query<(Entity, &ChildOf), Added<ChildOf>>,
+    parents: Query<&ChildOf>,
+    popups: Query<(), With<TooltipPopupOwner>>,
+    mut commands: Commands,
+) {
+    for (entity, parent) in &added {
+        if popups.contains(parent.parent())
+            || parents
+                .iter_ancestors(parent.parent())
+                .any(|ancestor| popups.contains(ancestor))
+        {
+            commands.entity(entity).insert(Pickable::IGNORE);
+        }
+    }
 }
 
 fn resolve_anchor(
     pointer: PointerId,
     hover_map: &HoverMap,
     parents: &Query<&ChildOf>,
-    tooltips: &Query<(), With<Tooltip>>,
+    tooltips: &Query<(), With<WidgetryTooltipHeadless>>,
 ) -> Option<Entity> {
     let hovered = hover_map.get(&pointer)?;
     let target = hovered
@@ -104,7 +269,7 @@ fn update_tooltip(
     hover_map: Res<HoverMap>,
     pointers: WidgetryPointerQuery,
     parents: Query<&ChildOf>,
-    tooltips: Query<(), With<Tooltip>>,
+    tooltips: Query<(), With<WidgetryTooltipHeadless>>,
     mut pointer_inputs: MessageReader<PointerInput>,
     mut state: ResMut<TooltipState>,
     mut redraw: MessageWriter<RequestRedraw>,
@@ -175,7 +340,7 @@ fn update_tooltip(
     if let Some(visible) = state.visible
         && resolved != Some(visible)
     {
-        commands.trigger(HideTooltip { source: visible });
+        state.hide(&mut commands);
         state.visible = None;
         state.cooldown_remaining = COOLDOWN;
         state.candidate = resolved;
@@ -217,7 +382,8 @@ fn update_tooltip(
 
     state.show_elapsed += real_time.delta();
     if state.show_elapsed >= state.show_delay {
-        commands.trigger(ShowTooltip { source: candidate });
+        let event = state.begin(candidate);
+        commands.trigger(event);
         state.visible = Some(candidate);
         state.show_elapsed = Duration::ZERO;
     } else {
@@ -226,7 +392,7 @@ fn update_tooltip(
 }
 
 fn tooltip_removed(
-    event: On<Remove<Tooltip>>,
+    event: On<Remove<WidgetryTooltipHeadless>>,
     mut state: ResMut<TooltipState>,
     mut commands: Commands,
 ) {
@@ -235,20 +401,28 @@ fn tooltip_removed(
         state.candidate = None;
         state.show_elapsed = Duration::ZERO;
     }
-    if state.visible == Some(anchor) {
+    if state.visible == Some(anchor) || state.current.is_some_and(|show| show.source == anchor) {
         state.visible = None;
         state.cooldown_remaining = COOLDOWN;
-        commands.trigger(HideTooltip { source: anchor });
+        state.hide(&mut commands);
     }
 }
 
-impl Plugin for TooltipPlugin {
+impl Plugin for WidgetryTooltipHeadlessPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_core::pointer::WidgetryPointerPlugin>() {
+            app.add_plugins(bevy_widgetry_core::pointer::WidgetryPointerPlugin);
+        }
         app.init_resource::<TooltipState>()
             .add_message::<RequestRedraw>()
             .add_observer(tooltip_removed)
+            .add_observer(hide_popup)
+            .add_systems(
+                PreUpdate,
+                ignore_popup_descendants.before(PickingSystems::Backend),
+            )
             .add_systems(PreUpdate, update_tooltip.in_set(PickingSystems::PostHover));
-        widgetry_debug!("TooltipPlugin 注册完成");
+        widgetry_debug!("WidgetryTooltipHeadlessPlugin 注册完成");
     }
 }
 
@@ -290,7 +464,7 @@ mod tests {
             .init_resource::<HoverMap>()
             .init_resource::<Events>()
             .add_message::<PointerInput>()
-            .add_plugins(TooltipPlugin)
+            .add_plugins(WidgetryTooltipHeadlessPlugin)
             .add_observer(record_show)
             .add_observer(record_hide);
         app.world_mut().spawn((
@@ -328,7 +502,7 @@ mod tests {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             for descendant in [false, true] {
                 let mut app = test_app(id);
-                let anchor = app.world_mut().spawn(Tooltip).id();
+                let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
                 let target = if descendant {
                     let child = app.world_mut().spawn_empty().id();
                     app.world_mut().entity_mut(anchor).add_child(child);
@@ -350,7 +524,7 @@ mod tests {
     fn waiting_candidate_requests_redraw_until_shown() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
 
             advance(&mut app, Duration::ZERO);
@@ -376,7 +550,7 @@ mod tests {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
             app.world_mut().resource_mut::<Time<Virtual>>().pause();
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
 
             advance(&mut app, Duration::ZERO);
@@ -398,7 +572,7 @@ mod tests {
 
             let disabled = app
                 .world_mut()
-                .spawn((Tooltip, bevy::ui::InteractionDisabled))
+                .spawn((WidgetryTooltipHeadless, bevy::ui::InteractionDisabled))
                 .id();
             hover(&mut app, Some(disabled));
             advance(&mut app, Duration::ZERO);
@@ -411,7 +585,7 @@ mod tests {
     fn pointer_movement_resets_show_timer() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
             advance(&mut app, Duration::from_millis(150));
@@ -448,10 +622,10 @@ mod tests {
     fn visible_anchor_stays_open_and_switches_warm() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let a = app.world_mut().spawn(Tooltip).id();
+            let a = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             let a_child = app.world_mut().spawn_empty().id();
             app.world_mut().entity_mut(a).add_child(a_child);
-            let b = app.world_mut().spawn(Tooltip).id();
+            let b = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(a));
             advance(&mut app, Duration::ZERO);
             advance(&mut app, COLD_WARMUP);
@@ -474,8 +648,8 @@ mod tests {
     fn cooldown_expires_back_to_cold_delay() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let a = app.world_mut().spawn(Tooltip).id();
-            let b = app.world_mut().spawn(Tooltip).id();
+            let a = app.world_mut().spawn(WidgetryTooltipHeadless).id();
+            let b = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(a));
             advance(&mut app, Duration::ZERO);
             advance(&mut app, COLD_WARMUP);
@@ -503,8 +677,8 @@ mod tests {
     fn candidate_entering_near_cooldown_end_keeps_warm_delay() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let a = app.world_mut().spawn(Tooltip).id();
-            let b = app.world_mut().spawn(Tooltip).id();
+            let a = app.world_mut().spawn(WidgetryTooltipHeadless).id();
+            let b = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(a));
             advance(&mut app, Duration::ZERO);
             advance(&mut app, COLD_WARMUP);
@@ -526,11 +700,13 @@ mod tests {
     fn removing_visible_tooltip_hides_it() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
             advance(&mut app, COLD_WARMUP);
-            app.world_mut().entity_mut(anchor).remove::<Tooltip>();
+            app.world_mut()
+                .entity_mut(anchor)
+                .remove::<WidgetryTooltipHeadless>();
             app.world_mut().flush();
             assert_eq!(app.world().resource::<Events>().hidden, vec![anchor]);
             assert!(app.world().resource::<TooltipState>().visible.is_none());
@@ -540,7 +716,7 @@ mod tests {
     fn destroyed_candidate_is_cleared() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
             app.world_mut().despawn(anchor);
@@ -555,8 +731,8 @@ mod tests {
     fn front_hit_owns_tooltip_resolution() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let front = app.world_mut().spawn(Tooltip).id();
-            let back = app.world_mut().spawn(Tooltip).id();
+            let front = app.world_mut().spawn(WidgetryTooltipHeadless).id();
+            let back = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             let blocker = app.world_mut().spawn_empty().id();
             for (target, expected) in [(blocker, None), (front, Some(front))] {
                 let mut hits = EntityHashMap::default();
@@ -577,7 +753,7 @@ mod tests {
     fn unregistered_pointer_input_does_not_reset_candidate() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
             advance(&mut app, Duration::from_millis(150));
@@ -600,7 +776,7 @@ mod tests {
     fn valid_hover_and_pointer_despawn_close_the_owned_tooltip() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
             advance(&mut app, COLD_WARMUP);
@@ -658,7 +834,7 @@ mod tests {
                             .normalize(None)
                             .unwrap();
                 }
-                let anchor = app.world_mut().spawn(Tooltip).id();
+                let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
                 hover(&mut app, Some(anchor));
                 advance(&mut app, Duration::ZERO);
                 advance(&mut app, COLD_WARMUP);
@@ -703,8 +879,8 @@ mod tests {
         let pointer = pointer_entity(&mut app, mouse);
         let location = app.world().get::<PointerLocation>(pointer).unwrap().clone();
         app.world_mut().spawn((custom, location));
-        let a = app.world_mut().spawn(Tooltip).id();
-        let b = app.world_mut().spawn(Tooltip).id();
+        let a = app.world_mut().spawn(WidgetryTooltipHeadless).id();
+        let b = app.world_mut().spawn(WidgetryTooltipHeadless).id();
         hover(&mut app, Some(a));
         let mut hits = EntityHashMap::default();
         hits.insert(b, HitData::new(Entity::PLACEHOLDER, 0.0, None, None));
@@ -772,7 +948,7 @@ mod tests {
                 .as_mut()
                 .unwrap()
                 .target = targets[0].clone();
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
             advance(&mut app, Duration::from_millis(190));
@@ -795,7 +971,7 @@ mod tests {
         let pointer = pointer_entity(&mut app, mouse);
         let location = app.world().get::<PointerLocation>(pointer).unwrap().clone();
         app.world_mut().spawn((custom, location));
-        let anchor = app.world_mut().spawn(Tooltip).id();
+        let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
         hover(&mut app, Some(anchor));
         advance(&mut app, Duration::ZERO);
         advance(&mut app, Duration::from_millis(190));
@@ -814,7 +990,7 @@ mod tests {
     fn cancel_before_owner_acquisition_blocks_static_fallback() {
         for id in bevy_widgetry_test_utils::pointer_ids() {
             let mut app = test_app(id);
-            let anchor = app.world_mut().spawn(Tooltip).id();
+            let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             activity(&mut app, id, PointerAction::Cancel);
             advance(&mut app, Duration::ZERO);

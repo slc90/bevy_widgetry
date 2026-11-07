@@ -5,6 +5,10 @@ mod error;
 mod headless;
 mod style;
 pub use error::{TooltipError, TooltipFailure};
+pub use headless::{
+    HideTooltip, ShowTooltip, TooltipPopupOwner, WidgetryTooltipHeadless,
+    WidgetryTooltipHeadlessPlugin,
+};
 
 pub use style::{
     TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,

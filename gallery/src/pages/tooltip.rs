@@ -12,9 +12,11 @@ use bevy_widgetry::{
 };
 
 pub(crate) struct TooltipDemoPlugin;
+mod bubble;
 
 impl Plugin for TooltipDemoPlugin {
     fn build(&self, app: &mut App) {
+        bubble::install(app);
         app.add_systems(OnEnter(GalleryPage::Tooltip), enter)
             .add_systems(OnExit(GalleryPage::Tooltip), exit);
     }
@@ -48,6 +50,7 @@ pub(crate) fn scene() -> impl Scene {
                 Children [@localized(TextKey::Tooltip(TooltipKey::RichContent)) bevy_widgetry::text::WidgetryText-- @rich_button()]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @disabled_button()]--
+            @bubble::scene()--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8), flex_grow: 1.0, min_height: px(0) }
                 Children [@localized(TextKey::Tooltip(TooltipKey::Placement)) bevy_widgetry::text::WidgetryText-- @placement_area()]
         ]

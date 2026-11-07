@@ -37,6 +37,7 @@
 ## Coverage Map
 
 - `tooltip.rs`：公开 Scene、Hover / Timer、Factory、Popup Lifecycle、Theme 和真实内容准备。
+- `independent.rs`：不经默认字体或 UI Plugin 安装纯 Headless，无 Factory/默认 Style；保护异位 Popup 归属、持续悬停单次 Show、Anchor Despawn / 能力移除、重复与过期登记/Hide、排队构造前失效、Scene 失败清理、原生 WindowFocused 消息转换的 Cancel / Hide，以及安装默认 Plugin 时不接管自定义实例。
 - 源码 `headless.rs`、`style.rs` 局部测试负责精确计时、前景命中与私有 Guard。
 - `style.rs` 局部测试另保护构造完成时立即采用 Anchor 覆盖色、稳定显示零重复配色、无关 Anchor 更新及 Popup 重新绑定；`tooltip.rs` 验证可见覆盖 / 清除 / Theme 与富 Text/Icon 前景同步，颜色变化不重建内容。
 

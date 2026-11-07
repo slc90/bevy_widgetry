@@ -7,6 +7,10 @@ pub type TooltipFailure = WidgetryFailure<TooltipError>;
 
 #[derive(Debug)]
 pub enum TooltipError {
+    InvalidPopup {
+        anchor: Entity,
+        popup: Entity,
+    },
     MissingContent {
         anchor: Entity,
     },
@@ -33,6 +37,7 @@ pub enum TooltipError {
 impl fmt::Display for TooltipError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidPopup { .. } => f.write_str("Tooltip popup 不存在或与 anchor 相同"),
             Self::MissingContent { .. } => f.write_str("Tooltip 构造必须提供 content"),
             Self::InvalidTarget { .. } => f.write_str("Tooltip 颜色目标不存在或类型不匹配"),
             Self::MissingColorState { .. } => f.write_str("Tooltip 缺失颜色配置"),

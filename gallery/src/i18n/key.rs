@@ -467,6 +467,9 @@ pub(crate) enum TextFieldKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TooltipKey {
+    CustomBubble,
+    HoverBubble,
+    BubbleContent,
     BasicTooltip,
     Bottom,
     Center,

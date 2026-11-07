@@ -8,6 +8,16 @@
 
 Tooltip 锚点由当前有效 Pointer Hover 及 Hierarchy 解析；Content Factory 在实际显示时构造新的 BSN 内容。一个 App 同时只有一个显示中的 Tooltip，先后 Hover 的过渡使用 Cold / Warm 计时。
 
+`WidgetryTooltipHeadless` / `WidgetryTooltipHeadlessPlugin` 独立提供同一 Hover、延迟与全局单实例协调，不要求默认 Content Factory、Popover 或配色。默认 `WidgetryTooltip` 使用同一行为；默认显示 Observer 只处理默认实例。
+
+独立 Plugin 确保安装 Core Pointer 能力，保留原生 WindowFocused 失焦到 Cancel 的转换；无需依赖其他 Widgetry 控件间接安装。
+
+`ShowTooltip` 是本轮展示请求，包含 Anchor `source` 与不可自行构造的展示身份，不表示 UI 已创建。外部 Style 在排队操作实际执行时先检查 `is_current(world)` 和 `popup(world)`，再以 BSN 构造自有内容；成功后调用 `register_popup(world, popup)` 登记根。登记不构造 UI，不限制根的 Parent 或定位方式。根必须是本次新建、只拥有该提示内容的 Entity，不得登记 Anchor 或承载其他界面的容器。构造失败由 Scene 调用方清理根并传播错误。
+
+登记成功返回 `true`。重复登记已拥有展示身份的根返回 `false`，保留该根；重复或过期请求登记另一份未拥有身份的新根时返回 `false` 并清理新根。不存在的根及 Anchor 自身返回 `TooltipError::InvalidPopup`。`TooltipPopupOwner` 提供只读 `source()` / `presentation()`，由登记 API 管理，不直接移除或替换该 Component。根及后代在首次实际 Picking 前设置 IGNORE。
+
+`HideTooltip::presentation()` 与对应 Show 身份相同。库使用全局归属清理登记的根和 Children，Anchor Despawn、移除 Headless、离开或输入源失效均适用，不依赖 Anchor 的直接 Children 或局部 Observer。重放过期 Hide 不影响较新的展示。外部 Style 无须复制 Hover 状态机或自行清理已登记的根；其他非 Entity 资源可以通过公开 Hide 事件及其展示身份释放。
+
 Popup 构造时直接采用 Anchor 当前有效的 Theme / 覆盖配色；后续仅在新建、Anchor 绑定或覆盖色变化、主题更新及必要颜色输出重新加入时同步 Background / Border / Foreground。稳定显示不重复解析相同配色，新增富内容仍通过既有前景传播获得颜色。配色更新不重建内容，也不跳过 Hover 检测或真实时间推进。
 
 ## 主要功能
@@ -24,7 +34,7 @@ Popup 构造时直接采用 Anchor 当前有效的 Theme / 覆盖配色；后续
 
 ## 边界情况与错误处理
 
-构造必须提供 Content Factory。Scene 初始化和运行期 Factory 构造缺失内容均返回 `TooltipError::MissingContent`，保留 Anchor；不同无效请求各自创建诊断。颜色 API 返回 `TooltipFailure`，区分失效目标、缺失配置、托管拒绝，并在 Core 颜色错误上保留原 source / origin 及字段上下文。
+默认 Style 构造必须提供 Content Factory；纯 Headless 不需要。默认 Scene 初始化和运行期 Factory 构造缺失内容均返回 `TooltipError::MissingContent`，保留 Anchor；不同无效请求各自创建诊断。颜色 API 返回 `TooltipFailure`，区分失效目标、缺失配置、托管拒绝，并在 Core 颜色错误上保留原 source / origin 及字段上下文。
 
 显示 Popup 时追加 Anchor / Popup 身份；嵌套内容 Scene 失败保留原诊断、ID、source 和 Backtrace，清理失败 Popup 后通过 `Severity::Error` 交给宿主。既有 Popup 缺失 Anchor 颜色时保留原 Query 错误，每个 Popup 独立保存持续异常身份；多 Popup 失败批量传播到宿主，持续失败不重新捕栈或重复源头 ERROR，恢复时记录一次 INFO。纯传播不产生 handled DEBUG。
 
