@@ -415,9 +415,7 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
         if let Some(place) = state.locations().iter().find(|place| place.name == name) {
             let label = place.name.clone();
             let path = place.path.clone();
-            let accessible_label = label.clone();
             let scene = bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label, font) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()}}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, justify_content: JustifyContent::FlexStart } }) as Box<dyn bevy::prelude::Scene>)}, } Name("FileDialogLocation") template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
-            template(move |_| {let mut node=accesskit::Node::new(accesskit::Role::Button);node.set_label(accessible_label.clone());Ok(bevy::a11y::AccessibilityNode(node))})
             template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(LOCATION_MIN_HEIGHT), flex_shrink: 0.0,border:UiRect::ZERO,padding:UiRect::axes(px(LOCATION_PADDING_X),px(LOCATION_PADDING_Y)),justify_content:JustifyContent::FlexStart,align_items:AlignItems::Center,overflow:Overflow::clip()}
              };
             rows.push(
@@ -670,9 +668,6 @@ pub(crate) fn apply_color(
         if selected && world.get::<InteractionDisabled>(entity).is_none() {
             state.background = colors.entry.selected.background;
             state.foreground = colors.entry.selected.foreground;
-        }
-        if let Some(mut node) = world.get_mut::<bevy::a11y::AccessibilityNode>(entity) {
-            node.0.set_selected(selected);
         }
         bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)
             .map_err(|error| error.into_bevy_error())?;

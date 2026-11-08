@@ -330,14 +330,14 @@ fn sidebar_projects_only_available_backend_places_in_fixed_order() {
         ("Desktop", "Z:/custom-desktop"),
         ("Downloads", "Z:/custom-downloads"),
     ]) {
-        assert_eq!(
-            app.world()
-                .get::<bevy::a11y::AccessibilityNode>(entity)
-                .unwrap()
-                .0
-                .label(),
-            Some(label)
-        );
+        let labels = app
+            .world_mut()
+            .query::<(Entity, &Text)>()
+            .iter(app.world())
+            .filter(|(child, _)| belongs(app.world(), *child, entity))
+            .map(|(_, text)| text.0.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(labels, [label.to_owned()]);
         app.world_mut()
             .trigger(bevy::ui_widgets::Activate { entity });
         app.world_mut().flush();
@@ -1470,14 +1470,6 @@ fn sidebar_selection_matches_canonical_prefix_and_keeps_original_navigation_path
             app.update();
         }
         let row = named(&mut app, root, "FileDialogLocation");
-        assert_eq!(
-            app.world()
-                .get::<bevy::a11y::AccessibilityNode>(row)
-                .unwrap()
-                .0
-                .is_selected(),
-            Some(selected)
-        );
         if selected {
             let color = bevy_widgetry_theme::WIDGETRY_DARK_THEME
                 .file_dialog

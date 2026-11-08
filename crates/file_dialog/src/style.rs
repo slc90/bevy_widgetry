@@ -224,11 +224,6 @@ fn control_scene(
     (
         bsn! {
             @WidgetryButton { @children: {Some(Box::new(bsn_list! {{icon}-- {text}}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name)
-            template(move |_| {
-                let mut node = accesskit::Node::new(accesskit::Role::Button);
-                node.set_label(label);
-                Ok(bevy::a11y::AccessibilityNode(node))
-            })
             template(move |_| Ok(Control {root, action: action.clone()}))
             template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
             Node {height:px(CONTROL_HEIGHT),min_width:px(if navigation {NAVIGATION_BUTTON_WIDTH} else {ACTION_BUTTON_MIN_WIDTH}),flex_shrink:0.0,padding:UiRect::axes(px(CONTROL_PADDING_X),px(CONTROL_PADDING_Y)),align_items:AlignItems::Center,justify_content:JustifyContent::Center}
@@ -255,11 +250,6 @@ pub(crate) fn editor_scene(
         template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryTextField>::new(root)))
         template(move |_| Ok(Part {root, kind}))
         template(move |_| Ok(bevy_widgetry_window::WidgetryWindowInitialFocus(if kind == PartKind::Filename {0} else {i32::MAX})))
-        template(move |_| {
-            let mut node = accesskit::Node::new(accesskit::Role::TextInput);
-            node.set_label(match kind {PartKind::Path => "Path", PartKind::Search => "Search", PartKind::Filename => "Filename", _ => "New folder name"});
-            Ok(bevy::a11y::AccessibilityNode(node))
-        })
         Node { min_width: px(0), flex_grow: 1.0, height: px(CONTROL_HEIGHT) }
     }
 }
