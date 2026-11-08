@@ -1885,7 +1885,6 @@ dependencies = [
 name = "bevy_widgetry_button"
 version = "0.1.0"
 dependencies = [
- "accesskit",
  "bevy",
  "bevy_widgetry_asset",
  "bevy_widgetry_core",

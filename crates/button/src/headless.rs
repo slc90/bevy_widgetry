@@ -1,5 +1,4 @@
 use bevy::{
-    a11y::AccessibilityNode,
     input::{ButtonState, keyboard::KeyboardInput},
     input_focus::{FocusedInput, tab_navigation::TabIndex},
     picking::{
@@ -18,7 +17,7 @@ use bevy::{
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 
 #[derive(SceneComponent, Default, Clone)]
-#[require(Node, Hovered, TabIndex(-1), AccessibilityNode(accesskit::Node::new(accesskit::Role::Button)))]
+#[require(Node, Hovered, TabIndex(-1))]
 pub struct WidgetryButtonHeadless;
 
 #[derive(Component)]

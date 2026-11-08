@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-普通 Button 通过 `WidgetryButtonHeadless` 提供官方 `Activate` 事件、主键输入、键盘输入和无障碍 Button 角色，默认 `WidgetryButton` 组合此能力与外观。`WidgetryOpenUrl` 在同根复用 Headless 输入并持有 URL，默认 LinkButton 组合 OpenUrl 与链接 Style。普通 Button 的内容、尺寸与布局由调用方提供；LinkButton 自行维护 URL 文字，调用方可设置根 Node 的布局。
+普通 Button 通过 `WidgetryButtonHeadless` 提供官方 `Activate` 事件、主键输入和键盘输入，默认 `WidgetryButton` 组合此能力与外观。`WidgetryOpenUrl` 在同根复用 Headless 输入并持有 URL，默认 LinkButton 组合 OpenUrl 与链接 Style。普通 Button 的内容、尺寸与布局由调用方提供；LinkButton 自行维护 URL 文字，调用方可设置根 Node 的布局。
 
 ## 主要功能
 

@@ -92,13 +92,6 @@ fn public_headless_uses_real_primary_input_focus_and_disabled_without_visuals() 
             .0,
         -1
     );
-    assert_eq!(
-        app.world()
-            .get::<bevy::a11y::AccessibilityNode>(root)
-            .unwrap()
-            .role(),
-        accesskit::Role::Button
-    );
     let location = |position| Location {
         target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
             .normalize(None)
