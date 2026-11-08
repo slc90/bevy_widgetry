@@ -1,7 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
-use bevy::a11y::AccessibilityNode;
 use bevy::ecs::world::CommandQueue;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
@@ -14,7 +13,7 @@ use bevy::picking::pointer::{PointerAction, PointerInput};
 use bevy::prelude::*;
 use bevy::ui::Selectable;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
-use bevy::ui_widgets::{ActiveDescendant, ListBox, ListItem, ScrollArea};
+use bevy::ui_widgets::{ListBox, ListItem, ScrollArea};
 use bevy::window::PrimaryWindow;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
@@ -303,7 +302,7 @@ fn wheel(app: &mut App, target: Entity) {
 }
 
 #[test]
-fn descendant_click_selects_stable_id_once_and_projects_focus() {
+fn descendant_click_selects_stable_id_once_and_focuses_root() {
     let (mut app, source, root, _) = fixture();
     let target = row(&mut app, 1);
     let child = app.world().get::<Children>(target).unwrap()[0];
@@ -324,10 +323,6 @@ fn descendant_click_selects_stable_id_once_and_projects_focus() {
     );
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
     assert!(app.world().get::<Selected>(target).is_some());
-    assert_eq!(
-        app.world().get::<ActiveDescendant>(root).unwrap().0,
-        Some(target)
-    );
     assert_eq!(
         app.world().resource::<Changes>().0,
         vec![(root, Some(id), true)]
@@ -365,7 +360,6 @@ fn disabled_click_and_offscreen_focus_keep_logical_state() {
             .active,
         None
     );
-    assert_eq!(app.world().get::<ActiveDescendant>(root).unwrap().0, None);
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
@@ -391,7 +385,6 @@ fn disabled_click_and_offscreen_focus_keep_logical_state() {
         .y = 70.0;
     app.update();
     assert_eq!(list_snapshot(app.world(), root), state);
-    assert_eq!(app.world().get::<ActiveDescendant>(root).unwrap().0, None);
     app.world_mut()
         .get_mut::<ScrollPosition>(viewport)
         .unwrap()
@@ -400,22 +393,14 @@ fn disabled_click_and_offscreen_focus_keep_logical_state() {
     app.update();
     let restored = row(&mut app, 1);
     assert!(app.world().get::<InteractionDisabled>(restored).is_some());
-    assert_eq!(
-        app.world().get::<ActiveDescendant>(root).unwrap().0,
-        Some(restored)
-    );
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
-    assert_eq!(app.world().get::<ActiveDescendant>(root).unwrap().0, None);
     assert_eq!(list_snapshot(app.world(), root), state);
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
     app.update();
-    assert_eq!(
-        app.world().get::<ActiveDescendant>(root).unwrap().0,
-        Some(restored)
-    );
+    assert_eq!(list_snapshot(app.world(), root), state);
 }
 
 #[test]
@@ -628,7 +613,6 @@ fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
             .active,
         active
     );
-    assert_eq!(app.world().get::<ActiveDescendant>(root).unwrap().0, None);
     press_key(&mut app, window, KeyCode::PageUp);
     assert_eq!(
         app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
@@ -763,22 +747,14 @@ fn pressed_lifecycle_cleans_up_without_leaking_to_replaced_entries() {
 }
 
 #[test]
-fn accessibility_and_descendant_control_propagation_are_independent() {
+fn descendant_controls_can_stop_selection_propagation() {
     let (mut app, _, root, _) = fixture();
     assert!(app.world().get::<ListBox>(root).is_none());
-    assert_eq!(
-        app.world().get::<AccessibilityNode>(root).unwrap().role(),
-        accesskit::Role::ListBox
-    );
     assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, -1);
     let target = row(&mut app, 0);
     assert!(app.world().get::<ListItem>(target).is_some());
     assert!(app.world().get::<Selectable>(target).is_some());
     assert!(app.world().get::<TabIndex>(target).is_none());
-    assert_eq!(
-        app.world().get::<AccessibilityNode>(target).unwrap().role(),
-        accesskit::Role::ListItem
-    );
     let child = app.world().get::<Children>(target).unwrap()[0];
     app.world_mut()
         .entity_mut(child)
@@ -932,13 +908,6 @@ fn assert_projection(
             model.id(index) == selected
         );
     }
-    let projected = active
-        .filter(|_| app.world().resource::<InputFocus>().get() == Some(root))
-        .map(|id| scoped_row(app, root, model.index_of(id).unwrap()));
-    assert_eq!(
-        app.world().get::<ActiveDescendant>(root).unwrap().0,
-        projected
-    );
 }
 
 #[test]

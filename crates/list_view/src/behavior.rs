@@ -18,7 +18,6 @@ use bevy::picking::events::{
 use bevy::picking::pointer::{PointerAction, PointerButton, PointerId, PointerInput};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
-use bevy::ui_widgets::ActiveDescendant;
 use bevy_widgetry_core::disabled::{WidgetryEffectiveDisabled, set_intrinsic_disabled};
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
@@ -413,9 +412,6 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
 ) -> Result<(), bevy_widgetry_core::diagnostics::CoreFailure> {
-    let Some(state) = world.get::<WidgetryListViewState<K>>(root).copied() else {
-        return Ok(());
-    };
     let Some(view) = world.get::<WidgetryListView<T, K>>(root) else {
         return Ok(());
     };
@@ -427,8 +423,6 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(
     let Some(runtime) = world.get::<ListRuntime>(root).cloned() else {
         return Ok(());
     };
-    let focused = is_focused(world, root);
-    let mut active = None;
     for row in runtime.rows {
         let Some(item) = world.get::<WidgetryListViewItem<K>>(row).copied() else {
             continue;
@@ -440,9 +434,6 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(
             } else {
                 world.entity_mut(row).remove::<Selected>();
             }
-        }
-        if focused && state.active == Some(item.id) {
-            active = Some(row);
         }
         let intrinsic = world
             .get_resource::<DataSource<T, K>>()
@@ -462,12 +453,6 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(
         {
             world.entity_mut(row).remove::<(Pressed, PressedEntry<K>)>();
         }
-    }
-    if world
-        .get::<ActiveDescendant>(root)
-        .is_none_or(|previous| previous.0 != active)
-    {
-        world.entity_mut(root).insert(ActiveDescendant(active));
     }
     Ok(())
 }

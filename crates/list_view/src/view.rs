@@ -9,10 +9,8 @@ use crate::{
     ListConfigurationRejection, ListError, ListFailure, ListSourceRejection,
     error::{failure, invalid_source, invalid_view},
 };
-use bevy::a11y::AccessibilityNode;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
-use bevy::ui_widgets::ActiveDescendant;
 use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{FailureState, WidgetryEcsError},
@@ -346,8 +344,6 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
                 },
             }
             TabIndex(-1)
-            ActiveDescendant::default()
-            template(|_| Ok(AccessibilityNode(accesskit::Node::new(accesskit::Role::ListBox))))
             BorderColor::default()
             Node {
                 min_width: px(0), min_height: px(0), border: UiRect::all(px(1)),
