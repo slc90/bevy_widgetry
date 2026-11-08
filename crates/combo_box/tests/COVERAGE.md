@@ -59,7 +59,7 @@
 
 私有单元回归保护稳定帧零归属发现、单实例 Owner 修复、独立构造后延后挂接、Popup 换父级、ListView 重建、Root / 部件标记移除、多 T 隔离和销毁清理；计数不进入公共 API。样式单元回归同时保护稳定帧零整套颜色解析 / 应用、单 Field 变化只更新其所属实例、Hovered / Pressed 移除、局部与根 Disabled 添加 / 移除、跨 T 的 Override 隔离、真正 Owner palette 的保留与解除托管、箭头替换及必需输出失败传播与修复后重试。`bsn_combo_box.rs` 继续保护首次颜色消费前的归属与托管部件拒绝公开覆盖写入。
 
-Field 私有单元回归保护 Field / Icon 持续结构故障的重复观察、真实修复后一次恢复 INFO、再次故障新 ID，以及无虚假 handled DEBUG。直接返回错误的 System 在单线程测试 Schedule 中进入真实宿主 Handler。稳定配色工作量测试等待 Icon 实际 Image 就绪并消费结构变化后再计数，避免把异步素材构造混入 idle。
+Field 私有单元回归保护 Field / Icon 持续结构故障的重复观察、真实修复后一次恢复 INFO、再次故障新 ID，以及无虚假 handled DEBUG。直接返回错误的 System 在单线程测试 Schedule 中进入真实宿主 Handler。稳定帧及单实例输入的配色工作量测试共用就绪等待：Icon 实际 Image 加载完成并消费结构变化后才清空计数、施加刺激，避免把异步素材构造混入 idle 或局部输入。
 
 `benches/owners.rs` 使用真实 Headless UI / Layout，固定 10 / 100 / 1000 个 ComboBox、每 Model 100 条数据，测 idle、仅一个实例丢失 Owner 后的修复、单 Field Hover 交替及单 Popup 的 0 / 64px 往返滚动；滚动时固定 8 个可见行，其余实例保持关闭。每次验证所有 Field / List 的归属与 Field 颜色，滚动时核对复用行 Index 和实际 Background / Text Foreground，以及实体数量稳定。该结果不代表原生 Present 或 60 FPS 验收。
 

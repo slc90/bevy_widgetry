@@ -747,17 +747,16 @@ mod tests {
         );
     }
 
-    #[test]
-    fn stable_combos_do_not_resolve_or_apply_colors() {
-        let (mut app, _, _) = fixture(2);
+    fn settle_indicator_images(app: &mut App) {
         let icons = app
             .world_mut()
             .query_filtered::<Entity, With<ComboBoxDropdownIcon>>()
             .iter(app.world())
             .collect::<Vec<_>>();
-        // Icon materialization changes Children asynchronously; measure idle after those changes are consumed.
+        // Icon materialization changes Children asynchronously.
+        // Consume those changes before counting color work.
         bevy_widgetry_test_utils::advance_until(
-            &mut app,
+            app,
             ASYNC_WAIT_TIMEOUT,
             "ComboBox indicator images",
             |world| {
@@ -774,6 +773,12 @@ mod tests {
         )
         .unwrap();
         app.update();
+    }
+
+    #[test]
+    fn stable_combos_do_not_resolve_or_apply_colors() {
+        let (mut app, _, _) = fixture(2);
+        settle_indicator_images(&mut app);
         app.world_mut().resource_mut::<StyleWork>().resolved.clear();
         app.world_mut().resource_mut::<StyleWork>().applied.clear();
         for _ in 0..3 {
@@ -801,6 +806,7 @@ mod tests {
     #[test]
     fn field_inputs_only_repaint_the_affected_combo() {
         let (mut app, _, roots) = fixture(3);
+        settle_indicator_images(&mut app);
         let (field, popup, _) = parts(app.world(), roots[1]);
         let colors = bevy_widgetry_theme::WIDGETRY_DARK_THEME.combo_box;
         clear_style_work(&mut app);
