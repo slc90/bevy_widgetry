@@ -43,6 +43,8 @@ Row / Column Stable ID 仅在所属 Model 内有效；移动保持身份，删�
 
 `WidgetryTableCellEditor<V>::new(mode, scene, read)` 用强类型初值生成 BSN SceneList，读取函数从编辑器根实体返回 `Result<V, WidgetryTableEditorReadError>`。`Rejected(String)` 表示正常解析 / 业务拒绝，保留草稿并显示反馈，不创建 ERROR；`Failed(TableEditFailure)` 表示基础设施失败，交给调用方或宿主，不伪装为验证反馈。`diagnostic(failure)` 可直接承接 TextField 等下层领域诊断，保留源头、ID 和原始回溯；`external(error)` 保留标准外部错误的具体类型与原因链。Table 只补充 View / Source / Cell / Editor / Pending / Request ID / 编辑阶段上下文，不重复记录源头。Renderer 与 Editor 独立。`WidgetryTableEditorAppExt` 注册类型默认 Editor 或绑定 `(Source Entity, ColumnId)` 的列覆盖；列覆盖优先，类型不匹配视为只读。运行时可通过 `WidgetryTableEditorRegistry` 注册或回收 Source 的覆盖项。
 
+进入编辑时按实际 Editor 子树解析输入焦点：优先使用复合控件现有的 `WidgetryInputTarget` 映射，否则查找可用的 `EditableText`；不依赖非负 TabIndex。映射必须有效并属于当前 Editor，隐藏或 Disabled 目标及祖先不可用。无交互目标的 Editor 保留容器焦点兜底。自定义非文本编辑器可声明该既有输入映射；Gallery 的布尔 ComboBox 编辑器显式映射到其 trigger。Table 的 Focused Cell、EditState 与实际 InputFocus 分别维护。
+
 Enter / 双击进入编辑，单行 Enter、多行 Ctrl+Enter 提交。Esc 或编辑器外部的 Pointer Press 取消草稿，原输入继续传给目标；内部含下拉 Children 的输入不取消。脱离 Children 的弹出层可挂 `WidgetryTableEditorPopup { editor }` 标注归属。Editor 内部拥有导航与文本快捷键。
 
 `begin_edit` / `submit_edit` / `cancel_edit` / `resolve_edit` 返回 `TableEditFailure`，对应 `queue_*` 显式转换后交给宿主。自身失败通过 `TableError::Edit` / `TableEditFault` 分类缺失部件、失效 Cell、未物化 Cell、Model 实例变更、初值类型、请求计数耗尽和回执不匹配原因；Editor Scene 失败保留原生 Severity 与 payload。多 View 同帧提交的实际失败全部传播，不因首个读取失败跳过其他 View。`WidgetryTableEditState` 只读查询 Cell、Editor Entity、Pending 和错误。编辑期间正常 Renderer 被替换，并保留至多一个额外 Cell Shell，使二维滚动或 Model Revision 改变时保留草稿及稳定身份；其他 Cell 仍按可见范围虚拟化。

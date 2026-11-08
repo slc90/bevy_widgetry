@@ -2,6 +2,7 @@ const MAX_ACCEPTED_DEMO_NUMBER: u32 = 1000;
 
 use super::*;
 use bevy::ui_widgets::ValueChange;
+use bevy_widgetry::combo_box::WidgetryComboBoxParts;
 use bevy_widgetry::diagnostics::{ErrorFrame, WidgetryFailure};
 use bevy_widgetry::list_view::WidgetryListItemId;
 use bevy_widgetry::table::WidgetryTableEditorReadError;
@@ -174,6 +175,10 @@ pub(super) fn install(app: &mut App) -> Result {
                         }
                         Name("TableBoolEditor") Node { width: percent(100), min_width: px(0) }
                     }).map_err(crate::diagnostics::error)?;
+                    let trigger = context.entity.get::<WidgetryComboBoxParts>()
+                        .map(|parts| parts.trigger)
+                        .ok_or_else(|| crate::diagnostics::error(EditorMappingError { root: source, part: "ComboBoxParts" }))?;
+                    context.entity.insert(bevy_widgetry_core::input_target::WidgetryInputTarget { target: trigger });
                     context.entity.world_scope(|world| WidgetryComboBox::<bool>::select_index(&mut world.commands(), source, selected));
                     Ok(BooleanEditor { value: selected != 0 })
                 })

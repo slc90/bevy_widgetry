@@ -565,24 +565,48 @@ fn focus_editor(world: &mut World, editor: Entity) {
     let mut entities = vec![editor];
     let mut target = editor;
     while let Some(entity) = entities.pop() {
+        if !editor_focus_available(world, entity, editor) {
+            continue;
+        }
+        if let Some(mapping) =
+            world.get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(entity)
+            && editor_focus_available(world, mapping.target, editor)
+        {
+            target = mapping.target;
+            break;
+        }
         if world.get::<bevy::text::EditableText>(entity).is_some() {
             target = entity;
             break;
-        }
-        if target == editor
-            && world
-                .get::<bevy::input_focus::tab_navigation::TabIndex>(entity)
-                .is_some_and(|i| i.0 >= 0)
-        {
-            target = entity;
         }
         if let Some(children) = world.get::<Children>(entity) {
             entities.extend(children.iter().rev());
         }
     }
-    if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
+    if editor_focus_available(world, target, editor)
+        && let Some(mut focus) = world.get_resource_mut::<InputFocus>()
+    {
         focus.set(target, FocusCause::Navigated);
     }
+}
+
+fn editor_focus_available(world: &World, target: Entity, editor: Entity) -> bool {
+    if world.get_entity(target).is_err() || !inside(world, target, editor) {
+        return false;
+    }
+    let mut current = Some(target);
+    while let Some(entity) = current {
+        if world.get::<InteractionDisabled>(entity).is_some()
+            || world.get::<Visibility>(entity) == Some(&Visibility::Hidden)
+            || world
+                .get::<Node>(entity)
+                .is_some_and(|node| node.display == Display::None)
+        {
+            return false;
+        }
+        current = world.get::<ChildOf>(entity).map(ChildOf::parent);
+    }
+    true
 }
 
 fn validate_feedback(
@@ -1098,4 +1122,79 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+    use super::*;
+    use bevy_widgetry_core::input_target::WidgetryInputTarget;
+
+    #[test]
+    fn explicit_input_mapping_precedes_incidental_text_and_rejects_unavailable_targets() {
+        for unavailable in [
+            "none",
+            "disabled",
+            "display",
+            "visibility",
+            "foreign",
+            "destroyed",
+        ] {
+            let mut world = World::new();
+            world.init_resource::<InputFocus>();
+            let editor = world.spawn(Node::default()).id();
+            let mapped = world.spawn((Node::default(), ChildOf(editor))).id();
+            let text = world
+                .spawn((
+                    Node::default(),
+                    bevy::text::EditableText::default(),
+                    ChildOf(editor),
+                ))
+                .id();
+            world
+                .entity_mut(editor)
+                .insert(WidgetryInputTarget { target: mapped });
+            match unavailable {
+                "disabled" => {
+                    world.entity_mut(mapped).insert(InteractionDisabled);
+                }
+                "display" => {
+                    world.get_mut::<Node>(mapped).unwrap().display = Display::None;
+                }
+                "visibility" => {
+                    world.entity_mut(mapped).insert(Visibility::Hidden);
+                }
+                "foreign" => {
+                    world.entity_mut(mapped).remove::<ChildOf>();
+                }
+                "destroyed" => {
+                    world.despawn(mapped);
+                }
+                _ => {}
+            }
+            focus_editor(&mut world, editor);
+            assert_eq!(
+                world.resource::<InputFocus>().get(),
+                Some(if unavailable == "none" { mapped } else { text })
+            );
+        }
+    }
+
+    #[test]
+    fn hidden_or_disabled_editor_branches_do_not_supply_text_focus() {
+        for hidden in [false, true] {
+            let mut world = World::new();
+            world.init_resource::<InputFocus>();
+            let editor = world.spawn(Node::default()).id();
+            let branch = world.spawn((Node::default(), ChildOf(editor))).id();
+            if hidden {
+                world.get_mut::<Node>(branch).unwrap().display = Display::None;
+            } else {
+                world.entity_mut(branch).insert(InteractionDisabled);
+            }
+            world.spawn((bevy::text::EditableText::default(), ChildOf(branch)));
+            focus_editor(&mut world, editor);
+            assert_eq!(world.resource::<InputFocus>().get(), Some(editor));
+        }
+    }
 }

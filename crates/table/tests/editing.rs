@@ -97,6 +97,103 @@ fn editor() -> WidgetryTableCellEditor<String> {
 }
 
 #[test]
+fn mapped_non_text_editor_receives_keys_and_returns_focus_after_submission() {
+    use bevy::input_focus::InputFocus;
+    use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
+    use bevy_widgetry_core::input_target::WidgetryInputTarget;
+    use bevy_widgetry_test_utils::{add_keyboard_dispatch, press_key};
+    let (mut app, source, root, _) = common::fixture(1, 1);
+    app.add_plugins(WidgetryButtonPlugin);
+    add_keyboard_dispatch(&mut app);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), bevy::window::PrimaryWindow))
+        .id();
+    app.init_resource::<Requests>().add_observer(
+        |event: On<WidgetryTableEditRequested>, mut requests: ResMut<Requests>| {
+            requests.0.push(event.clone())
+        },
+    );
+    app.register_table_cell_editor(WidgetryTableCellEditor::new(
+        WidgetryTableEditorMode::SingleLine,
+        |value: &String| {
+            let value = value.clone();
+            bsn_list! {
+                Node WidgetryInputTarget { target: #Trigger }
+                Children [
+                    #Trigger @WidgetryButton template(move |_| Ok(Draft(value.clone())))
+                    on(|event: On<bevy::ui_widgets::Activate>, mut drafts: Query<&mut Draft>| {
+                        drafts.get_mut(event.entity).unwrap().0 = "edited".to_owned();
+                    })
+                ]
+            }
+        },
+        |world, editor| {
+            let composite = world.get::<Children>(editor).unwrap()[0];
+            let trigger = world.get::<Children>(composite).unwrap()[0];
+            Ok(world.get::<Draft>(trigger).unwrap().0.clone())
+        },
+    ));
+    app.world_mut()
+        .entity_mut(root)
+        .insert(WidgetryTableEditing::new(|_, _, _| true));
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let cell = WidgetryTableCell {
+        row: model.row_id(0).unwrap(),
+        column: model.column_id(0).unwrap(),
+    };
+    let table_state = *app.world().get::<WidgetryTableState>(root).unwrap();
+    WidgetryTable::<u32>::begin_edit(app.world_mut(), root, cell).unwrap();
+    let editor = app
+        .world()
+        .get::<WidgetryTableEditState>(root)
+        .unwrap()
+        .editor();
+    let composite = app.world().get::<Children>(editor).unwrap()[0];
+    let trigger = app
+        .world()
+        .get::<WidgetryInputTarget>(composite)
+        .unwrap()
+        .target;
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(trigger));
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableEditState>(root)
+            .unwrap()
+            .cell(),
+        cell
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .focused_cell(),
+        table_state.focused_cell()
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        table_state.selection()
+    );
+    press_key(&mut app, window, KeyCode::Space);
+    assert_eq!(app.world().get::<Draft>(trigger).unwrap().0, "edited");
+    WidgetryTable::<u32>::submit_edit(app.world_mut(), root).unwrap();
+    let request = app.world().resource::<Requests>().0[0].clone();
+    assert_eq!(request.value.downcast_ref::<String>().unwrap(), "edited");
+    WidgetryTable::<u32>::resolve_edit(
+        app.world_mut(),
+        root,
+        request.request_id,
+        WidgetryTableEditResult::Accepted,
+    )
+    .unwrap();
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
+    assert!(!app.world().entities().contains(editor));
+}
+
+#[test]
 fn readonly_cell_resolves_to_external_cursor_and_restores_default_when_editing_is_off() {
     use bevy::picking::pointer::{Location, PointerAction, PointerId};
     use bevy::window::{CursorIcon, SystemCursorIcon};
