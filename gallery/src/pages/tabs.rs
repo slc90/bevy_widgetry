@@ -160,7 +160,7 @@ fn items(orientation: TabsOrientation, prefix: &'static str) -> impl SceneList {
                 @children: bsn_list! {
                     @localized_args(TextKey::Tabs(TabsKey::Page), vec![("index", index.to_string())]) WidgetryText--
                     Name({format!("{prefix}Field{index}")}) @WidgetryTextField
-                    bevy::input_focus::tab_navigation::TabIndex(0) Node { width: px(FIELD_WIDTH), max_width: percent(100) }--
+                    Node { width: px(FIELD_WIDTH), max_width: percent(100) }--
                     Node { height: px(NESTED_DEMO_HEIGHT), width: percent(100), flex_shrink: 0.0 }
                     Children [@localized(TextKey::Tabs(TabsKey::Retained)) WidgetryText]
                 },

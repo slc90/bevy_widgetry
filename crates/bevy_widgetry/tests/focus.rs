@@ -123,6 +123,8 @@ fn plain_node_press_clears_text_focus() {
 
 fn editing_app(combo_first: bool) -> App {
     let mut app = text_edit_app();
+    #[cfg(feature = "window")]
+    app.add_plugins(bevy_widgetry::window::WidgetryWindowPlugin);
     if combo_first {
         app.add_plugins(WidgetryComboBoxPlugin)
             .add_plugins(WidgetryTextFieldPlugin);
@@ -313,4 +315,127 @@ fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
             .unwrap()
             .active,
     }
+}
+
+#[cfg(feature = "window")]
+#[test]
+fn window_composition_keeps_tab_on_the_editor_and_pointer_switches_focus_once() {
+    use bevy::input_focus::FocusGained;
+    use bevy::ui_widgets::Activate;
+    use bevy_widgetry::window::{
+        WidgetryWindowBackground, WidgetryWindowControlsConfig, owned_widgetry_window,
+        widgetry_window_target,
+    };
+    #[derive(Resource, Default)]
+    struct FocusEvents {
+        transitions: Vec<(bool, Entity)>,
+        activations: Vec<Entity>,
+    }
+    let mut app = editing_app(false);
+    app.init_resource::<FocusEvents>();
+    assert!(!app.is_plugin_added::<TabNavigationPlugin>());
+    app.add_observer(|event: On<FocusGained>, mut seen: ResMut<FocusEvents>| {
+        if event.entity == event.original_event_target() {
+            seen.transitions.push((true, event.entity));
+        }
+    });
+    app.add_observer(|event: On<FocusLost>, mut seen: ResMut<FocusEvents>| {
+        if event.entity == event.original_event_target() {
+            seen.transitions.push((false, event.entity));
+        }
+    });
+    app.add_observer(|event: On<Activate>, mut seen: ResMut<FocusEvents>| {
+        seen.activations.push(event.entity);
+    });
+    let root = app.world_mut().spawn_scene(bsn! {
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{}, bsn_list!{
+            @WidgetryTextField Name("CompositionText")--
+            @WidgetryButton Name("CompositionButton")
+        })
+    }).unwrap().id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let window = widgetry_window_target(app.world(), root).unwrap();
+    app.world_mut().entity_mut(window).insert(PrimaryWindow);
+    let named: std::collections::HashMap<_, _> = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .map(|(entity, name)| (name.as_str().to_owned(), entity))
+        .collect();
+    let field = named["CompositionText"];
+    let button = named["CompositionButton"];
+    let editor = input_entity(app.world(), field);
+    assert!(app.world().get::<TabIndex>(field).is_none());
+    assert_eq!(app.world().get::<TabIndex>(button), Some(&TabIndex(-1)));
+    press(&mut app, editor);
+    app.update();
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
+    app.world_mut()
+        .resource_mut::<FocusEvents>()
+        .transitions
+        .clear();
+    for shift in [false, true] {
+        if shift {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::ShiftLeft);
+        }
+        queue_key(
+            &mut app,
+            KeyboardInput {
+                key_code: KeyCode::Tab,
+                logical_key: Key::Tab,
+                state: ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window,
+            },
+        );
+        app.update();
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
+        assert!(app.world().resource::<FocusEvents>().transitions.is_empty());
+    }
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .release(KeyCode::ShiftLeft);
+    queue_key(
+        &mut app,
+        KeyboardInput {
+            key_code: KeyCode::KeyX,
+            logical_key: Key::Character("x".into()),
+            state: ButtonState::Pressed,
+            text: Some("x".into()),
+            repeat: false,
+            window,
+        },
+    );
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(editor)
+            .unwrap()
+            .value()
+            .to_string(),
+        "x"
+    );
+    press(&mut app, button);
+    bevy_widgetry_test_utils::release(&mut app, button);
+    app.update();
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
+    assert_eq!(
+        app.world().resource::<FocusEvents>().transitions,
+        [(false, editor), (true, button)]
+    );
+    bevy_widgetry_test_utils::press_key(&mut app, window, KeyCode::Space);
+    assert_eq!(app.world().resource::<FocusEvents>().activations, [button]);
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(editor)
+            .unwrap()
+            .value()
+            .to_string(),
+        "x"
+    );
 }

@@ -69,3 +69,5 @@
 - `taskbar_icon.rs`：Facade Macro 的调用方 PNG 嵌入和失败路径。
 
 - `plugin_focus.rs`：七个基础 Widget 与 TextField 独立装配时不自动安装 TabNavigationPlugin，仍提供 PointerFocusPlugin 与 InputFocus；不同共享依赖装配顺序不会重新开启导航。
+
+Window/TextField/ComboBox/ListView/Button 聚合焦点回归：组合安装不自动开启 Tab；真实 editor 接收 Tab / Shift+Tab 后焦点不跳转且无多余 FocusGained/FocusLost，随后可键入；Pointer 切到 -1 Button 只产生一次 Lost/Gained，Space 只激活一次且不写入旧 editor。public_api 的独立/组合装配矩阵同时检查 PointerFocusPlugin/InputFocus 保留及 TabNavigationPlugin 缺席。

@@ -35,7 +35,6 @@ use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::TableKey;
 use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{Language, TextKey, localized, localized_args, tr, tr_args};
-use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::text::FontSize;
 use bevy::ui::{InteractionDisabled, ScrollPosition, UiSystems};
@@ -333,7 +332,7 @@ fn panel(
         @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @header_actions: {actions.clone()}, @editing: {WidgetryTableEditing::new(move |_,_,_| demo != Demo::Virtualization)} }
         template(move |_| Ok(Name::new(format!("TableView{demo:?}"))))
         template(|_| Ok(ProjectionDemo { enabled: false, applied: None }))
-        template(|_| Ok(DemoEvents::default())) TabIndex({if demo == Demo::Basic {0} else {-1}})
+        template(|_| Ok(DemoEvents::default()))
         Node { width: percent(100), height: px(OVERVIEW_HEIGHT), flex_shrink: 0.0 }
         template(move |context| {
             if demo == Demo::Disabled { context.entity.insert(InteractionDisabled); }
@@ -450,7 +449,7 @@ fn shared_view(
             template(move |_| Ok(DemoStatus { source, view })) Name({format!("TableStatus{name}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }--
             @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()}, @header_actions: {actions.clone()}, @editing: {WidgetryTableEditing::new(|_,_,_| true)} }
             template(move |_| Ok(view)) template(|_| Ok(DemoEvents::default()))
-            Name({format!("TableView{name}")}) TabIndex(-1)
+            Name({format!("TableView{name}")})
                 template(move |_| Ok(ProjectionDemo { enabled: side == 1, applied: None }))
             Node { width: percent(100), height: px(COMPACT_VIEW_HEIGHT), flex_shrink: 0.0 }--
             Node { column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP), flex_wrap: FlexWrap::Wrap } Children [{controls}]
@@ -463,7 +462,6 @@ fn change_demo(
     event: On<Activate>,
     buttons: Query<&DemoNav>,
     mut panels: Query<(&DemoPanel, &mut Node)>,
-    mut tables: Query<(&DemoTable, &mut TabIndex)>,
 ) {
     let Ok(button) = buttons.get(event.entity) else {
         return;
@@ -474,9 +472,6 @@ fn change_demo(
         } else {
             Display::None
         };
-    }
-    for (table, mut index) in &mut tables {
-        index.0 = if table.0 == button.0 { 0 } else { -1 };
     }
     info!(demo = ?button.0, "切换 Table 示例");
 }

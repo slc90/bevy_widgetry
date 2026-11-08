@@ -504,10 +504,7 @@ fn text_field_scene_preserves_app_font_policy() {
         bevy::scene::ScenePlugin,
         bevy::input_focus::InputFocusPlugin,
     ));
-    app.add_plugins((
-        bevy::input_focus::tab_navigation::TabNavigationPlugin,
-        WidgetryTextFieldPlugin,
-    ));
+    app.add_plugins(WidgetryTextFieldPlugin);
     let entity = app
         .world_mut()
         .spawn_scene(bsn! { @WidgetryTextField })
@@ -1129,6 +1126,14 @@ fn standalone_widget_plugins_and_facade_share_ui_theme_and_pointer_plugins() {
                 bevy_widgetry_theme::WIDGETRY_LIGHT_THEME
             );
             assert!(app.is_plugin_added::<WidgetryPointerPlugin>());
+            assert!(
+                !app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>()
+            );
+            assert!(app.is_plugin_added::<bevy::input_focus::pointer_focus::PointerFocusPlugin>());
+            assert!(
+                app.world()
+                    .contains_resource::<bevy::input_focus::InputFocus>()
+            );
             let count = app.get_added_plugins::<WidgetryPointerPlugin>().len();
             assert_eq!(count, 1);
         }

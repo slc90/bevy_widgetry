@@ -297,7 +297,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Segmented(super::SegmentedKey::CustomShapes) => "Corner shape: capsule / square / rounded · Middle option disabled",
         TextKey::Segmented(super::SegmentedKey::Mixed) => "Mixed vertical · Default block and custom shapes",
         TextKey::Segmented(super::SegmentedKey::Description) => {
-            "Click a segment to focus its group. Use Left / Right horizontally or Up / Down vertically; skip disabled options and stop at the edges. Tab skips every group."
+            "Click a segment to focus its group. Use Left / Right horizontally or Up / Down vertically; skip disabled options and stop at the edges. Use the pointer to choose another control."
         }
         TextKey::Segmented(super::SegmentedKey::Basic) => {
             "Basic selection · independent user event count"
@@ -323,8 +323,6 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Segmented(super::SegmentedKey::Last30) => "Last 30 days",
         TextKey::Segmented(super::SegmentedKey::Programmatic) => "Select next in disabled group",
         TextKey::Segmented(super::SegmentedKey::ToggleDisabled) => "Toggle whole group disabled",
-        TextKey::Segmented(super::SegmentedKey::FocusBefore) => "Tab before group",
-        TextKey::Segmented(super::SegmentedKey::FocusAfter) => "Tab after group",
         TextKey::Segmented(super::SegmentedKey::Status) => {
             "Selected index: {index} · user events: {events} · programmatic: {programmatic}"
         }

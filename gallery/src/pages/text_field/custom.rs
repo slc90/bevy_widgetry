@@ -89,7 +89,6 @@ fn field(mode: Mode) -> impl Scene {
     bsn! {
         #Root @WidgetryTextFieldHeadless {editor:#Editor,@read_only:read_only}
         template(move |_|Ok(mode)) Name(name)
-        bevy::input_focus::tab_navigation::TabIndex(0)
         Node {width:px(EDITOR_WIDTH),max_width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP),flex_shrink:0.0}
         Children [
             template(|_|Ok(SearchPanel)) Node {width:percent(100),min_height:px(SEARCH_MIN_HEIGHT),padding:UiRect::all(px(SEARCH_PADDING)),column_gap:px(CONTENT_GAP),align_items:AlignItems::Center,border:UiRect::bottom(px(SEARCH_UNDERLINE_WIDTH)),border_radius:BorderRadius::all(px(SEARCH_CORNER_RADIUS))}

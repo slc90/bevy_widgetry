@@ -8,7 +8,6 @@ const ITEM_GAP: f32 = 10.0;
 use crate::i18n::NavigationKey;
 use crate::i18n::{TextKey, localized};
 use crate::pages;
-use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
 use bevy::state::state::{StateTransitionEvent, StateTransitionSystems};
 use bevy::ui::UiSystems;
@@ -68,7 +67,6 @@ pub(crate) enum GalleryPage {
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #GalleryRoot
-        TabGroup::default()
         Node {
             width: percent(100),
             height: percent(100),

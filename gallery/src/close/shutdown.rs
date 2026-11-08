@@ -290,7 +290,6 @@ fn decision(force: bool, key: CloseKey) -> impl Scene {
     bsn! {
         Name({if force { "GalleryForceExit" } else { "GalleryContinueWaiting" }})
         @WidgetryButton { @children: {Some(Box::new(bsn_list! { @localized(TextKey::GalleryClose(key)) WidgetryText }) as Box<dyn SceneList>)} }
-        bevy::input_focus::tab_navigation::TabIndex::default()
         on(move |_: On<Activate>, mut commands: Commands| { commands.queue(move |world: &mut World| decide(world, force)); })
     }
 }

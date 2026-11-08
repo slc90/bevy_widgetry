@@ -110,7 +110,7 @@ pub(crate) fn scene() -> impl SceneList {
                 WidgetryTextFieldPrefix Children [ Text("Prefix ") bevy_widgetry::text::WidgetryText ]
             }) as Box<dyn SceneList>)},
         }
-        Name("TextFieldSlots") bevy::input_focus::tab_navigation::TabIndex(0)
+        Name("TextFieldSlots")
         Node { margin: UiRect::top(px(EXAMPLE_MARGIN)), width: px(EXPANDED_EDITOR_WIDTH) }
         --
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("AutoSize: narrow / wide") bevy_widgetry::text::WidgetryText}) as Box<dyn SceneList>)} }

@@ -321,7 +321,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         }
         TextKey::Segmented(super::SegmentedKey::Mixed) => "竖向混合 · 默认浮块与自定义胶囊",
         TextKey::Segmented(super::SegmentedKey::Description) => {
-            "点击选项获得组焦点；横向用左右键，竖向用上下键，跳过禁用项并在首尾停止。Tab 跳过所有分段组。"
+            "点击选项获得组焦点；横向用左右键，竖向用上下键，跳过禁用项并在首尾停止。通过 Pointer 选择其他控件。"
         }
         TextKey::Segmented(super::SegmentedKey::Basic) => "基础单选 · 独立用户事件计数",
         TextKey::Segmented(super::SegmentedKey::Natural) => "内容自适应 · 不同长度文字",
@@ -339,8 +339,6 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Segmented(super::SegmentedKey::Last30) => "最近30天",
         TextKey::Segmented(super::SegmentedKey::Programmatic) => "程序选择禁用组的下一项",
         TextKey::Segmented(super::SegmentedKey::ToggleDisabled) => "切换整组禁用",
-        TextKey::Segmented(super::SegmentedKey::FocusBefore) => "组前的 Tab 目标",
-        TextKey::Segmented(super::SegmentedKey::FocusAfter) => "组后的 Tab 目标",
         TextKey::Segmented(super::SegmentedKey::Status) => {
             "选中索引：{index} · 用户事件：{events} · 程序操作：{programmatic}"
         }

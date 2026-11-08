@@ -779,8 +779,6 @@ pub(crate) enum SegmentedKey {
     Last30,
     Programmatic,
     ToggleDisabled,
-    FocusBefore,
-    FocusAfter,
     Status,
     Overrides,
 }

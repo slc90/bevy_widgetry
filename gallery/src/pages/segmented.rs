@@ -121,7 +121,6 @@ fn scene() -> impl Scene {
             @localized(TextKey::Segmented(SegmentedKey::Description)) WidgetryText Node { max_width: percent(100) }--
             Node { column_gap: px(CONTROL_GAP), row_gap: px(GROUP_GAP), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Center }
             Children [
-                @action(SegmentedKey::FocusBefore, "SegmentedFocusBefore") bevy::input_focus::tab_navigation::TabIndex(0)--
                 @demo(SegmentedKey::Basic, "SegmentedBasic", bsn! {
                     @WidgetrySegmented Children [
                         @option("SegmentedBasic0", SegmentedKey::Day)--
@@ -129,8 +128,7 @@ fn scene() -> impl Scene {
                         @option("SegmentedBasic2", SegmentedKey::Month)--
                         @option("SegmentedBasic3", SegmentedKey::Year)
                     ]
-                }, 0)--
-                @action(SegmentedKey::FocusAfter, "SegmentedFocusAfter") bevy::input_focus::tab_navigation::TabIndex(0)
+                }, 0)
             ]--
             Node { column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP), flex_wrap: FlexWrap::Wrap }
             Children [

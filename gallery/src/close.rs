@@ -10,7 +10,7 @@ use crate::i18n::{CloseKey, Language, LocalizedText, LocalizedWindowTitle, TextK
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::NonSendMarker;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input_focus::{FocusedInput, tab_navigation::TabIndex};
+use bevy::input_focus::FocusedInput;
 use bevy::prelude::*;
 use bevy::ui::Checked;
 use bevy::ui_widgets::Activate;
@@ -175,7 +175,6 @@ fn dialog_button(confirm: bool, label: CloseKey) -> impl Scene {
     bsn! {
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::GalleryClose(label)) WidgetryText}) as Box<dyn SceneList>)}, }
         Name({if confirm { "GalleryCloseConfirm" } else { "GalleryCloseCancel" }})
-        TabIndex::default()
         Node { min_width: px(ACTION_MIN_WIDTH), height: px(ACTION_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(move |_: On<Activate>, mut commands: Commands| {
             commands.queue(move |world: &mut World| -> Result {

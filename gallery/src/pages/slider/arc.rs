@@ -215,7 +215,7 @@ pub(super) fn scene() -> impl Scene {
             @WidgetrySliderHeadless { @value:{Some(50.0)} }
             template(|_|Ok(WidgetrySliderInteraction::new(ArcStrategy)))
             template(|_|Ok(ArcReadout::default()))
-            Name("SliderArc") TabIndex(0) on(changed) on(ended)
+            Name("SliderArc") TabIndex(-1) on(changed) on(ended)
             Node {width:px(CONTROL_DIAMETER),height:px(CONTROL_DIAMETER),flex_shrink:0.0,border:UiRect::all(px(CONTROL_BORDER_WIDTH)),border_radius:BorderRadius::MAX}
             BorderColor BackgroundColor
             Children [

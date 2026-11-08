@@ -42,7 +42,6 @@ pub(super) fn scene() -> impl Scene {
             #Root @WidgetryTextFieldHeadless {editor:#Editor}
             @WidgetryTextFieldAutoSize { @rows:{AutoSize {min_rows:2,max_rows:5}} }
             Name("TextFieldCustomAutoSize") template(|_|Ok(Notes))
-            bevy::input_focus::tab_navigation::TabIndex(0)
             Node {width:px(EXPANDED_EDITOR_WIDTH),max_width:percent(100),column_gap:px(CONTENT_GAP),align_items:AlignItems::Center,padding:UiRect::all(px(EDITOR_PADDING)),border_radius:BorderRadius::all(px(EDITOR_CORNER_RADIUS))}
             BackgroundColor
             Children [
