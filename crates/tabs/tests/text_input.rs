@@ -80,12 +80,7 @@ fn disabling_a_selected_header_keeps_its_editor_enabled_but_root_disabled_blocks
 }
 
 #[test]
-fn tab_and_shift_tab_cannot_enter_hidden_pages() {
-    use bevy::input_focus::{
-        FocusCause,
-        tab_navigation::{TabGroup, TabIndex},
-    };
-    use bevy_widgetry_test_utils::press_key;
+fn pointer_focus_and_typing_follow_the_active_page() {
     let mut app = text_edit_app();
     app.add_plugins((WidgetryTabsPlugin, WidgetryTextFieldPlugin));
     add_keyboard_dispatch(&mut app);
@@ -96,7 +91,7 @@ fn tab_and_shift_tab_cannot_enter_hidden_pages() {
     let items: Vec<Box<dyn Scene>> = (0..2)
         .map(|_| {
             let header: Box<dyn Scene> = Box::new(bsn! { Text("Header") });
-            let content: Box<dyn Scene> = Box::new(bsn! { @WidgetryTextField TabIndex(0) });
+            let content: Box<dyn Scene> = Box::new(bsn! { @WidgetryTextField });
             Box::new(bsn! { @WidgetryTab { @header: {Some(header)}, @content: {Some(content)} } })
                 as Box<dyn Scene>
         })
@@ -105,50 +100,41 @@ fn tab_and_shift_tab_cannot_enter_hidden_pages() {
     let container = app
         .world_mut()
         .spawn_scene(bsn! {
-            Node TabGroup::default() Children [
-                Node TabIndex(0)--
-                @WidgetryTabs { @children: {Some(items)} }--
-                Node TabIndex(0)
-            ]
+            @WidgetryTabs { @children: {Some(items)} }
         })
         .unwrap()
         .id();
     app.update();
-    let children = app.world().get::<Children>(container).unwrap().to_vec();
-    let root = children[1];
+    let root = container;
     for selected in [0, 1] {
         WidgetryTabs::set_selected_in_world(app.world_mut(), root, selected).unwrap();
-        app.world_mut()
-            .resource_mut::<InputFocus>()
-            .set(children[0], FocusCause::Navigated);
-        press_key(&mut app, window, KeyCode::Tab);
+        if selected != 0 {
+            assert_eq!(app.world().resource::<InputFocus>().get(), None);
+        }
         let page = WidgetryTabs::page(app.world(), root, selected).unwrap();
         let field = app.world().get::<Children>(page).unwrap()[0];
-        let focus = app.world().resource::<InputFocus>().get().unwrap();
-        assert!(
-            focus == field
-                || app.world().get::<ChildOf>(focus).is_some_and(|parent| app
-                    .world()
-                    .get::<ChildOf>(parent.parent())
-                    .is_some_and(|parent| parent.parent() == field))
-        );
-        press_key(&mut app, window, KeyCode::Tab);
-        assert_eq!(
-            app.world().resource::<InputFocus>().get(),
-            Some(children[2])
-        );
+        let editor = app
+            .world()
+            .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(field)
+            .unwrap()
+            .target;
         app.world_mut()
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::ShiftLeft);
-        press_key(&mut app, window, KeyCode::Tab);
-        press_key(&mut app, window, KeyCode::Tab);
+            .trigger(bevy_widgetry_test_utils::primary_press(editor));
+        app.world_mut().flush();
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
+        app.world_mut().write_message(KeyboardInput {
+            key_code: KeyCode::KeyX,
+            logical_key: Key::Character("x".into()),
+            text: Some("x".into()),
+            state: ButtonState::Pressed,
+            repeat: false,
+            window,
+        });
+        app.update();
         assert_eq!(
-            app.world().resource::<InputFocus>().get(),
-            Some(children[0])
+            WidgetryTextFieldHeadless::text(app.world(), field).unwrap(),
+            "x"
         );
-        app.world_mut()
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .release(KeyCode::ShiftLeft);
     }
 }
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};

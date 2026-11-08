@@ -28,9 +28,6 @@ impl Plugin for WidgetryTabsPlugin {
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);
         }
-        if !app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>() {
-            app.add_plugins(bevy::input_focus::tab_navigation::TabNavigationPlugin);
-        }
         if !app.is_plugin_added::<bevy::ui_widgets::ButtonPlugin>() {
             app.add_plugins(bevy::ui_widgets::ButtonPlugin);
         }

@@ -117,18 +117,14 @@ fn focused_headers_navigate_on_their_axis_skip_disabled_and_stop_at_edges() {
 }
 
 #[test]
-fn tab_navigation_skips_headers_but_visits_the_active_page() {
+fn tab_does_not_move_focus_between_independent_widgets() {
     for orientation in [TabsOrientation::Horizontal, TabsOrientation::Vertical] {
-        let (mut app, window, root, before, after) = fixture(orientation);
+        let (mut app, window, root, before, _) = fixture(orientation);
         app.world_mut()
             .resource_mut::<InputFocus>()
             .set(before, FocusCause::Navigated);
         press_key(&mut app, window, KeyCode::Tab);
-        let page = WidgetryTabs::page(app.world(), root, 0).unwrap();
-        let content = app.world().get::<Children>(page).unwrap()[0];
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(content));
-        press_key(&mut app, window, KeyCode::Tab);
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(after));
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(before));
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::ShiftLeft);

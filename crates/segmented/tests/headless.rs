@@ -327,7 +327,7 @@ fn focused_axis_keys_skip_disabled_stop_at_edges_and_ignore_other_axes() {
 }
 
 #[test]
-fn tab_passes_between_siblings_without_entering_segmented() {
+fn tab_keeps_focus_on_the_current_widget() {
     for orientation in [
         SegmentedOrientation::Horizontal,
         SegmentedOrientation::Vertical,
@@ -354,7 +354,7 @@ fn tab_passes_between_siblings_without_entering_segmented() {
         press_key(&mut app, window, KeyCode::Tab);
         assert_eq!(
             app.world().resource::<InputFocus>().get(),
-            Some(children[2])
+            Some(children[0])
         );
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()

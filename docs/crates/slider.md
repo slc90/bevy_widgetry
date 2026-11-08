@@ -1,5 +1,7 @@
 # Slider
 
+插件保留 Pointer 焦点与当前控件内部键盘操作，不自动安装 `TabNavigationPlugin`。
+
 `bevy_widgetry_slider` 提供单值 `f32` 数值模型，经 Facade 默认启用的 `slider` Feature 和模块导出。安装 `WidgetrySliderPlugin`；使用 `@WidgetrySlider` 和一次性 Props 构造。
 
 `@WidgetrySliderHeadless` 与 `WidgetrySliderHeadlessProps` 独立构造数值能力，不创建 Node、Track、Fill、Thumb、默认颜色或交互。BSN 需要 Bevy Asset/Scene 基础设施，不需要 UI、布局或渲染 Plugin。独立 `WidgetrySliderHeadlessPlugin` 仅登记状态反射。默认控件在原根组合数值能力与既有线性输入/Style，默认 Plugin 自动确保独立 Plugin。

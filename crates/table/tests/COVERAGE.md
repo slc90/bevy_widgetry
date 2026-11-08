@@ -131,3 +131,5 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 - Editor Scene 失败保留普通 / Panic Severity 与 payload、原生具体 cause 和独立 ID；失败重试只清理本次构造，已有业务实体与已提交的状态保留。
 
 - 内嵌业务 Button 的拖动隔离同时覆盖原生 Button 与公开 WidgetryButtonHeadless，避免表格矩形选择抢占子控件输入。
+
+`interaction.rs` 验证 Pointer 聚焦 Table 后初始化 Focused Cell，不额外选择或发出业务事件。

@@ -700,7 +700,7 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
 }
 
 #[test]
-fn tab_skips_radio_group_but_pointer_focus_keeps_keyboard_selection() {
+fn tab_preserves_focus_and_pointer_focus_keeps_keyboard_selection() {
     let mut app = app();
     app.init_resource::<ButtonInput<KeyCode>>();
     add_keyboard_dispatch(&mut app);
@@ -728,7 +728,7 @@ fn tab_skips_radio_group_but_pointer_focus_keeps_keyboard_selection() {
         .resource_mut::<InputFocus>()
         .set(before, FocusCause::Navigated);
     press_key(&mut app, window, KeyCode::Tab);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(after));
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(before));
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::ShiftLeft);
@@ -747,9 +747,14 @@ fn tab_skips_radio_group_but_pointer_focus_keeps_keyboard_selection() {
     press_key(&mut app, window, KeyCode::ArrowRight);
     assert_selected(&app, root, 1);
     press_key(&mut app, window, KeyCode::Tab);
-    assert_ne!(app.world().resource::<InputFocus>().get(), Some(root));
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
     press_key(&mut app, window, KeyCode::ArrowLeft);
-    assert_selected(&app, root, 1);
+    assert_selected(&app, root, 0);
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(after, FocusCause::Navigated);
+    press_key(&mut app, window, KeyCode::ArrowRight);
+    assert_selected(&app, root, 0);
 }
 
 #[test]

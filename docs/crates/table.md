@@ -1,5 +1,7 @@
 # Table
 
+插件保留 Pointer 焦点与当前控件内部键盘操作，不自动安装 `TabNavigationPlugin`。
+
 ## 功能概述
 
 提供具有异构 Cell 值、二维虚拟化和连续 Row / Column / Cell Selection 的 Table 组件。适用于可滚动、可调整列宽的数据表格。

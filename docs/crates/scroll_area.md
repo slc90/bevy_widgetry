@@ -1,5 +1,7 @@
 # Scroll Area
 
+插件保留 Pointer 焦点与当前控件内部键盘操作，不自动安装 `TabNavigationPlugin`。
+
 ## 功能概述
 
 提供用于展示超出可见范围内容的通用 ScrollArea，支持横向、纵向及两轴滚动。

@@ -68,3 +68,4 @@
 - `color_composition.rs`：嵌套 Widget Foreground Scope、颜色与 Disabled 继承；公开自定义完整 Theme 对既有控件和新内容的前景投影、局部覆盖优先级及 Checked / 正文保留。
 - `taskbar_icon.rs`：Facade Macro 的调用方 PNG 嵌入和失败路径。
 
+- `plugin_focus.rs`：七个 Widget 独立装配时不自动安装 TabNavigationPlugin，仍提供 PointerFocusPlugin 与 InputFocus；不同共享依赖装配顺序不会重新开启导航。

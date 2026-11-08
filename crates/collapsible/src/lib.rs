@@ -32,9 +32,6 @@ impl Plugin for WidgetryCollapsiblePlugin {
         }
         state::install(app);
         style::install(app);
-        if !app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>() {
-            app.add_plugins(bevy::input_focus::tab_navigation::TabNavigationPlugin);
-        }
         widgetry_debug!("WidgetryCollapsiblePlugin 注册完成");
     }
 }

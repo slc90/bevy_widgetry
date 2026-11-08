@@ -3,7 +3,6 @@ use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::MouseScrollPixelsPerLine;
 use bevy::input_focus::FocusedInput;
-use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::ui::{
     ComputedNode, InteractionDisabled, Overflow, OverflowAxis, ScrollPosition, UiGlobalTransform,
@@ -59,9 +58,6 @@ impl Plugin for WidgetryScrollAreaPlugin {
         }
         if !app.is_plugin_added::<ScrollAreaPlugin>() {
             app.add_plugins(ScrollAreaPlugin);
-        }
-        if !app.is_plugin_added::<TabNavigationPlugin>() {
-            app.add_plugins(TabNavigationPlugin);
         }
         if !app.is_plugin_added::<ScrollbarPlugin>() {
             app.add_plugins(ScrollbarPlugin);

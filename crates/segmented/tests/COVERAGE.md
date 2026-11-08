@@ -9,7 +9,7 @@
 
 - BSN 构造及任意内容组合、后代 PointerClick / PointerPress、实际键盘派发、程序 Commands、增删层级、标记失效。
 - 初始多个 Checked 拒绝且不覆盖声明；空集合、非法 Root / Child / Index 以 Severity::Error 传播。
-- Focus 内对应方向轴有效；跳过 Disabled、首尾停止，其他按键和无焦点忽略。Tab / Shift+Tab 跳过 Group。
+- Focus 内对应方向轴有效；跳过 Disabled、首尾停止，其他按键和无焦点忽略。Tab / Shift+Tab 不改变当前控件焦点。
 
 ## Transitions / Invariants
 
@@ -24,7 +24,7 @@
 - `external.rs`：独立行为插件、四种默认/自定义 Group/Option 组合的真实 Mouse/Custom Picking 和焦点、两轴不循环键盘及通知内已提交 Checked；自定义 Option 不被默认样式写入、纯 Headless 父级 Theme 回退、动态成员静默修复、布局 Patch 不改变键盘轴及独立初始冲突恢复。不安装原生 RadioGroup/RadioButton。
 
 - `diagnostics.rs`：多个无效组与孤立 Option 的批量归属、稳定帧零检查、持续失败重查复用 ID / origin、修复 INFO、初始 Checked 冲突身份、独立程序请求的索引与新 ID，以及多个样式失败在 Theme 重算与修复中的诊断生命周期。
-- `headless.rs`：初始化、结构、输入、Disabled、事件、队列错误、场景组合与嵌套组隔离；两方向输入轴、首尾 / Disabled、Tab 跳过、结构回退语义一致。
+- `headless.rs`：初始化、结构、输入、Disabled、事件、队列错误、场景组合与嵌套组隔离；两方向输入轴、首尾 / Disabled、Tab 保持焦点、结构回退语义一致。
 - `group.rs` Unit Test：稳定结构不重复校验、受影响组局部维护、后装 Plugin 和无效初始化请求。
 - 共享选择历史的连续 / 批量删除、临时 Checked 项与复用原 Option 清空恢复，同时由 RadioGroup 的实际集成回归保护。
 

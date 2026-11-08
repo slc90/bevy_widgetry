@@ -86,9 +86,12 @@ fn only_the_fixed_button_toggles_and_disabled_user_activation_is_ignored() {
 }
 
 #[test]
-fn tab_navigation_and_native_enter_space_activate_the_same_state() {
+fn pointer_focus_and_native_enter_space_activate_the_same_state() {
     let (mut app, window, root, button, _, _) = fixture();
-    press_key(&mut app, window, KeyCode::Tab);
+    app.world_mut().trigger(primary_press(button));
+    app.world_mut().flush();
+    app.world_mut().trigger(primary_release(button));
+    app.world_mut().flush();
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
     press_key(&mut app, window, KeyCode::Enter);
     assert!(!WidgetryCollapsible::expanded(app.world(), root).unwrap());
@@ -110,9 +113,7 @@ fn tab_navigation_and_native_enter_space_activate_the_same_state() {
     assert_eq!(app.world().resource::<Changes>().0, vec![false, true]);
     WidgetryCollapsible::set_expanded_in_world(app.world_mut(), root, false).unwrap();
     press_key(&mut app, window, KeyCode::Tab);
-    let outer = app.world().get::<ChildOf>(root).unwrap().parent();
-    let outside = app.world().get::<Children>(outer).unwrap()[1];
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(outside));
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
 }
 
 #[test]

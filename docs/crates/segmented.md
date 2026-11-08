@@ -2,7 +2,7 @@
 
 ## 功能与组合
 
-`WidgetrySegmented` / `WidgetrySegmentedOption` 是独立的严格单选分段控件，通过 BSN 构造。Root 的直接 Children 必须全部为 Option 且至少一项；Option 内部可组合任意 Scene 内容，不使用字符串或图标专属内容 API。安装 `WidgetrySegmentedPlugin` 自动安装共享 UI、Pointer Focus 和 Tab 基础设施；Facade 通过默认开启的 `segmented` Feature 导出。
+`WidgetrySegmented` / `WidgetrySegmentedOption` 是独立的严格单选分段控件，通过 BSN 构造。Root 的直接 Children 必须全部为 Option 且至少一项；Option 内部可组合任意 Scene 内容，不使用字符串或图标专属内容 API。安装 `WidgetrySegmentedPlugin` 自动安装共享 UI 与 Pointer Focus，不自动安装 TabNavigationPlugin；Facade 通过默认开启的 `segmented` Feature 导出。
 
 当前提供横向 / 竖向输入与浮块式主题外观、可选水平等宽模式，并在 Gallery 独立页面展示。
 
@@ -13,7 +13,7 @@
 - Checked 是唯一选择权威。初始无 Checked 时选择首项；一个初始 Checked 时采用指定项；多个初始 Checked 报错，不覆盖冲突声明。修复冲突标记后可恢复。
 - 初始化完成后通过 `WidgetrySegmentedHeadless::set_selected(&mut Commands, root, index)` 更新，不直接插入或移除 Checked 绕过单选约束；没有清空选择 API。
 - 用户点击非禁用项时提交选择，再发送来源为 Root 的 `ValueChange<usize>`；同项点击、程序化设置、初始化及结构修复静默。Observer 可以读取已经提交的 Checked。
-- 点击 Option 或内容可使 Group 获得 Focus；有焦点时横向使用左右方向键、竖向使用上下方向键跳过禁用项，到首尾停止不循环，非对应轴 / Home / End 不改选。失焦及整体 Disabled 时不响应导航。Group 默认 `TabIndex(-1)`，Tab / Shift+Tab 跳过；程序设置不抢焦点。
+- 点击 Option 或内容可使 Group 获得 Focus；有焦点时横向使用左右方向键、竖向使用上下方向键跳过禁用项，到首尾停止不循环，非对应轴 / Home / End 不改选。失焦及整体 Disabled 时不响应导航。Group 默认 `TabIndex(-1)`，保留 Pointer 聚焦且不启动跨控件 Tab 遍历；程序设置不抢焦点。
 - Disabled 沿用 Core 的继承 OR 语义。禁用不清除选中项，不限制合法程序选择或删除后的自动补选。
 
 ## 动态结构与错误

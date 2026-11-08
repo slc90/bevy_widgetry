@@ -46,9 +46,6 @@ impl Plugin for WidgetrySliderInteractionPlugin {
         if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
             app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
         }
-        if !app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>() {
-            app.add_plugins(bevy::input_focus::tab_navigation::TabNavigationPlugin);
-        }
         input::install(app);
         widgetry_debug!("WidgetrySliderInteractionPlugin 注册完成");
     }

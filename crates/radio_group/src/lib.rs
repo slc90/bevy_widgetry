@@ -9,7 +9,6 @@ mod option;
 mod option_style;
 
 use bevy::input_focus::InputFocusSystems;
-use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy::ui_widgets::RadioGroupPlugin;
@@ -28,9 +27,6 @@ impl Plugin for WidgetryRadioGroupHeadlessPlugin {
         }
         if !app.is_plugin_added::<RadioGroupPlugin>() {
             app.add_plugins(RadioGroupPlugin);
-        }
-        if !app.is_plugin_added::<TabNavigationPlugin>() {
-            app.add_plugins(TabNavigationPlugin);
         }
         group::install(app);
         app.add_observer(group::handle_value_change).add_systems(

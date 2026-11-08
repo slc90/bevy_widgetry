@@ -8,7 +8,7 @@ mod input;
 mod option;
 mod style;
 
-use bevy::input_focus::{InputFocusSystems, tab_navigation::TabNavigationPlugin};
+use bevy::input_focus::InputFocusSystems;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
@@ -30,9 +30,6 @@ impl Plugin for WidgetrySegmentedHeadlessPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);
-        }
-        if !app.is_plugin_added::<TabNavigationPlugin>() {
-            app.add_plugins(TabNavigationPlugin);
         }
         group::install(app);
         app.add_observer(input::on_click)

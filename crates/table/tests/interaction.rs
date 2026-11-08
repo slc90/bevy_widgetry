@@ -10,7 +10,6 @@ use bevy::input::{
     ButtonState,
     keyboard::{Key, KeyboardInput, NativeKey},
 };
-use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::input_focus::{AcquireFocus, InputFocus};
 use bevy::picking::hover::HoverMap;
 use bevy::picking::{
@@ -1875,37 +1874,18 @@ fn hover_style_priority_and_theme_follow_public_state() {
 }
 
 #[test]
-fn tab_navigation_enters_table_through_caller_group() {
+fn pointer_focus_initializes_the_focused_cell_without_selecting() {
     let (mut app, source, root, _) = common::uninitialized_fixture(20, 10);
     add_keyboard_dispatch(&mut app);
     app.init_resource::<Events>().add_observer(
         |event: On<WidgetryTableEvent>, mut events: ResMut<Events>| events.0.push(event.kind),
     );
     app.init_resource::<ButtonInput<KeyCode>>();
-    let window = app
-        .world_mut()
-        .spawn((Window::default(), PrimaryWindow))
-        .id();
-    let group = app
-        .world_mut()
-        .spawn_scene(bsn! { TabGroup::default() Node::default() })
-        .unwrap()
-        .id();
-    app.world_mut().entity_mut(group).add_child(root);
+    app.world_mut().spawn((Window::default(), PrimaryWindow));
     app.update();
     let mut redraw = MessageCursor::<RequestRedraw>::default();
     redraw.clear(app.world().resource::<Messages<RequestRedraw>>());
-    queue_key(
-        &mut app,
-        KeyboardInput {
-            key_code: KeyCode::Tab,
-            logical_key: Key::Tab,
-            state: ButtonState::Pressed,
-            text: None,
-            repeat: false,
-            window,
-        },
-    );
+    app.world_mut().trigger(primary_press(root));
     app.update();
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
     assert!(
