@@ -2364,6 +2364,7 @@ dependencies = [
  "bevy_widgetry_internal_log",
  "bevy_widgetry_test_utils",
  "rstest",
+ "winsafe",
 ]
 
 [[package]]

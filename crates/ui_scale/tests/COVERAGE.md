@@ -3,7 +3,10 @@
 - 状态：应用缩放值、Window 的逻辑尺寸基准、普通/排除窗口、插件安装前已有/后建窗口。
 - 刺激：初始资源、Scale 更新、相同值、用户物理 Resize、排除标记加入/移除、Window 移除后重建。
 - 不变量：普通窗口采用当前统一 Scale，缩放保留逻辑设计范围，用户 Resize 成为下一次基准；排除窗口包括同批 Bundle 创建时不被改写，同值不标记 Window 变化。
-- `scaling.rs` 验证真实 App/World 组合；后续 Windows DPI/工作区增强另增加相应覆盖。
+- `scaling.rs` 验证真实 App/World 组合、无原生窗口环境的基本缩放和排除。
+- 静态帧与同值 Scale 由排在 Sync 之后的同帧 `Changed<Window>` 消费者验证，不依赖帧结束后的 tracker 清理；实际比例变化仍通知一次。
 - 运行期修改原生 Resize Constraints 立即约束尺寸，后续 Scale 使用新约束；放宽约束恢复未丢失的设计尺寸基准。
 - `camera.rs` 使用 Bevy 真实 Camera System 与显式 Viewport，验证缩小比例时窗口与相机在同帧收敛，避免新输出纹理配旧 scissor。
+- Windows 算法单元覆盖位于 `geometry.rs` / `native.rs`：DPI 两种到达顺序、同 DPI 的工作区变化、用户 Resize、负坐标和重叠/距离选择、原生边框预算、暂停/恢复、部分约束更新、有效位置保持和出界夹紧；Monitor Index 使用 Winit 的真实排序，不以 ECS 迭代顺序冒充。
+- `windows.rs` 使用受控原生查询失败验证真实 SysError 载荷保留、同一失败源头一次 ERROR/不重复传播、等待 Monitor 元数据期间保持原故障身份且不记恢复、实际取得工作区后恢复并允许新失败获得新 ID。真实 Native Maximize/Minimize、跨屏和系统 DPI 行为由任务级运行时证据另行记录，不以这些 Headless 测试取代。
 - `validation.rs` 验证非有限/非正 Scale 的领域分类、请求值、状态保留及源头一次 ERROR；传播保留 origin，不虚报 handled，真实 Startup System 的错误以 Error Severity 到达宿主 Handler。有限正数不受 Gallery 四档限制。

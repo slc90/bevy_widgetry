@@ -2,6 +2,8 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod error;
+mod geometry;
+mod native;
 mod scale;
 mod windows;
 

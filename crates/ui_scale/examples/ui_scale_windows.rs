@@ -90,7 +90,11 @@ fn view(commands: &mut Commands, window: Entity, viewport: Option<UVec2>) {
     });
 }
 
-fn set_scale(keys: Res<ButtonInput<KeyCode>>, mut scale: ResMut<WidgetryUiScale>) -> Result {
+fn set_scale(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut scale: ResMut<WidgetryUiScale>,
+    mut primary: Single<&mut Window, With<PrimaryWindow>>,
+) -> Result {
     let choices = [
         (KeyCode::Digit1, 1.0),
         (KeyCode::Digit2, 1.25),
@@ -102,6 +106,16 @@ fn set_scale(keys: Res<ButtonInput<KeyCode>>, mut scale: ResMut<WidgetryUiScale>
                 .set(value)
                 .map_err(|failure| failure.into_bevy_error())?;
         }
+    }
+    if keys.just_pressed(KeyCode::KeyM) {
+        primary.set_maximized(true);
+    }
+    if keys.just_pressed(KeyCode::KeyI) {
+        primary.set_minimized(true);
+    }
+    if keys.just_pressed(KeyCode::KeyR) {
+        primary.set_minimized(false);
+        primary.set_maximized(false);
     }
     Ok(())
 }

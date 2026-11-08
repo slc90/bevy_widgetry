@@ -1,9 +1,51 @@
 #![allow(clippy::unwrap_used, clippy::disallowed_macros)]
 
 use bevy::prelude::*;
-use bevy_widgetry_ui_scale::{WidgetryUiScale, WidgetryUiScalePlugin, WindowScaleExcluded};
+use bevy_widgetry_ui_scale::{
+    WidgetryUiScale, WidgetryUiScalePlugin, WidgetryUiScaleSystems, WindowScaleExcluded,
+};
 
 const DESIGN: UVec2 = UVec2::new(640, 400);
+
+#[derive(Resource, Default)]
+struct ChangedWindows(usize);
+
+fn count_changed_windows(
+    windows: Query<Entity, Changed<Window>>,
+    mut count: ResMut<ChangedWindows>,
+) {
+    count.0 = windows.iter().count();
+}
+
+#[test]
+fn static_and_same_scale_frames_do_not_notify_window_consumers() {
+    let mut app = app();
+    app.init_resource::<ChangedWindows>().add_systems(
+        PostUpdate,
+        count_changed_windows.after(WidgetryUiScaleSystems::Sync),
+    );
+    app.world_mut().spawn(window());
+    app.update();
+    assert_eq!(app.world().resource::<ChangedWindows>().0, 1);
+    app.update();
+    assert_eq!(app.world().resource::<ChangedWindows>().0, 0);
+    assert!(
+        !app.world_mut()
+            .resource_mut::<WidgetryUiScale>()
+            .set(1.0)
+            .unwrap()
+    );
+    app.update();
+    assert_eq!(app.world().resource::<ChangedWindows>().0, 0);
+    app.world_mut()
+        .resource_mut::<WidgetryUiScale>()
+        .set(1.25)
+        .unwrap();
+    app.update();
+    assert_eq!(app.world().resource::<ChangedWindows>().0, 1);
+    app.update();
+    assert_eq!(app.world().resource::<ChangedWindows>().0, 0);
+}
 
 fn app() -> App {
     let mut app = App::new();
@@ -99,7 +141,7 @@ fn excluded_window_is_never_scaled_even_during_bundle_creation() {
 }
 
 #[test]
-fn user_resize_becomes_the_next_scale_baseline_and_same_scale_is_quiet() {
+fn user_resize_becomes_the_next_scale_baseline() {
     let mut app = app();
     let entity = app.world_mut().spawn(window()).id();
     app.world_mut()
@@ -122,16 +164,6 @@ fn user_resize_becomes_the_next_scale_baseline_and_same_scale_is_quiet() {
         app.world().get::<Window>(entity).unwrap().physical_size(),
         UVec2::new(1600, 1000)
     );
-    app.world_mut().clear_trackers();
-    assert!(
-        !app.world_mut()
-            .resource_mut::<WidgetryUiScale>()
-            .set(2.0)
-            .unwrap()
-    );
-    app.update();
-    let mut query = app.world_mut().query_filtered::<Entity, Changed<Window>>();
-    assert_eq!(query.iter(app.world()).count(), 0);
 }
 
 #[test]
