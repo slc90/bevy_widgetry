@@ -39,7 +39,7 @@ State Authority 的提交不意味着高亮、Renderer Subtree、颜色或 Layou
 
 各 Widget 根据自身语义设计更新、查询及通知接口，不引入统一的 `set_value`、Binding、Callback 或 Event 总线。
 
-保留现有 API 的操作语义及附带行为，包括必要的 Active、Cursor、Focus、Reveal / Scroll 等状态调整，不强制将 Setter 简化为仅修改目标 State。
+除已明确取消的跨控件键盘焦点导航行为外，保留现有 API 的操作语义及附带行为，包括必要的 Active、Cursor、Focus、Reveal / Scroll 等状态调整，不强制将 Setter 简化为仅修改目标 State。
 
 保留同步 `World` 操作与 `Commands` Queue 两类入口及各自的执行时机：
 
@@ -47,6 +47,20 @@ State Authority 的提交不意味着高亮、Renderer Subtree、颜色或 Layou
 - 排队入口在 Command 实际执行时完成校验、提交与通知，不承诺入队时状态已经改变。
 
 Disabled、Read-only、Modal、Index、Stable ID 与 Entity 等限制继续遵循对应 Widget 的既有契约，不为统一 API 形式而改变行为。
+
+## 焦点与键盘交互
+
+控件的键盘交互必须与自身业务语义对应，不承担跨独立控件的焦点导航职责。
+
+控件可以使用 Bevy 官方的 InputFocus、FocusedInput 等机制接收键盘输入。复合控件可以将外部控件身份映射到实际输入实体，不要求根实体直接承载全部输入组件。
+
+方向键、Enter、Space、Escape 及组合快捷键等输入，可以由当前获得焦点的控件解释为内部操作。控件应根据自身状态、Disabled / ReadOnly 等限制决定是否处理，并遵循相应事件传播契约。
+
+控件内部的 Active、Selection、Focused Cell 等业务状态与 Bevy 的输入焦点是不同概念，不要求统一或相互替代。
+
+窗口、弹窗和复合控件可以根据实际需求维护输入作用域、初始焦点或焦点恢复，但不得以通用 Tab 遍历作为其必要前提。
+
+不为控件增加仅服务于通用键盘焦点导航的 Component、配置、状态或测试。
 
 ## Bevy 官方 Component
 
