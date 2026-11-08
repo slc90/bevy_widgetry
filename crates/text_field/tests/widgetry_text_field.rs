@@ -38,7 +38,7 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
         bevy::input_focus::InputFocusPlugin,
     ));
     app.add_plugins(WidgetryTextFieldPlugin);
-    assert!(app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>());
+    assert!(!app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>());
     assert!(!app.is_plugin_added::<WidgetryFontPlugin>());
     assert!(!app.is_plugin_added::<bevy::ui_widgets::TextInputPlugin>());
     let entity = app.world_mut().spawn_scene(bsn! {

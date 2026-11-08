@@ -9,7 +9,6 @@ use bevy::{
     input_focus::tab_navigation::TabIndex,
     input_focus::{
         AcquireFocus, FocusCause, InputFocus, InputFocusSystems, dispatch_focused_input,
-        tab_navigation::TabNavigationPlugin,
     },
     prelude::*,
     text::{EditableText, EditableTextSystems, TextEdit},
@@ -74,10 +73,10 @@ fn normal_text_field_keeps_keyboard_input_beside_read_only() {
 }
 
 #[test]
-fn pointer_focus_survives_tab_navigation_for_both_text_fields() {
+fn pointer_focus_without_tab_navigation_supports_both_text_fields() {
     for read_only in [false, true] {
         let mut app = text_input_app();
-        app.add_plugins((TabNavigationPlugin, WidgetryTextFieldPlugin));
+        app.add_plugins(WidgetryTextFieldPlugin);
         app.world_mut().spawn((Window::default(), PrimaryWindow));
         let entity = if read_only {
             app.world_mut()
@@ -105,12 +104,12 @@ fn pointer_focus_survives_tab_navigation_for_both_text_fields() {
 fn programmatic_acquire_focus_targets_internal_editor() {
     for read_only in [false, true] {
         let mut app = text_input_app();
-        app.add_plugins((TabNavigationPlugin, WidgetryTextFieldPlugin));
+        app.add_plugins(WidgetryTextFieldPlugin);
         let window = app
             .world_mut()
             .spawn((Window::default(), PrimaryWindow))
             .id();
-        let parent = app.world_mut().spawn((Node::default(), TabIndex(0))).id();
+        let parent = app.world_mut().spawn((Node::default(), TabIndex(-1))).id();
         let entity = if read_only {
             app.world_mut()
                 .spawn_scene(bsn! { @WidgetryReadOnlyTextField })
@@ -139,7 +138,7 @@ fn programmatic_acquire_focus_targets_internal_editor() {
 fn programmatic_acquire_focus_keeps_official_navigation_cause() {
     for read_only in [false, true] {
         let mut app = text_input_app();
-        app.add_plugins((TabNavigationPlugin, WidgetryTextFieldPlugin));
+        app.add_plugins(WidgetryTextFieldPlugin);
         let window = app
             .world_mut()
             .spawn((Window::default(), PrimaryWindow))
@@ -157,7 +156,7 @@ fn programmatic_acquire_focus_keeps_official_navigation_cause() {
         };
         app.world_mut()
             .entity_mut(entity)
-            .insert((TabIndex(0), SelectAllOnFocus));
+            .insert((TabIndex(-1), SelectAllOnFocus));
         app.update();
         app.world_mut().trigger(AcquireFocus {
             focused_entity: entity,
@@ -181,7 +180,7 @@ fn programmatic_acquire_focus_keeps_official_navigation_cause() {
 fn disabled_text_fields_do_not_retain_pointer_focus() {
     for read_only in [false, true] {
         let mut app = text_input_app();
-        app.add_plugins((TabNavigationPlugin, WidgetryTextFieldPlugin));
+        app.add_plugins(WidgetryTextFieldPlugin);
         app.world_mut().spawn((Window::default(), PrimaryWindow));
         let entity = if read_only {
             app.world_mut()

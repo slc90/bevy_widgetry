@@ -402,7 +402,7 @@ fn slot_focus_requests_do_not_select_the_editor_and_root_requests_do() {
 }
 
 #[test]
-fn tab_moves_from_editor_to_slot_control_then_to_the_next_field() {
+fn tab_and_shift_tab_keep_focus_on_the_real_editor() {
     use bevy::{
         input::{
             ButtonState,
@@ -410,7 +410,7 @@ fn tab_moves_from_editor_to_slot_control_then_to_the_next_field() {
         },
         input_focus::{
             InputFocus,
-            tab_navigation::{TabGroup, TabIndex, handle_tab_navigation},
+            tab_navigation::{TabGroup, TabIndex},
         },
     };
     let mut app = editing_app();
@@ -419,7 +419,6 @@ fn tab_moves_from_editor_to_slot_control_then_to_the_next_field() {
     let window = app
         .world_mut()
         .spawn((Window::default(), bevy::window::PrimaryWindow))
-        .observe(handle_tab_navigation)
         .id();
     let group = app
         .world_mut()
@@ -445,10 +444,13 @@ fn tab_moves_from_editor_to_slot_control_then_to_the_next_field() {
         .add_children(&[first, second]);
     app.update();
     WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), first).unwrap();
-    let frame = support::frame_entity(app.world(), first);
-    let slot = app.world().get::<Children>(frame).unwrap()[1];
-    let control = app.world().get::<Children>(slot).unwrap()[0];
-    for expected in [control, support::editor_entity(app.world(), second)] {
+    let editor = support::editor_entity(app.world(), first);
+    for shift in [false, true] {
+        if shift {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::ShiftLeft);
+        }
         for state in [ButtonState::Pressed, ButtonState::Released] {
             app.world_mut().write_message(KeyboardInput {
                 key_code: KeyCode::Tab,
@@ -460,7 +462,7 @@ fn tab_moves_from_editor_to_slot_control_then_to_the_next_field() {
             });
             app.update();
         }
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(expected));
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
     }
 }
 

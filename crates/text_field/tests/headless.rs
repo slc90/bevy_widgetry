@@ -51,7 +51,6 @@ fn nested(app: &mut App, value: &str, max: Option<usize>, read_only: bool) -> En
     app.world_mut()
         .spawn_scene(bsn! {
             #Root @WidgetryTextFieldHeadless {editor:#Editor,@read_only:read_only}
-            bevy::input_focus::tab_navigation::TabIndex(0)
             Node {width:px(300)}
             Children [
                 Node {padding:UiRect::all(px(8))}
@@ -60,7 +59,7 @@ fn nested(app: &mut App, value: &str, max: Option<usize>, read_only: bool) -> En
                     Children [
                         #Editor @WidgetryTextFieldEditor {root:#Root,@value:value,@max_length:max}
                         Node {min_width:px(0),height:px(36)}--
-                        Node bevy::input_focus::tab_navigation::TabIndex(0)
+                        Node bevy::input_focus::tab_navigation::TabIndex(-1)
                     ]
                 ]
             ]

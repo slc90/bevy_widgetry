@@ -12,7 +12,7 @@
 
 `@WidgetryTextFieldHeadless { editor: #Editor, @read_only: false }` 初始化行为根和一次性 ReadOnly 配置。`editor` 是公开不可变绑定；`@WidgetryTextFieldEditor { root: #Root, ... }` 在实际编辑位置初始化唯一的官方 `EditableText` / `TextInput`、Caret 和固定长度约束。Editor Props 支持 `value`、`max_length`、`multiline`、`visible_lines`、`visible_width`，正文初始化即按完整字素截断。根和 Editor 的所属关系创建后固定，不支持运行期跨根搬迁/共享编辑器。
 
-Editor 可以位于根下任意装饰容器中。内容与聚焦 API 校验 Editor 身份、双向 Owner 及祖先链；不读取默认 Frame/Parts，也不要求 Count、Hint 或槽位。`WidgetryTextFieldHeadless::editor_entity` 返回经过验证的 Entity，`WidgetryTextFieldEditor::owner` 验证反向映射；`max_length` 和 `is_read_only` 提供只读配置。根的 `WidgetryInputTarget` 由绑定自动投影，供 AcquireFocus、Tab 和 Window InitialFocus 使用；普通子控件继续保留自身焦点。
+Editor 可以位于根下任意装饰容器中。内容与聚焦 API 校验 Editor 身份、双向 Owner 及祖先链；不读取默认 Frame/Parts，也不要求 Count、Hint 或槽位。`WidgetryTextFieldHeadless::editor_entity` 返回经过验证的 Entity，`WidgetryTextFieldEditor::owner` 验证反向映射；`max_length` 和 `is_read_only` 提供只读配置。根的 `WidgetryInputTarget` 由绑定自动投影，供 AcquireFocus、程序化聚焦和 Window InitialFocus 使用；普通子控件继续保留自身焦点。
 
 安装独立 `WidgetryTextFieldHeadlessPlugin` 可使用编辑、长度、ReadOnly/Disabled、根聚焦与文本配置投影，不安装默认 TextField 样式/槽布局/Count/Hint/AutoSize。根没有对应文本配置时，Editor 自己的字体与布局配置保持；根明确设置的配置按原契约投影。安装默认 `WidgetryTextFieldPlugin` 自动确保独立 Plugin，默认普通/只读两种 Scene 组合相同 Headless/Editor，主题样式只作用于默认实例。
 
@@ -73,7 +73,7 @@ AutoSize 从 Parley 最新排版读取视觉行数（包括软换行与预编辑
 
 提示使用 `WidgetryTheme::text_field.hint_warning` 的黄色警告语义。Light、Dark、PinkDream、KamuriViolet 各自定义颜色，Disabled 不投影为灰色。主题刷新只改提示颜色；StyleOwner 管理的复合控件由其拥有者投影完整 TextField palette，包括提示警告色，不被全局独立样式覆盖。
 
-`editor` 提供以 Headless 根为目标的官方编辑状态只读访问，`focus_in_world` / 排队 `focus` 将根映射为真实 InputFocus 目标。根的 `AcquireFocus`、Tab 顺序及 Window InitialFocus 继续使用根作为外部身份；Tab 在真实编辑器、槽中焦点控件与其他控件之间导航。槽内按钮保留自身的点击与焦点，装饰内容不会自动聚焦编辑器，调用方可自行设置拾取穿透或显式调用根聚焦 API。根或祖先的 Disabled 通过继承约束全部内部交互；ReadOnly 仍可选择、导航和复制。
+`editor` 提供以 Headless 根为目标的官方编辑状态只读访问，`focus_in_world` / 排队 `focus` 将根映射为真实 InputFocus 目标。根的 `AcquireFocus` 与 Window InitialFocus 继续使用根作为外部身份。TextField 不自动安装 `TabNavigationPlugin`，也不主动解释 Tab / Shift+Tab 为跨控件焦点跳转；键盘与 IME 继续发送到真实编辑器，官方编辑器自身的内容操作语义保持。槽内按钮保留自身的点击与焦点，装饰内容不会自动聚焦编辑器，调用方可自行设置拾取穿透或显式调用根聚焦 API。根或祖先的 Disabled 通过继承约束全部内部交互；ReadOnly 仍可选择、导航和复制。
 
 用户输入在官方编辑提交前按队列顺序约束。先处理选择、删除，再按实际试替换全文确定最长合法插入前缀；键入、粘贴和 IME 正式提交共用该语义。预编辑仍交给官方编辑器，既不提前裁剪，也不计入正式正文。普通非 Widgetry `EditableText` 不受影响。
 

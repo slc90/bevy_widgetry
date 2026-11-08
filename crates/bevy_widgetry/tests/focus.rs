@@ -63,7 +63,7 @@ fn button_press_focuses_button_even_when_propagation_stops() {
         }
         app.world_mut().spawn((Window::default(), PrimaryWindow));
         app.init_resource::<LostFocus>();
-        assert!(app.is_plugin_added::<TabNavigationPlugin>());
+        assert!(!app.is_plugin_added::<TabNavigationPlugin>());
         app.add_observer(|event: On<FocusLost>, mut lost: ResMut<LostFocus>| {
             if event.entity == event.original_event_target() {
                 lost.0.push(event.entity);

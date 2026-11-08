@@ -1,5 +1,4 @@
 use crate::{auto_size, composition, count, hint, input, length, style};
-use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::text::EditableTextSystems;
 use bevy_widgetry_internal_log::widgetry_debug;
@@ -29,15 +28,11 @@ impl Plugin for WidgetryTextFieldHeadlessPlugin {
         if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
             app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
         }
-        if !app.is_plugin_added::<TabNavigationPlugin>() {
-            app.add_plugins(TabNavigationPlugin);
-        }
         app.init_resource::<bevy::text::FontCx>()
             .init_resource::<bevy::text::LayoutCx>();
         app.add_observer(input::focus_text_field_on_press);
         app.add_observer(input::retain_text_field_focus_on_acquire);
         app.add_observer(input::redirect_gained_focus);
-        app.add_observer(input::navigate_from_editor);
         app.add_systems(
             PreUpdate,
             input::redirect_root_focus.before(bevy::input_focus::InputFocusSystems::Dispatch),

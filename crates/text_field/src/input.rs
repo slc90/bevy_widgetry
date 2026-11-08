@@ -40,7 +40,7 @@ pub(super) fn block_read_only_text_field_edits(
     }
 }
 
-// TextInput only handles caret/selection, so fields without TabIndex need pointer focus here.
+// TextInput handles caret and selection without claiming its editor as the pointer focus target.
 pub(super) fn focus_text_field_on_press(
     event: On<bevy::picking::events::PointerPress>,
     text_fields: Query<(), (With<TextFieldEditor>, Without<InteractionDisabled>)>,
@@ -54,7 +54,7 @@ pub(super) fn focus_text_field_on_press(
     }
 }
 
-// Without TabIndex, AcquireFocus would reach the window and clear pointer focus.
+// An unresolved editor focus request would reach the window and clear the focus claimed by its PointerPress.
 // Stop propagation only when this field already owns focus.
 pub(super) fn retain_text_field_focus_on_acquire(
     mut event: On<AcquireFocus>,
@@ -111,52 +111,4 @@ pub(crate) fn redirect_gained_focus(
     {
         focus.set(parts.editor, event.cause);
     }
-}
-
-pub(crate) fn navigate_from_editor(
-    mut event: On<bevy::input_focus::FocusedInput<bevy::input::keyboard::KeyboardInput>>,
-    editors: Query<(&TextFieldEditor, &EditableText)>,
-    roots: Query<&WidgetryTextFieldHeadless>,
-    nav: bevy::input_focus::tab_navigation::TabNavigation,
-    keys: Res<ButtonInput<KeyCode>>,
-    mut focus: ResMut<InputFocus>,
-    mut visible: ResMut<bevy::input_focus::InputFocusVisible>,
-) -> Result {
-    if event.input.key_code != KeyCode::Tab || !event.input.state.is_pressed() || event.input.repeat
-    {
-        return Ok(());
-    }
-    let Ok((owner, edit)) = editors.get(event.original_event_target()) else {
-        return Ok(());
-    };
-    // Handle at the composite root, after TextInput has decided whether to propagate the key.
-    // A sibling observer on the editor can overwrite propagate(false) when it returns.
-    if event.focused_entity != owner.root {
-        return Ok(());
-    }
-    if edit.is_composing() {
-        return Ok(());
-    }
-    let action = if keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]) {
-        bevy::input_focus::tab_navigation::NavAction::Previous
-    } else {
-        bevy::input_focus::tab_navigation::NavAction::Next
-    };
-    let next = match nav.navigate(&InputFocus::from_entity(owner.root), action) {
-        Ok(next) => next,
-        Err(bevy::input_focus::tab_navigation::TabNavigationError::NoTabGroupForCurrentFocus {
-            new_focus,
-            ..
-        }) => new_focus,
-        Err(error) => {
-            bevy_widgetry_internal_log::widgetry_warn!(%error, "TextField Tab 导航不可用");
-            event.propagate(false);
-            return Ok(());
-        }
-    };
-    let target = roots.get(next).map(|parts| parts.editor).unwrap_or(next);
-    focus.set(target, FocusCause::Navigated);
-    visible.0 = true;
-    event.propagate(false);
-    Ok(())
 }

@@ -6,7 +6,8 @@
     feature = "table",
     feature = "tabs",
     feature = "segmented",
-    feature = "radio_group"
+    feature = "radio_group",
+    feature = "text_field"
 ))]
 
 use bevy::input_focus::{
@@ -54,6 +55,11 @@ pointer_focus_plugin!(
     radio_group,
     "radio_group",
     bevy_widgetry::radio_group::WidgetryRadioGroupPlugin
+);
+pointer_focus_plugin!(
+    text_field,
+    "text_field",
+    bevy_widgetry::text_field::WidgetryTextFieldPlugin
 );
 
 #[cfg(all(feature = "tabs", feature = "table", feature = "segmented"))]
