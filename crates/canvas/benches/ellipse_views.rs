@@ -1,3 +1,8 @@
+const GRID_COLUMNS: usize = 20;
+const GRID_SPACING: Vec2 = Vec2::new(50.0, 30.0);
+const BENCH_VIEWPORT: UVec2 = UVec2::new(800, 600);
+const VIEW_SIZE: Vec2 = Vec2::new(350.0, 250.0);
+
 use bevy::prelude::*;
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, artifact::error, run};
@@ -29,7 +34,7 @@ fn fixture(count: usize, contour: &str) -> Result<Fixture> {
     add_ui_plugins(&mut app);
     app.add_plugins((TransformPlugin, CanvasPlugin));
     app.set_error_handler(ErrorCapture::handler());
-    let camera = spawn_ui_camera(&mut app, UVec2::new(800, 600), 1.0);
+    let camera = spawn_ui_camera(&mut app, BENCH_VIEWPORT, 1.0);
     let document = app.world_mut().spawn(CanvasDocument).id();
     let (radii, stroke_width, scale) = match contour {
         "wide_eccentric" => (Vec2::new(20.0, 0.2), 20.0, Vec3::ONE),
@@ -43,8 +48,12 @@ fn fixture(count: usize, contour: &str) -> Result<Fixture> {
                 app.world_mut(),
                 document,
                 CanvasEllipse { radii },
-                Transform::from_xyz((index % 20) as f32 * 50.0, (index / 20) as f32 * 30.0, 0.0)
-                    .with_scale(scale),
+                Transform::from_xyz(
+                    (index % GRID_COLUMNS) as f32 * GRID_SPACING.x,
+                    (index / GRID_COLUMNS) as f32 * GRID_SPACING.y,
+                    0.0,
+                )
+                .with_scale(scale),
                 CanvasPaint {
                     fill: Some(Color::WHITE),
                     stroke: Some(CanvasStroke {
@@ -59,7 +68,7 @@ fn fixture(count: usize, contour: &str) -> Result<Fixture> {
         );
     }
     for _ in 0..2 {
-        app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } template(move |_|Ok(UiTargetCamera(camera))) Node {width:px(350),height:px(250)} }).map_err(BevyError::error)?;
+        app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } template(move |_|Ok(UiTargetCamera(camera))) Node {width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)} }).map_err(BevyError::error)?;
     }
     frame(&mut app)?;
     frame(&mut app)?;
@@ -76,7 +85,8 @@ fn fixture(count: usize, contour: &str) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("canvas-ellipse-criterion")?;
-    for count in [100, 1000] {
+    let entity_counts = [100, 1000];
+    for count in entity_counts {
         for contour in ["regular", "wide_eccentric", "thin_eccentric"] {
             for update_radii in [false, true] {
                 let operation = if update_radii {

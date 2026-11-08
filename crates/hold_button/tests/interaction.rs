@@ -1,5 +1,9 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const BEFORE_HOLD_THRESHOLD_FRAMES: usize = 189;
+const SUCCESS_HOLD_FRAMES: usize = 190;
+const LONG_HOLD_FRAMES: usize = 200;
+
 use bevy::{
     picking::{hover::Hovered, pointer::*},
     prelude::*,
@@ -113,9 +117,9 @@ fn real_picking_corner_passes_through_and_center_charges_once() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        frames(&mut app, 189);
+        frames(&mut app, BEFORE_HOLD_THRESHOLD_FRAMES);
         assert_eq!(app.world().resource::<Activations>().0, [root]);
-        frames(&mut app, 190);
+        frames(&mut app, SUCCESS_HOLD_FRAMES);
         assert_eq!(app.world().resource::<Activations>().0, [root]);
         input(
             &mut app,
@@ -129,7 +133,7 @@ fn real_picking_corner_passes_through_and_center_charges_once() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        frames(&mut app, 189);
+        frames(&mut app, BEFORE_HOLD_THRESHOLD_FRAMES);
         assert_eq!(app.world().resource::<Activations>().0, [root, root]);
         assert!(app.world().get::<bevy::ui_widgets::Button>(root).is_none());
         assert_eq!(
@@ -159,7 +163,7 @@ fn drag_out_cancels_and_reenter_requires_a_fresh_press() {
         assert!(app.world().get::<Pressed>(root).is_none());
         at.position = Vec2::splat(96.0);
         input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ZERO });
-        frames(&mut app, 200);
+        frames(&mut app, LONG_HOLD_FRAMES);
         assert!(app.world().resource::<Activations>().0.is_empty());
         input(
             &mut app,
@@ -173,7 +177,7 @@ fn drag_out_cancels_and_reenter_requires_a_fresh_press() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        frames(&mut app, 189);
+        frames(&mut app, BEFORE_HOLD_THRESHOLD_FRAMES);
         assert_eq!(app.world().resource::<Activations>().0, [root]);
     }
 }
@@ -215,7 +219,7 @@ fn parent_disabled_and_hidden_reject_held_pointer_after_recovery() {
                 .entity_mut(parent)
                 .remove::<InteractionDisabled>();
         }
-        frames(&mut app, 200);
+        frames(&mut app, LONG_HOLD_FRAMES);
         assert!(app.world().resource::<Activations>().0.is_empty());
         input(
             &mut app,
@@ -229,7 +233,7 @@ fn parent_disabled_and_hidden_reject_held_pointer_after_recovery() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        frames(&mut app, 189);
+        frames(&mut app, BEFORE_HOLD_THRESHOLD_FRAMES);
         assert_eq!(app.world().resource::<Activations>().0, [root]);
     }
 }
@@ -282,7 +286,7 @@ fn keyboard_and_pointer_cannot_inherit_each_others_held_input() {
         PointerAction::Release(PointerButton::Primary),
     );
     key(&mut app, ButtonState::Pressed, true);
-    frames(&mut app, 200);
+    frames(&mut app, LONG_HOLD_FRAMES);
     assert!(app.world().get::<Pressed>(root).is_none());
     assert!(app.world().resource::<Activations>().0.is_empty());
     key(&mut app, ButtonState::Released, false);
@@ -294,7 +298,7 @@ fn keyboard_and_pointer_cannot_inherit_each_others_held_input() {
         PointerAction::Press(PointerButton::Primary),
     );
     key(&mut app, ButtonState::Released, false);
-    frames(&mut app, 200);
+    frames(&mut app, LONG_HOLD_FRAMES);
     assert!(app.world().get::<Pressed>(root).is_none());
     assert!(app.world().resource::<Activations>().0.is_empty());
     input(
@@ -309,7 +313,7 @@ fn keyboard_and_pointer_cannot_inherit_each_others_held_input() {
         &at,
         PointerAction::Press(PointerButton::Primary),
     );
-    frames(&mut app, 189);
+    frames(&mut app, BEFORE_HOLD_THRESHOLD_FRAMES);
     assert_eq!(app.world().resource::<Activations>().0, [root]);
 }
 
@@ -375,6 +379,6 @@ fn existing_nested_content_reparented_into_button_remains_non_pickable() {
         PointerAction::Press(PointerButton::Primary),
     );
     assert!(app.world().get::<Pressed>(root).is_some());
-    frames(&mut app, 189);
+    frames(&mut app, BEFORE_HOLD_THRESHOLD_FRAMES);
     assert_eq!(app.world().resource::<Activations>().0, [root]);
 }

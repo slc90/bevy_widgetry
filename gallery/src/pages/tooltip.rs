@@ -1,3 +1,15 @@
+const TARGET_LEFT_PERCENT: f32 = 40.0;
+
+const ICON_SIZE: f32 = 20.0;
+const PLACEMENT_PANEL_MIN_HEIGHT: f32 = 180.0;
+const CENTER_TARGET_TOP: f32 = 32.0;
+const RIGHT_TARGET_TOP: f32 = 92.0;
+
+const DETAIL_GAP: f32 = 2.0;
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 8.0;
+
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::TooltipKey;
@@ -40,18 +52,18 @@ pub(crate) fn scene() -> impl Scene {
         template(|_| Ok(TooltipDemo))
         Node {
             width: percent(100), height: percent(100),
-            flex_direction: FlexDirection::Column, row_gap: px(16),
+            flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP),
         }
         Children [
             @localized(TextKey::Navigation(NavigationKey::Tooltip)) bevy_widgetry::text::WidgetryText--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start }
                 Children [@localized(TextKey::Common(CommonKey::Basic)) bevy_widgetry::text::WidgetryText-- @basic_button()]--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start }
                 Children [@localized(TextKey::Tooltip(TooltipKey::RichContent)) bevy_widgetry::text::WidgetryText-- @rich_button()]--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start }
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @disabled_button()]--
             @bubble::scene()--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8), flex_grow: 1.0, min_height: px(0) }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), flex_grow: 1.0, min_height: px(0) }
                 Children [@localized(TextKey::Tooltip(TooltipKey::Placement)) bevy_widgetry::text::WidgetryText-- @placement_area()]
         ]
     }
@@ -72,13 +84,13 @@ fn rich_button() -> impl Scene {
         #RichTooltip
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Tooltip(TooltipKey::RichContent2)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{
-            Node { align_items: AlignItems::Center, column_gap: px(8) }
+            Node { align_items: AlignItems::Center, column_gap: px(CONTROL_GAP) }
                 Children [
                     @WidgetryIcon {
                         @path: {GalleryIcon::ButtonStar.path()},
-                        @max_size: {Some(UVec2::new(20, 20))},
-                    } Node { width: px(20), height: px(20) }--
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(2) }
+                        @max_size: {Some(UVec2::splat(ICON_SIZE as u32))},
+                    } Node { width: px(ICON_SIZE), height: px(ICON_SIZE) }--
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
                         Children [@localized(TextKey::Tooltip(TooltipKey::RichTooltip)) bevy_widgetry::text::WidgetryText-- @localized(TextKey::Tooltip(TooltipKey::IconAndMultipleLines)) bevy_widgetry::text::WidgetryText]
                 ]
         })} }
@@ -100,11 +112,11 @@ fn disabled_button() -> impl Scene {
 
 fn placement_area() -> impl Scene {
     bsn! {
-        Node { width: percent(100), flex_grow: 1.0, min_height: px(180) }
+        Node { width: percent(100), flex_grow: 1.0, min_height: px(PLACEMENT_PANEL_MIN_HEIGHT) }
         Children [
-            #CenterTooltip @placement_button(TextKey::Tooltip(TooltipKey::Center)) Node { position_type: PositionType::Absolute, left: percent(40), top: px(32) }--
-            #RightTooltip @placement_button(TextKey::Tooltip(TooltipKey::Right)) Node { position_type: PositionType::Absolute, right: px(0), top: px(92) }--
-            #BottomTooltip @placement_button(TextKey::Tooltip(TooltipKey::Bottom)) Node { position_type: PositionType::Absolute, left: percent(40), bottom: px(0) }
+            #CenterTooltip @placement_button(TextKey::Tooltip(TooltipKey::Center)) Node { position_type: PositionType::Absolute, left: percent(TARGET_LEFT_PERCENT), top: px(CENTER_TARGET_TOP) }--
+            #RightTooltip @placement_button(TextKey::Tooltip(TooltipKey::Right)) Node { position_type: PositionType::Absolute, right: px(0), top: px(RIGHT_TARGET_TOP) }--
+            #BottomTooltip @placement_button(TextKey::Tooltip(TooltipKey::Bottom)) Node { position_type: PositionType::Absolute, left: percent(TARGET_LEFT_PERCENT), bottom: px(0) }
         ]
     }
 }

@@ -1,3 +1,16 @@
+const NORMAL_OUTLINE_ALPHA: f32 = 0.28;
+const HOVER_BACKGROUND_ALPHA: f32 = 0.035;
+const HOVER_OUTLINE_ALPHA: f32 = 0.48;
+const PRESSED_BACKGROUND_ALPHA: f32 = 0.07;
+const PRESSED_OUTLINE_ALPHA: f32 = 0.65;
+const WINDOW_INSET: f32 = 24.0;
+const BUTTON_WIDTH: f32 = 72.0;
+const BUTTON_HEIGHT: f32 = 30.0;
+const BUTTON_BORDER_WIDTH: f32 = 1.0;
+const BUTTON_CORNER_RADIUS: f32 = 5.0;
+
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use super::SplashSession;
 use crate::i18n::{TextKey, localized};
 use bevy::prelude::*;
@@ -23,18 +36,18 @@ pub(super) fn scene() -> impl Scene {
         Visibility::Hidden
         ZIndex(1)
         Node {
-            position_type: PositionType::Absolute, right: px(24), top: px(24),
-            width: px(72), height: px(30),
+            position_type: PositionType::Absolute, right: px(WINDOW_INSET), top: px(WINDOW_INSET),
+            width: px(BUTTON_WIDTH), height: px(BUTTON_HEIGHT),
             justify_content: JustifyContent::Center, align_items: AlignItems::Center,
-            border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(5)),
+            border: UiRect::all(px(BUTTON_BORDER_WIDTH)), border_radius: BorderRadius::all(px(BUTTON_CORNER_RADIUS)),
         }
         BackgroundColor({Color::NONE})
-        template(|_| Ok(BorderColor::all(border(0.28))))
+        template(|_| Ok(BorderColor::all(border(NORMAL_OUTLINE_ALPHA))))
         template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
         Children [
             Name("SplashSkipLabel")
             @localized(TextKey::SplashSkip)
-            TextFont { font_size: bevy::text::FontSize::Px(14.0) }
+            TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }
             TextColor({Color::srgba(0.38, 0.32, 0.46, 0.9)})
             template(|_| Ok(Pickable::IGNORE))
         ]
@@ -78,20 +91,30 @@ fn over(
     event: On<PointerOver>,
     mut buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<SplashSkip>>,
 ) {
-    visual(event.entity, 0.035, 0.48, &mut buttons);
+    visual(
+        event.entity,
+        HOVER_BACKGROUND_ALPHA,
+        HOVER_OUTLINE_ALPHA,
+        &mut buttons,
+    );
 }
 fn out(
     event: On<PointerOut>,
     mut buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<SplashSkip>>,
 ) {
-    visual(event.entity, 0.0, 0.28, &mut buttons);
+    visual(event.entity, 0.0, NORMAL_OUTLINE_ALPHA, &mut buttons);
 }
 fn press(
     event: On<PointerPress>,
     mut buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<SplashSkip>>,
 ) {
     if event.button == PointerButton::Primary {
-        visual(event.entity, 0.07, 0.65, &mut buttons);
+        visual(
+            event.entity,
+            PRESSED_BACKGROUND_ALPHA,
+            PRESSED_OUTLINE_ALPHA,
+            &mut buttons,
+        );
     }
 }
 fn release(
@@ -99,12 +122,12 @@ fn release(
     mut buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<SplashSkip>>,
 ) {
     if event.button == PointerButton::Primary {
-        visual(event.entity, 0.0, 0.28, &mut buttons);
+        visual(event.entity, 0.0, NORMAL_OUTLINE_ALPHA, &mut buttons);
     }
 }
 fn cancel(
     event: On<PointerCancel>,
     mut buttons: Query<(&mut BackgroundColor, &mut BorderColor), With<SplashSkip>>,
 ) {
-    visual(event.entity, 0.0, 0.28, &mut buttons);
+    visual(event.entity, 0.0, NORMAL_OUTLINE_ALPHA, &mut buttons);
 }

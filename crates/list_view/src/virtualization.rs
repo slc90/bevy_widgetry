@@ -1,3 +1,7 @@
+const ROW_PADDING_X: f32 = 8.0;
+const ROW_BORDER_WIDTH: f32 = 1.0;
+const ROW_CORNER_RADIUS: f32 = 3.0;
+
 use crate::error::{RuntimeFault, core, failure};
 use crate::source::DataSource;
 use crate::view::{BottomSpacer, ListDiagnostics, TopSpacer, validate_source};
@@ -431,7 +435,7 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
                     Node {
                         width: percent(100), height: px(height), min_height: px(height), max_height: px(height),
                         box_sizing: BoxSizing::BorderBox, flex_shrink: 0.0, margin: UiRect::ZERO,
-                        padding: UiRect::horizontal(px(8)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(3)),
+                        padding: UiRect::horizontal(px(ROW_PADDING_X)), border: UiRect::all(px(ROW_BORDER_WIDTH)), border_radius: BorderRadius::all(px(ROW_CORNER_RADIUS)),
                     }
                     Children [{children}]
                 };

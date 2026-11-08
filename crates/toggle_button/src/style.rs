@@ -1,3 +1,9 @@
+const BUTTON_MIN_HEIGHT: f32 = 32.0;
+const BUTTON_PADDING_X: f32 = 12.0;
+const BUTTON_PADDING_Y: f32 = 6.0;
+const BUTTON_BORDER_WIDTH: f32 = 1.0;
+const BUTTON_CORNER_RADIUS: f32 = 4.0;
+
 use crate::WidgetryToggleButtonHeadless;
 use crate::{WidgetryToggleButton, WidgetryToggleButtonColorOverrides};
 use bevy::ecs::entity::EntityHashMap;
@@ -34,8 +40,8 @@ impl WidgetryToggleButton {
             @WidgetryToggleButtonHeadless { @selected: selected }
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             Node {
-                min_height: px(32), padding: UiRect::axes(px(12), px(6)),
-                border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(4)),
+                min_height: px(BUTTON_MIN_HEIGHT), padding: UiRect::axes(px(BUTTON_PADDING_X), px(BUTTON_PADDING_Y)),
+                border: UiRect::all(px(BUTTON_BORDER_WIDTH)), border_radius: BorderRadius::all(px(BUTTON_CORNER_RADIUS)),
                 align_items: AlignItems::Center, justify_content: JustifyContent::Center,
             }
             BackgroundColor BorderColor

@@ -376,22 +376,43 @@ impl CanvasFailureState {
 
 impl CanvasInput {
     fn key(&self, values: &mut Vec<u64>) {
+        const INPUT_ENTITY: u64 = 0;
+        const INPUT_ENTITIES: u64 = 1;
+        const INPUT_FLOAT: u64 = 2;
+        const INPUT_INDEX: u64 = 3;
+        const INPUT_FLAG: u64 = 4;
+        const INPUT_POINT: u64 = 5;
+        const INPUT_POINTS: u64 = 6;
+        const INPUT_RECTANGLE: u64 = 7;
+        const INPUT_ELLIPSE: u64 = 8;
+        const INPUT_GEOMETRY: u64 = 9;
+        const INPUT_PATH: u64 = 10;
+        const INPUT_COMMAND: u64 = 11;
+        const INPUT_TRANSFORM: u64 = 12;
+        const INPUT_PAINT: u64 = 13;
+
         fn floats(values: &mut Vec<u64>, floats: impl IntoIterator<Item = f32>) {
             values.extend(floats.into_iter().map(|v| u64::from(v.to_bits())));
         }
         fn command(values: &mut Vec<u64>, c: CanvasPathCommand) {
             use CanvasPathCommand::*;
+            const COMMAND_MOVE_TO: u64 = 0;
+            const COMMAND_LINE_TO: u64 = 1;
+            const COMMAND_QUAD_TO: u64 = 2;
+            const COMMAND_CUBIC_TO: u64 = 3;
+            const COMMAND_ARC_TO: u64 = 4;
+            const COMMAND_CLOSE: u64 = 5;
             match c {
                 MoveTo(p) => {
-                    values.push(0);
+                    values.push(COMMAND_MOVE_TO);
                     floats(values, p.to_array());
                 }
                 LineTo(p) => {
-                    values.push(1);
+                    values.push(COMMAND_LINE_TO);
                     floats(values, p.to_array());
                 }
                 QuadTo { control, to } => {
-                    values.push(2);
+                    values.push(COMMAND_QUAD_TO);
                     floats(values, control.to_array().into_iter().chain(to.to_array()));
                 }
                 CubicTo {
@@ -399,7 +420,7 @@ impl CanvasInput {
                     control2,
                     to,
                 } => {
-                    values.push(3);
+                    values.push(COMMAND_CUBIC_TO);
                     floats(
                         values,
                         control1
@@ -416,7 +437,7 @@ impl CanvasInput {
                     sweep,
                     to,
                 } => {
-                    values.extend([4, u64::from(large_arc), u64::from(sweep)]);
+                    values.extend([COMMAND_ARC_TO, u64::from(large_arc), u64::from(sweep)]);
                     floats(
                         values,
                         radii
@@ -426,46 +447,46 @@ impl CanvasInput {
                             .chain(to.to_array()),
                     );
                 }
-                Close => values.push(5),
+                Close => values.push(COMMAND_CLOSE),
             }
         }
         match self {
-            Self::Entity { value, .. } => values.extend([0, value.to_bits()]),
+            Self::Entity { value, .. } => values.extend([INPUT_ENTITY, value.to_bits()]),
             Self::Entities {
                 values: entities, ..
             } => {
-                values.extend([1, entities.len() as u64]);
+                values.extend([INPUT_ENTITIES, entities.len() as u64]);
                 values.extend(entities.iter().map(|e| e.to_bits()));
             }
-            Self::Float { value, .. } => values.extend([2, u64::from(value.to_bits())]),
-            Self::Index { value, .. } => values.extend([3, *value as u64]),
-            Self::Flag { value, .. } => values.extend([4, u64::from(*value)]),
+            Self::Float { value, .. } => values.extend([INPUT_FLOAT, u64::from(value.to_bits())]),
+            Self::Index { value, .. } => values.extend([INPUT_INDEX, *value as u64]),
+            Self::Flag { value, .. } => values.extend([INPUT_FLAG, u64::from(*value)]),
             Self::Point { value, .. } => {
-                values.push(5);
+                values.push(INPUT_POINT);
                 floats(values, value.to_array());
             }
             Self::Points { values: points, .. } => {
-                values.extend([6, points.len() as u64]);
+                values.extend([INPUT_POINTS, points.len() as u64]);
                 floats(values, points.iter().flat_map(|p| p.to_array()));
             }
             Self::Rectangle(r) => {
-                values.push(7);
+                values.push(INPUT_RECTANGLE);
                 floats(
                     values,
                     r.size.to_array().into_iter().chain([r.corner_radius]),
                 );
             }
             Self::Ellipse(e) => {
-                values.push(8);
+                values.push(INPUT_ELLIPSE);
                 floats(values, e.radii.to_array());
             }
             Self::Geometry(g) => {
-                values.push(9);
+                values.push(INPUT_GEOMETRY);
                 match g {
                     CanvasGeometry::Rectangle(r) => Self::Rectangle(*r).key(values),
                     CanvasGeometry::Ellipse(e) => Self::Ellipse(*e).key(values),
                     CanvasGeometry::Path(p) => {
-                        values.extend([10, p.commands.len() as u64]);
+                        values.extend([INPUT_PATH, p.commands.len() as u64]);
                         for c in &p.commands {
                             command(values, *c);
                         }
@@ -473,11 +494,11 @@ impl CanvasInput {
                 }
             }
             Self::Command { index, value } => {
-                values.extend([11, *index as u64]);
+                values.extend([INPUT_COMMAND, *index as u64]);
                 command(values, *value);
             }
             Self::Transform(t) => {
-                values.push(12);
+                values.push(INPUT_TRANSFORM);
                 floats(
                     values,
                     t.translation
@@ -488,7 +509,7 @@ impl CanvasInput {
                 );
             }
             Self::Paint(p) => {
-                values.extend([13, p.fill_rule as u64, u64::from(p.fill.is_some())]);
+                values.extend([INPUT_PAINT, p.fill_rule as u64, u64::from(p.fill.is_some())]);
                 if let Some(fill) = p.fill {
                     floats(values, fill.to_linear().to_f32_array());
                 }

@@ -1,3 +1,10 @@
+const PATH_SWEEP_PI_FACTOR: f32 = 1.5;
+const PATH_RADIUS: f32 = 40.0;
+const BENCH_VIEWPORT: UVec2 = UVec2::new(800, 600);
+const VIEW_MARGIN: f32 = 40.0;
+const VIEW_SIZE: Vec2 = Vec2::new(200.0, 160.0);
+const SECONDARY_VIEW_LEFT: f32 = 300.0;
+
 use bevy::{
     picking::{hover::PointerCaptureMap, pointer::*},
     prelude::*,
@@ -37,18 +44,18 @@ fn fixture(count: usize) -> Result<Fixture> {
         .world_mut()
         .spawn((
             Window {
-                resolution: bevy::window::WindowResolution::new(800, 600),
+                resolution: bevy::window::WindowResolution::new(BENCH_VIEWPORT.x, BENCH_VIEWPORT.y),
                 ..default()
             },
             bevy::window::PrimaryWindow,
         ))
         .id();
-    let camera = spawn_picking_camera(&mut app, window, UVec2::new(800, 600), 1.0);
+    let camera = spawn_picking_camera(&mut app, window, BENCH_VIEWPORT, 1.0);
     let document = app.world_mut().spawn(CanvasDocument).id();
     let pointer = pointer_ids()[1];
     app.world_mut().spawn(pointer);
-    let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(40),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?.id();
-    app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(300),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?;
+    let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(VIEW_MARGIN),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
+    app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(SECONDARY_VIEW_LEFT),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?;
     frame(&mut app)?;
     frame(&mut app)?;
     CanvasView::set_mode_in_world(
@@ -79,7 +86,8 @@ fn fixture(count: usize) -> Result<Fixture> {
     for i in 0..count {
         let mut point = at.clone();
         point.position +=
-            Vec2::from_angle(i as f32 / count as f32 * std::f32::consts::PI * 1.5) * 40.0;
+            Vec2::from_angle(i as f32 / count as f32 * std::f32::consts::PI * PATH_SWEEP_PI_FACTOR)
+                * PATH_RADIUS;
         for action in [
             PointerAction::Move { delta: Vec2::ONE },
             PointerAction::Press(PointerButton::Primary),
@@ -124,7 +132,8 @@ fn fixture(count: usize) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("canvas-pen-criterion")?;
-    for count in [100, 1000] {
+    let entity_counts = [100, 1000];
+    for count in entity_counts {
         run(
             &mut harness,
             &format!("canvas_pen/views2/commands{count}/held_endpoint_preview_and_frame"),

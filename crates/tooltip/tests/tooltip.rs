@@ -1,6 +1,17 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const EXPECTED_COLD_DELAY_MS: u64 = 200;
+const BEFORE_COLD_DELAY_MS: u64 = EXPECTED_COLD_DELAY_MS - BOUNDARY_STEP_MS;
+const EXPECTED_WARM_DELAY_MS: u64 = 50;
+const BEFORE_WARM_DELAY_MS: u64 = EXPECTED_WARM_DELAY_MS - BOUNDARY_STEP_MS;
+const BOUNDARY_STEP_MS: u64 = 1;
+const POST_HIDE_WAIT_MS: u64 = 500;
+const IDLE_FRAME_MS: u64 = 100;
+const NORMAL_FRAME_MS: u64 = 16;
+
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 use bevy::{
     camera::visibility::VisibilitySystems,
     ecs::entity::EntityHashMap,
@@ -70,7 +81,7 @@ fn app() -> App {
     let warm = app.world_mut().spawn_scene(bsn! { @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} } }).unwrap().id();
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "Tooltip font/icon 前置资源",
         |world| {
             world.resource::<Assets<Font>>().contains(&font)
@@ -148,9 +159,9 @@ fn public_hover_lifecycle_rebuilds_content_and_cleans_tree() {
     let nested = app.world().get::<Children>(a).unwrap()[1];
     app.world_mut().resource_mut::<HoverTarget>().0 = Some(label);
     advance(&mut app, 0);
-    advance(&mut app, 199);
+    advance(&mut app, BEFORE_COLD_DELAY_MS);
     assert!(popups(&mut app).is_empty());
-    advance(&mut app, 1);
+    advance(&mut app, BOUNDARY_STEP_MS);
     let popup = popups(&mut app);
     assert_eq!(popup.len(), 1);
     let popup = popup[0];
@@ -163,7 +174,7 @@ fn public_hover_lifecycle_rebuilds_content_and_cleans_tree() {
         .unwrap();
     assert_eq!(app.world().get::<Body>(*body).unwrap().0, 1);
     app.world_mut().resource_mut::<HoverTarget>().0 = Some(nested);
-    advance(&mut app, 1);
+    advance(&mut app, BOUNDARY_STEP_MS);
     assert_eq!(popups(&mut app), vec![popup]);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     app.world_mut().resource_mut::<HoverTarget>().0 = None;
@@ -175,14 +186,14 @@ fn public_hover_lifecycle_rebuilds_content_and_cleans_tree() {
     );
     app.world_mut().resource_mut::<HoverTarget>().0 = Some(b);
     advance(&mut app, 0);
-    advance(&mut app, 50);
+    advance(&mut app, EXPECTED_WARM_DELAY_MS);
     assert_eq!(popups(&mut app).len(), 1);
     app.world_mut().despawn(b);
     advance(&mut app, 0);
     assert!(popups(&mut app).is_empty());
     app.world_mut().resource_mut::<HoverTarget>().0 = Some(a);
     advance(&mut app, 0);
-    advance(&mut app, 50);
+    advance(&mut app, EXPECTED_WARM_DELAY_MS);
     let popup = popups(&mut app)[0];
     assert_eq!(calls.load(Ordering::SeqCst), 3);
     assert!(app.world().get_entity(old[0]).is_err());
@@ -192,7 +203,7 @@ fn public_hover_lifecycle_rebuilds_content_and_cleans_tree() {
             .is_some_and(|body| body.0 == 3)
     }));
     app.world_mut().despawn(a);
-    advance(&mut app, 500);
+    advance(&mut app, POST_HIDE_WAIT_MS);
     assert!(popups(&mut app).is_empty());
     let waiting = app
         .world_mut()
@@ -202,7 +213,7 @@ fn public_hover_lifecycle_rebuilds_content_and_cleans_tree() {
     app.world_mut().resource_mut::<HoverTarget>().0 = Some(waiting);
     advance(&mut app, 0);
     app.world_mut().despawn(waiting);
-    advance(&mut app, 500);
+    advance(&mut app, POST_HIDE_WAIT_MS);
     assert!(popups(&mut app).is_empty());
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
@@ -217,7 +228,7 @@ fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
         .id();
     app.world_mut().resource_mut::<HoverTarget>().0 = Some(a);
     advance(&mut app, 0);
-    advance(&mut app, 200);
+    advance(&mut app, EXPECTED_COLD_DELAY_MS);
     let popup = popups(&mut app)[0];
     assert!(app.world().get::<OverrideClip>(popup).is_some());
     assert_eq!(
@@ -351,7 +362,7 @@ fn visible_palette_changes_and_reshow_preserve_factory_and_rich_content_contract
     WidgetryTooltipColorOverrides::set_in_world(app.world_mut(), anchor, colors.clone()).unwrap();
     app.world_mut().resource_mut::<HoverTarget>().0 = Some(anchor);
     advance(&mut app, 0);
-    advance(&mut app, 200);
+    advance(&mut app, EXPECTED_COLD_DELAY_MS);
     let first = popups(&mut app)[0];
     let assert_content = |app: &mut App, popup: Entity, foreground: Color| {
         let content = descendants(app, popup);
@@ -370,7 +381,7 @@ fn visible_palette_changes_and_reshow_preserve_factory_and_rich_content_contract
     };
     assert_content(&mut app, first, red);
     for _ in 0..3 {
-        advance(&mut app, 100);
+        advance(&mut app, IDLE_FRAME_MS);
         assert_eq!(popups(&mut app), vec![first]);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
@@ -407,9 +418,9 @@ fn visible_palette_changes_and_reshow_preserve_factory_and_rich_content_contract
     assert!(app.world().get_entity(first).is_err());
     app.world_mut().resource_mut::<HoverTarget>().0 = Some(anchor);
     advance(&mut app, 0);
-    advance(&mut app, 49);
+    advance(&mut app, BEFORE_WARM_DELAY_MS);
     assert!(popups(&mut app).is_empty());
-    advance(&mut app, 1);
+    advance(&mut app, BOUNDARY_STEP_MS);
     let second = popups(&mut app)[0];
     assert_ne!(first, second);
     assert_content(
@@ -476,16 +487,16 @@ fn real_picking_lifecycle_preserves_single_popup_and_factory_quietness() {
             },
         );
         advance(&mut app, 0);
-        advance(&mut app, 199);
+        advance(&mut app, BEFORE_COLD_DELAY_MS);
         assert!(popups(&mut app).is_empty());
-        advance(&mut app, 1);
+        advance(&mut app, BOUNDARY_STEP_MS);
         let popup = popups(&mut app)[0];
         assert_eq!(app.world().get::<ChildOf>(popup).unwrap().parent(), root);
         for _ in 0..5 {
             app.world_mut()
                 .resource_mut::<Messages<bevy::window::RequestRedraw>>()
                 .clear();
-            advance(&mut app, 16);
+            advance(&mut app, NORMAL_FRAME_MS);
             assert_eq!(popups(&mut app), vec![popup]);
             assert!(
                 app.world()
@@ -496,7 +507,7 @@ fn real_picking_lifecycle_preserves_single_popup_and_factory_quietness() {
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         queue_pointer(&mut app, id, location, PointerAction::Cancel);
         advance(&mut app, 0);
-        advance(&mut app, 200);
+        advance(&mut app, EXPECTED_COLD_DELAY_MS);
         assert!(popups(&mut app).is_empty());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }

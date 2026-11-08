@@ -1,3 +1,7 @@
+pub(crate) const MAX_SAMPLE_RATE: u32 = 1_000_000_000;
+pub(crate) const NANOS_PER_SECOND: u128 = 1_000_000_000;
+pub(crate) const MILLISECONDS_PER_SECOND: u64 = 1000;
+
 use crate::WaveformAmplitude;
 use crate::error::failure;
 use crate::{WaveformError, WaveformFailure};
@@ -26,21 +30,21 @@ impl WaveformCursor {
 // Duration has only nanosecond precision.
 // Round nanoseconds up at exact frame boundaries because rounding down would lose a frame on round-trip conversion.
 pub fn duration_from_frames(frames: u64, sample_rate: u32) -> Result<Duration, WaveformFailure> {
-    if !(1..=1_000_000_000).contains(&sample_rate) {
+    if !(1..=MAX_SAMPLE_RATE).contains(&sample_rate) {
         return Err(failure(
             WaveformError::SampleRate { sample_rate },
             "waveform.time.sample_rate",
         ));
     }
-    let nanos = (u128::from(frames) * 1_000_000_000).div_ceil(u128::from(sample_rate));
+    let nanos = (u128::from(frames) * NANOS_PER_SECOND).div_ceil(u128::from(sample_rate));
     Ok(Duration::new(
-        (nanos / 1_000_000_000) as u64,
-        (nanos % 1_000_000_000) as u32,
+        (nanos / NANOS_PER_SECOND) as u64,
+        (nanos % NANOS_PER_SECOND) as u32,
     ))
 }
 
 pub fn sample_boundary(position: Duration, sample_rate: u32) -> Result<u64, WaveformFailure> {
-    if !(1..=1_000_000_000).contains(&sample_rate) {
+    if !(1..=MAX_SAMPLE_RATE).contains(&sample_rate) {
         return Err(failure(
             WaveformError::SampleRate { sample_rate },
             "waveform.time.sample_rate",
@@ -49,7 +53,7 @@ pub fn sample_boundary(position: Duration, sample_rate: u32) -> Result<u64, Wave
     let frames = position
         .as_nanos()
         .checked_mul(u128::from(sample_rate))
-        .map(|value| value / 1_000_000_000);
+        .map(|value| value / NANOS_PER_SECOND);
     frames
         .and_then(|value| u64::try_from(value).ok())
         .ok_or_else(|| {
@@ -93,14 +97,14 @@ impl WaveformConfig {
     ) -> Result<usize, WaveformFailure> {
         self.validate()?;
         let product = u64::from(sample_rate) * u64::from(self.visible_duration_ms);
-        let frames = product / 1000;
+        let frames = product / MILLISECONDS_PER_SECOND;
         let capacity = usize::try_from(frames).ok();
         let bytes = capacity
             .and_then(|value| value.checked_mul(channels))
             .and_then(|value| value.checked_mul(size_of::<f32>()));
-        if !(1..=1_000_000_000).contains(&sample_rate)
+        if !(1..=MAX_SAMPLE_RATE).contains(&sample_rate)
             || channels == 0
-            || !product.is_multiple_of(1000)
+            || !product.is_multiple_of(MILLISECONDS_PER_SECOND)
             || frames == 0
             || bytes.is_none_or(|value| value > isize::MAX as usize)
         {

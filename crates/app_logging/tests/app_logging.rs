@@ -1,5 +1,15 @@
 #![allow(clippy::disallowed_macros)]
 
+const EXPECTED_LOG_FILENAME_LEN: usize = 27;
+const EXPECTED_FILENAME_TIMESTAMP_LEN: usize = 23;
+const YEAR_END: usize = 4;
+const MONTH_END: usize = 7;
+const DATE_END: usize = 10;
+const HOUR_END: usize = 13;
+const MINUTE_END: usize = 16;
+const SECOND_END: usize = 19;
+const MILLISECOND_RANGE: std::ops::Range<usize> = 20..23;
+
 use bevy::ecs::error::Severity;
 use bevy::log::{debug, error, info, trace, warn};
 use bevy::prelude::*;
@@ -62,12 +72,16 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     assert_eq!(files.len(), 1);
     let path = files[0].path();
     let name = files[0].file_name().to_string_lossy().into_owned();
-    assert_eq!(name.len(), 27);
-    assert_eq!(&name[23..], ".log");
-    for (index, byte) in name.bytes().take(23).enumerate() {
+    assert_eq!(name.len(), EXPECTED_LOG_FILENAME_LEN);
+    assert_eq!(&name[EXPECTED_FILENAME_TIMESTAMP_LEN..], ".log");
+    for (index, byte) in name
+        .bytes()
+        .take(EXPECTED_FILENAME_TIMESTAMP_LEN)
+        .enumerate()
+    {
         match index {
-            4 | 7 | 13 | 16 | 19 => assert_eq!(byte, b'-'),
-            10 => assert_eq!(byte, b'_'),
+            YEAR_END | MONTH_END | HOUR_END | MINUTE_END | SECOND_END => assert_eq!(byte, b'-'),
+            DATE_END => assert_eq!(byte, b'_'),
             _ => assert!(byte.is_ascii_digit()),
         }
     }
@@ -104,9 +118,13 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     assert!(!contents.contains('\u{1b}'));
     assert!(!contents.contains("bevy_widgetry"));
     let timestamp = contents.lines().next().ok_or("日志为空")?;
-    assert_eq!(timestamp.as_bytes()[10], b' ');
-    assert_eq!(timestamp.as_bytes()[19], b'.');
-    assert!(timestamp.as_bytes()[20..23].iter().all(u8::is_ascii_digit));
+    assert_eq!(timestamp.as_bytes()[DATE_END], b' ');
+    assert_eq!(timestamp.as_bytes()[SECOND_END], b'.');
+    assert!(
+        timestamp.as_bytes()[MILLISECOND_RANGE]
+            .iter()
+            .all(u8::is_ascii_digit)
+    );
     Ok(())
 }
 

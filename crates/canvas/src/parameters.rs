@@ -1,3 +1,12 @@
+const SIZE_HANDLE_INSET: f32 = 14.0;
+const SIZE_HANDLE_MAX_INSET_FRACTION: f32 = 0.35;
+const CORNER_HANDLE_INSET: f32 = 26.0;
+const CORNER_HANDLE_MAX_INSET_FRACTION: f32 = 0.65;
+const HANDLE_HIT_RADIUS_SQUARED: f32 = 25.0;
+const ROUND_HANDLE_SEGMENTS: u32 = 12;
+const SIZE_HANDLE_SEGMENTS: u32 = 4;
+const HANDLE_HALF_SIZE: f32 = 4.0;
+
 use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasEllipse, CanvasGeometry, CanvasPaint, CanvasRectangle};
 use bevy::{math::DVec2, prelude::*};
@@ -57,15 +66,20 @@ pub(crate) fn controls(
             p + delta.normalize_or_zero() * (d / zoom).min(delta.length() * limit)
         };
         let mut handles = crate::scale::controls(corners)
-            .map(|(h, p)| (ParameterHandle::Size(h), inset(p, 14.0, 0.35)))
+            .map(|(h, p)| {
+                (
+                    ParameterHandle::Size(h),
+                    inset(p, SIZE_HANDLE_INSET, SIZE_HANDLE_MAX_INSET_FRACTION),
+                )
+            })
             .to_vec();
         if let Geometry::Rectangle(rectangle) = geometry {
             handles.push((
                 ParameterHandle::CornerRadius,
                 inset(
                     project(-half + Vec2::splat(rectangle.corner_radius)),
-                    26.0,
-                    0.65,
+                    CORNER_HANDLE_INSET,
+                    CORNER_HANDLE_MAX_INSET_FRACTION,
                 ),
             ));
         }
@@ -85,7 +99,7 @@ pub(crate) fn hit(
             .into_iter()
             .filter_map(|(h, p)| {
                 let distance = (point - p).length_squared() * zoom * zoom;
-                (distance <= 25.0).then_some((h, distance))
+                (distance <= HANDLE_HIT_RADIUS_SQUARED).then_some((h, distance))
             })
             .min_by(|(_, a), (_, b)| a.total_cmp(b)))
     })()
@@ -107,15 +121,15 @@ pub(crate) fn decorate(mesh: Mesh, handles: &[(ParameterHandle, Vec2)], zoom: f3
     for (handle, center) in handles {
         let base = positions.len() as u32;
         let count = if *handle == ParameterHandle::CornerRadius {
-            12
+            ROUND_HANDLE_SEGMENTS
         } else {
-            4
+            SIZE_HANDLE_SEGMENTS
         };
         positions.push(center.extend(0.0).to_array());
         for i in 0..count {
             let angle = i as f32 * std::f32::consts::TAU / count as f32;
             positions.push(
-                (*center + Vec2::from_angle(angle) * (4.0 / zoom))
+                (*center + Vec2::from_angle(angle) * (HANDLE_HALF_SIZE / zoom))
                     .extend(0.0)
                     .to_array(),
             );

@@ -16,6 +16,9 @@ fn width(world: &World, e: Entity) -> f32 {
 }
 #[test]
 fn percentage_constraints_and_scale_factors_use_logical_content_space() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+    let pixel_tolerance = 1.1;
+
     for scale in [1.0, 2.0] {
         let mut app = picking_app();
         app.add_plugins(WidgetrySplitterPlugin);
@@ -33,14 +36,19 @@ fn percentage_constraints_and_scale_factors_use_logical_content_space() {
         .unwrap();
         settle(&mut app);
         let a = app.world().get::<Children>(root).unwrap()[0];
-        assert!((width(app.world(), a) - 254.0).abs() < 1.1);
-        assert!((WidgetrySplitter::split_ratio(app.world(), root).unwrap() - 0.254).abs() < 0.001);
-        assert!((width(app.world(), root) - 1016.0).abs() < 1.1);
+        assert!((width(app.world(), a) - 254.0).abs() < pixel_tolerance);
+        assert!(
+            (WidgetrySplitter::split_ratio(app.world(), root).unwrap() - 0.254).abs()
+                < COMPARISON_TOLERANCE
+        );
+        assert!((width(app.world(), root) - 1016.0).abs() < pixel_tolerance);
     }
 }
 
 #[test]
 fn external_scroll_area_owns_overflow_and_scroll_state() {
+    let pixel_tolerance = 1.1;
+
     use bevy_widgetry_scroll_area::{
         ScrollAxis, WidgetryScrollArea, WidgetryScrollAreaPlugin, WidgetryScrollAreaViewport,
     };
@@ -70,8 +78,8 @@ fn external_scroll_area_owns_overflow_and_scroll_state() {
         .find(|(_, n)| n.as_str() == "OverflowSplitter")
         .unwrap()
         .0;
-    assert!((width(app.world(), root) - 708.0).abs() < 1.1);
-    assert!((width(app.world(), scroll) - 200.0).abs() < 1.1);
+    assert!((width(app.world(), root) - 708.0).abs() < pixel_tolerance);
+    assert!((width(app.world(), scroll) - 200.0).abs() < pixel_tolerance);
     assert_eq!(
         app.world().get::<Node>(root).unwrap().overflow,
         Overflow::visible()
@@ -90,6 +98,8 @@ fn external_scroll_area_owns_overflow_and_scroll_state() {
 
 #[test]
 fn dynamic_pixel_maxima_can_shrink_a_root_with_percentage_minima() {
+    let pixel_tolerance = 1.0;
+
     let mut app = picking_app();
     app.add_plugins(WidgetrySplitterPlugin);
     spawn_ui_camera(&mut app, UVec2::splat(1600), 1.25);
@@ -115,9 +125,9 @@ fn dynamic_pixel_maxima_can_shrink_a_root_with_percentage_minima() {
     let errors = bevy_widgetry_test_utils::ErrorCapture::default();
     errors.run(|| settle(&mut app));
     assert!(errors.take().is_empty());
-    assert!((width(app.world(), root) - 608.0).abs() < 1.0);
-    assert!((width(app.world(), a) - 300.0).abs() < 1.0);
-    assert!((width(app.world(), b) - 300.0).abs() < 1.0);
+    assert!((width(app.world(), root) - 608.0).abs() < pixel_tolerance);
+    assert!((width(app.world(), a) - 300.0).abs() < pixel_tolerance);
+    assert!((width(app.world(), b) - 300.0).abs() < pixel_tolerance);
     assert_eq!(
         WidgetrySplitter::split_ratio(app.world(), root).unwrap(),
         0.5

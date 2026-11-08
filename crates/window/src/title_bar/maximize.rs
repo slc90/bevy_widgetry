@@ -93,7 +93,11 @@ pub(super) fn sync_maximize_state(
                 continue;
             }
             root.maximized = maximized;
-            let radius = px(if maximized { 0.0 } else { 8.0 });
+            let radius = px(if maximized {
+                0.0
+            } else {
+                crate::window_root::WINDOW_CORNER_RADIUS
+            });
             if let Ok(mut node) = nodes.get_mut(entity) {
                 node.border_radius = BorderRadius::all(radius);
             }

@@ -90,7 +90,8 @@ fn fixture(count: usize) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("scroll-area-style-criterion")?;
-    for count in [10, 100, 1000] {
+    let entity_counts = [10, 100, 1000];
+    for count in entity_counts {
         for action in ["idle", "hover_one", "override_one"] {
             run(
                 &mut harness,

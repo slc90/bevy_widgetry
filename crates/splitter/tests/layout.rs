@@ -41,7 +41,12 @@ fn fixture(orientation: Orientation, ratio: f32, min: f32, max: Val) -> (App, En
     (app, parent, root)
 }
 fn close(actual: f32, expected: f32) {
-    assert!((actual - expected).abs() <= 1.0, "{actual} != {expected}");
+    let pixel_tolerance = 1.0;
+
+    assert!(
+        (actual - expected).abs() <= pixel_tolerance,
+        "{actual} != {expected}"
+    );
 }
 
 #[test]

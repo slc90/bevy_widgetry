@@ -1,3 +1,6 @@
+const VIEWPORT_EDGE_INSET: f32 = 0.001;
+const DRAG_ACTIVATION_DISTANCE_SQUARED: f32 = 16.0;
+
 use crate::interaction::{clicked, valid};
 use crate::layout::TableGeometry;
 use crate::projection::TableRuntime;
@@ -245,7 +248,10 @@ fn endpoint(world: &World, root: Entity, session: &SelectionDrag) -> Option<Widg
     if !point.is_finite() {
         return None;
     }
-    let mut point = point.clamp(Vec2::ZERO, (size - Vec2::splat(0.001)).max(Vec2::ZERO));
+    let mut point = point.clamp(
+        Vec2::ZERO,
+        (size - Vec2::splat(VIEWPORT_EDGE_INSET)).max(Vec2::ZERO),
+    );
     let inverse = computed.inverse_scale_factor();
     let offset = (world.get::<ScrollPosition>(session.body)?.0 / inverse).floor() * inverse;
     if point.x >= geometry.frozen_width {
@@ -305,7 +311,7 @@ fn apply<T: Send + Sync + 'static>(
     }
     session.position = location.position;
     let distance = distance.unwrap_or(session.position - session.start);
-    session.active |= distance.length_squared() >= 16.0;
+    session.active |= distance.length_squared() >= DRAG_ACTIVATION_DISTANCE_SQUARED;
     let end = if session.active {
         endpoint(world, root, &session)
     } else {

@@ -1,3 +1,14 @@
+const EXPORT_PAINT_DEPTH_RANGE: f32 = 100.0;
+const MAX_EXPORT_DIMENSION: u32 = 16_777_216;
+const RGBA_BYTES_PER_PIXEL: usize = 4;
+const READBACK_ROW_ALIGNMENT: u64 = 256;
+const TILE_MAX_WIDTH: u32 = 2048;
+const TILE_MAX_HEIGHT: u32 = 512;
+const ESTIMATED_GPU_BYTES_PER_PIXEL: u64 = 80;
+const EXPORT_MEMORY_BUDGET: u64 = 512 * 1024 * 1024;
+const MAX_TILE_EDGE_ERROR_PIXELS: f64 = 1.0 / 256.0;
+const EXPORT_RENDER_TIMEOUT: Duration = Duration::from_secs(30);
+
 use super::{CanvasExportError, CanvasRenderIssue};
 use crate::CanvasDocument;
 use bevy::prelude::*;
@@ -156,8 +167,8 @@ fn dimensions(
         || !h.is_finite()
         || w < 1.0
         || h < 1.0
-        || w > 16_777_216.0
-        || h > 16_777_216.0
+        || w > f64::from(MAX_EXPORT_DIMENSION)
+        || h > f64::from(MAX_EXPORT_DIMENSION)
     {
         return Err(CanvasExportError::InvalidResolution);
     }
@@ -192,30 +203,36 @@ impl Tiles {
         max_texture: u32,
         max_buffer: u64,
     ) -> std::result::Result<Self, CanvasExportError> {
-        let row_bytes = u64::from(size.x) * 4;
+        let row_bytes = u64::from(size.x) * RGBA_BYTES_PER_PIXEL as u64;
         // Bound total work as well as the row assembly buffer, independently of GPU limits.
         if size.x == 0
             || size.y == 0
-            || size.max_element() > 16_777_216
+            || size.max_element() > MAX_EXPORT_DIMENSION
             || row_bytes > BAND_BYTES
             || u64::from(size.x) * u64::from(size.y) > u64::from(u32::MAX)
             || max_texture <= 2 * GUARD
-            || max_buffer < 256
+            || max_buffer < READBACK_ROW_ALIGNMENT
         {
             return Err(CanvasExportError::InvalidResolution);
         }
         let mut step = UVec2::new(
-            2048.min(max_texture - 2 * GUARD).min(size.x),
-            512.min(max_texture - 2 * GUARD)
+            TILE_MAX_WIDTH.min(max_texture - 2 * GUARD).min(size.x),
+            TILE_MAX_HEIGHT
+                .min(max_texture - 2 * GUARD)
                 .min(size.y)
                 .min((BAND_BYTES / row_bytes) as u32),
         );
         loop {
             let render = (step + UVec2::splat(2 * GUARD)).min(size);
-            let padded = (u64::from(render.x) * 4).div_ceil(256) * 256 * u64::from(render.y);
+            let padded = (u64::from(render.x) * RGBA_BYTES_PER_PIXEL as u64)
+                .div_ceil(READBACK_ROW_ALIGNMENT)
+                * READBACK_ROW_ALIGNMENT
+                * u64::from(render.y);
             if padded <= max_buffer
-                && u64::from(render.x) * u64::from(render.y) * 80 + padded + BAND_BYTES
-                    <= 512 * 1024 * 1024
+                && u64::from(render.x) * u64::from(render.y) * ESTIMATED_GPU_BYTES_PER_PIXEL
+                    + padded
+                    + BAND_BYTES
+                    <= EXPORT_MEMORY_BUDGET
             {
                 break;
             }
@@ -262,7 +279,7 @@ impl Tiles {
             || region.width() <= 0.0
             || region.height() <= 0.0
             || !(error / pixel).is_finite()
-            || (error / pixel).max_element() > 1.0 / 256.0
+            || (error / pixel).max_element() > MAX_TILE_EDGE_ERROR_PIXELS
         {
             return Err(CanvasExportError::InvalidResolution);
         }
@@ -609,7 +626,7 @@ async fn encode_tiles(
     let mut stream = writer
         .stream_writer()
         .map_err(|error| failure(encoding_error(error), tiles))?;
-    let row_bytes = tiles.size.x as usize * 4;
+    let row_bytes = tiles.size.x as usize * RGBA_BYTES_PER_PIXEL;
     let mut band = vec![0; row_bytes * tiles.step.y as usize];
     let mut image = first;
     loop {
@@ -703,9 +720,10 @@ fn copy_tile(
     }
     let crop = tile.origin - tile.render_origin;
     for y in 0..tile.size.y as usize {
-        let src = ((crop.y as usize + y) * tile.render_size.x as usize + crop.x as usize) * 4;
-        let dst = y * row_bytes + tile.origin.x as usize * 4;
-        let count = tile.size.x as usize * 4;
+        let src = ((crop.y as usize + y) * tile.render_size.x as usize + crop.x as usize)
+            * RGBA_BYTES_PER_PIXEL;
+        let dst = y * row_bytes + tile.origin.x as usize * RGBA_BYTES_PER_PIXEL;
+        let count = tile.size.x as usize * RGBA_BYTES_PER_PIXEL;
         band[dst..dst + count].copy_from_slice(&image.as_raw()[src..src + count]);
     }
     Ok(())
@@ -916,7 +934,7 @@ fn geometry(
         let mut transform = shape.transform;
         transform.scale.z = 1.0;
         // Map document paint order to bounded export depth independently of model Z.
-        transform.translation.z = index as f32 / count * 100.0;
+        transform.translation.z = index as f32 / count * EXPORT_PAINT_DEPTH_RANGE;
         spawn_scene(
             world,
             bsn! {
@@ -976,7 +994,7 @@ fn poll_jobs(world: &mut World) -> Result {
                 let resources = job.resources.as_ref();
                 let timed_out = (preparing || capturing)
                     && resources.is_some_and(|resources| {
-                        resources.started.elapsed() > Duration::from_secs(30)
+                        resources.started.elapsed() > EXPORT_RENDER_TIMEOUT
                     });
                 let ready =
                     resources.is_some_and(|resources| resources.ready.load(Ordering::Acquire));
@@ -1295,6 +1313,12 @@ fn redraw_exports(exports: Res<Exports>, mut redraw: MessageWriter<bevy::window:
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
+    const REFERENCE_EXPORT_TIMEOUT: Duration = Duration::from_secs(90);
+    const EXPIRED_RENDER_AGE: Duration = Duration::from_secs(31);
+    const POLL_INTERVAL: Duration = Duration::from_millis(1);
+
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy::render::view::screenshot::{
         Captured, CapturedScreenshots, Capturing, trigger_screenshots,
@@ -1384,11 +1408,18 @@ mod tests {
                 max_buffer,
             )
             .unwrap();
-            assert!(u64::from(size.x) * 4 * u64::from(plan.step.y) <= BAND_BYTES);
+            assert!(
+                u64::from(size.x) * RGBA_BYTES_PER_PIXEL as u64 * u64::from(plan.step.y)
+                    <= BAND_BYTES
+            );
             let render = plan.tile().render_size;
             assert!(render.max_element() <= max_texture);
             assert!(
-                (u64::from(render.x) * 4).div_ceil(256) * 256 * u64::from(render.y) <= max_buffer
+                (u64::from(render.x) * RGBA_BYTES_PER_PIXEL as u64)
+                    .div_ceil(READBACK_ROW_ALIGNMENT)
+                    * READBACK_ROW_ALIGNMENT
+                    * u64::from(render.y)
+                    <= max_buffer
             );
         }
         let region = Rect::from_corners(Vec2::splat(1e12), Vec2::splat(1e12 + 65536.0));
@@ -1446,7 +1477,7 @@ mod tests {
         );
         while app.plugins_state() != bevy::app::PluginsState::Ready {
             bevy::tasks::tick_global_task_pools_on_main_thread();
-            std::thread::sleep(Duration::from_millis(1));
+            std::thread::sleep(POLL_INTERVAL);
         }
         app.finish();
         app.cleanup();
@@ -1530,11 +1561,11 @@ mod tests {
                 let before = app.world().resource::<Notices>().0.len();
                 let path = directory.path().join(format!("{scale}-{tiled}.png"));
                 begin(app.world_mut(), document, path, snapshot, tiles).unwrap();
-                let deadline = Instant::now() + Duration::from_secs(90);
+                let deadline = Instant::now() + REFERENCE_EXPORT_TIMEOUT;
                 while app.world().resource::<Notices>().0.len() == before {
                     assert!(Instant::now() < deadline);
                     app.update();
-                    std::thread::sleep(Duration::from_millis(1));
+                    std::thread::sleep(POLL_INTERVAL);
                 }
                 assert_eq!(
                     app.world().resource::<Notices>().0.last().unwrap().result,
@@ -1660,7 +1691,7 @@ mod tests {
         let (entity, id) = tiled_request(&mut app, directory.path().join("canceled.png"));
         deliver_tile(&mut app, entity, id);
         let bridge = app.world().resource::<Exports>().0[&entity].bridge.clone();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !bridge.lock().consumed {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -1853,7 +1884,7 @@ mod tests {
     }
 
     fn pump(app: &mut App, done: impl Fn(&World) -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !done(app.world()) {
             assert!(Instant::now() < deadline, "PNG lifecycle did not settle");
             let errors = bevy_widgetry_test_utils::ErrorCapture::default();
@@ -1972,7 +2003,7 @@ mod tests {
         let images = app.world().resource::<Assets<Image>>().len();
         let (entity, id) = queued(&mut app, file.path().to_owned());
         let manager = app.world().resource::<JobManager>().clone();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while manager.status(id).unwrap().state != JobState::Running {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -2059,7 +2090,7 @@ mod tests {
         let scene = {
             let mut job = app.world_mut().get_mut::<CanvasPngExport>(entity).unwrap();
             let resources = job.resources.as_mut().unwrap();
-            resources.started = Instant::now() - Duration::from_secs(31);
+            resources.started = Instant::now() - EXPIRED_RENDER_AGE;
             resources.scene
         };
         pump(&mut app, |world| {
@@ -2177,7 +2208,7 @@ mod tests {
             app.world_mut().flush();
         }
         let bridge = app.world().resource::<Exports>().0[&entity].bridge.clone();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while bridge.lock().result.is_none() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();

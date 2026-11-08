@@ -518,6 +518,8 @@ mod tests {
 
     #[test]
     fn envelopes_and_polylines_keep_neighbor_lane_shapes_and_skip_outside_runs() {
+        let comparison_tolerance = 0.01;
+
         struct Source;
         impl crate::WaveformSource for Source {
             fn metadata(&self) -> Result<crate::WaveformMetadata, crate::WaveformReadError> {
@@ -615,7 +617,9 @@ mod tests {
                 .map(|(_, p)| p[1])
                 .collect();
             assert!(
-                lane_two.iter().all(|y| (*y - 0.25).abs() < 0.01),
+                lane_two
+                    .iter()
+                    .all(|y| (*y - 0.25).abs() < comparison_tolerance),
                 "+3A belongs above the original lane"
             );
         }

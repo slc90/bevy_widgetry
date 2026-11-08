@@ -1,3 +1,19 @@
+use crate::config::NANOS_PER_SECOND;
+const NANOSECOND_DECIMAL_DIGITS: u32 = 9;
+const DECIMAL_RADIX: u128 = 10;
+const MAJOR_TICK_FACTORS: [u128; 3] = [1, 2, 5];
+const MINOR_TICK_DIVISORS: [u128; 2] = [5, 2];
+const MIN_LABEL_SPACING: f32 = 90.0;
+const MIN_MINOR_TICK_SPACING: f64 = 20.0;
+const LABEL_GAP: f32 = 8.0;
+const LABEL_MEASUREMENT_MARGIN: f32 = 16.0;
+const LABEL_EDGE_TOLERANCE: f32 = 0.5;
+const MAJOR_TICK_HEIGHT: f32 = 6.0;
+const MINOR_TICK_HEIGHT: f32 = 3.0;
+const LABEL_TOP: f32 = 7.0;
+const LABEL_FONT_SIZE: f32 = 12.0;
+const TICK_ALPHA: f32 = 0.4;
+
 use crate::view_error::ViewResult;
 use crate::view_error::{ViewErrors, ViewFailureState};
 use bevy::prelude::*;
@@ -58,10 +74,10 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> ViewResult {
         .get::<AxisState>(axis)
         .ok_or_else(|| crate::view_error::missing(crate::WaveformPart::AxisState).at(axis))?;
     let values = rate.map_or_else(Vec::new, |rate| {
-        let start = u128::from(range.start) * 1_000_000_000 / u128::from(rate);
-        let span = u128::from(range.end - range.start) * 1_000_000_000 / u128::from(rate);
-        let origin = u128::from(range.start) * 1_000_000_000;
-        let extent = u128::from(range.end - range.start) * 1_000_000_000;
+        let start = u128::from(range.start) * NANOS_PER_SECOND / u128::from(rate);
+        let span = u128::from(range.end - range.start) * NANOS_PER_SECOND / u128::from(rate);
+        let origin = u128::from(range.start) * NANOS_PER_SECOND;
+        let extent = u128::from(range.end - range.start) * NANOS_PER_SECOND;
         ticks(start, span, width, state.label_spacing)
             .into_iter()
             .filter_map(|mut tick| {
@@ -84,17 +100,17 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> ViewResult {
             Children [
                 #TimeMark
                 Name::new("WaveformTimeMark")
-                Node { position_type: PositionType::Absolute, width: px(1), height: px(6) }
+                Node { position_type: PositionType::Absolute, width: px(1), height: px(MAJOR_TICK_HEIGHT) }
                 BackgroundColor::default()
                 Pickable::IGNORE
             --
                 #TimeLabel
                 Name::new("WaveformTimeLabel")
                 Text::default()
-                TextFont { font_size: bevy::text::FontSize::Px(12.0) }
+                TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }
                 TextLayout::no_wrap()
                 WidgetryText
-                Node { position_type: PositionType::Absolute, top: px(7), flex_shrink: 0.0 }
+                Node { position_type: PositionType::Absolute, top: px(LABEL_TOP), flex_shrink: 0.0 }
                 UiTransform::from_translation(Val2::percent(-50, 0))
                 Pickable::IGNORE
             ]
@@ -122,7 +138,11 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> ViewResult {
         };
         if let Some(tick) = tick {
             mark.left = percent(tick.fraction * 100.0);
-            mark.height = px(if tick.major { 6 } else { 3 });
+            mark.height = px(if tick.major {
+                MAJOR_TICK_HEIGHT
+            } else {
+                MINOR_TICK_HEIGHT
+            });
         }
         let mut label = world.get_mut::<Node>(part.label).ok_or_else(|| {
             crate::view_error::missing(crate::WaveformPart::TickLabel).at(part.label)
@@ -183,16 +203,17 @@ pub(crate) fn finish(
                 let major = state.ticks.get(index).is_some_and(|tick| tick.major);
                 let visible = major
                     && label_width > 0.0
-                    && label_left >= left - 0.5
-                    && label_right <= left + width + 0.5
-                    && label_left >= last_right + 8.0 / node.inverse_scale_factor();
+                    && label_left >= left - LABEL_EDGE_TOLERANCE
+                    && label_right <= left + width + LABEL_EDGE_TOLERANCE
+                    && label_left >= last_right + LABEL_GAP / node.inverse_scale_factor();
                 *visibility = if visible {
                     Visibility::Inherited
                 } else {
                     Visibility::Hidden
                 };
                 if major {
-                    measured = measured.max(label_width * node.inverse_scale_factor() + 16.0);
+                    measured = measured
+                        .max(label_width * node.inverse_scale_factor() + LABEL_MEASUREMENT_MARGIN);
                 }
                 if visible {
                     last_right = label_right;
@@ -204,9 +225,9 @@ pub(crate) fn finish(
                         part: crate::WaveformPart::TickMark,
                         source,
                     })?
-                    .0 = theme.text.normal.foreground.with_alpha(0.4);
+                    .0 = theme.text.normal.foreground.with_alpha(TICK_ALPHA);
             }
-            Ok(measured.max(90.0))
+            Ok(measured.max(MIN_LABEL_SPACING))
         })();
         let result = state
             .layout_failure
@@ -258,38 +279,41 @@ fn ticks(start: u128, span: u128, width: f32, label_spacing: f32) -> Vec<TimeTic
     if span == 0 || !width.is_finite() || width <= 0.0 {
         return Vec::new();
     }
-    let desired = (span as f64 * f64::from(label_spacing.max(90.0)) / f64::from(width.max(1.0)))
-        .ceil() as u128;
+    let desired = (span as f64 * f64::from(label_spacing.max(MIN_LABEL_SPACING))
+        / f64::from(width.max(1.0)))
+    .ceil() as u128;
     let mut power = 1_u128;
     let major = loop {
-        if let Some(step) = [1, 2, 5]
+        if let Some(step) = MAJOR_TICK_FACTORS
             .into_iter()
             .map(|factor| factor * power)
             .find(|&step| step >= desired)
         {
             break step;
         }
-        power *= 10;
+        power *= DECIMAL_RADIX;
     };
-    let minor = [5, 2]
+    let minor = MINOR_TICK_DIVISORS
         .into_iter()
         .find_map(|divisor| {
             let step = major / divisor;
-            (major.is_multiple_of(divisor) && step as f64 / span as f64 * f64::from(width) >= 20.0)
+            (major.is_multiple_of(divisor)
+                && step as f64 / span as f64 * f64::from(width) >= MIN_MINOR_TICK_SPACING)
                 .then_some(step)
         })
         .unwrap_or(major);
-    let precision = 9_u32.saturating_sub(major.ilog10()) as usize;
+    let precision = NANOSECOND_DECIMAL_DIGITS.saturating_sub(major.ilog10()) as usize;
     let mut at = start.div_ceil(minor) * minor;
     let mut result = Vec::new();
     while at <= start + span {
         let is_major = at.is_multiple_of(major);
         let label = if is_major {
-            let seconds = at / 1_000_000_000;
+            let seconds = at / NANOS_PER_SECOND;
             if precision == 0 {
                 format!("{seconds} s")
             } else {
-                let fraction = (at % 1_000_000_000) / 10_u128.pow(9 - precision as u32);
+                let fraction = (at % NANOS_PER_SECOND)
+                    / DECIMAL_RADIX.pow(NANOSECOND_DECIMAL_DIGITS - precision as u32);
                 format!("{seconds}.{fraction:0precision$} s")
             }
         } else {
@@ -329,6 +353,8 @@ mod tests {
 
     #[test]
     fn absolute_ticks_anchor_to_zero_and_move_continuously() {
+        let comparison_tolerance = 0.00001;
+
         let current = ticks(25 * SECOND, 10 * SECOND, 500.0, 90.0);
         let majors: Vec<_> = current.iter().filter(|tick| tick.major).collect();
         assert_eq!(
@@ -341,7 +367,7 @@ mod tests {
         let moved = ticks(25 * SECOND + SECOND / 10, 10 * SECOND, 500.0, 90.0);
         for tick in majors {
             let next = moved.iter().find(|next| next.nanos == tick.nanos).unwrap();
-            assert!((tick.fraction - next.fraction - 0.01).abs() < 0.00001);
+            assert!((tick.fraction - next.fraction - 0.01).abs() < comparison_tolerance);
         }
     }
 

@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+
+const MIN_BOUND_WITH_ROUNDING: f32 = -0.001;
 use bevy::prelude::*;
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::LogCapture;
@@ -164,7 +166,10 @@ fn svg_arcs_preserve_flags_degeneracies_and_close_context() {
                 assert!(bounds.width() > 15.0 || bounds.height() > 30.0);
             }
             if !large_arc && sweep {
-                assert!(bounds.min.x >= -0.001 && bounds.min.y >= -0.001);
+                assert!(
+                    bounds.min.x >= MIN_BOUND_WITH_ROUNDING
+                        && bounds.min.y >= MIN_BOUND_WITH_ROUNDING
+                );
             }
         }
     }

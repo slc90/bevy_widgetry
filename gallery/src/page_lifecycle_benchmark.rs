@@ -1,3 +1,5 @@
+const MILLISECONDS_PER_SECOND: f64 = 1000.0;
+
 use crate::gallery::GalleryPage;
 use bevy::prelude::*;
 use std::fs::{self, File};
@@ -59,7 +61,7 @@ fn measure(world: &mut World) -> Result {
     if measurement.previous == current {
         return Ok(());
     }
-    let elapsed = measurement.start.elapsed().as_secs_f64() * 1000.0;
+    let elapsed = measurement.start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND;
     let previous = measurement.previous;
     let entities = world.entities().count_spawned();
     let waveform_sources = world.contains_resource::<crate::pages::WaveformDemoSources>();

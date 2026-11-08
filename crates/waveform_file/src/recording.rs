@@ -12,7 +12,9 @@ use std::io::SeekFrom;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
-const MAGIC: &[u8; 8] = b"WFRIDX02";
+use crate::format::{self, FLOAT_FIELD_LEN, MAGIC, RAW_DATA_START, index, raw, span};
+const PRODUCER_BATCH_FRAMES: u64 = 65_536;
+const MINMAX_LEVEL_FACTOR: u64 = 2;
 const BASE: u64 = 256;
 const MAX_BUCKET: u64 = 65_536;
 pub(super) type Result<T> = std::result::Result<T, WaveformReadError>;
@@ -98,18 +100,18 @@ fn raw_spans(
     bucket_size: u64,
     stats: &mut DiskReadStats,
 ) -> Result<Vec<WaveformSpan>> {
-    let mut bytes = vec![0; (range.end - range.start) as usize * 5];
-    read_at(file, raw + range.start * 5, &mut bytes, stats)?;
+    let mut bytes = vec![0; (range.end - range.start) as usize * raw::LEN];
+    read_at(file, raw + range.start * raw::LEN as u64, &mut bytes, stats)?;
     let mut spans = Vec::new();
-    for (index, cell) in bytes.as_chunks::<5>().0.iter().enumerate() {
+    for (index, cell) in bytes.as_chunks::<{ raw::LEN }>().0.iter().enumerate() {
         let value = f32::from_le_bytes(
-            cell[..4]
+            cell[raw::VALUE]
                 .try_into()
-                .map_err(|source| file.decode(source, 4))?,
+                .map_err(|source| file.decode(source, FLOAT_FIELD_LEN))?,
         );
-        match cell[4] {
-            0 => {}
-            1 if value.is_finite() => {
+        match cell[raw::VALIDITY] {
+            raw::INVALID => {}
+            raw::VALID if value.is_finite() => {
                 let span = WaveformSpan {
                     samples: RangeBoundary {
                         start: range.start + index as u64,
@@ -131,7 +133,7 @@ fn raw_spans(
                     RecordingError::Sample {
                         frame: range.start + index as u64,
                         value,
-                        validity: cell[4],
+                        validity: cell[raw::VALIDITY],
                     },
                     "waveform_file.raw",
                 ));
@@ -171,25 +173,25 @@ fn read_buckets(
         file,
         level.table,
         buckets.clone(),
-        24,
+        span::LEN as u64,
         level.size,
         payload_end,
         stats,
     )?;
-    let mut spans = Vec::with_capacity(bytes.len() / 24);
+    let mut spans = Vec::with_capacity(bytes.len() / span::LEN);
     let mut previous = buckets.start * level.size;
-    for cell in bytes.as_chunks::<24>().0 {
-        let start = u64_at(file, &cell[..8])?;
-        let end = u64_at(file, &cell[8..16])?;
+    for cell in bytes.as_chunks::<{ span::LEN }>().0 {
+        let start = u64_at(file, &cell[span::START])?;
+        let end = u64_at(file, &cell[span::END])?;
         let min = f32::from_le_bytes(
-            cell[16..20]
+            cell[span::MIN]
                 .try_into()
-                .map_err(|source| file.decode(source, 4))?,
+                .map_err(|source| file.decode(source, FLOAT_FIELD_LEN))?,
         );
         let max = f32::from_le_bytes(
-            cell[20..24]
+            cell[span::MAX]
                 .try_into()
-                .map_err(|source| file.decode(source, 4))?,
+                .map_err(|source| file.decode(source, FLOAT_FIELD_LEN))?,
         );
         if start < previous
             || start >= end
@@ -234,20 +236,20 @@ pub(super) fn read_indexed_payload(
         .checked_sub(buckets.start)
         .ok_or_else(|| file.overflow("bucket_range", buckets.end, buckets.start))?;
     let length = count
-        .checked_mul(16)
-        .ok_or_else(|| file.overflow("index_length", count, 16))?;
+        .checked_mul(index::LEN as u64)
+        .ok_or_else(|| file.overflow("index_length", count, index::LEN as u64))?;
     let mut entries = vec![0; file.usize(length)?];
     let table_offset = buckets
         .start
-        .checked_mul(16)
+        .checked_mul(index::LEN as u64)
         .and_then(|n| table.checked_add(n))
         .ok_or_else(|| file.overflow("table_offset", table, buckets.start))?;
     read_at(file, table_offset, &mut entries, stats)?;
-    let offset = u64_at(file, &entries[..entries.len().min(8)])?;
+    let offset = u64_at(file, &entries[..entries.len().min(index::OFFSET_LEN)])?;
     let mut end = offset;
-    for (index, entry) in entries.as_chunks::<16>().0.iter().enumerate() {
-        let start = u64_at(file, &entry[..8])?;
-        let count = u64_at(file, &entry[8..])?;
+    for (index, entry) in entries.as_chunks::<{ index::LEN }>().0.iter().enumerate() {
+        let start = u64_at(file, &entry[index::OFFSET])?;
+        let count = u64_at(file, &entry[index::COUNT])?;
         let next = count
             .checked_mul(record_size)
             .and_then(|n| start.checked_add(n));
@@ -280,14 +282,14 @@ fn write_bucket(
     index: u64,
     spans: &[WaveformSpan],
 ) -> Result<()> {
-    let mut bytes = Vec::with_capacity(spans.len() * 24);
+    let mut bytes = Vec::with_capacity(spans.len() * span::LEN);
     for span in spans {
         bytes.extend_from_slice(&span.samples.start.to_le_bytes());
         bytes.extend_from_slice(&span.samples.end.to_le_bytes());
         bytes.extend_from_slice(&span.min.to_le_bytes());
         bytes.extend_from_slice(&span.max.to_le_bytes());
     }
-    write_indexed_payload(file, level.table, index, &bytes, 24)
+    write_indexed_payload(file, level.table, index, &bytes, span::LEN)
 }
 
 pub(super) fn write_indexed_payload(
@@ -299,7 +301,7 @@ pub(super) fn write_indexed_payload(
 ) -> Result<()> {
     let offset = file.seek(SeekFrom::End(0))?;
     file.write_all(bytes)?;
-    file.seek(SeekFrom::Start(table + index * 16))?;
+    file.seek(SeekFrom::Start(table + index * index::LEN as u64))?;
     file.write_all(&offset.to_le_bytes())?;
     file.write_all(&((bytes.len() / record_size) as u64).to_le_bytes())?;
     Ok(())
@@ -330,8 +332,8 @@ pub fn build_recording(
     };
     let raw_end = frames
         .checked_mul(metadata.channel_count as u64)
-        .and_then(|n| n.checked_mul(5))
-        .and_then(|n| n.checked_add(8))
+        .and_then(|n| n.checked_mul(raw::LEN as u64))
+        .and_then(|n| n.checked_add(RAW_DATA_START))
         .ok_or_else(|| {
             failure(
                 path,
@@ -369,7 +371,7 @@ pub fn build_recording(
     for channel in 0..metadata.channel_count {
         let mut start = 0;
         while start < frames {
-            let end = (start + 65_536).min(frames);
+            let end = (start + PRODUCER_BATCH_FRAMES).min(frames);
             values.clear();
             file.channel = Some(channel);
             file.range = Some(start..end);
@@ -394,7 +396,7 @@ pub fn build_recording(
                     RecordingError::Sample {
                         frame: start + index as u64,
                         value,
-                        validity: 1,
+                        validity: raw::VALID,
                     },
                     "waveform_file.producer",
                 ));
@@ -420,7 +422,7 @@ pub fn build_recording(
             file.range = None;
             let table = file.seek(SeekFrom::End(0))?;
             let table_end = count
-                .checked_mul(16)
+                .checked_mul(index::LEN as u64)
                 .and_then(|n| n.checked_add(table))
                 .ok_or_else(|| file.overflow("table_length", table, count))?;
             file.set_len(table_end)?;
@@ -430,7 +432,9 @@ pub fn build_recording(
                 let mut stats = DiskReadStats::default();
                 let spans = if let Some(lower) = channel_levels.last() {
                     let mut merged = Vec::new();
-                    for child in index * 2..(index * 2 + 2).min(lower.count) {
+                    for child in index * MINMAX_LEVEL_FACTOR
+                        ..(index * MINMAX_LEVEL_FACTOR + MINMAX_LEVEL_FACTOR).min(lower.count)
+                    {
                         let end = file.metadata()?.len();
                         for span in read_bucket(file, lower, child, end, &mut stats)? {
                             append_span(&mut merged, span);
@@ -440,7 +444,7 @@ pub fn build_recording(
                 } else {
                     raw_spans(
                         file,
-                        8 + channel as u64 * frames * 5,
+                        RAW_DATA_START + channel as u64 * frames * raw::LEN as u64,
                         index * size..((index + 1) * size).min(frames),
                         size,
                         &mut stats,
@@ -453,8 +457,8 @@ pub fn build_recording(
                 break;
             }
             size = size
-                .checked_mul(2)
-                .ok_or_else(|| file.overflow("bucket_size", size, 2))?;
+                .checked_mul(MINMAX_LEVEL_FACTOR)
+                .ok_or_else(|| file.overflow("bucket_size", size, MINMAX_LEVEL_FACTOR))?;
         }
         levels.push(channel_levels);
     }
@@ -473,9 +477,9 @@ pub fn build_recording(
         rate: metadata.sample_rate,
         frames,
         unit: match metadata.unit {
-            WaveformUnit::Volts => 0,
-            WaveformUnit::Millivolts => 1,
-            WaveformUnit::Microvolts => 2,
+            WaveformUnit::Volts => format::UNIT_VOLTS,
+            WaveformUnit::Millivolts => format::UNIT_MILLIVOLTS,
+            WaveformUnit::Microvolts => format::UNIT_MICROVOLTS,
         },
         labels: metadata.channel_labels,
         levels,
@@ -531,17 +535,17 @@ impl Recording {
         let mut access = FileAccess::new(&mut handle, path);
         let file = &mut access;
         let length = file.metadata()?.len();
-        if length < 24 {
+        if length < format::MIN_FILE_LEN {
             return Err(file.fail(
                 RecordingError::Truncated {
                     actual: length,
-                    minimum: 24,
+                    minimum: format::MIN_FILE_LEN,
                 },
                 "waveform_file.open",
             ));
         }
         let mut stats = DiskReadStats::default();
-        let mut magic = [0; 8];
+        let mut magic = [0; MAGIC.len()];
         read_at(file, 0, &mut magic, &mut stats)?;
         if &magic != MAGIC {
             return Err(file.fail(
@@ -552,22 +556,30 @@ impl Recording {
                 "waveform_file.open",
             ));
         }
-        let mut footer = [0; 16];
-        read_at(file, length - 16, &mut footer, &mut stats)?;
-        let size = u64_at(file, &footer[..8])?;
-        if &footer[8..] != MAGIC || size > 8_388_608 || size > length - 24 {
+        let mut footer = [0; format::FOOTER_LEN];
+        read_at(
+            file,
+            length - format::FOOTER_LEN as u64,
+            &mut footer,
+            &mut stats,
+        )?;
+        let size = u64_at(file, &footer[format::FOOTER_HEADER_SIZE])?;
+        if &footer[format::FOOTER_MAGIC] != MAGIC
+            || size > format::MAX_HEADER_LEN
+            || size > length - format::MIN_FILE_LEN
+        {
             return Err(file.fail(
                 RecordingError::Footer {
                     size,
                     length,
-                    magic: footer[8..]
+                    magic: footer[format::FOOTER_MAGIC]
                         .try_into()
-                        .map_err(|source| file.decode(source, 8))?,
+                        .map_err(|source| file.decode(source, MAGIC.len()))?,
                 },
                 "waveform_file.open",
             ));
         }
-        let payload_end = length - 16 - size;
+        let payload_end = length - format::FOOTER_LEN as u64 - size;
         let mut json = vec![0; size as usize];
         read_at(file, payload_end, &mut json, &mut stats)?;
         let header: Header = serde_json::from_slice(&json).map_err(|source| {
@@ -581,9 +593,9 @@ impl Recording {
             )
         })?;
         let unit = match header.unit {
-            0 => WaveformUnit::Volts,
-            1 => WaveformUnit::Millivolts,
-            2 => WaveformUnit::Microvolts,
+            format::UNIT_VOLTS => WaveformUnit::Volts,
+            format::UNIT_MILLIVOLTS => WaveformUnit::Millivolts,
+            format::UNIT_MICROVOLTS => WaveformUnit::Microvolts,
             _ => {
                 return Err(file.fail(
                     RecordingError::Unit { value: header.unit },
@@ -609,8 +621,8 @@ impl Recording {
         let raw_end = header
             .frames
             .checked_mul(metadata.channel_count as u64)
-            .and_then(|n| n.checked_mul(5))
-            .and_then(|n| n.checked_add(8))
+            .and_then(|n| n.checked_mul(raw::LEN as u64))
+            .and_then(|n| n.checked_add(RAW_DATA_START))
             .ok_or_else(|| {
                 file.overflow("raw_layout", header.frames, metadata.channel_count as u64)
             })?;
@@ -644,7 +656,7 @@ impl Recording {
             let mut expected_size = BASE;
             while header.frames.div_ceil(expected_size) != 1 && expected_size < MAX_BUCKET {
                 expected_levels += 1;
-                expected_size *= 2;
+                expected_size *= MINMAX_LEVEL_FACTOR;
             }
             if levels.len() != expected_levels {
                 return Err(file.fail(
@@ -663,7 +675,7 @@ impl Recording {
                     || level.table < raw_end
                     || level
                         .count
-                        .checked_mul(16)
+                        .checked_mul(index::LEN as u64)
                         .and_then(|n| n.checked_add(level.table))
                         .is_none_or(|end| end > payload_end)
                 {
@@ -683,8 +695,8 @@ impl Recording {
                     ));
                 }
                 size = size
-                    .checked_mul(2)
-                    .ok_or_else(|| file.overflow("bucket_size", size, 2))?;
+                    .checked_mul(MINMAX_LEVEL_FACTOR)
+                    .ok_or_else(|| file.overflow("bucket_size", size, MINMAX_LEVEL_FACTOR))?;
             }
         }
         crate::lttb_index::validate(
@@ -755,7 +767,7 @@ impl Recording {
         let mut channels = Vec::with_capacity(channel_range.len());
         for channel in channel_range {
             file.channel = Some(channel);
-            let raw = 8 + channel as u64 * self.header.frames * 5;
+            let raw = RAW_DATA_START + channel as u64 * self.header.frames * raw::LEN as u64;
             if algorithm == WaveformAlgorithm::Lttb {
                 let points = crate::lttb_index::query(
                     file,
@@ -775,19 +787,24 @@ impl Recording {
             let level = levels.iter().rposition(|level| level.size <= density);
             stats.bucket_size = level.map_or(1, |i| levels[i].size);
             if range.end - range.start <= output_len as u64 {
-                let mut bytes = vec![0; (range.end - range.start) as usize * 5];
-                read_at(file, raw + range.start * 5, &mut bytes, &mut stats)?;
+                let mut bytes = vec![0; (range.end - range.start) as usize * raw::LEN];
+                read_at(
+                    file,
+                    raw + range.start * raw::LEN as u64,
+                    &mut bytes,
+                    &mut stats,
+                )?;
                 let mut points = Vec::new();
                 let mut gap = true;
-                for (index, cell) in bytes.as_chunks::<5>().0.iter().enumerate() {
+                for (index, cell) in bytes.as_chunks::<{ raw::LEN }>().0.iter().enumerate() {
                     let value = f32::from_le_bytes(
-                        cell[..4]
+                        cell[raw::VALUE]
                             .try_into()
-                            .map_err(|source| file.decode(source, 4))?,
+                            .map_err(|source| file.decode(source, FLOAT_FIELD_LEN))?,
                     );
-                    match cell[4] {
-                        0 => gap = true,
-                        1 if value.is_finite() => {
+                    match cell[raw::VALIDITY] {
+                        raw::INVALID => gap = true,
+                        raw::VALID if value.is_finite() => {
                             points.push(WaveformPoint {
                                 sample: range.start + index as u64,
                                 value,
@@ -800,7 +817,7 @@ impl Recording {
                                 RecordingError::Sample {
                                     frame: range.start + index as u64,
                                     value,
-                                    validity: cell[4],
+                                    validity: cell[raw::VALIDITY],
                                 },
                                 "waveform_file.raw",
                             ));

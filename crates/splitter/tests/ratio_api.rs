@@ -46,6 +46,8 @@ fn fixture(orientation: Orientation) -> (App, Entity) {
 
 #[test]
 fn world_setter_clamps_and_notifies_after_commit_in_both_axes() {
+    const COMPARISON_TOLERANCE: f32 = 0.01;
+
     for orientation in [Orientation::Horizontal, Orientation::Vertical] {
         let (mut app, root) = fixture(orientation);
         for (request, expected) in [(0.1_f32, 0.3_f32), (0.9, 0.8), (0.5, 0.5)] {
@@ -69,7 +71,7 @@ fn world_setter_clamps_and_notifies_after_commit_in_both_axes() {
             } else {
                 v.y
             };
-            assert!((extent - expected * 1000.0).abs() < 0.01);
+            assert!((extent - expected * 1000.0).abs() < COMPARISON_TOLERANCE);
         }
         assert_eq!(
             app.world().resource::<Changes>().0,

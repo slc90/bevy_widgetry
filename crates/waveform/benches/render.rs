@@ -1,3 +1,4 @@
+const MILLISECONDS_PER_SECOND: u64 = 1000;
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, ui_app};
 use bevy_widgetry_waveform::*;
@@ -165,7 +166,7 @@ fn fixture(channels: usize, width: u32, action: &str) -> Result<Fixture> {
         WaveformChannelCount::All
     };
     let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)}, @channels_per_screen: {count} } Node { width: px(width as f32 + 132.0), height: px(684) } })?.id();
-    let frame = u64::from(rate) * u64::from(duration) / 1000;
+    let frame = u64::from(rate) * u64::from(duration) / MILLISECONDS_PER_SECOND;
     app.world_mut()
         .get_mut::<WaveformCursor>(root)
         .ok_or_else(|| missing("cursor"))?

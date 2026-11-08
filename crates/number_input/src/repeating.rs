@@ -10,6 +10,9 @@ use bevy::{
 use bevy_widgetry_core::pointer::WidgetryPointerPressQuery;
 use std::time::Duration;
 
+const INITIAL_REPEAT_DELAY: Duration = Duration::from_millis(400);
+const REPEAT_INTERVAL: Duration = Duration::from_millis(100);
+
 #[derive(Component, Default, Clone)]
 #[require(RepeatTimer, bevy_widgetry_core::pointer::WidgetryPointerPressed)]
 pub struct WidgetryNumberInputRepeat;
@@ -125,7 +128,7 @@ fn tick(
         }
         if started {
             repeat.canceled = false;
-            repeat.next = Some(now + Duration::from_millis(400));
+            repeat.next = Some(now + INITIAL_REPEAT_DELAY);
             redraw.write(RequestRedraw);
             continue;
         }
@@ -134,11 +137,11 @@ fn tick(
         }
         redraw.write(RequestRedraw);
         let Some(next) = repeat.next else {
-            repeat.next = Some(now + Duration::from_millis(400));
+            repeat.next = Some(now + INITIAL_REPEAT_DELAY);
             continue;
         };
         if now >= next {
-            repeat.next = Some(now + Duration::from_millis(100));
+            repeat.next = Some(now + REPEAT_INTERVAL);
             commands.trigger(Activate { entity });
         }
     }

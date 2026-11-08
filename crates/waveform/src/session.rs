@@ -1,3 +1,5 @@
+const MILLIVOLTS_TO_VOLTS: f32 = 0.001;
+const MICROVOLTS_TO_VOLTS: f32 = 0.000001;
 use crate::{Waveform, WaveformCursor, WaveformRuntime, WaveformSource};
 use bevy::prelude::*;
 use bevy_widgetry_job::JobFailure;
@@ -14,8 +16,8 @@ impl WaveformUnit {
     pub(crate) fn volts(self) -> f32 {
         match self {
             Self::Volts => 1.0,
-            Self::Millivolts => 0.001,
-            Self::Microvolts => 0.000001,
+            Self::Millivolts => MILLIVOLTS_TO_VOLTS,
+            Self::Microvolts => MICROVOLTS_TO_VOLTS,
         }
     }
 }
@@ -43,7 +45,7 @@ impl WaveformMetadata {
                 .channel_labels
                 .iter()
                 .any(|label| label.trim().is_empty())
-            || !(1..=1_000_000_000).contains(&self.sample_rate)
+            || !(1..=crate::config::MAX_SAMPLE_RATE).contains(&self.sample_rate)
             || matches!(self.kind, WaveformSessionKind::Replay { total_frames: 0 })
         {
             return Err(crate::error::failure(

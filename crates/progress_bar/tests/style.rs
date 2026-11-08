@@ -37,6 +37,8 @@ fn size(world: &World, entity: Entity) -> Vec2 {
 
 #[test]
 fn default_bsn_has_full_width_track_and_border_with_inset_fill() {
+    let pixel_tolerance = 1.0;
+
     for value in [0.0, 0.65, 1.0] {
         let (app, _, bar) = fixture(value);
         assert_eq!(size(app.world(), bar), Vec2::new(300.0, 12.0));
@@ -44,7 +46,7 @@ fn default_bsn_has_full_width_track_and_border_with_inset_fill() {
         let clip = app.world().get::<Children>(track).unwrap()[0];
         let fill = app.world().get::<Children>(clip).unwrap()[0];
         assert_eq!(size(app.world(), track), Vec2::new(298.0, 10.0));
-        assert!((size(app.world(), clip).x - 298.0 * value).abs() <= 1.0);
+        assert!((size(app.world(), clip).x - 298.0 * value).abs() <= pixel_tolerance);
         assert_eq!(size(app.world(), fill).y, 10.0);
         assert_eq!(app.world().get::<Children>(bar).unwrap().len(), 1);
         assert_eq!(app.world().get::<Children>(track).unwrap().len(), 1);
@@ -63,6 +65,8 @@ fn default_bsn_has_full_width_track_and_border_with_inset_fill() {
 
 #[test]
 fn updates_and_parent_resize_preserve_inset_ratio_and_custom_height() {
+    let pixel_tolerance = 1.0;
+
     let (mut app, parent, bar) = fixture(0.25);
     let track = app.world().get::<Children>(bar).unwrap()[0];
     let clip = app.world().get::<Children>(track).unwrap()[0];
@@ -75,7 +79,7 @@ fn updates_and_parent_resize_preserve_inset_ratio_and_custom_height() {
         )
         .unwrap();
         frames(&mut app);
-        assert!((size(app.world(), clip).x - 298.0 * value).abs() <= 1.0);
+        assert!((size(app.world(), clip).x - 298.0 * value).abs() <= pixel_tolerance);
         assert_eq!(
             WidgetryProgressBar::state(app.world(), bar).unwrap(),
             WidgetryProgressState::Determinate { value }
@@ -92,8 +96,8 @@ fn updates_and_parent_resize_preserve_inset_ratio_and_custom_height() {
     frames(&mut app);
     assert_eq!(size(app.world(), bar), Vec2::new(500.0, 24.0));
     assert_eq!(size(app.world(), track), Vec2::new(498.0, 22.0));
-    assert!((size(app.world(), clip).x - 498.0 * 0.65).abs() <= 1.0);
-    assert!((size(app.world(), fill).x - 498.0).abs() <= 1.0);
+    assert!((size(app.world(), clip).x - 498.0 * 0.65).abs() <= pixel_tolerance);
+    assert!((size(app.world(), fill).x - 498.0).abs() <= pixel_tolerance);
     assert_eq!(
         app.world().get::<Node>(track).unwrap().overflow,
         Overflow::clip()

@@ -1,3 +1,5 @@
+const CONTROL_GAP: f32 = 8.0;
+
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
@@ -423,7 +425,7 @@ fn fixture(nodes: usize, shape: &str, rich: bool) -> Result<Fixture> {
     app.add_plugins(WidgetryTreePlugin);
     app.init_resource::<HoverRequest>()
         .add_systems(Update, apply_hover);
-    app.register_renderer::<Label>(WidgetryTreeRenderer::new(move |_, label: &Label| bsn_list!{Node { column_gap: px(8) } Children [Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("node metadata") bevy_widgetry_core::text::WidgetryText })}]})).map_err(bevy_widgetry_tree::TreeFailure::into_bevy_error)?;
+    app.register_renderer::<Label>(WidgetryTreeRenderer::new(move |_, label: &Label| bsn_list!{Node { column_gap: px(CONTROL_GAP) } Children [Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("node metadata") bevy_widgetry_core::text::WidgetryText })}]})).map_err(bevy_widgetry_tree::TreeFailure::into_bevy_error)?;
     let hierarchy = app.world_mut().spawn_empty().id();
     let branch = app
         .world_mut()

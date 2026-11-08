@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+
+const EXPECTED_DAY_CELLS: usize = 42;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry_date_picker::*;
@@ -41,7 +43,7 @@ fn independent_date_model_has_no_default_parts_and_separate_month_selection_stat
     let days =
         WidgetryDatePickerHeadless::days(app.world(), root, Some(date!(2026 - 11 - 07))).unwrap();
     assert_eq!(days[0].date.weekday(), Weekday::Sunday);
-    assert_eq!(days.len(), 42);
+    assert_eq!(days.len(), EXPECTED_DAY_CELLS);
     assert_eq!(days.iter().filter(|day| day.is_today).count(), 1);
     app.update();
     assert!(app.world().get::<Children>(root).is_none());

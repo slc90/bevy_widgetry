@@ -1,3 +1,8 @@
+const OPTION_MIN_WIDTH: f32 = 24.0;
+const OPTION_MIN_HEIGHT: f32 = 26.0;
+const OPTION_PADDING_X: f32 = 10.0;
+const OPTION_CORNER_RADIUS: f32 = 4.0;
+
 use bevy::prelude::*;
 
 #[derive(SceneComponent, Default, Clone)]
@@ -36,9 +41,9 @@ impl WidgetrySegmentedOption {
             @WidgetrySegmentedOptionHeadless
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             Node {
-                min_width: px(24), min_height: px(26),
-                padding: UiRect::horizontal(px(10)),
-                border_radius: BorderRadius::all(px(4)),
+                min_width: px(OPTION_MIN_WIDTH), min_height: px(OPTION_MIN_HEIGHT),
+                padding: UiRect::horizontal(px(OPTION_PADDING_X)),
+                border_radius: BorderRadius::all(px(OPTION_CORNER_RADIUS)),
                 align_items: AlignItems::Center, justify_content: JustifyContent::Center,
             }
             BackgroundColor

@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 mod common;
 use bevy::prelude::*;
 use bevy::ui::UiGlobalTransform;
@@ -64,7 +66,7 @@ fn resized_frozen_text_is_laid_out_and_clipped_in_the_first_update() {
         .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
-        std::time::Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "Frozen Table font",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

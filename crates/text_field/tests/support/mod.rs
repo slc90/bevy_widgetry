@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::prelude::*;
 use bevy::text::FontSource;
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
@@ -35,7 +37,7 @@ pub fn editing_app() -> App {
         .load::<Font>(BuiltinFont::Default.path());
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "TextField 内建字体",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
 use super::*;
 use bevy::{
     asset::{
@@ -216,7 +218,7 @@ fn real_loader_failures_keep_source_identity_and_actual_fallback_logs() {
             crate::scene::spawn_scene(app.world_mut(), bsn! { @WidgetryIcon { @path: {path} } })
                 .unwrap();
         let handle = app.world().get::<WidgetryIcon>(owner).unwrap().svg.clone();
-        advance_until(&mut app, Duration::from_secs(5), path, |world| {
+        advance_until(&mut app, ASYNC_WAIT_TIMEOUT, path, |world| {
             world
                 .resource::<AssetServer>()
                 .load_state(handle.id())
@@ -308,12 +310,9 @@ fn real_loader_failures_keep_source_identity_and_actual_fallback_logs() {
             &id
         );
         WidgetryIcon::set_svg_in_world(app.world_mut(), owner, "good.svg").unwrap();
-        advance_until(
-            &mut app,
-            Duration::from_secs(5),
-            "recovered image",
-            |world| world.get::<IconMaterialized>(owner).is_some(),
-        )
+        advance_until(&mut app, ASYNC_WAIT_TIMEOUT, "recovered image", |world| {
+            world.get::<IconMaterialized>(owner).is_some()
+        })
         .unwrap();
         assert_eq!(
             logs.records_for_error(&id)
@@ -325,7 +324,7 @@ fn real_loader_failures_keep_source_identity_and_actual_fallback_logs() {
         WidgetryIcon::set_svg_in_world(app.world_mut(), owner, "again.svg").unwrap();
         advance_until(
             &mut app,
-            Duration::from_secs(5),
+            ASYNC_WAIT_TIMEOUT,
             "independent failure",
             |world| {
                 world

@@ -1,3 +1,10 @@
+const GRID_COLUMNS: usize = 20;
+const GRID_SPACING: f32 = 30.0;
+const BENCH_VIEWPORT: UVec2 = UVec2::new(800, 600);
+const VIEW_MARGIN: f32 = 40.0;
+const VIEW_SIZE: Vec2 = Vec2::new(200.0, 160.0);
+const SECONDARY_VIEW_LEFT: f32 = 300.0;
+
 use bevy::{picking::pointer::*, prelude::*, ui::UiGlobalTransform};
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, artifact::error, run};
@@ -32,13 +39,13 @@ fn fixture(count: usize, mode: &str) -> Result<Fixture> {
         .world_mut()
         .spawn((
             Window {
-                resolution: bevy::window::WindowResolution::new(800, 600),
+                resolution: bevy::window::WindowResolution::new(BENCH_VIEWPORT.x, BENCH_VIEWPORT.y),
                 ..default()
             },
             bevy::window::PrimaryWindow,
         ))
         .id();
-    let camera = spawn_picking_camera(&mut app, window, UVec2::new(800, 600), 1.0);
+    let camera = spawn_picking_camera(&mut app, window, BENCH_VIEWPORT, 1.0);
     let pointer = pointer_ids()[1];
     app.world_mut().spawn(pointer);
     let document = app.world_mut().spawn(CanvasDocument).id();
@@ -48,7 +55,11 @@ fn fixture(count: usize, mode: &str) -> Result<Fixture> {
         let transform = if editing {
             Transform::default()
         } else {
-            Transform::from_xyz((i % 20) as f32 * 30.0, (i / 20) as f32 * 30.0, 0.0)
+            Transform::from_xyz(
+                (i % GRID_COLUMNS) as f32 * GRID_SPACING,
+                (i / GRID_COLUMNS) as f32 * GRID_SPACING,
+                0.0,
+            )
         };
         let shape = if editing && mode == "ellipse_parameters" {
             CanvasDocument::create_ellipse(
@@ -82,8 +93,8 @@ fn fixture(count: usize, mode: &str) -> Result<Fixture> {
             selected = Some(shape);
         }
     }
-    let view=app.world_mut().spawn_scene(bsn! {@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(40),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?.id();
-    let other=app.world_mut().spawn_scene(bsn! {@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(300),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?.id();
+    let view=app.world_mut().spawn_scene(bsn! {@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(VIEW_MARGIN),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
+    let other=app.world_mut().spawn_scene(bsn! {@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(SECONDARY_VIEW_LEFT),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
     frame(&mut app)?;
     frame(&mut app)?;
     if mode == "ellipse_preview" {
@@ -148,7 +159,8 @@ fn fixture(count: usize, mode: &str) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("canvas-drawing-criterion")?;
-    for count in [100, 1000] {
+    let entity_counts = [100, 1000];
+    for count in entity_counts {
         for mode in [
             "ellipse_preview",
             "rectangle_parameters",

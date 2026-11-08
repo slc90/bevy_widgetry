@@ -54,7 +54,8 @@ fn fixture(count: usize) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("file_dialog-window-criterion")?;
-    for count in [1, 4, 8] {
+    let session_counts = [1, 4, 8];
+    for count in session_counts {
         for operation in ["idle", "tab", "close"] {
             run(
                 &mut harness,

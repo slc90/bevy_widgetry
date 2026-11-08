@@ -1,3 +1,9 @@
+const MIN_CROSS_SIZE: f32 = 28.0;
+const DEFAULT_LENGTH: f32 = 200.0;
+
+const FOCUS_OUTLINE_WIDTH: f32 = 2.0;
+const FOCUS_OUTLINE_OFFSET: f32 = 3.0;
+
 use crate::{
     SliderError, SliderFailure,
     error::{StyleKey, StyleProblem, failure},
@@ -59,7 +65,7 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
     let vertical = props.orientation == WidgetrySliderOrientation::Vertical;
     let thickness = props.track_thickness;
     let diameter = props.thumb_diameter;
-    let cross = 28.0_f32.max(diameter).max(thickness);
+    let cross = MIN_CROSS_SIZE.max(diameter).max(thickness);
     let initial_ratio = ((f64::from(props.value.unwrap_or(props.min)) - f64::from(props.min))
         / (f64::from(props.max) - f64::from(props.min))) as f32;
     let orientation = props.orientation;
@@ -81,7 +87,7 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
         Parts { track: #SliderTrack, fill: #SliderFill, thumb: #SliderThumb }
         bevy::input_focus::tab_navigation::TabIndex(0) Hovered(false)
         Node {
-            width: px(if vertical {cross} else {200.0}), height: px(if vertical {200.0} else {cross}),
+            width: px(if vertical {cross} else {DEFAULT_LENGTH}), height: px(if vertical {DEFAULT_LENGTH} else {cross}),
             min_width: px(if vertical {cross} else {0.0}), min_height: px(if vertical {0.0} else {cross}),
             flex_shrink: 0.0, align_items: AlignItems::Center, justify_content: JustifyContent::Center,
             padding: {if vertical {UiRect::vertical(px(diameter*0.5))} else {UiRect::horizontal(px(diameter*0.5))}},
@@ -108,7 +114,7 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
                 }
                 UiTransform { translation: {Val2::percent(-50,-50)} }
                 template(move |context| Ok(BackgroundColor(colors_for_thumb.resolve(&context.resource::<WidgetryTheme>().slider).normal.thumb)))
-                Outline { width: px(2), offset: px(3), color: Color::NONE }
+                Outline { width: px(FOCUS_OUTLINE_WIDTH), offset: px(FOCUS_OUTLINE_OFFSET), color: Color::NONE }
             ]
         ]
     }

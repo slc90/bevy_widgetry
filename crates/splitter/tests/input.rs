@@ -89,7 +89,12 @@ fn ratio(app: &App, root: Entity) -> f32 {
     WidgetrySplitter::split_ratio(app.world(), root).unwrap()
 }
 fn close(actual: f32, expected: f32) {
-    assert!((actual - expected).abs() < 0.0001, "{actual} != {expected}");
+    const COMPARISON_TOLERANCE: f32 = 0.0001;
+
+    assert!(
+        (actual - expected).abs() < COMPARISON_TOLERANCE,
+        "{actual} != {expected}"
+    );
 }
 
 #[test]

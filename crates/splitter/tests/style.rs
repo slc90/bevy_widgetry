@@ -71,6 +71,8 @@ fn send(app: &mut App, at: &Location, action: PointerAction) {
 
 #[test]
 fn centered_line_and_hit_region_keep_independent_sizes_in_both_axes_and_dpi() {
+    let pixel_tolerance = 1.0;
+
     for vertical in [false, true] {
         for dpi in [1.0, 1.25, 1.5] {
             for (thickness, visible) in [(8.0, 2.0), (12.0, 4.0)] {
@@ -79,9 +81,9 @@ fn centered_line_and_hit_region_keep_independent_sizes_in_both_axes_and_dpi() {
                 let h = app.world().get::<ComputedNode>(handle).unwrap().size() / dpi;
                 let l = app.world().get::<ComputedNode>(visual).unwrap().size() / dpi;
                 let axis = if vertical { 1 } else { 0 };
-                assert!((h[axis] - thickness).abs() <= 1.0 / dpi);
-                assert!((l[axis] - visible).abs() <= 1.0 / dpi);
-                assert!((h[1 - axis] - l[1 - axis]).abs() <= 1.0 / dpi);
+                assert!((h[axis] - thickness).abs() <= pixel_tolerance / dpi);
+                assert!((l[axis] - visible).abs() <= pixel_tolerance / dpi);
+                assert!((h[1 - axis] - l[1 - axis]).abs() <= pixel_tolerance / dpi);
                 let center = app
                     .world()
                     .get::<UiGlobalTransform>(visual)

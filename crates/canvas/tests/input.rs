@@ -14,6 +14,8 @@ use common::*;
 
 #[test]
 fn space_primary_pan_locks_until_release_and_only_moves_its_view() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     for id in pointer_ids() {
         for (scale, ui_scale) in [(1.0, 1.0), (1.5, 1.0), (2.0, 1.5)] {
             let (mut app, a, b, shape, _, mut at) = fixture(id, scale, ui_scale);
@@ -39,7 +41,7 @@ fn space_primary_pan_locks_until_release_and_only_moves_its_view() {
             moved(&mut app, id, &mut at, Vec2::new(40.0, 20.0) * ui_scale);
             assert!(
                 (CanvasView::center(app.world(), a).unwrap() - Vec2::new(-40.0, -20.0)).length()
-                    < 0.001
+                    < COMPARISON_TOLERANCE
             );
             app.world_mut()
                 .resource_mut::<ButtonInput<KeyCode>>()
@@ -47,7 +49,7 @@ fn space_primary_pan_locks_until_release_and_only_moves_its_view() {
             moved(&mut app, id, &mut at, Vec2::new(160.0, 60.0) * ui_scale);
             assert!(
                 (CanvasView::center(app.world(), a).unwrap() - Vec2::new(-200.0, -80.0)).length()
-                    < 0.001
+                    < COMPARISON_TOLERANCE
             );
             assert_eq!(CanvasView::center(app.world(), b).unwrap(), Vec2::ZERO);
             assert_eq!(
@@ -60,7 +62,9 @@ fn space_primary_pan_locks_until_release_and_only_moves_its_view() {
                 .get::<GlobalTransform>(camera)
                 .unwrap()
                 .translation();
-            assert!((position.truncate() - Vec2::new(-200.0, 80.0)).length() < 0.001);
+            assert!(
+                (position.truncate() - Vec2::new(-200.0, 80.0)).length() < COMPARISON_TOLERANCE
+            );
             input(
                 &mut app,
                 id,
@@ -71,7 +75,7 @@ fn space_primary_pan_locks_until_release_and_only_moves_its_view() {
             moved(&mut app, id, &mut at, Vec2::splat(15.0));
             assert!(
                 (CanvasView::center(app.world(), a).unwrap() - Vec2::new(-200.0, -80.0)).length()
-                    < 0.001
+                    < COMPARISON_TOLERANCE
             );
         }
     }
@@ -160,6 +164,8 @@ fn pan_rejects_unmodified_primary_and_middle_and_cancels_when_unavailable() {
 
 #[test]
 fn pan_uses_transformed_local_axes_and_ignores_other_pointers() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     let id = pointer_ids()[1];
     let (mut app, a, _, _, _, mut at) = fixture(id, 1.5, 1.0);
     app.world_mut().entity_mut(a).insert(bevy::ui::UiTransform {
@@ -186,7 +192,7 @@ fn pan_uses_transformed_local_axes_and_ignores_other_pointers() {
         .transform_vector2(local * 1.5)
         / 1.5;
     moved(&mut app, id, &mut at, delta);
-    assert!((CanvasView::center(app.world(), a).unwrap() + local).length() < 0.001);
+    assert!((CanvasView::center(app.world(), a).unwrap() + local).length() < COMPARISON_TOLERANCE);
     input(
         &mut app,
         PointerId::Mouse,
@@ -210,7 +216,7 @@ fn pan_uses_transformed_local_axes_and_ignores_other_pointers() {
     app.world_mut().resource_mut::<InputFocus>().clear();
     moved(&mut app, id, &mut at, Vec2::splat(10.0));
     assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
-    assert!((CanvasView::center(app.world(), a).unwrap() + local).length() < 0.001);
+    assert!((CanvasView::center(app.world(), a).unwrap() + local).length() < COMPARISON_TOLERANCE);
 }
 
 #[test]
@@ -879,6 +885,10 @@ fn zoom_api_is_center_anchored_validated_and_notified_after_commit() {
 
 #[test]
 fn wheel_keeps_cursor_document_point_stable_and_pan_uses_zoom() {
+    const POSITION_TOLERANCE: f32 = 0.001;
+
+    const COMPARISON_TOLERANCE: f32 = 0.0001;
+
     for id in pointer_ids() {
         for (scale, ui_scale) in [(1.0, 1.0), (1.5, 1.0), (2.0, 1.5)] {
             let (mut app, a, b, shape, _, mut at) = fixture(id, scale, ui_scale);
@@ -899,14 +909,14 @@ fn wheel_keeps_cursor_document_point_stable_and_pan_uses_zoom() {
             assert!(zoom > 1.0);
             assert!(
                 (CanvasView::center(app.world(), a).unwrap() + local / zoom - local).length()
-                    < 0.001
+                    < POSITION_TOLERANCE
             );
             assert_eq!(CanvasView::zoom(app.world(), b).unwrap(), 1.0);
             for _ in 0..8 {
                 scroll(&mut app, id, &at, -1.0);
             }
-            assert!((CanvasView::zoom(app.world(), a).unwrap() - 1.0).abs() < 0.0001);
-            assert!(CanvasView::center(app.world(), a).unwrap().length() < 0.001);
+            assert!((CanvasView::zoom(app.world(), a).unwrap() - 1.0).abs() < COMPARISON_TOLERANCE);
+            assert!(CanvasView::center(app.world(), a).unwrap().length() < POSITION_TOLERANCE);
             CanvasView::set_zoom_in_world(app.world_mut(), a, 2.0).unwrap();
             app.world_mut()
                 .resource_mut::<ButtonInput<KeyCode>>()
@@ -922,7 +932,7 @@ fn wheel_keeps_cursor_document_point_stable_and_pan_uses_zoom() {
             assert!(
                 (CanvasView::center(app.world(), a).unwrap() - before + Vec2::new(10.0, 5.0))
                     .length()
-                    < 0.001
+                    < POSITION_TOLERANCE
             );
             let before = CanvasView::center(app.world(), a).unwrap();
             scroll(&mut app, id, &at, 1.0);
@@ -934,7 +944,7 @@ fn wheel_keeps_cursor_document_point_stable_and_pan_uses_zoom() {
                 (CanvasView::center(app.world(), a).unwrap() - after_wheel
                     + Vec2::new(10.0, 5.0) / zoom)
                     .length()
-                    < 0.001
+                    < POSITION_TOLERANCE
             );
             input(
                 &mut app,
@@ -957,6 +967,10 @@ fn wheel_keeps_cursor_document_point_stable_and_pan_uses_zoom() {
 
 #[test]
 fn wheel_coordinate_conversion_and_atomic_notices_survive_runtime_scale_changes() {
+    const POSITION_TOLERANCE: f32 = 0.001;
+
+    const COMPARISON_TOLERANCE: f32 = 0.0001;
+
     let id = pointer_ids()[1];
     let (mut app, a, _, _, window, mut at) = fixture(id, 1.0, 1.0);
     let camera = app
@@ -985,7 +999,7 @@ fn wheel_coordinate_conversion_and_atomic_notices_survive_runtime_scale_changes(
                     (CanvasView::center(&world, event.entity).unwrap() + anchor.local / event.zoom
                         - anchor.point)
                         .length()
-                        < 0.001
+                        < POSITION_TOLERANCE
                 );
                 world.resource_mut::<Anchor>().notices += 1;
             },
@@ -1001,7 +1015,7 @@ fn wheel_coordinate_conversion_and_atomic_notices_survive_runtime_scale_changes(
                     (event.center + anchor.local / CanvasView::zoom(&world, event.entity).unwrap()
                         - anchor.point)
                         .length()
-                        < 0.001
+                        < POSITION_TOLERANCE
                 );
                 world.resource_mut::<Anchor>().notices += 1;
             },
@@ -1047,13 +1061,18 @@ fn wheel_coordinate_conversion_and_atomic_notices_survive_runtime_scale_changes(
                 phase: bevy::input::touch::TouchPhase::Moved,
             },
         );
-        assert!((CanvasView::zoom(app.world(), a).unwrap() / old - 0.1_f32.exp()).abs() < 0.0001);
+        assert!(
+            (CanvasView::zoom(app.world(), a).unwrap() / old - 0.1_f32.exp()).abs()
+                < COMPARISON_TOLERANCE
+        );
         assert_eq!(app.world().resource::<Anchor>().notices, 2);
     }
 }
 
 #[test]
 fn captured_pan_interleaves_moves_and_wheel_in_the_original_frame_order() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     for id in pointer_ids() {
         let (mut app, a, _, _, _, mut at) = fixture(id, 1.0, 1.0);
         app.world_mut()
@@ -1099,7 +1118,10 @@ fn captured_pan_interleaves_moves_and_wheel_in_the_original_frame_order() {
         let zoom = CanvasView::zoom(app.world(), a).unwrap();
         let expected = -Vec2::new(20.0, 10.0) + Vec2::new(20.0, 10.0) * (1.0 - zoom.recip())
             - Vec2::new(10.0, 5.0) / zoom;
-        assert!((CanvasView::center(app.world(), a).unwrap() - expected).length() < 0.001);
+        assert!(
+            (CanvasView::center(app.world(), a).unwrap() - expected).length()
+                < COMPARISON_TOLERANCE
+        );
     }
 }
 

@@ -1,4 +1,12 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+
+const EXPECTED_INITIAL_REPEAT_MS: u64 = 400;
+const BEFORE_INITIAL_REPEAT_MS: u64 = EXPECTED_INITIAL_REPEAT_MS - BOUNDARY_STEP_MS;
+const EXPECTED_REPEAT_INTERVAL_MS: u64 = 100;
+const IDLE_BEFORE_PRESS_MS: u64 = 5000;
+const LONG_FRAME_MS: u64 = 1000;
+const POST_INPUT_WAIT_MS: u64 = 500;
+const BOUNDARY_STEP_MS: u64 = 1;
 use bevy::{
     picking::pointer::{Location, PointerAction, PointerButton, PointerId},
     prelude::*,
@@ -96,7 +104,7 @@ fn public_repeat_runs_headless_after_idle_without_catchup_or_trailing_wakes() {
     let (mut app, root, _, _, pointer, at) = fixture(false);
     assert!(!app.is_plugin_added::<bevy_widgetry_number_input::WidgetryNumberInputPlugin>());
     app.world_mut().resource_mut::<Time<Virtual>>().pause();
-    advance(&mut app, 5000);
+    advance(&mut app, IDLE_BEFORE_PRESS_MS);
     input(
         &mut app,
         pointer,
@@ -105,13 +113,13 @@ fn public_repeat_runs_headless_after_idle_without_catchup_or_trailing_wakes() {
     );
     assert_eq!(value(&app, root), 1);
     assert!(redraw(&app));
-    advance(&mut app, 399);
+    advance(&mut app, BEFORE_INITIAL_REPEAT_MS);
     assert_eq!(value(&app, root), 1);
-    advance(&mut app, 1);
+    advance(&mut app, BOUNDARY_STEP_MS);
     assert_eq!(value(&app, root), 2);
-    advance(&mut app, 100);
+    advance(&mut app, EXPECTED_REPEAT_INTERVAL_MS);
     assert_eq!(value(&app, root), 3);
-    advance(&mut app, 1000);
+    advance(&mut app, LONG_FRAME_MS);
     assert_eq!(value(&app, root), 4);
     input(
         &mut app,
@@ -120,7 +128,7 @@ fn public_repeat_runs_headless_after_idle_without_catchup_or_trailing_wakes() {
         PointerAction::Release(PointerButton::Primary),
     );
     clear_redraw(&mut app);
-    advance(&mut app, 1000);
+    advance(&mut app, LONG_FRAME_MS);
     assert_eq!(value(&app, root), 4);
     assert!(!redraw(&app));
     assert_eq!(app.world().resource::<Changes>().0, vec![1, 2, 3, 4]);
@@ -142,7 +150,7 @@ fn root_or_editor_disable_cancels_an_external_hold_until_a_fresh_press() {
             .insert(InteractionDisabled);
         app.world_mut().flush();
         clear_redraw(&mut app);
-        advance(&mut app, 500);
+        advance(&mut app, POST_INPUT_WAIT_MS);
         assert_eq!(value(&app, root), 1);
         assert!(!redraw(&app));
         app.world_mut()
@@ -150,8 +158,8 @@ fn root_or_editor_disable_cancels_an_external_hold_until_a_fresh_press() {
             .remove::<InteractionDisabled>();
         app.world_mut().flush();
         clear_redraw(&mut app);
-        advance(&mut app, 1000);
-        advance(&mut app, 500);
+        advance(&mut app, LONG_FRAME_MS);
+        advance(&mut app, POST_INPUT_WAIT_MS);
         assert_eq!(value(&app, root), 1);
         assert!(!redraw(&app));
         input(
@@ -167,7 +175,7 @@ fn root_or_editor_disable_cancels_an_external_hold_until_a_fresh_press() {
             PointerAction::Press(PointerButton::Primary),
         );
         assert_eq!(value(&app, root), 2);
-        advance(&mut app, 400);
+        advance(&mut app, EXPECTED_INITIAL_REPEAT_MS);
         assert_eq!(value(&app, root), 3);
     }
 }
@@ -182,7 +190,7 @@ fn readonly_or_lost_step_relation_stops_repeat_without_waking() {
         &at,
         PointerAction::Press(PointerButton::Primary),
     );
-    advance(&mut app, 1000);
+    advance(&mut app, LONG_FRAME_MS);
     assert_eq!(value(&app, root), 0);
     assert!(!redraw(&app));
     let (mut app, root, _, trigger, pointer, at) = fixture(false);
@@ -196,7 +204,7 @@ fn readonly_or_lost_step_relation_stops_repeat_without_waking() {
         .entity_mut(trigger)
         .remove::<WidgetryNumberInputStep>();
     clear_redraw(&mut app);
-    advance(&mut app, 500);
+    advance(&mut app, POST_INPUT_WAIT_MS);
     assert!(!redraw(&app));
     app.world_mut()
         .entity_mut(trigger)
@@ -204,8 +212,8 @@ fn readonly_or_lost_step_relation_stops_repeat_without_waking() {
             root,
             increase: true,
         });
-    advance(&mut app, 1000);
-    advance(&mut app, 500);
+    advance(&mut app, LONG_FRAME_MS);
+    advance(&mut app, POST_INPUT_WAIT_MS);
     assert_eq!(value(&app, root), 1);
     assert!(!redraw(&app));
 }
@@ -225,8 +233,8 @@ fn adding_repeat_to_an_existing_press_does_not_resume_that_press() {
     app.world_mut()
         .entity_mut(trigger)
         .insert(WidgetryNumberInputRepeat);
-    advance(&mut app, 500);
-    advance(&mut app, 500);
+    advance(&mut app, POST_INPUT_WAIT_MS);
+    advance(&mut app, POST_INPUT_WAIT_MS);
     assert_eq!(value(&app, root), 1);
     input(
         &mut app,
@@ -240,7 +248,7 @@ fn adding_repeat_to_an_existing_press_does_not_resume_that_press() {
         &at,
         PointerAction::Press(PointerButton::Primary),
     );
-    advance(&mut app, 400);
+    advance(&mut app, EXPECTED_INITIAL_REPEAT_MS);
     assert_eq!(value(&app, root), 3);
 }
 
@@ -264,7 +272,7 @@ fn disable_and_reenable_before_the_next_tick_still_cancels_the_old_hold() {
             .remove::<InteractionDisabled>();
         app.world_mut().flush();
         clear_redraw(&mut app);
-        advance(&mut app, 500);
+        advance(&mut app, POST_INPUT_WAIT_MS);
         assert_eq!(value(&app, root), 1);
         assert!(!redraw(&app));
     }
@@ -293,7 +301,7 @@ fn disable_from_the_first_step_notification_cancels_that_same_press() {
         );
         assert_eq!(value(&app, root), 1);
         clear_redraw(&mut app);
-        advance(&mut app, 500);
+        advance(&mut app, POST_INPUT_WAIT_MS);
         assert_eq!(value(&app, root), 1);
         assert!(!redraw(&app));
         input(
@@ -308,7 +316,7 @@ fn disable_from_the_first_step_notification_cancels_that_same_press() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        advance(&mut app, 400);
+        advance(&mut app, EXPECTED_INITIAL_REPEAT_MS);
         assert_eq!(value(&app, root), 3);
     }
 }
@@ -324,7 +332,7 @@ fn cancellation_or_root_despawn_stops_headless_repeat_and_redraws() {
     );
     input(&mut app, pointer, &at, PointerAction::Cancel);
     clear_redraw(&mut app);
-    advance(&mut app, 1000);
+    advance(&mut app, LONG_FRAME_MS);
     assert_eq!(value(&app, root), 1);
     assert!(!redraw(&app));
     input(
@@ -336,7 +344,7 @@ fn cancellation_or_root_despawn_stops_headless_repeat_and_redraws() {
     assert_eq!(value(&app, root), 2);
     app.world_mut().despawn(root);
     clear_redraw(&mut app);
-    advance(&mut app, 1000);
+    advance(&mut app, LONG_FRAME_MS);
     assert_eq!(app.world().resource::<Changes>().0, vec![1, 2]);
     assert!(!redraw(&app));
 }

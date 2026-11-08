@@ -1,8 +1,10 @@
 #![allow(clippy::disallowed_macros)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::{prelude::*, tasks::block_on};
 use bevy_widgetry_job::*;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 struct ConsumerA;
 struct ConsumerB;
@@ -93,7 +95,7 @@ fn headless_consumer_can_use_a_frame_budget_and_distinguish_execution_from_displ
                 Ok(())
             })
             .unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();

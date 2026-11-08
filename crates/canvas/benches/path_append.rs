@@ -1,3 +1,4 @@
+const PATH_COLUMNS: usize = 100;
 use bevy::prelude::*;
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, artifact::error, run};
@@ -13,10 +14,12 @@ fn fixture(count: usize) -> Result<Fixture> {
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();
     let mut commands = vec![CanvasPathCommand::MoveTo(Vec2::ZERO)];
-    commands.extend(
-        (1..count)
-            .map(|i| CanvasPathCommand::LineTo(Vec2::new((i % 100) as f32, (i / 100) as f32))),
-    );
+    commands.extend((1..count).map(|i| {
+        CanvasPathCommand::LineTo(Vec2::new(
+            (i % PATH_COLUMNS) as f32,
+            (i / PATH_COLUMNS) as f32,
+        ))
+    }));
     let original = CanvasPath { commands };
     let shape = CanvasDocument::create_path(
         &mut world,
@@ -36,7 +39,8 @@ fn fixture(count: usize) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("canvas-path-append-criterion")?;
-    for count in [100, 1000, 10000] {
+    let command_counts = [100, 1000, 10000];
+    for count in command_counts {
         run(
             &mut harness,
             &format!("canvas_path_append/commands{count}/append_rectangle_and_restore"),

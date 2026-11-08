@@ -1,3 +1,5 @@
+const MAX_PENDING_INPUTS: usize = 128;
+
 use crate::style::{Part, PartKind};
 use crate::view::EntryRow;
 use crate::*;
@@ -275,12 +277,12 @@ fn on_key(
     let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
     commands.queue(move |world: &mut World| -> Result {
         let mut pending = world.resource_mut::<PendingKeys>();
-        if pending.0.len() >= 128 {
+        if pending.0.len() >= MAX_PENDING_INPUTS {
             return Err(crate::error::failure(
                 FileDialogError::Capacity {
                     resource: "keyboard queue",
                     actual: pending.0.len() + 1,
-                    limit: 128,
+                    limit: MAX_PENDING_INPUTS,
                 },
                 "file_dialog.keyboard",
             )

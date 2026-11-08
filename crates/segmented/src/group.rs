@@ -1,3 +1,7 @@
+const GROUP_MIN_HEIGHT: f32 = 32.0;
+const GROUP_PADDING: f32 = 2.0;
+const GROUP_BORDER_WIDTH: f32 = 1.0;
+const GROUP_CORNER_RADIUS: f32 = 6.0;
 use crate::WidgetrySegmentedOptionHeadless;
 use crate::{
     SegmentedError, SegmentedFailure,
@@ -380,10 +384,10 @@ impl WidgetrySegmented {
                 grid_auto_flow: GridAutoFlow::Column,
                 grid_auto_columns: {if equal_width { vec![GridTrack::fr(1.0)] } else { vec![] }},
                 flex_direction: {if horizontal { FlexDirection::Row } else { FlexDirection::Column }},
-                min_height: px(32),
-                padding: UiRect::all(px(2)),
-                border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(6)),
+                min_height: px(GROUP_MIN_HEIGHT),
+                padding: UiRect::all(px(GROUP_PADDING)),
+                border: UiRect::all(px(GROUP_BORDER_WIDTH)),
+                border_radius: BorderRadius::all(px(GROUP_CORNER_RADIUS)),
                 align_items: AlignItems::Stretch,
             }
             BackgroundColor

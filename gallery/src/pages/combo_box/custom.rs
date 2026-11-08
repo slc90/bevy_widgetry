@@ -1,3 +1,18 @@
+const POPUP_Z_INDEX: i32 = 1000;
+const RESULT_ROW_HEIGHT: f32 = 32.0;
+const COMBO_WIDTH: f32 = 280.0;
+const FIELD_MIN_HEIGHT: f32 = 48.0;
+const FIELD_PADDING_X: f32 = 16.0;
+const FIELD_PADDING_Y: f32 = 10.0;
+const BORDER_WIDTH: f32 = 2.0;
+const CORNER_RADIUS: f32 = 12.0;
+const POPUP_TOP: f32 = 54.0;
+const POPUP_PADDING: f32 = 8.0;
+const RESULTS_HEIGHT: f32 = 96.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 12.0;
+
 use super::{ComboBoxDemo, ComboBoxDemoItem, item_text};
 use crate::i18n::{ComboBoxKey, CommonKey, Language, TextKey, localized, tr};
 use bevy::{
@@ -47,42 +62,42 @@ pub(super) fn install(app: &mut App) {
 
 pub(super) fn scene(source: Entity) -> impl Scene {
     bsn! {
-        Node {flex_direction:FlexDirection::Column,row_gap:px(8)}
+        Node {flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP)}
         Children [
             @localized(TextKey::ComboBox(ComboBoxKey::CustomDescription)) WidgetryText--
-            Node {column_gap:px(12),align_items:AlignItems::Start} Children [
+            Node {column_gap:px(CONTROL_GAP),align_items:AlignItems::Start} Children [
                 #Root @Combo::<ComboBoxDemoItem> {@source:source}
                 WidgetryComboBoxParts {trigger:#Trigger,popup:#Popup,list:#List}
                 WidgetryComboBoxSearch::<ComboBoxDemoItem> {field:#Search,matcher:{super::search_matcher()}}
                 Name::new("ComboCustomRoot") template(|_|Ok(ComboBoxDemo("Custom"))) on(super::on_selection_changed)
-                Node {width:px(280)} Children [
+                Node {width:px(COMBO_WIDTH)} Children [
                     Node {width:percent(100)} Children [
                         #Trigger @WidgetryButtonHeadless Name::new("ComboCustomTrigger")
-                        Node {width:percent(100),min_height:px(48),padding:UiRect::axes(px(16),px(10)),border:UiRect::all(px(2)),border_radius:BorderRadius::all(px(12)),align_items:AlignItems::Center}
+                        Node {width:percent(100),min_height:px(FIELD_MIN_HEIGHT),padding:UiRect::axes(px(FIELD_PADDING_X),px(FIELD_PADDING_Y)),border:UiRect::all(px(BORDER_WIDTH)),border_radius:BorderRadius::all(px(CORNER_RADIUS)),align_items:AlignItems::Center}
                         BackgroundColor BorderColor
                         Children [Label {root:#Root,results:#Results,empty:#Empty} Text("") WidgetryText Pickable::IGNORE]
                     ]--
-                    Node {position_type:PositionType::Absolute,width:percent(100),top:px(54)} Children [
-                        #Popup Name::new("ComboCustomPopup") Visibility::Hidden GlobalZIndex(1000)
-                        Node {width:percent(100),padding:UiRect::all(px(8)),border:UiRect::all(px(2)),border_radius:BorderRadius::all(px(12)),flex_direction:FlexDirection::Column,row_gap:px(8)}
+                    Node {position_type:PositionType::Absolute,width:percent(100),top:px(POPUP_TOP)} Children [
+                        #Popup Name::new("ComboCustomPopup") Visibility::Hidden GlobalZIndex(POPUP_Z_INDEX)
+                        Node {width:percent(100),padding:UiRect::all(px(POPUP_PADDING)),border:UiRect::all(px(BORDER_WIDTH)),border_radius:BorderRadius::all(px(CORNER_RADIUS)),flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP)}
                         BackgroundColor BorderColor Children [
                             @localized(TextKey::ComboBox(ComboBoxKey::CustomPopup)) WidgetryText--
-                            #Results Node {width:percent(100),height:px(96)} Name::new("ComboCustomResults") Children [
-                                #List @WidgetryListView::<ComboBoxDemoItem> {@source:source,@selection_mode:WidgetryListSelectionMode::Single,@item_height:32.0,@renderer:{WidgetryListViewRenderer::new(|item:&ComboBoxDemoItem| {
+                            #Results Node {width:percent(100),height:px(RESULTS_HEIGHT)} Name::new("ComboCustomResults") Children [
+                                #List @WidgetryListView::<ComboBoxDemoItem> {@source:source,@selection_mode:WidgetryListSelectionMode::Single,@item_height:RESULT_ROW_HEIGHT,@renderer:{WidgetryListViewRenderer::new(|item:&ComboBoxDemoItem| {
                                     let text=item.label.as_ref().map(|label|item_text(label.clone(),item.edits));
                                     bsn_list! {Node {align_items:AlignItems::Center} Children [@text]}
                                 })}}
                                 Name::new("ComboCustomList") Node {width:percent(100),height:percent(100)}
                             ]--
                             #Empty Node Name::new("ComboCustomEmpty") Children [@localized(TextKey::ComboBox(ComboBoxKey::NoResults)) WidgetryText]--
-                            Node {width:percent(100),padding:UiRect::top(px(8))} Children [
+                            Node {width:percent(100),padding:UiRect::top(px(POPUP_PADDING))} Children [
                                 #Search @bevy_widgetry::text_field::WidgetryTextField Name::new("ComboCustomSearch")
                                 Node {width:percent(100)}
                             ]
                         ]
                     ]
                 ]--
-                Node {flex_direction:FlexDirection::Column,row_gap:px(8)} Children [
+                Node {flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP)} Children [
                     @WidgetryButton {@children:{Some(Box::new(bsn_list! {@localized(TextKey::Common(CommonKey::ClearSelection)) WidgetryText}) as Box<dyn SceneList>)}}
                     Controls {root:#Root,toggle:false} Name::new("ComboCustomClear") on(operate)--
                     @WidgetryButton {@children:{Some(Box::new(bsn_list! {@localized(TextKey::Common(CommonKey::EnableDisable)) WidgetryText}) as Box<dyn SceneList>)}}

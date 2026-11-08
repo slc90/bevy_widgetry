@@ -281,9 +281,13 @@ mod tests {
 
     #[test]
     fn warning_text_has_readable_contrast_on_each_theme_background() {
+        const MIN_TEXT_CONTRAST: f32 = 4.5;
         fn luminance(color: Color) -> f32 {
             let linear = color.to_linear();
-            0.2126 * linear.red + 0.7152 * linear.green + 0.0722 * linear.blue
+            {
+                let [red_weight, green_weight, blue_weight] = [0.2126, 0.7152, 0.0722];
+                red_weight * linear.red + green_weight * linear.green + blue_weight * linear.blue
+            }
         }
         let palettes = [
             (DARK, dark::WINDOW_BACKGROUND),
@@ -300,9 +304,12 @@ mod tests {
             ] {
                 let a = luminance(theme.hint_warning);
                 let b = luminance(surface);
-                let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+                let contrast = {
+                    let luminance_offset = 0.05;
+                    (a.max(b) + luminance_offset) / (a.min(b) + luminance_offset)
+                };
                 assert!(
-                    contrast >= 4.5,
+                    contrast >= MIN_TEXT_CONTRAST,
                     "warning contrast {contrast} on {surface:?}"
                 );
             }

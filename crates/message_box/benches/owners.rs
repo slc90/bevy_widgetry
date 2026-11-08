@@ -159,7 +159,8 @@ fn fixture(count: usize) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("message-box-owners")?;
-    for count in [1, 12, 100] {
+    let window_counts = [1, 12, 100];
+    for count in window_counts {
         for action in ["idle", "reparent_one", "hover_one", "press_one"] {
             run(
                 &mut harness,

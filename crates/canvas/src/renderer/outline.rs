@@ -1,3 +1,8 @@
+const OUTLINE_WIDTH: f32 = 2.0;
+const OUTLINE_GAP: f32 = 3.0;
+const OUTLINE_COLOR: Color = Color::srgb(0.0, 0.55, 1.0);
+const OUTLINE_DEPTH: f32 = 101.0;
+
 use crate::CanvasView;
 use crate::error::CanvasResult as Result;
 use bevy::{
@@ -27,8 +32,8 @@ fn mesh(
         crate::parameters::decorate(
             crate::geometry::outline(
                 *points,
-                2.0 / zoom,
-                3.0 / zoom,
+                OUTLINE_WIDTH / zoom,
+                OUTLINE_GAP / zoom,
                 crate::scale::controls(*points).map(|(_, p)| p),
                 crate::scale::HANDLE_SIZE / zoom,
                 crate::rotate::control(*points, zoom),
@@ -40,8 +45,8 @@ fn mesh(
     } else {
         Ok(crate::geometry::reference_frames(
             points,
-            2.0 / zoom,
-            3.0 / zoom,
+            OUTLINE_WIDTH / zoom,
+            OUTLINE_GAP / zoom,
         ))
     }
 }
@@ -100,7 +105,7 @@ pub(super) fn sync(
             .add(mesh(&points, zoom, &parameters)?),
         material: world
             .resource_mut::<Assets<ColorMaterial>>()
-            .add(ColorMaterial::from(Color::srgb(0.0, 0.55, 1.0))),
+            .add(ColorMaterial::from(OUTLINE_COLOR)),
         points,
         zoom,
         parameters,
@@ -111,7 +116,7 @@ pub(super) fn sync(
         bsn! {
             Name("CanvasSelectionOutline") template(move |_|Ok(Mesh2d(mesh.clone()))) template(move |_|Ok(MeshMaterial2d(material.clone())))
             template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(ChildOf(content)))
-            Transform::from_xyz(0.0,0.0,101.0) Visibility::default() Pickable::IGNORE NoFrustumCulling
+            Transform::from_xyz(0.0,0.0,OUTLINE_DEPTH) Visibility::default() Pickable::IGNORE NoFrustumCulling
         },
     );
     match result {

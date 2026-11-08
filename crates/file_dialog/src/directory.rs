@@ -1,3 +1,8 @@
+const CPU_QUEUE_RETRY_DELAY: Duration = Duration::from_millis(1);
+const DIRECTORY_BATCH_ENTRIES: usize = 128;
+const MAX_ERROR_SUMMARIES: usize = 8;
+const BATCH_FLUSH_INTERVAL: Duration = Duration::from_millis(8);
+
 use crate::error::{directory_failure, directory_io, is_managed_io};
 use crate::retention::{Control, CpuSendError, CpuWork, Retention};
 use crate::*;
@@ -193,7 +198,7 @@ async fn enumerate(
         ),
     )
     .await?;
-    let mut data = Vec::with_capacity(128);
+    let mut data = Vec::with_capacity(DIRECTORY_BATCH_ENTRIES);
     let mut previous = None;
     let mut errors = 0;
     let mut summary = Vec::new();
@@ -217,13 +222,13 @@ async fn enumerate(
                     DirectoryError::Failed(error) => error,
                 };
                 errors += 1;
-                if summary.len() < 8 {
+                if summary.len() < MAX_ERROR_SUMMARIES {
                     summary.push(error.to_string());
                 }
                 error.record_handled("跳过读取失败的目录条目", "继续枚举，目录结果标记为 Partial");
             }
         }
-        if total > 100_000 {
+        if total > crate::limits::MAX_DIRECTORY_ENTRIES {
             return Err(directory_failure(
                 directory_context(
                     &control,
@@ -232,7 +237,7 @@ async fn enumerate(
                 ),
                 FileDialogDirectoryFault::Capacity {
                     actual: total,
-                    limit: 100_000,
+                    limit: crate::limits::MAX_DIRECTORY_ENTRIES,
                 },
             )
             .into());
@@ -266,7 +271,7 @@ async fn enumerate(
 }
 
 fn should_flush(count: usize, elapsed: Duration) -> bool {
-    count == 128 || (count > 0 && elapsed >= Duration::from_millis(8))
+    count == DIRECTORY_BATCH_ENTRIES || (count > 0 && elapsed >= BATCH_FLUSH_INTERVAL)
 }
 
 async fn prepare(
@@ -307,7 +312,7 @@ async fn prepare(
                 Ok(()) => break,
                 Err(CpuSendError::Busy(returned)) => {
                     work = *returned;
-                    futures_timer::Delay::new(Duration::from_millis(1)).await;
+                    futures_timer::Delay::new(CPU_QUEUE_RETRY_DELAY).await;
                 }
                 Err(CpuSendError::Closed) => {
                     check(context, service, control)?;
@@ -393,6 +398,8 @@ impl Batch {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy_widgetry_job::{JobOutcome, JobRead};
 
@@ -463,7 +470,7 @@ mod tests {
                     Ok(())
                 })
                 .unwrap();
-            let closed_context = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+            let closed_context = ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             assert!(matches!(
                 closed_receiver.recv_blocking().unwrap(),
                 JobRead::Finished(JobOutcome::Completed)
@@ -844,7 +851,7 @@ mod tests {
             );
         }
         for _ in 0..workers {
-            entered.recv_timeout(Duration::from_secs(5)).unwrap();
+            entered.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         }
         let (sent, received) = std::sync::mpsc::channel();
         let sentinel = pool.spawn(async move {
@@ -891,7 +898,7 @@ mod tests {
                 state.query(),
             )
             .unwrap();
-            entered.recv_timeout(Duration::from_secs(5)).unwrap();
+            entered.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             manager.cancel(id).unwrap();
             drop(release);
             let JobRead::Finished(outcome) = receiver.recv_blocking().unwrap() else {

@@ -1,3 +1,12 @@
+const EDITOR_WIDTH: f32 = 200.0;
+const EDITOR_MIN_WIDTH: f32 = 134.0;
+const EDITOR_MIN_HEIGHT: f32 = 38.0;
+const EDITOR_BORDER_WIDTH: f32 = 1.0;
+const EDITOR_CORNER_RADIUS: f32 = 4.0;
+const STEP_BUTTON_SIZE: f32 = 36.0;
+const STEP_BUTTON_CORNER_RADIUS: f32 = 3.0;
+const FIELD_MIN_WIDTH: f32 = 60.0;
+
 use crate::{
     NumberInputError, NumberInputFailure,
     error::{failure, missing, text_field},
@@ -71,8 +80,8 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
         WidgetryNumberInputEditor {field:#NumberInputField}
         Parts {field:#NumberInputField,decrease:#NumberInputDecrease,increase:#NumberInputIncrease}
         Node {
-            width:px(200),min_width:px(134),min_height:px(38),flex_direction:FlexDirection::Row,
-            border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4)),overflow:Overflow::clip(),
+            width:px(EDITOR_WIDTH),min_width:px(EDITOR_MIN_WIDTH),min_height:px(EDITOR_MIN_HEIGHT),flex_direction:FlexDirection::Row,
+            border:UiRect::all(px(EDITOR_BORDER_WIDTH)),border_radius:BorderRadius::all(px(EDITOR_CORNER_RADIUS)),overflow:Overflow::clip(),
         }
         BorderColor
         BackgroundColor
@@ -82,20 +91,20 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             crate::WidgetryNumberInputRepeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
-            Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::right(px(1)),border_radius:BorderRadius::left(px(3))}
+            Node {width:px(STEP_BUTTON_SIZE),min_height:px(STEP_BUTTON_SIZE),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::right(px(EDITOR_BORDER_WIDTH)),border_radius:BorderRadius::left(px(STEP_BUTTON_CORNER_RADIUS))}
             BorderColor
             BackgroundColor bevy_widgetry_core::foreground::ResolvedForeground
             Children [Text::new("−") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]--
             #NumberInputField @{field_scene}
             bevy::input_focus::tab_navigation::TabIndex(0)
             TextLayout {justify:Justify::Center}
-            Node {flex_grow:1.0,flex_basis:px(0),min_width:px(60)}--
+            Node {flex_grow:1.0,flex_basis:px(0),min_width:px(FIELD_MIN_WIDTH)}--
             #NumberInputIncrease WidgetryNumberInputStep {root:#NumberInputRoot,increase:true}
             @{disabled_increase}
             crate::WidgetryNumberInputRepeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
-            Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::left(px(1)),border_radius:BorderRadius::right(px(3))}
+            Node {width:px(STEP_BUTTON_SIZE),min_height:px(STEP_BUTTON_SIZE),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::left(px(EDITOR_BORDER_WIDTH)),border_radius:BorderRadius::right(px(STEP_BUTTON_CORNER_RADIUS))}
             BorderColor
             BackgroundColor bevy_widgetry_core::foreground::ResolvedForeground
             Children [Text::new("+") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]

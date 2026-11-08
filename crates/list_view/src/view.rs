@@ -1,3 +1,5 @@
+const VIEW_CORNER_RADIUS: f32 = 4.0;
+
 use crate::WidgetryListItemId;
 use crate::WidgetryListKey;
 use crate::behavior::ListNavigation;
@@ -349,7 +351,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
             BorderColor::default()
             Node {
                 min_width: px(0), min_height: px(0), border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(4)), overflow: Overflow::clip(),
+                border_radius: BorderRadius::all(px(VIEW_CORNER_RADIUS)), overflow: Overflow::clip(),
             }
             WidgetryListView::<T, K> {
                 source: {props.source},

@@ -13,6 +13,7 @@ mod filter;
 mod folder;
 mod icons;
 mod input;
+mod limits;
 mod locations;
 mod model;
 mod persistence;

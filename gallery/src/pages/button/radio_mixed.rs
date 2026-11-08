@@ -1,3 +1,10 @@
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 12.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 12.0;
+const LABEL_FONT_SIZE: f32 = 18.0;
+const TITLE_FONT_SIZE: f32 = 20.0;
+
 use crate::{
     assets::GalleryImage,
     i18n::{ButtonKey, Language, TextKey, localized, localized_args, tr_args},
@@ -49,7 +56,7 @@ impl GalleryRadioGroup {
         bsn! {
             @WidgetryRadioGroupHeadless
             Name("RadioMixedGroup")
-            Node { width: percent(100), flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(12), row_gap: px(12), align_items: AlignItems::Center, padding: UiRect::all(px(8)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(8)) }
+            Node { width: percent(100), flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(CONTENT_GAP), row_gap: px(GROUP_GAP), align_items: AlignItems::Center, padding: UiRect::all(px(8)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(8)) }
             template(|_| Ok(BorderColor::all(Color::srgb_u8(90, 110, 130))))
             on(selected)
             Children [
@@ -77,12 +84,12 @@ fn custom_option(style: ChoiceStyle, number: usize, name: String) -> impl Scene 
         Children [
             @{(!image).then_some(bsn! {
                 @localized_args(TextKey::Button(ButtonKey::RadioMixedCard), vec![("number", number.to_string())])
-                Pickable::IGNORE TextFont { font_size: FontSize::Px(20.0) } TextColor({Color::WHITE})
+                Pickable::IGNORE TextFont { font_size: FontSize::Px(TITLE_FONT_SIZE) } TextColor({Color::WHITE})
             })}--
             @{image.then_some(bsn! {
                 Pickable::IGNORE Node { position_type: PositionType::Absolute, left: px(0), right: px(0), bottom: px(0), height: px(32), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                 BackgroundColor({Color::srgba(0.0, 0.0, 0.0, 0.7)})
-                Children [@localized(TextKey::Button(ButtonKey::RadioMixedImage)) Pickable::IGNORE TextColor({Color::WHITE}) TextFont { font_size: FontSize::Px(18.0) }]
+                Children [@localized(TextKey::Button(ButtonKey::RadioMixedImage)) Pickable::IGNORE TextColor({Color::WHITE}) TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }]
             })}
         ]
     }
@@ -91,12 +98,12 @@ fn custom_option(style: ChoiceStyle, number: usize, name: String) -> impl Scene 
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("RadioMixedDemo")
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::Button(ButtonKey::RadioMixedDescription)) WidgetryText--
             @GalleryRadioGroup--
             Name("RadioMixedStatus") template(|_| Ok(Status)) Text("") WidgetryText--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap }
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP), flex_wrap: FlexWrap::Wrap }
             Children [
                 @control(Action::Add, ButtonKey::RadioMixedAdd, "RadioMixedAdd")--
                 @control(Action::Remove, ButtonKey::RadioMixedRemove, "RadioMixedRemove")--

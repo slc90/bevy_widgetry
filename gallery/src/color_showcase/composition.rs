@@ -1,3 +1,7 @@
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 8.0;
+
 use super::overrides::{TEAL, icon};
 use super::pair;
 use crate::i18n::ButtonKey;
@@ -28,12 +32,12 @@ struct Activations(usize);
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP) }
         Children [
             @pair(TextKey::Common(CommonKey::Text),TextKey::Button(ButtonKey::FixedColorConvenienceApi0F766ERetainedAcross), text_button(), text_button(), text_colors)--
             @pair(TextKey::Common(CommonKey::Icon),TextKey::Button(ButtonKey::FixedColorConvenienceApi0F766ERetainedAcross), icon_button(), icon_button(), icon_colors)--
             @localized(TextKey::Button(ButtonKey::NestedNodeContentRootButtonDisabledAffects)) WidgetryText--
-            @WidgetryButton { @children: {Some(Box::new(bsn_list! {Node Children [Node { column_gap: px(8), align_items: AlignItems::Center }
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {Node Children [Node { column_gap: px(CONTROL_GAP), align_items: AlignItems::Center }
                     Children [@icon()-- @localized(TextKey::Button(ButtonKey::ManagedText)) WidgetryText-- @localized(TextKey::Button(ButtonKey::NativeFixedText)) TextColor(TEAL)]]}) as Box<dyn bevy::prelude::SceneList>)}, } template(|_| Ok(CompositionButton))
                 Name("ColorCompositionButton") on(activated)
                 --
@@ -41,8 +45,8 @@ pub(super) fn scene() -> impl Scene {
             template(|_| Ok(Activations(0))) Name("ColorCompositionCount") @localized_args(TextKey::Button(ButtonKey::ButtonActivations), vec![("count", "0".into())]) WidgetryText--
             @localized(TextKey::Button(ButtonKey::DisabledContainersAffectDescendantsThroughPlainNodes)) WidgetryText--
             template(|_| Ok(DisabledContainer)) Name("ColorDisabledContainer") InteractionDisabled
-                Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
-                Children [Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
+                Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
+                Children [Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) } Children [
                     @WidgetryCheckBox Name("ColorInheritedCheckBox") Children [@localized(TextKey::Button(ButtonKey::InheritParentDisabled)) WidgetryText]--
                     @WidgetryTextField { @value: {"父级恢复后可以编辑".to_owned()} } Name("ColorInheritedTextField")--
                     @WidgetryCheckBox Name("ColorLocalDisabledCheckBox") InteractionDisabled Children [@localized(TextKey::Button(ButtonKey::LocallyDisabledStaysDisabledAfterParentIs)) WidgetryText]
@@ -57,7 +61,7 @@ fn text_button() -> impl Scene {
 }
 
 fn icon_button() -> impl Scene {
-    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Node Children [Node { column_gap: px(8) } Children [@icon() template(|_| Ok(ContentIcon))-- @localized(TextKey::Button(ButtonKey::IconInsideButton)) WidgetryText]]}) as Box<dyn bevy::prelude::SceneList>)}, }  }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Node Children [Node { column_gap: px(CONTROL_GAP) } Children [@icon() template(|_| Ok(ContentIcon))-- @localized(TextKey::Button(ButtonKey::IconInsideButton)) WidgetryText]]}) as Box<dyn bevy::prelude::SceneList>)}, }  }
 }
 
 fn text_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool, BevyError> {

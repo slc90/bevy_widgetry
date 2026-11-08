@@ -151,9 +151,11 @@ impl<T> JobReceiver<T> {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy::tasks::{IoTaskPool, TaskPool};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     #[test]
     fn stale_empty_observation_cannot_skip_the_last_item() {
@@ -171,7 +173,7 @@ mod tests {
         let stale = receiver.data.try_recv();
         assert_eq!(stale, Err(async_broadcast::TryRecvError::Empty));
         release.notify(usize::MAX);
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();

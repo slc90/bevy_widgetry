@@ -461,7 +461,10 @@ fn key(mut event: On<FocusedInput<KeyboardInput>>, mut world: bevy::ecs::world::
         }
         let state = WidgetrySliderHeadless::state(world, entity)
             .map_err(|error| error.into_bevy_error())?;
-        let step = state.step.unwrap_or((state.max - state.min) * 0.01);
+        let default_keyboard_step_fraction = 0.01;
+        let step = state
+            .step
+            .unwrap_or((state.max - state.min) * default_keyboard_step_fraction);
         let sign = match direction {
             SliderDirection::Increase => 1.0,
             SliderDirection::Decrease => -1.0,

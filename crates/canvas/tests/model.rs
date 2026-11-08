@@ -210,6 +210,8 @@ fn invalid_requests_preserve_existing_geometry_and_report_errors() {
 
 #[test]
 fn bounds_include_centered_stroke_rotation_and_nonuniform_scale() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     let rectangle = CanvasRectangle {
         corner_radius: 0.0,
         size: Vec2::new(120.0, 80.0),
@@ -230,8 +232,14 @@ fn bounds_include_centered_stroke_rotation_and_nonuniform_scale() {
     let transform = transform.with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_4));
     let bounds = rectangle.bounds(&transform, &paint).unwrap();
     let half = 265.0 / 2.0_f32.sqrt();
-    assert!((bounds.min - (Vec2::new(-200.0, -100.0) - Vec2::splat(half))).length() < 0.001);
-    assert!((bounds.max - (Vec2::new(-200.0, -100.0) + Vec2::splat(half))).length() < 0.001);
+    assert!(
+        (bounds.min - (Vec2::new(-200.0, -100.0) - Vec2::splat(half))).length()
+            < COMPARISON_TOLERANCE
+    );
+    assert!(
+        (bounds.max - (Vec2::new(-200.0, -100.0) + Vec2::splat(half))).length()
+            < COMPARISON_TOLERANCE
+    );
     let corners = rectangle.corners(&Transform::from_xyz(-10.0, -20.0, 0.0));
     assert_eq!(
         corners,

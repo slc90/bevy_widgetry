@@ -1,3 +1,14 @@
+const MAX_HISTORY_EVENTS: usize = 8;
+const COMPACT_PANEL_WIDTH: f32 = 304.0;
+const DETAILS_MIN_WIDTH: f32 = 280.0;
+
+const DETAIL_GAP: f32 = 6.0;
+const ITEM_GAP: f32 = 10.0;
+const GROUP_GAP: f32 = 12.0;
+const SECTION_GAP: f32 = 24.0;
+const CONTROL_GAP: f32 = 6.0;
+const CONTENT_GAP: f32 = 24.0;
+
 use crate::{
     gallery::{GalleryPage, mount_page, unmount_page},
     i18n::{DatePickerKey, Language, LocalizedText, NavigationKey, TextKey, localized, tr},
@@ -39,7 +50,7 @@ struct DatePickerDemoState {
 
 impl DatePickerDemoState {
     fn record(&mut self, event: String) {
-        if self.history.len() == 8 {
+        if self.history.len() == MAX_HISTORY_EVENTS {
             self.history.remove(0);
         }
         self.history.push(event);
@@ -117,12 +128,12 @@ fn label(key: DatePickerKey) -> impl Scene {
 fn scene(selected: Option<Date>) -> impl Scene {
     bsn! {
         Name("DatePickerDemo")
-        Node {width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(24), flex_shrink: 0.0}
+        Node {width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(SECTION_GAP), flex_shrink: 0.0}
         Children [
             @label(DatePickerKey::Description)--
             @example("DatePickerMain", DatePickerKey::Main, WidgetryDatePickerProps {selected_date: selected, ..default()},
                 vec![Action::SetDate, Action::Same, Action::Clear, Action::Previous, Action::Next, Action::Jump], false, false)--
-            Node {width: percent(100), column_gap: px(24), row_gap: px(24), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Start, flex_shrink: 0.0}
+            Node {width: percent(100), column_gap: px(CONTENT_GAP), row_gap: px(SECTION_GAP), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Start, flex_shrink: 0.0}
             Children [
                 @example("DatePickerUnselected", DatePickerKey::Unselected, WidgetryDatePickerProps::default(), vec![], false, true)--
                 @example("DatePickerBounded", DatePickerKey::Bounded, WidgetryDatePickerProps {
@@ -153,19 +164,19 @@ fn example(
     bsn! {
         ExampleParts {picker: #DatePickerExamplePicker, status: #DatePickerExampleStatus, history: #DatePickerExampleHistory, operation: #DatePickerExampleOperation}
         Name({format!("{name}Example")})
-        Node {width: {if compact {px(304)} else {percent(100)}}, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(10), flex_shrink: 0.0}
+        Node {width: {if compact {px(COMPACT_PANEL_WIDTH)} else {percent(100)}}, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), flex_shrink: 0.0}
         Children [
             @label(title)--
-            Node {width: percent(100), flex_direction: {if compact {FlexDirection::Column} else {FlexDirection::Row}}, flex_wrap: FlexWrap::Wrap, column_gap: px(24), row_gap: px(12), align_items: AlignItems::Start, flex_shrink: 0.0}
+            Node {width: percent(100), flex_direction: {if compact {FlexDirection::Column} else {FlexDirection::Row}}, flex_wrap: FlexWrap::Wrap, column_gap: px(CONTENT_GAP), row_gap: px(GROUP_GAP), align_items: AlignItems::Start, flex_shrink: 0.0}
             Children [
                 #DatePickerExamplePicker Name(name)
                 @WidgetryDatePicker {@selected_date: {props.selected_date}, @displayed_month: {props.displayed_month}, @min_date: {props.min_date}, @max_date: {props.max_date}}
                 @{disabled} template(|_| Ok(DatePickerDemoState::default())) on(selection_changed) on(month_changed)--
-                Node {flex_direction: FlexDirection::Column, row_gap: px(10), flex_grow: 1.0, flex_basis: {if compact {Val::Auto} else {px(280)}}, min_width: {if compact {px(0)} else {px(280)}}, max_width: percent(100)}
+                Node {flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), flex_grow: 1.0, flex_basis: {if compact {Val::Auto} else {px(DETAILS_MIN_WIDTH)}}, min_width: {if compact {px(0)} else {px(DETAILS_MIN_WIDTH)}}, max_width: percent(100)}
                 Children [
                     #DatePickerExampleStatus Name({format!("{name}Status")}) Text("") WidgetryText--
                     #DatePickerExampleHistory Name({format!("{name}History")}) Text("") WidgetryText--
-                    Node {width: percent(100), flex_wrap: FlexWrap::Wrap, column_gap: px(6), row_gap: px(6)} Children [{buttons}]--
+                    Node {width: percent(100), flex_wrap: FlexWrap::Wrap, column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP)} Children [{buttons}]--
                     #DatePickerExampleOperation Name({format!("{name}Operation")}) Text("") WidgetryText
                 ]
             ]

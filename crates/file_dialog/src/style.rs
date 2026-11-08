@@ -1,3 +1,19 @@
+const CONTROL_ICON_SIZE: f32 = 16.0;
+const CONTROL_FONT_SIZE: f32 = 14.0;
+const CONTROL_HEIGHT: f32 = 30.0;
+const NAVIGATION_BUTTON_WIDTH: f32 = 30.0;
+const ACTION_BUTTON_MIN_WIDTH: f32 = 82.0;
+const CONTROL_PADDING_X: f32 = 8.0;
+const CONTROL_PADDING_Y: f32 = 4.0;
+const SEARCH_ICON_MARGIN: f32 = 6.0;
+const NAVIGATION_GAP: f32 = 4.0;
+const ACTION_ROW_GAP: f32 = 4.0;
+const ADDRESS_MIN_WIDTH: f32 = 120.0;
+const SEARCH_WIDTH_PERCENT: f32 = 24.0;
+const SIDEBAR_MAX_WIDTH_PERCENT: f32 = 28.0;
+const SIDEBAR_DIVIDER_WIDTH: f32 = 1.0;
+const FILENAME_LABEL_WIDTH: f32 = 76.0;
+const MAX_OVERSCAN: usize = 8;
 mod color_updates;
 mod configuration;
 mod owners;
@@ -222,10 +238,10 @@ fn control_scene(
         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Up) => Some(BuiltinIcon::FileDialogUp),
         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Refresh) => Some(BuiltinIcon::FileDialogRefresh),
         _ => None,
-    }.map(|icon| bsn_list!{@WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(16))} } Node {width: px(16), height: px(16)} template(|_| Ok(Pickable::IGNORE))});
-    let text = (!navigation).then(|| bsn_list! { @text_scene(label.into(), 14.0) });
+    }.map(|icon| bsn_list!{@WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(CONTROL_ICON_SIZE as u32))} } Node {width: px(CONTROL_ICON_SIZE), height: px(CONTROL_ICON_SIZE)} template(|_| Ok(Pickable::IGNORE))});
+    let text = (!navigation).then(|| bsn_list! { @text_scene(label.into(), CONTROL_FONT_SIZE) });
     let tooltip = navigation.then(|| bsn! { @WidgetryTooltip {
-        @content: {TooltipContentFactory::new(move || bsn_list! { @text_scene(label.into(), 14.0) })}
+        @content: {TooltipContentFactory::new(move || bsn_list! { @text_scene(label.into(), CONTROL_FONT_SIZE) })}
     } });
     (
         bsn! {
@@ -237,7 +253,7 @@ fn control_scene(
             })
             template(move |_| Ok(Control {root, action: action.clone()}))
             template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
-            Node {height:px(30),min_width:px(if navigation {30.0} else {82.0}),flex_shrink:0.0,padding:UiRect::axes(px(8),px(4)),align_items:AlignItems::Center,justify_content:JustifyContent::Center}
+            Node {height:px(CONTROL_HEIGHT),min_width:px(if navigation {NAVIGATION_BUTTON_WIDTH} else {ACTION_BUTTON_MIN_WIDTH}),flex_shrink:0.0,padding:UiRect::axes(px(CONTROL_PADDING_X),px(CONTROL_PADDING_Y)),align_items:AlignItems::Center,justify_content:JustifyContent::Center}
 
         },
         tooltip,
@@ -252,8 +268,8 @@ pub(crate) fn editor_scene(
 ) -> impl Scene {
     let suffix = (kind == PartKind::Search).then(|| bsn_list! {
         Name("FileDialogSearchIcon") WidgetryTextFieldSuffix
-        @WidgetryIcon { @path: {BuiltinIcon::FileDialogSearch.path()}, @max_size: {Some(UVec2::splat(16))} }
-        Node {width:px(16),height:px(16),margin:UiRect::left(px(6)),flex_shrink:0.0}
+        @WidgetryIcon { @path: {BuiltinIcon::FileDialogSearch.path()}, @max_size: {Some(UVec2::splat(CONTROL_ICON_SIZE as u32))} }
+        Node {width:px(CONTROL_ICON_SIZE),height:px(CONTROL_ICON_SIZE),margin:UiRect::left(px(SEARCH_ICON_MARGIN)),flex_shrink:0.0}
         template(|_| Ok(Pickable::IGNORE))
     });
     bsn! {
@@ -266,7 +282,7 @@ pub(crate) fn editor_scene(
             node.set_label(match kind {PartKind::Path => "Path", PartKind::Search => "Search", PartKind::Filename => "Filename", _ => "New folder name"});
             Ok(bevy::a11y::AccessibilityNode(node))
         })
-        Node { min_width: px(0), flex_grow: 1.0, height: px(30) }
+        Node { min_width: px(0), flex_grow: 1.0, height: px(CONTROL_HEIGHT) }
     }
 }
 
@@ -321,18 +337,18 @@ fn shell_scene(
         BackgroundColor::default()
         template(|_| Ok(ResolvedForeground::default()))
         Children [
-            Name("FileDialogNavigation") Node { width:percent(100),flex_shrink:0.0,column_gap:px(4),row_gap:px(4),flex_wrap:FlexWrap::Wrap,align_items:AlignItems::Center } Children [
+            Name("FileDialogNavigation") Node { width:percent(100),flex_shrink:0.0,column_gap:px(NAVIGATION_GAP),row_gap:px(NAVIGATION_GAP),flex_wrap:FlexWrap::Wrap,align_items:AlignItems::Center } Children [
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Back), "FileDialogBack", "Back")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Forward), "FileDialogForward", "Forward")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Up), "FileDialogUp", "Up")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Refresh), "FileDialogRefresh", "Refresh")--
-                @editor_scene(root, PartKind::Path, "FileDialogPath", path) Node {min_width:px(120)}--
-                @editor_scene(root, PartKind::Search, "FileDialogSearch", state.search().into()) Node {width:percent(24),min_width:px(120),flex_grow:0.0,flex_shrink:0.0}
+                @editor_scene(root, PartKind::Path, "FileDialogPath", path) Node {min_width:px(ADDRESS_MIN_WIDTH)}--
+                @editor_scene(root, PartKind::Search, "FileDialogSearch", state.search().into()) Node {width:percent(SEARCH_WIDTH_PERCENT),min_width:px(ADDRESS_MIN_WIDTH),flex_grow:0.0,flex_shrink:0.0}
             ]--
             Node { flex_grow: 1.0, min_height: px(0), width: percent(100), column_gap: px(style.spacing) } Children [
-                @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), max_width:percent(28), flex_shrink: 0.0, min_height: px(0), height: percent(100) }--
+                @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), max_width:percent(SIDEBAR_MAX_WIDTH_PERCENT), flex_shrink: 0.0, min_height: px(0), height: percent(100) }--
                 Name("FileDialogSidebarDivider") template(move |_| Ok(Part {root,kind:PartKind::SidebarDivider}))
-                Node {width:px(1),height:percent(100),flex_shrink:0.0} BackgroundColor(Color::NONE) template(|_| Ok(Pickable::IGNORE))--
+                Node {width:px(SIDEBAR_DIVIDER_WIDTH),height:percent(100),flex_shrink:0.0} BackgroundColor(Color::NONE) template(|_| Ok(Pickable::IGNORE))--
                 Node {flex_direction:FlexDirection::Column,flex_grow:1.0,min_width:px(0),min_height:px(0),height:percent(100)} Children [
                     Name("FileDialogColumnHeader") template(move |_| Ok(Part {root,kind:PartKind::ColumnHeader})) @crate::view::column_header(style.font_size)--
                     @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0,width:percent(100), min_width: px(0), min_height: px(0) }
@@ -341,11 +357,11 @@ fn shell_scene(
             {crate::controls::panels(root)}--
             Name("FileDialogStatus") template(move |_| Ok(Part {root, kind: PartKind::Status})) Text("Loading…") bevy_widgetry_core::text::WidgetryText TextFont { font_size: {style.font_size} } TextLayout::no_wrap() Node {width:percent(100),flex_shrink:0.0,overflow:Overflow::clip()} template(|_| Ok(Pickable::IGNORE))--
             Node {width:percent(100),flex_shrink:0.0,column_gap:px(style.spacing),align_items:AlignItems::Center} Children [
-                @text_scene(if matches!(state.mode(),WidgetryFileDialogMode::PickDirectory | WidgetryFileDialogMode::PickDirectories) {"Folder:".into()} else {"File name:".into()},style.font_size) Node {width:px(76),flex_shrink:0.0}--
+                @text_scene(if matches!(state.mode(),WidgetryFileDialogMode::PickDirectory | WidgetryFileDialogMode::PickDirectories) {"Folder:".into()} else {"File name:".into()},style.font_size) Node {width:px(FILENAME_LABEL_WIDTH),flex_shrink:0.0}--
                 {filename}-- {summary}
             ]--
             {filter}--
-            Node { width: percent(100),flex_shrink:0.0, flex_wrap:FlexWrap::Wrap,row_gap:px(4), justify_content: JustifyContent::FlexEnd, column_gap: px(style.spacing) } Children [
+            Node { width: percent(100),flex_shrink:0.0, flex_wrap:FlexWrap::Wrap,row_gap:px(ACTION_ROW_GAP), justify_content: JustifyContent::FlexEnd, column_gap: px(style.spacing) } Children [
                 @control_scene(root, WidgetryFileDialogAction::Confirm, "FileDialogConfirm", label)--
                 @control_scene(root, WidgetryFileDialogAction::Cancel, "FileDialogCancel", "Cancel")
             ]
@@ -432,7 +448,7 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         || ![style.spacing, style.padding]
             .iter()
             .all(|value| value.is_finite() && *value >= 0.0)
-        || style.overscan > 8
+        || style.overscan > MAX_OVERSCAN
     {
         let rejected = RejectedStyle(
             [

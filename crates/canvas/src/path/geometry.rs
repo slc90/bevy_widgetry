@@ -1,3 +1,9 @@
+const MAX_NORMALIZED_FEATURE_RATIO: f64 = 4096.0;
+const CONNECTION_ERROR_FRACTION: f64 = 0.125;
+const MIN_NORMALIZED_COORDINATE: f32 = f32::from_bits(1);
+const CONVEX_TURN_TOLERANCE: f64 = 1e-6;
+const ROUND_JOIN_SEGMENTS_PER_TURN: f64 = 256.0;
+
 use super::{CanvasPath, Segment};
 use crate::error::CanvasResult as Result;
 use crate::{CanvasFillRule, CanvasLineCap, CanvasLineJoin, CanvasPaint};
@@ -134,7 +140,7 @@ fn flatten_curve(controls: &[DVec2], output: &mut Vec<DVec2>) {
             ctrl: p(1),
             to: p(2),
         }
-        .for_each_flattened(1.0 / 4096.0, &mut append);
+        .for_each_flattened(super::RELATIVE_TESSELLATION_TOLERANCE as f32, &mut append);
     } else {
         lyon::geom::CubicBezierSegment {
             from: p(0),
@@ -142,7 +148,7 @@ fn flatten_curve(controls: &[DVec2], output: &mut Vec<DVec2>) {
             ctrl2: p(2),
             to: p(3),
         }
-        .for_each_flattened(1.0 / 4096.0, &mut append);
+        .for_each_flattened(super::RELATIVE_TESSELLATION_TOLERANCE as f32, &mut append);
     }
     if let (Some(last), Some(to)) = (output.last_mut(), controls.last()) {
         *last = *to;
@@ -227,7 +233,7 @@ fn paint_regions(
         if polygons.is_empty() {
             continue;
         }
-        if feature_floor / center_spacing > 4096.0
+        if feature_floor / center_spacing > MAX_NORMALIZED_FEATURE_RATIO
             && let Some(axis) = (0..2).find(|axis| {
                 polygons.iter().flatten().any(|p| p[*axis] < 0.0)
                     && polygons.iter().flatten().any(|p| p[*axis] > 0.0)
@@ -305,7 +311,7 @@ fn paint_regions(
         feature = feature.max(DVec2::splat(feature_floor));
         let span = max - min;
         let ratio = span / feature;
-        if ratio.max_element() > 4096.0 {
+        if ratio.max_element() > MAX_NORMALIZED_FEATURE_RATIO {
             let axis = if ratio.x >= ratio.y { 0 } else { 1 };
             let mut coordinates = polygons
                 .iter()
@@ -355,19 +361,21 @@ fn paint_regions(
         }
         // Lyon also uses tolerance for edge connections, so normalization must preserve the same feature budget.
         let mut tolerance = if rebased {
-            ((precision / scale).min_element() * 0.125)
-                .min(1.0 / 4096.0)
-                .max(f64::from(f32::from_bits(1))) as f32
+            ((precision / scale).min_element() * CONNECTION_ERROR_FRACTION)
+                .min(super::RELATIVE_TESSELLATION_TOLERANCE)
+                .max(f64::from(MIN_NORMALIZED_COORDINATE)) as f32
         } else {
-            1.0 / 4096.0
+            super::RELATIVE_TESSELLATION_TOLERANCE as f32
         };
         if feature_floor > 0.0 {
             let face_spacing = center_edges
                 .iter()
                 .map(|edge| (*edge / scale).length())
                 .fold(f64::INFINITY, f64::min);
-            tolerance =
-                tolerance.min((face_spacing * 0.125).max(f64::from(f32::from_bits(1))) as f32);
+            tolerance = tolerance.min(
+                (face_spacing * CONNECTION_ERROR_FRACTION).max(f64::from(MIN_NORMALIZED_COORDINATE))
+                    as f32,
+            );
             tolerance = connection_tolerance(&polygons, origin, scale, tolerance);
         }
         let mut builder = lyon::path::Path::builder();
@@ -482,13 +490,13 @@ fn connection_tolerance(polygons: &[Vec<DVec2>], origin: DVec2, scale: DVec2, in
                         .any(|i| contains_point(&polygons[*i], nearest))
                         || covered_connection(p, nearest, &polygons, &bounds);
                     if !covered {
-                        tolerance = distance * 0.125;
+                        tolerance = distance * CONNECTION_ERROR_FRACTION;
                     }
                 }
             }
         }
     }
-    tolerance.max(f64::from(f32::from_bits(1))) as f32
+    tolerance.max(f64::from(MIN_NORMALIZED_COORDINATE)) as f32
 }
 
 fn contains_point(polygon: &[DVec2], p: DVec2) -> bool {
@@ -559,7 +567,7 @@ fn convex(polygon: &[DVec2]) -> bool {
         }
         turn += cross.atan2(a.dot(b));
     }
-    sign != 0.0 && (turn.abs() - std::f64::consts::TAU).abs() < 1e-6
+    sign != 0.0 && (turn.abs() - std::f64::consts::TAU).abs() < CONVEX_TURN_TOLERANCE
 }
 
 fn clip(polygon: &[DVec2], axis: usize, cut: f64, lower: bool) -> Vec<DVec2> {
@@ -713,7 +721,9 @@ fn append_stroke(
             let outer = (a - previous).perp_dot(b - a) * sign < 0.0;
             if outer {
                 match join {
-                    CanvasLineJoin::Miter if miter.length() <= half * 4.0 && denominator > 0.0 => {
+                    CanvasLineJoin::Miter
+                        if miter.length() <= half * super::MITER_LIMIT && denominator > 0.0 =>
+                    {
                         polygon(vec![a, p, a + miter * sign, q])
                     }
                     CanvasLineJoin::Round => {
@@ -754,7 +764,7 @@ fn append_stroke(
 }
 
 fn sector(center: DVec2, start: DVec2, angle: f64) -> Vec<DVec2> {
-    let steps = (angle.abs() / std::f64::consts::TAU * 256.0)
+    let steps = (angle.abs() / std::f64::consts::TAU * ROUND_JOIN_SEGMENTS_PER_TURN)
         .ceil()
         .max(1.0) as usize;
     let mut points = Vec::with_capacity(steps + 2);

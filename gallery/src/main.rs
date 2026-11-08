@@ -170,10 +170,12 @@ fn window_startup_failure(failure: bevy_widgetry::window::WindowFailure) -> Bevy
     failure.into_bevy_error()
 }
 
+const STARTUP_PHYSICAL_SIZE: UVec2 = UVec2::new(1920, 1080);
+
 fn gallery_window(config: &config::AppConfig) -> Window {
     prepare_native_window(Window {
         title: "Widget Gallery".into(),
-        resolution: WindowResolution::new(1920, 1080)
+        resolution: WindowResolution::new(STARTUP_PHYSICAL_SIZE.x, STARTUP_PHYSICAL_SIZE.y)
             .with_scale_factor_override(config.scale_factor),
         position: WindowPosition::Centered(MonitorSelection::Primary),
         ..default()
@@ -195,7 +197,9 @@ fn setup(
     })?;
     // winit sets size before positioning the window, so initialization across displays with different DPI can scale its physical size.
     // Restore the fixed startup size in Startup after native creation and positioning so the first frame does not use the scaled size.
-    window.resolution.set_physical_resolution(1920, 1080);
+    window
+        .resolution
+        .set_physical_resolution(STARTUP_PHYSICAL_SIZE.x, STARTUP_PHYSICAL_SIZE.y);
     let camera = commands.spawn(Camera2d).id();
     let title = header::scene(&mut commands, target)?;
     let root = commands.spawn_scene_with_error_handler(bsn! {

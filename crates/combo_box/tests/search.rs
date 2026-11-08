@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 use bevy::input::{
     ButtonState,
     keyboard::{Key, KeyboardInput, NativeKey},
@@ -41,7 +43,7 @@ fn fixture(len: usize) -> Fixture {
         .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
-        std::time::Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "搜索编辑字体",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )
@@ -358,6 +360,8 @@ fn search_rows_fill_popup_width_after_filtering_empty_recovery_and_resize() {
     use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 
     fn assert_full_width(f: &mut Fixture, expected_count: usize) {
+        let pixel_tolerance = 1.0;
+
         for _ in 0..3 {
             f.app.update();
         }
@@ -377,7 +381,7 @@ fn search_rows_fill_popup_width_after_filtering_empty_recovery_and_resize() {
             .unwrap();
         let viewport_width = world.get::<ComputedNode>(viewport).unwrap().size().x;
         assert!(
-            (viewport_width - inner_width).abs() <= 1.0,
+            (viewport_width - inner_width).abs() <= pixel_tolerance,
             "viewport width {viewport_width}, popup inner width {inner_width}"
         );
         let rows = f
@@ -390,7 +394,7 @@ fn search_rows_fill_popup_width_after_filtering_empty_recovery_and_resize() {
         assert!(!rows.is_empty());
         for width in rows {
             assert!(
-                (width - viewport_width).abs() <= 1.0,
+                (width - viewport_width).abs() <= pixel_tolerance,
                 "row width {width}, viewport width {viewport_width}"
             );
         }

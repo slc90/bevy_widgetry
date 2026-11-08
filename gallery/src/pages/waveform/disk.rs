@@ -1,3 +1,5 @@
+const DETAIL_GAP: f32 = 8.0;
+
 use super::*;
 use crate::i18n::localized_binding;
 use bevy_widgetry::button::WidgetryButton;
@@ -407,7 +409,7 @@ impl Drop for DiskReplay {
 pub(super) fn scene(disk: &DiskReplay) -> impl Scene + use<> {
     let binding = disk.binding();
     bsn! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), width: percent(100) }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), width: percent(100) }
         Children [
             @localized_binding(binding) WidgetryText Name::new("WaveformDiskStatus") template(|_|Ok(DiskStatus))--
             @WidgetryButton Node { align_self: AlignSelf::Start } Name::new("WaveformDiskReload") template(|_|Ok(Reload))
@@ -462,6 +464,8 @@ fn project_status(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
 
     fn recording(path: &std::path::Path) {
@@ -493,7 +497,7 @@ mod tests {
         }
     }
     fn wait(mut done: impl FnMut() -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !done() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -524,7 +528,7 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        let reader = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        let reader = ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         disk.task = Some(OpenJob {
             origin: OpenOrigin::User,
             id,
@@ -640,7 +644,7 @@ mod tests {
             pending: None,
             owner,
         });
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let shutdown = disk.manager.begin_shutdown(Duration::from_secs(5)).unwrap();
         release.send(()).unwrap();
         wait(|| disk.manager.status(id).unwrap().state.is_finished());
@@ -716,8 +720,8 @@ mod tests {
             });
             barrier.wait();
             release.send(()).unwrap();
-            done.recv_timeout(Duration::from_secs(5)).unwrap();
-            let shutdown = shutdown.recv_timeout(Duration::from_secs(5)).unwrap();
+            done.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
+            let shutdown = shutdown.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             closer.join().unwrap();
             discarder.join().unwrap();
             wait(|| {
@@ -910,7 +914,7 @@ mod tests {
                 owner: Arc::new(OnceLock::new()),
             });
             let mut observer = manager.subscribe::<Weak<DiskWaveformSource>>(id).unwrap();
-            ready.recv_timeout(Duration::from_secs(5)).unwrap();
+            ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             if leaving {
                 drop(disk);
             } else {

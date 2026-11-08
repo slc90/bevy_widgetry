@@ -1,3 +1,5 @@
+const RESIZE_HANDLE_WIDTH: f32 = 6.0;
+
 use crate::layout::TableGeometry;
 use crate::runtime_error::{RuntimeResult, required};
 
@@ -92,7 +94,7 @@ pub(crate) fn ensure_handle(
     let entity=spawn_scene(world,bsn! {
         template(move |_|Ok(ResizeHandle {column}))
         template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::ColResize)))
-        Node {position_type:PositionType::Absolute,right:px(0),top:px(0),width:px(6),height:percent(100)}
+        Node {position_type:PositionType::Absolute,right:px(0),top:px(0),width:px(RESIZE_HANDLE_WIDTH),height:percent(100)}
         ZIndex(1)
     }).map_err(bevy_widgetry_core::scene::SceneFailure::into_bevy_error)?;
     required(world.get_entity_mut(header).ok(), header, "Entity")?.add_child(entity);

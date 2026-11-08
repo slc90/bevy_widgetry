@@ -1,3 +1,10 @@
+const LAUNCH_BUTTON_HEIGHT: f32 = 40.0;
+const LAUNCH_BUTTON_PADDING_X: f32 = 16.0;
+const LAUNCH_BUTTON_PADDING_Y: f32 = 6.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 12.0;
+
 use super::independent::on_demo_button;
 use crate::i18n::WindowKey;
 use crate::i18n::{Language, LocalizedText, LocalizedWindowTitle, TextKey, localized, tr};
@@ -13,10 +20,10 @@ struct MessageBoxDemo(WidgetryMessageBoxButtons);
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
         Children [
             @localized(TextKey::Window(WindowKey::MessageBox)) bevy_widgetry::text::WidgetryText--
-            Node { column_gap: px(12) } Children [
+            Node { column_gap: px(CONTROL_GAP) } Children [
                 @message_box_demo_button(TextKey::Window(WindowKey::Ok), WidgetryMessageBoxButtons::Ok)--
                 @message_box_demo_button(TextKey::Window(WindowKey::YesNo), WidgetryMessageBoxButtons::YesNo)--
                 @message_box_demo_button(TextKey::Window(WindowKey::YesNoCancel), WidgetryMessageBoxButtons::YesNoCancel)
@@ -29,7 +36,7 @@ fn message_box_demo_button(label: TextKey, buttons: WidgetryMessageBoxButtons) -
     bsn! {
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(MessageBoxDemo(buttons)))
-        Node { height: px(40), padding: UiRect::axes(px(16), px(6)), align_items: AlignItems::Center }
+        Node { height: px(LAUNCH_BUTTON_HEIGHT), padding: UiRect::axes(px(LAUNCH_BUTTON_PADDING_X), px(LAUNCH_BUTTON_PADDING_Y)), align_items: AlignItems::Center }
         on(open_message_box)
 
     }

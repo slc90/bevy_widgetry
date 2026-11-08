@@ -1,3 +1,25 @@
+const MAGNIFIER_HANDLE_ANGLE: f32 = -35.0;
+const EXAMPLE_BOTTOM_MARGIN: f32 = 20.0;
+const EDITOR_WIDTH: f32 = 480.0;
+const SEARCH_MIN_HEIGHT: f32 = 50.0;
+const SEARCH_PADDING: f32 = 10.0;
+const SEARCH_UNDERLINE_WIDTH: f32 = 3.0;
+const SEARCH_CORNER_RADIUS: f32 = 12.0;
+const MAGNIFIER_DIAMETER: f32 = 18.0;
+const MAGNIFIER_BORDER_WIDTH: f32 = 2.0;
+const MAGNIFIER_HANDLE_LEFT: f32 = 13.0;
+const MAGNIFIER_HANDLE_TOP: f32 = 11.0;
+const MAGNIFIER_HANDLE_WIDTH: f32 = 3.0;
+const MAGNIFIER_HANDLE_HEIGHT: f32 = 10.0;
+
+const DETAIL_GAP: f32 = 6.0;
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 12.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 12.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+const TITLE_FONT_SIZE: f32 = 18.0;
+
 use crate::i18n::{Language, TextFieldKey, TextKey, localized, tr_args};
 use bevy::{
     prelude::*,
@@ -36,7 +58,7 @@ struct Action {
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(12),margin:UiRect::bottom(px(20))}
+        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(GROUP_GAP),margin:UiRect::bottom(px(EXAMPLE_BOTTOM_MARGIN))}
         Children [
             @localized(TextKey::TextField(TextFieldKey::CustomDescription)) WidgetryText--
             @field(Mode::Editable)--
@@ -68,37 +90,37 @@ fn field(mode: Mode) -> impl Scene {
         #Root @WidgetryTextFieldHeadless {editor:#Editor,@read_only:read_only}
         template(move |_|Ok(mode)) Name(name)
         bevy::input_focus::tab_navigation::TabIndex(0)
-        Node {width:px(480),max_width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(6),flex_shrink:0.0}
+        Node {width:px(EDITOR_WIDTH),max_width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP),flex_shrink:0.0}
         Children [
-            template(|_|Ok(SearchPanel)) Node {width:percent(100),min_height:px(50),padding:UiRect::all(px(10)),column_gap:px(12),align_items:AlignItems::Center,border:UiRect::bottom(px(3)),border_radius:BorderRadius::all(px(12))}
+            template(|_|Ok(SearchPanel)) Node {width:percent(100),min_height:px(SEARCH_MIN_HEIGHT),padding:UiRect::all(px(SEARCH_PADDING)),column_gap:px(CONTENT_GAP),align_items:AlignItems::Center,border:UiRect::bottom(px(SEARCH_UNDERLINE_WIDTH)),border_radius:BorderRadius::all(px(SEARCH_CORNER_RADIUS))}
             BackgroundColor BorderColor
             Children [
-                Pickable::IGNORE Node {width:px(18),height:px(18),border:UiRect::all(px(2)),border_radius:BorderRadius::MAX,flex_shrink:0.0} ~{BorderColor::all(Color::srgb_u8(40,200,180))}
+                Pickable::IGNORE Node {width:px(MAGNIFIER_DIAMETER),height:px(MAGNIFIER_DIAMETER),border:UiRect::all(px(MAGNIFIER_BORDER_WIDTH)),border_radius:BorderRadius::MAX,flex_shrink:0.0} ~{BorderColor::all(Color::srgb_u8(40,200,180))}
                 Children [
-                    Pickable::IGNORE Node {position_type:PositionType::Absolute,width:px(3),height:px(10),left:px(13),top:px(11)} BackgroundColor({Color::srgb_u8(40,200,180)})
-                    UiTransform {rotation:Rot2::degrees(-35.0)}
+                    Pickable::IGNORE Node {position_type:PositionType::Absolute,width:px(MAGNIFIER_HANDLE_WIDTH),height:px(MAGNIFIER_HANDLE_HEIGHT),left:px(MAGNIFIER_HANDLE_LEFT),top:px(MAGNIFIER_HANDLE_TOP)} BackgroundColor({Color::srgb_u8(40,200,180)})
+                    UiTransform {rotation:Rot2::degrees(MAGNIFIER_HANDLE_ANGLE)}
                 ]--
                 Node {flex_grow:1.0,min_width:px(0)}
                 Children [
                     Node {width:percent(100),align_items:AlignItems::Center}
                     Children [
                         #Editor @WidgetryTextFieldEditor {root:#Root,@value:value,@max_length:{Some(16)}}
-                        Name(editor_name) TextFont {font_size:FontSize::Px(18.0)}
+                        Name(editor_name) TextFont {font_size:FontSize::Px(TITLE_FONT_SIZE)}
                         Node {width:percent(100),min_width:px(0)}
                     ]
                 ]--
                 @control(mode,Operation::Clear,TextFieldKey::CustomClear,if read_only {"TextFieldCustomReadOnlyClear"} else {"TextFieldCustomClear"})
             ]--
             @localized(TextKey::TextField(if read_only {TextFieldKey::CustomReadOnlyHint} else {TextFieldKey::CustomHint})) WidgetryText
-            TextFont {font_size:FontSize::Px(14.0)}--
-            ContentLabel(#Root) Text("") WidgetryText TextFont {font_size:FontSize::Px(14.0)}
+            TextFont {font_size:FontSize::Px(LABEL_FONT_SIZE)}--
+            ContentLabel(#Root) Text("") WidgetryText TextFont {font_size:FontSize::Px(LABEL_FONT_SIZE)}
         ]
     }
 }
 fn controls(mode: Mode) -> impl Scene {
     let readonly = mode == Mode::ReadOnly;
     bsn! {
-        Node {column_gap:px(8),row_gap:px(8),flex_wrap:FlexWrap::Wrap}
+        Node {column_gap:px(CONTROL_GAP),row_gap:px(ITEM_GAP),flex_wrap:FlexWrap::Wrap}
         Children [
             @control(mode,Operation::Focus,TextFieldKey::CustomFocus,if readonly {"TextFieldCustomReadOnlyFocus"} else {"TextFieldCustomFocus"})--
             @control(mode,Operation::Preset,TextFieldKey::CustomPreset,if readonly {"TextFieldCustomReadOnlyPreset"} else {"TextFieldCustomPreset"})--
@@ -108,7 +130,7 @@ fn controls(mode: Mode) -> impl Scene {
 }
 fn control(mode: Mode, operation: Operation, key: TextFieldKey, name: &'static str) -> impl Scene {
     bsn! {
-        @WidgetryButton { @children:{Some(Box::new(bsn_list!{@localized(TextKey::TextField(key)) WidgetryText TextFont {font_size:FontSize::Px(14.0)}}) as Box<dyn SceneList>)} }
+        @WidgetryButton { @children:{Some(Box::new(bsn_list!{@localized(TextKey::TextField(key)) WidgetryText TextFont {font_size:FontSize::Px(LABEL_FONT_SIZE)}}) as Box<dyn SceneList>)} }
         template(move |_|Ok(Action {mode,operation})) Name(name) on(operate)
     }
 }

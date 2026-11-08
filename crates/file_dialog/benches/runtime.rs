@@ -1,3 +1,13 @@
+const MILLISECONDS_PER_SECOND: f64 = 1000.0;
+const P95_PERCENT: usize = 95;
+const PERCENT_SCALE: usize = 100;
+const UPDATE_BUDGET_MS: f64 = 2.0;
+const FRAME_BUDGET_MS: f64 = 16.7;
+const ITEM_COUNTS: [usize; 3] = [1_000, 10_000, 100_000];
+const DIRECTORY_RUNS: usize = 12;
+const WARMUP_RUNS: usize = 2;
+const OPERATION_TIMEOUT: Duration = Duration::from_secs(60);
+const IDLE_UPDATES: usize = 200;
 use bevy::prelude::*;
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_test_utils::{
@@ -31,13 +41,13 @@ fn state(app: &App, root: Entity) -> Result<&WidgetryFileDialogState> {
 fn measure(app: &mut App, samples: &mut Vec<f64>) {
     let start = Instant::now();
     app.update();
-    samples.push(start.elapsed().as_secs_f64() * 1000.0);
+    samples.push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
 }
 
 fn summary(mut samples: Vec<f64>) -> Value {
     samples.sort_by(f64::total_cmp);
     let len = samples.len();
-    json!({ "samples": len, "median_ms": samples.get(len / 2), "p95_ms": samples.get(len * 95 / 100), "max_ms": samples.last(), "over_2ms": samples.iter().filter(|value| **value > 2.0).count(), "over_16_7ms": samples.iter().filter(|value| **value > 16.7).count() })
+    json!({ "samples": len, "median_ms": samples.get(len / 2), "p95_ms": samples.get(len * P95_PERCENT / PERCENT_SCALE), "max_ms": samples.last(), "over_2ms": samples.iter().filter(|value| **value > UPDATE_BUDGET_MS).count(), "over_16_7ms": samples.iter().filter(|value| **value > FRAME_BUDGET_MS).count() })
 }
 
 fn main() -> std::process::ExitCode {
@@ -50,7 +60,7 @@ fn run() -> Result {
         "headless App; all background work and snapshot lifetime managed by JobManager; no rendering",
     )?;
     let mut scenarios = Vec::new();
-    for items in [1_000, 10_000, 100_000] {
+    for items in ITEM_COUNTS {
         let mut app = fixture(items);
         let mut first = Vec::new();
         let mut final_projection = Vec::new();
@@ -67,12 +77,12 @@ fn run() -> Result {
         let mut cancel = Vec::new();
         let mut close = Vec::new();
         let mut peaks = (0, 0, 0);
-        for sample in 0..12 {
+        for sample in 0..DIRECTORY_RUNS {
             let start = Instant::now();
             let root = bevy_widgetry_core::scene::spawn_scene(app.world_mut(), bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::PickFiles, @initial_directory: {Some(PathBuf::from("C:/fixture"))} } }).map_err(|failure| failure.into_bevy_error())?;
             let mut first_seen = false;
             loop {
-                if start.elapsed() > Duration::from_secs(60) {
+                if start.elapsed() > OPERATION_TIMEOUT {
                     return Err(error("runtime benchmark timed out"));
                 }
                 measure(&mut app, &mut updates);
@@ -82,8 +92,8 @@ fn run() -> Result {
                     return Err(error(failure.clone()));
                 }
                 if !first_seen && !current.entries().is_empty() {
-                    if sample > 1 {
-                        first.push(start.elapsed().as_secs_f64() * 1000.0);
+                    if sample >= WARMUP_RUNS {
+                        first.push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
                     }
                     first_seen = true;
                 }
@@ -93,8 +103,9 @@ fn run() -> Result {
                 peaks.2 = peaks.2.max(status.retained_snapshots);
                 if current.directory_state() == &WidgetryFileDialogDirectoryState::Ready {
                     black_box(current.entries().len());
-                    if sample > 1 {
-                        final_projection.push(start.elapsed().as_secs_f64() * 1000.0);
+                    if sample >= WARMUP_RUNS {
+                        final_projection
+                            .push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
                     }
                     break;
                 }
@@ -114,7 +125,7 @@ fn run() -> Result {
                     ));
                 }
                 loop {
-                    if start.elapsed() > Duration::from_secs(60) {
+                    if start.elapsed() > OPERATION_TIMEOUT {
                         return Err(error("cached projection benchmark timed out"));
                     }
                     measure(&mut app, &mut projection_updates);
@@ -131,8 +142,9 @@ fn run() -> Result {
                                 "cached projection benchmark applied the wrong query",
                             ));
                         }
-                        if sample > 1 {
-                            cached_projection.push(start.elapsed().as_secs_f64() * 1000.0);
+                        if sample >= WARMUP_RUNS {
+                            cached_projection
+                                .push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
                         }
                         break;
                     }
@@ -152,7 +164,7 @@ fn run() -> Result {
                     return Err(error("selection benchmark unexpectedly became a no-op"));
                 }
                 loop {
-                    if start.elapsed() > Duration::from_secs(60) {
+                    if start.elapsed() > OPERATION_TIMEOUT {
                         return Err(error("selection benchmark timed out"));
                     }
                     measure(&mut app, &mut selection_updates);
@@ -166,30 +178,30 @@ fn run() -> Result {
                         if current.selected().len() != if select { items } else { 0 } {
                             return Err(error("selection benchmark committed the wrong set"));
                         }
-                        if sample > 1 {
+                        if sample >= WARMUP_RUNS {
                             let samples = if select {
                                 &mut selection_prepare
                             } else {
                                 &mut selection_clear
                             };
-                            samples.push(start.elapsed().as_secs_f64() * 1000.0);
+                            samples.push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
                         }
                         break;
                     }
                     thread::yield_now();
                 }
             }
-            for _ in 0..200 {
+            for _ in 0..IDLE_UPDATES {
                 measure(&mut app, &mut idle);
             }
             let start = Instant::now();
             WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)
                 .map_err(|failure| failure.into_bevy_error())?;
-            cancel.push(start.elapsed().as_secs_f64() * 1000.0);
+            cancel.push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
             let start = Instant::now();
             app.world_mut().despawn(root);
             app.update();
-            close.push(start.elapsed().as_secs_f64() * 1000.0);
+            close.push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
 
             let root = bevy_widgetry_core::scene::spawn_scene(
                 app.world_mut(),
@@ -201,7 +213,7 @@ fn run() -> Result {
             .map_err(|failure| failure.into_bevy_error())?;
             let setup = Instant::now();
             loop {
-                if setup.elapsed() > Duration::from_secs(60) {
+                if setup.elapsed() > OPERATION_TIMEOUT {
                     return Err(error("validation fixture load timed out"));
                 }
                 app.update();
@@ -218,7 +230,7 @@ fn run() -> Result {
             WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)
                 .map_err(|failure| failure.into_bevy_error())?;
             while state(&app, root)?.selection_pending() {
-                if setup.elapsed() > Duration::from_secs(60) {
+                if setup.elapsed() > OPERATION_TIMEOUT {
                     return Err(error("validation fixture selection timed out"));
                 }
                 app.update();
@@ -228,7 +240,7 @@ fn run() -> Result {
             WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)
                 .map_err(|failure| failure.into_bevy_error())?;
             loop {
-                if start.elapsed() > Duration::from_secs(60) {
+                if start.elapsed() > OPERATION_TIMEOUT {
                     return Err(error("candidate validation timed out"));
                 }
                 measure(&mut app, &mut validation_updates);
@@ -245,8 +257,8 @@ fn run() -> Result {
                             "candidate validation lost paths or background ownership",
                         ));
                     }
-                    if sample > 1 {
-                        validation.push(start.elapsed().as_secs_f64() * 1000.0);
+                    if sample >= WARMUP_RUNS {
+                        validation.push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
                     }
                     break;
                 }
@@ -255,9 +267,9 @@ fn run() -> Result {
             let start = Instant::now();
             app.world_mut().despawn(root);
             app.update();
-            validation_drop.push(start.elapsed().as_secs_f64() * 1000.0);
+            validation_drop.push(start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND);
         }
-        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "selection_prepare": summary(selection_prepare), "selection_clear": summary(selection_clear), "selection_updates": summary(selection_updates), "validation": summary(validation), "validation_updates": summary(validation_updates), "validation_drop": summary(validation_drop), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_retention_jobs": peaks.0, "peak_queued_retention": peaks.1, "peak_retained": peaks.2 }));
+        scenarios.push(json!({ "items": items, "directory_runs": DIRECTORY_RUNS, "warmup_runs": WARMUP_RUNS, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "selection_prepare": summary(selection_prepare), "selection_clear": summary(selection_clear), "selection_updates": summary(selection_updates), "validation": summary(validation), "validation_updates": summary(validation_updates), "validation_drop": summary(validation_drop), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_retention_jobs": peaks.0, "peak_queued_retention": peaks.1, "peak_retained": peaks.2 }));
     }
     let connection = wmi::WMIConnection::new().map_err(error)?;
     let process: Vec<HashMap<String, Value>> = connection.raw_query(format!("SELECT PeakWorkingSetSize,WorkingSetSize,ThreadCount FROM Win32_Process WHERE ProcessId={}", std::process::id())).map_err(error)?;

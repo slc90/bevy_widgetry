@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(2);
+
 use accesskit::{Role, Toggled};
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::world::CommandQueue;
@@ -745,7 +747,7 @@ fn loaded_mark_projection_tracks_states_and_disabled() {
     let icons = app.world().get::<Children>(warm).unwrap().to_vec();
     advance_until(
         &mut app,
-        Duration::from_secs(2),
+        ASYNC_WAIT_TIMEOUT,
         "CheckBox 预加载两种 mark",
         |world| {
             icons
@@ -844,7 +846,7 @@ fn materialized_indeterminate_checkbox_consumes_ready_glyph_and_colors_in_same_f
     let icons = app.world().get::<Children>(warm).unwrap().to_vec();
     advance_until(
         &mut app,
-        Duration::from_secs(2),
+        ASYNC_WAIT_TIMEOUT,
         "同帧构造预加载 glyph",
         |world| {
             icons

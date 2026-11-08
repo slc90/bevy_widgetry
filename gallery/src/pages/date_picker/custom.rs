@@ -1,3 +1,31 @@
+const CANDIDATE_COLUMNS: u16 = 3;
+const CANDIDATE_COUNT: usize = 12;
+const YEAR_PAGE_LAST_OFFSET: i32 = 11;
+const DAYS_PER_WEEK: u16 = 7;
+const CALENDAR_WEEKS: usize = 6;
+const CALENDAR_CELL_COUNT: usize = DAYS_PER_WEEK as usize * CALENDAR_WEEKS;
+const CANDIDATE_HEIGHT: f32 = 40.0;
+const DAY_WIDTH: f32 = 40.0;
+
+const CANDIDATE_CORNER_RADIUS: f32 = 8.0;
+
+const PANEL_WIDTH: f32 = 320.0;
+const PANEL_PADDING: f32 = 8.0;
+const NAVIGATION_BUTTON_WIDTH: f32 = 40.0;
+const NAVIGATION_HEIGHT: f32 = 36.0;
+const CANDIDATE_WIDTH: f32 = 90.0;
+const CELL_FONT_SIZE: f32 = 14.0;
+const DAY_HEIGHT: f32 = 34.0;
+const DAY_CORNER_RADIUS: f32 = 17.0;
+const DAY_BORDER_WIDTH: f32 = 1.0;
+
+const DETAIL_GAP: f32 = 3.0;
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 10.0;
+const CONTROL_GAP: f32 = 3.0;
+const CONTENT_GAP: f32 = 8.0;
+const PANEL_GAP: f32 = 16.0;
+
 use crate::i18n::{CommonKey, DatePickerKey, TextKey, localized};
 use bevy::{
     prelude::*,
@@ -66,14 +94,14 @@ pub(super) fn install(app: &mut App) {
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node {flex_direction:FlexDirection::Column,row_gap:px(10),align_items:AlignItems::Start}
+        Node {flex_direction:FlexDirection::Column,row_gap:px(GROUP_GAP),align_items:AlignItems::Start}
         Children [
             @localized(TextKey::DatePicker(DatePickerKey::DateOnly)) WidgetryText--
             @localized(TextKey::DatePicker(DatePickerKey::DateOnlyDescription)) WidgetryText--
-            Node {column_gap:px(16),align_items:AlignItems::Start} Children [
+            Node {column_gap:px(PANEL_GAP),align_items:AlignItems::Start} Children [
                 #Root @Picker {@displayed_month:{Some(DatePickerMonth {year:2026,month:Month::October})}}
                 DateRegion Name::new("DateCustomRoot")
-                Node {width:px(320),flex_direction:FlexDirection::Column,row_gap:px(8),padding:UiRect::all(px(8))}
+                Node {width:px(PANEL_WIDTH),flex_direction:FlexDirection::Column,row_gap:px(ITEM_GAP),padding:UiRect::all(px(PANEL_PADDING))}
                 Children [
                     @grid(#Root)--
                     Target {root:#Root} Readout Text("") WidgetryText Name::new("DateCustomStatus")--
@@ -89,28 +117,28 @@ pub(super) fn scene() -> impl Scene {
 
 pub(super) fn navigation_scene() -> impl Scene {
     bsn! {
-        Node {flex_direction:FlexDirection::Column,row_gap:px(10),align_items:AlignItems::Start}
+        Node {flex_direction:FlexDirection::Column,row_gap:px(GROUP_GAP),align_items:AlignItems::Start}
         Children [
             @localized(TextKey::DatePicker(DatePickerKey::CustomNavigation)) WidgetryText--
             @localized(TextKey::DatePicker(DatePickerKey::CustomNavigationDescription)) WidgetryText--
             #Root @Picker {@displayed_month:{Some(DatePickerMonth {year:2026,month:Month::October})}}
             @Nav DateRegion Name::new("DateCustomNavigation")
-            Node {width:px(320),flex_direction:FlexDirection::Column,row_gap:px(8),padding:UiRect::all(px(8))}
+            Node {width:px(PANEL_WIDTH),flex_direction:FlexDirection::Column,row_gap:px(ITEM_GAP),padding:UiRect::all(px(PANEL_PADDING))}
             Children [
                 Node {width:percent(100),justify_content:JustifyContent::SpaceBetween} Children [
                     @WidgetryButtonHeadless NavigationAction {root:#Root,step:-1} Name::new("DateCustomPrevious")
-                    Node {width:px(40),height:px(36),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(browse)
+                    Node {width:px(NAVIGATION_BUTTON_WIDTH),height:px(NAVIGATION_HEIGHT),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(browse)
                     Children [Text("‹") WidgetryText Pickable::IGNORE]--
                     @WidgetryButtonHeadless NavigationTitle {root:#Root} Name::new("DateCustomTitle")
-                    Node {flex_grow:1.0,height:px(36),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(enter_parent)
+                    Node {flex_grow:1.0,height:px(NAVIGATION_HEIGHT),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(enter_parent)
                     Children [Text("") WidgetryText Pickable::IGNORE]--
                     @WidgetryButtonHeadless NavigationAction {root:#Root,step:1} Name::new("DateCustomNext")
-                    Node {width:px(40),height:px(36),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(browse)
+                    Node {width:px(NAVIGATION_BUTTON_WIDTH),height:px(NAVIGATION_HEIGHT),align_items:AlignItems::Center,justify_content:JustifyContent::Center} on(browse)
                     Children [Text("›") WidgetryText Pickable::IGNORE]
                 ]--
                 @grid(#Root) NavigationPanel {root:#Root,days:true}--
                 NavigationPanel {root:#Root,days:false}
-                Node {display:Display::Grid,grid_template_columns:{vec![RepeatedGridTrack::px(3,90.0)]},column_gap:px(8),row_gap:px(8)}
+                Node {display:Display::Grid,grid_template_columns:{vec![RepeatedGridTrack::px(CANDIDATE_COLUMNS,CANDIDATE_WIDTH)]},column_gap:px(CONTENT_GAP),row_gap:px(ITEM_GAP)}
                 @candidate_cells(#Root)--
                 Target {root:#Root} Readout Text("") WidgetryText--
                 @WidgetryButton {@children:{Some(Box::new(bsn_list!{@localized(TextKey::Common(CommonKey::ClearSelection)) WidgetryText}) as Box<dyn SceneList>)}}
@@ -121,12 +149,12 @@ pub(super) fn navigation_scene() -> impl Scene {
 }
 
 fn candidate_cells(root: bevy::ecs::template::EntityTemplate) -> impl Scene {
-    let candidates = (0usize..12).map(|index| bsn! {
+    let candidates = (0usize..CANDIDATE_COUNT).map(|index| bsn! {
         @WidgetryButtonHeadless Candidate {root:{root},index:index,value:None,selectable:true,text:#Text}
         Name({format!("DateCustomCandidate{index}")})
-        Node {width:px(90),height:px(40),align_items:AlignItems::Center,justify_content:JustifyContent::Center,border_radius:BorderRadius::all(px(8))}
+        Node {width:px(CANDIDATE_WIDTH),height:px(CANDIDATE_HEIGHT),align_items:AlignItems::Center,justify_content:JustifyContent::Center,border_radius:BorderRadius::all(px(CANDIDATE_CORNER_RADIUS))}
         BackgroundColor on(confirm_candidate)
-        Children [#Text Text("") WidgetryText TextFont {font_size:px(14)} Pickable::IGNORE]
+        Children [#Text Text("") WidgetryText TextFont {font_size:px(CELL_FONT_SIZE)} Pickable::IGNORE]
     }).collect::<Vec<_>>();
     bsn! {Children [{candidates}]}
 }
@@ -168,7 +196,7 @@ fn refresh_navigation(world: &mut World, root: Entity, language: crate::i18n::La
             format!("{year}年")
         }
         (DatePickerView::Months(year), _) => year.to_string(),
-        (DatePickerView::Years(start), _) => format!("{start} – {}", start + 11),
+        (DatePickerView::Years(start), _) => format!("{start} – {}", start + YEAR_PAGE_LAST_OFFSET),
     };
     let titles = world
         .query::<(Entity, &NavigationTitle, &Children)>()
@@ -246,17 +274,17 @@ fn refresh_navigation(world: &mut World, root: Entity, language: crate::i18n::La
 }
 
 fn grid(root: bevy::ecs::template::EntityTemplate) -> impl Scene {
-    let cells=(0usize..42).map(|index| {
+    let cells=(0usize..CALENDAR_CELL_COUNT).map(|index| {
         bsn! {
             @WidgetryButtonHeadless Day {root:{root},index:index,date:None,selectable:true,text:#Text}
             Name({format!("DateCustomDay{index}")})
-            Node {width:px(40),height:px(34),align_items:AlignItems::Center,justify_content:JustifyContent::Center,border_radius:BorderRadius::all(px(17)),border:UiRect::all(px(1))}
+            Node {width:px(DAY_WIDTH),height:px(DAY_HEIGHT),align_items:AlignItems::Center,justify_content:JustifyContent::Center,border_radius:BorderRadius::all(px(DAY_CORNER_RADIUS)),border:UiRect::all(px(DAY_BORDER_WIDTH))}
             BackgroundColor BorderColor on(choose)
-            Children [#Text Text("") WidgetryText TextFont {font_size:px(14)} TextLayout::justify(Justify::Center) Node {width:percent(100)} Pickable::IGNORE]
+            Children [#Text Text("") WidgetryText TextFont {font_size:px(CELL_FONT_SIZE)} TextLayout::justify(Justify::Center) Node {width:percent(100)} Pickable::IGNORE]
         }
     }).collect::<Vec<_>>();
     bsn! {
-        Node {display:Display::Grid,grid_template_columns:{vec![RepeatedGridTrack::px(7,40.0)]},column_gap:px(3),row_gap:px(3)}
+        Node {display:Display::Grid,grid_template_columns:{vec![RepeatedGridTrack::px(DAYS_PER_WEEK,DAY_WIDTH)]},column_gap:px(CONTROL_GAP),row_gap:px(DETAIL_GAP)}
         Children [{cells}]
     }
 }

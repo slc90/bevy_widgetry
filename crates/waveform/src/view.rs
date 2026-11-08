@@ -1,3 +1,7 @@
+const VIEW_PADDING: f32 = 4.0;
+const CONTROLS_HEIGHT: f32 = 36.0;
+const TIME_AXIS_HEIGHT: f32 = 28.0;
+
 use crate::{
     WaveformConfig, WaveformCursor, WaveformOutputLength, WaveformRuntime, WaveformSource,
     WaveformStyle,
@@ -113,12 +117,12 @@ impl Waveform {
                 template(|_| Ok(crate::controls::TimeBar))
                 Node { min_width: px(0), flex_shrink: 0.0, align_items: AlignItems::Center }
                 Children [
-                    Node { padding: UiRect::all(px(4)), flex_shrink: 0.0 }
+                    Node { padding: UiRect::all(px(VIEW_PADDING)), flex_shrink: 0.0 }
                     Children [
                         #MeasurementToggle
                         @bevy_widgetry_toggle_button::WidgetryToggleButton
                         Name::new("WaveformMeasurementToggle")
-                        Node { height: px(36) }
+                        Node { height: px(CONTROLS_HEIGHT) }
                         Children [Text("Δt / ΔV") bevy_widgetry_core::text::WidgetryText]
                     ]
                 ]
@@ -155,7 +159,7 @@ impl Waveform {
                         #MeasurementReadout
                         Name::new("WaveformMeasurementReadout")
                         Pickable::IGNORE
-                        Node { display: Display::None, position_type: PositionType::Absolute, left: px(4), top: px(4), max_width: percent(100) }
+                        Node { display: Display::None, position_type: PositionType::Absolute, left: px(VIEW_PADDING), top: px(VIEW_PADDING), max_width: percent(100) }
                         Text("") bevy_widgetry_core::text::WidgetryText
                         BackgroundColor
                     ]
@@ -164,7 +168,7 @@ impl Waveform {
                 Name::new("WaveformTimeAxis")
                 template(|_| Ok(crate::time_axis::AxisState::default()))
                 bevy::ui::LayoutConfig { use_rounding: false }
-                Node { min_width: px(0), margin: UiRect { left: px(label_width), right: px(crate::channels::GUTTER), top: px(0), bottom: px(0) }, height: px(28), flex_shrink: 0.0, overflow: Overflow::clip() }
+                Node { min_width: px(0), margin: UiRect { left: px(label_width), right: px(crate::channels::GUTTER), top: px(0), bottom: px(0) }, height: px(TIME_AXIS_HEIGHT), flex_shrink: 0.0, overflow: Overflow::clip() }
                 Pickable::IGNORE
             ]
         }

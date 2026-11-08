@@ -1,6 +1,10 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(test)]
 
+const ASSET_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+const CLICK_SEPARATION: Duration = Duration::from_millis(600);
+const FIXTURE_FRAME_DURATION: Duration = Duration::from_millis(16);
+
 mod support;
 
 use bevy::{
@@ -35,7 +39,7 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
                 .load::<Font>(BuiltinFont::Default.path());
             advance_until(
                 &mut app,
-                Duration::from_secs(10),
+                ASSET_WAIT_TIMEOUT,
                 "Pointer TextField 字体",
                 |world| world.resource::<Assets<Font>>().contains(&font),
             )
@@ -123,11 +127,11 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
             }
             *app.world_mut()
                 .resource_mut::<bevy::time::TimeUpdateStrategy>() =
-                bevy::time::TimeUpdateStrategy::ManualDuration(Duration::from_millis(600));
+                bevy::time::TimeUpdateStrategy::ManualDuration(CLICK_SEPARATION);
             app.update();
             *app.world_mut()
                 .resource_mut::<bevy::time::TimeUpdateStrategy>() =
-                bevy::time::TimeUpdateStrategy::ManualDuration(Duration::from_millis(16));
+                bevy::time::TimeUpdateStrategy::ManualDuration(FIXTURE_FRAME_DURATION);
             queue_pointer(
                 &mut app,
                 id,

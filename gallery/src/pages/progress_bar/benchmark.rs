@@ -1,3 +1,6 @@
+const MILLISECONDS_PER_SECOND: f64 = 1000.0;
+const FLUSH_INTERVAL_MS: u128 = 500;
+
 use crate::gallery::GalleryPage;
 use bevy::prelude::*;
 use bevy_widgetry::progress_bar::{WidgetryProgressBarHeadless, WidgetryProgressState};
@@ -63,16 +66,16 @@ fn record(world: &mut World) -> Result {
     let now = Instant::now();
     let exiting = !world.resource::<Messages<AppExit>>().is_empty();
     let mut measurement = world.resource_mut::<Measurement>();
-    let elapsed = now.duration_since(measurement.epoch).as_secs_f64() * 1000.0;
-    let update = now.duration_since(measurement.begin).as_secs_f64() * 1000.0;
-    let interval = now.duration_since(measurement.previous).as_secs_f64() * 1000.0;
+    let elapsed = now.duration_since(measurement.epoch).as_secs_f64() * MILLISECONDS_PER_SECOND;
+    let update = now.duration_since(measurement.begin).as_secs_f64() * MILLISECONDS_PER_SECOND;
+    let interval = now.duration_since(measurement.previous).as_secs_f64() * MILLISECONDS_PER_SECOND;
     measurement.previous = now;
     writeln!(
         measurement.writer,
         "{elapsed:.4},{update:.4},{interval:.4},{page:?},{indeterminate}"
     )
     .map_err(failure)?;
-    if now.duration_since(measurement.flush).as_millis() >= 500 || exiting {
+    if now.duration_since(measurement.flush).as_millis() >= FLUSH_INTERVAL_MS || exiting {
         measurement.writer.flush().map_err(failure)?;
         measurement.flush = now;
     }

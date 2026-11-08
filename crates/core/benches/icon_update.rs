@@ -1,3 +1,4 @@
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 use bevy::prelude::*;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
@@ -15,7 +16,8 @@ struct Fixture {
 
 fn main() -> Result {
     let mut harness = Harness::new("icon-update-criterion")?;
-    for count in [10, 100, 1000] {
+    let entity_counts = [10, 100, 1000];
+    for count in entity_counts {
         for action in ["idle", "color", "svg", "queued_color", "queued_svg"] {
             run(
                 &mut harness,
@@ -251,7 +253,7 @@ fn fixture(count: usize) -> Result<Fixture> {
     }
     advance_until(
         &mut app,
-        Duration::from_secs(5),
+        ASYNC_WAIT_TIMEOUT,
         "benchmark Icon images",
         |world| {
             icons.iter().all(|entity| {

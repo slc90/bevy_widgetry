@@ -1,3 +1,5 @@
+const REPLACEMENT_SEAM_LOOKAHEAD: usize = 3;
+
 use crate::text_field::TextFieldEditor;
 use crate::{
     TextFieldError,
@@ -35,12 +37,12 @@ fn replacement_prefix<'a>(
 ) -> &'a str {
     let mut ends: Vec<_> = input
         .grapheme_indices(true)
-        .take(max.saturating_add(3))
+        .take(max.saturating_add(REPLACEMENT_SEAM_LOOKAHEAD))
         .map(|(index, _)| index)
         .collect();
     // Only the two replacement seams can merge input graphemes with surrounding text.
     // More than max + 2 input graphemes cannot fit, even when both seams merge.
-    if ends.len() < max.saturating_add(3) {
+    if ends.len() < max.saturating_add(REPLACEMENT_SEAM_LOOKAHEAD) {
         ends.push(input.len());
     }
     let mut candidate = String::new();

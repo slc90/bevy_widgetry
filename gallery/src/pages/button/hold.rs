@@ -1,3 +1,14 @@
+const PICKING_DEMO_WIDTH: f32 = 160.0;
+const PICKING_DEMO_HEIGHT: f32 = 112.0;
+const UNDERLAY_PADDING: f32 = 2.0;
+const PICKING_BUTTON_OFFSET: f32 = 24.0;
+
+const ITEM_GAP: f32 = 6.0;
+const GROUP_GAP: f32 = 10.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 20.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use crate::{
     gallery::GalleryPage,
     i18n::{ButtonKey, TextKey, localized},
@@ -42,7 +53,7 @@ fn hold(diameter: f32, name: &'static str) -> impl Scene {
     bsn! {
         @WidgetryHoldButton {
             @diameter: diameter,
-            @children: {Some(Box::new(bsn_list! { @localized(TextKey::Button(ButtonKey::HoldConfirm)) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) } }) as Box<dyn SceneList>)},
+            @children: {Some(Box::new(bsn_list! { @localized(TextKey::Button(ButtonKey::HoldConfirm)) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) } }) as Box<dyn SceneList>)},
         }
         Name(name) on(activated)
     }
@@ -58,11 +69,11 @@ fn control(key: ButtonKey, action: Action, name: &'static str) -> impl Scene {
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("HoldButtonDemo") template(|_| Ok(HoldDemoCount::default()))
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(10), align_items: AlignItems::Start }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Button(ButtonKey::HoldTitle)) WidgetryText--
-            @localized(TextKey::Button(ButtonKey::HoldDescription)) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
-            Node { column_gap: px(20), align_items: AlignItems::Center }
+            @localized(TextKey::Button(ButtonKey::HoldDescription)) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }--
+            Node { column_gap: px(CONTENT_GAP), align_items: AlignItems::Center }
             Children [
                 @hold(64.0, "HoldButton64")--
                 Name("HoldButtonParent") template(|_| Ok(HoldParent)) Node Children [@hold(112.0, "HoldButton112") template(|_| Ok(MainHold))]--
@@ -70,7 +81,7 @@ pub(super) fn scene() -> impl Scene {
                 @hold(64.0, "HoldButtonDisabled") InteractionDisabled
             ]--
             Text("Activate = 0 / Underlay = 0") WidgetryText template(|_| Ok(CountText)) Name("HoldButtonCount")--
-            Node { column_gap: px(8), row_gap: px(6), flex_wrap: FlexWrap::Wrap }
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP), flex_wrap: FlexWrap::Wrap }
             Children [
                 @control(ButtonKey::HoldFocus, Action::Focus, "HoldFocus")--
                 @control(ButtonKey::HoldBlur, Action::Blur, "HoldBlur")--
@@ -78,11 +89,11 @@ pub(super) fn scene() -> impl Scene {
                 @control(ButtonKey::HoldParentDisable, Action::ParentDisabled, "HoldToggleParentDisabled")--
                 @control(ButtonKey::HoldVisibility, Action::Visibility, "HoldToggleVisibility")
             ]--
-            Node { width: px(160), height: px(112), flex_shrink: 0.0 }
+            Node { width: px(PICKING_DEMO_WIDTH), height: px(PICKING_DEMO_HEIGHT), flex_shrink: 0.0 }
             Children [
                 @WidgetryButton { @children: {Some(Box::new(bsn_list! { @localized(TextKey::Button(ButtonKey::HoldUnderlay)) WidgetryText }) as Box<dyn SceneList>)}, }
-                Name("HoldUnderlay") Node { width: percent(100), height: percent(100), padding: UiRect::all(px(2)) } on(underlay)--
-                @hold(112.0, "HoldPicking") Node { position_type: PositionType::Absolute, left: px(24), top: px(0) }
+                Name("HoldUnderlay") Node { width: percent(100), height: percent(100), padding: UiRect::all(px(UNDERLAY_PADDING)) } on(underlay)--
+                @hold(112.0, "HoldPicking") Node { position_type: PositionType::Absolute, left: px(PICKING_BUTTON_OFFSET), top: px(0) }
             ]
         ]
     }

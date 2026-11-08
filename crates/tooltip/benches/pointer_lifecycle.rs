@@ -1,3 +1,4 @@
+const COLD_SHOW_DELAY: Duration = Duration::from_millis(200);
 use bevy::{
     camera::NormalizedRenderTarget,
     ecs::entity::EntityHashMap,
@@ -72,7 +73,7 @@ fn fixture(hits: usize, pointers: usize, pending: bool, visible: bool) -> Result
     app.update();
     if visible {
         *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
-            TimeUpdateStrategy::ManualDuration(Duration::from_millis(200));
+            TimeUpdateStrategy::ManualDuration(COLD_SHOW_DELAY);
         app.update();
         *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
             TimeUpdateStrategy::ManualDuration(Duration::ZERO);

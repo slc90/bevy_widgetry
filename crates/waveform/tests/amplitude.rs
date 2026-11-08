@@ -92,6 +92,9 @@ fn positions(app: &App, mesh: &Handle<Mesh>) -> Vec<[f32; 3]> {
 
 #[test]
 fn source_units_match_and_amplitude_reprojects_paused_data_without_read_or_reduction() {
+    let comparison_tolerance = 1e-5;
+    let clipped_half_extent = 0.500001;
+
     let mut reference = None;
     for (unit, value) in [
         (WaveformUnit::Volts, 0.0001),
@@ -103,13 +106,17 @@ fn source_units_match_and_amplitude_reprojects_paused_data_without_read_or_reduc
         assert!(
             points
                 .iter()
-                .all(|point| point[0].abs() <= 0.500001 && point[1].abs() <= 0.500001)
+                .all(|point| point[0].abs() <= clipped_half_extent
+                    && point[1].abs() <= clipped_half_extent)
         );
         if let Some(reference) = &reference {
             let reference: &Vec<[f32; 3]> = reference;
             assert_eq!(reference.len(), points.len());
             for (a, b) in reference.iter().zip(&points) {
-                assert!((a[0] - b[0]).abs() < 1e-5 && (a[1] - b[1]).abs() < 1e-5);
+                assert!(
+                    (a[0] - b[0]).abs() < comparison_tolerance
+                        && (a[1] - b[1]).abs() < comparison_tolerance
+                );
             }
         } else {
             reference = Some(points.clone());

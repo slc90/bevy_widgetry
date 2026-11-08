@@ -1,3 +1,17 @@
+const NUMBER_WIDTH: f32 = 300.0;
+const NARROW_CLIP_WIDTH: f32 = 180.0;
+const NARROW_PARENT_WIDTH: f32 = 50.0;
+const NARROW_REQUEST_WIDTH: f32 = 1.0;
+const PANEL_WIDTH: f32 = 380.0;
+const PANEL_MIN_WIDTH: f32 = 180.0;
+
+const DETAIL_GAP: f32 = 6.0;
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 16.0;
+const SECTION_GAP: f32 = 24.0;
+const CONTROL_GAP: f32 = 6.0;
+const CONTENT_GAP: f32 = 24.0;
+
 use crate::{
     gallery::{GalleryPage, mount_page, unmount_page},
     i18n::{Language, LocalizedText, NumberInputKey, TextKey, localized},
@@ -198,11 +212,11 @@ fn scene() -> impl Scene {
     ];
     bsn! {
         Name::new("NumberInputDemo")
-        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(16),flex_shrink:0.0}
+        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(GROUP_GAP),flex_shrink:0.0}
         Children [
             @label(NumberInputKey::Description) Node {max_width:percent(100)}--
             @custom::scene()--
-            Node {width:percent(100),flex_wrap:FlexWrap::Wrap,column_gap:px(24),row_gap:px(24),align_items:AlignItems::Start}
+            Node {width:percent(100),flex_wrap:FlexWrap::Wrap,column_gap:px(CONTENT_GAP),row_gap:px(SECTION_GAP),align_items:AlignItems::Start}
             Children [{examples}]
         ]
     }
@@ -230,22 +244,22 @@ fn example<T: WidgetryNumber>(
     let parent = inherited.then_some(bsn! {InteractionDisabled});
     bsn! {
         ExampleParts {input:#NumberExampleInput,status:#NumberExampleStatus}
-        Node {width:px(380),max_width:percent(100),min_width:px(180),flex_direction:FlexDirection::Column,row_gap:px(8),flex_shrink:0.0}
+        Node {width:px(PANEL_WIDTH),max_width:percent(100),min_width:px(PANEL_MIN_WIDTH),flex_direction:FlexDirection::Column,row_gap:px(ITEM_GAP),flex_shrink:0.0}
         Children [
             @label(key) Node {max_width:percent(100)}--
-            Node {width:px(if narrow {180.0} else {300.0}),overflow:Overflow::clip()}
+            Node {width:px(if narrow {NARROW_CLIP_WIDTH} else {NUMBER_WIDTH}),overflow:Overflow::clip()}
             Children [
                 Name({format!("{name}Parent")}) @{parent}
-                Node {width:px(if narrow {50.0} else {300.0})}
+                Node {width:px(if narrow {NARROW_PARENT_WIDTH} else {NUMBER_WIDTH})}
                 Children [
                     #NumberExampleInput Name::new(name)
                     @WidgetryNumberInput<T> {@value:{props.value},@min:{props.min},@max:{props.max},@step:{props.step},@decimals:{props.decimals},@read_only:{props.read_only}}
-                    @{local} Node {width:px(if narrow {1.0} else {300.0})}
+                    @{local} Node {width:px(if narrow {NARROW_REQUEST_WIDTH} else {NUMBER_WIDTH})}
                     template(|_|Ok(NumberDemoState::<T>::default())) on(changed::<T>)
                 ]
             ]--
             #NumberExampleStatus Name({format!("{name}Status")}) Text::new("") WidgetryText Node {max_width:percent(100)}--
-            Node {max_width:percent(100),column_gap:px(6),row_gap:px(6),flex_wrap:FlexWrap::Wrap} Children [{buttons}]
+            Node {max_width:percent(100),column_gap:px(CONTROL_GAP),row_gap:px(DETAIL_GAP),flex_wrap:FlexWrap::Wrap} Children [{buttons}]
         ]
     }
 }

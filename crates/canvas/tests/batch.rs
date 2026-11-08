@@ -364,6 +364,8 @@ fn first_frame_multi_selection_click_completes_on_release_but_not_cancel() {
 
 #[test]
 fn dragging_any_selected_shape_moves_the_set_with_one_document_delta_and_keeps_identity() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     use bevy::{
         input_focus::InputFocus,
         picking::{hover::PointerCaptureMap, pointer::*},
@@ -451,7 +453,7 @@ fn dragging_any_selected_shape_moves_the_set_with_one_document_delta_and_keeps_i
                         .translation
                         .truncate()
                         .distance(transform.translation.truncate() + Vec2::new(12.0, 7.0))
-                        < 0.001
+                        < COMPARISON_TOLERANCE
                 );
                 assert_eq!(actual.rotation, transform.rotation);
                 assert_eq!(actual.scale, transform.scale);

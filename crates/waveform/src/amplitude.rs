@@ -1,3 +1,7 @@
+const MILLIVOLTS_TO_VOLTS: f64 = 1e-3;
+const MICROVOLTS_TO_VOLTS: f64 = 1e-6;
+const EQUIVALENCE_RELATIVE_TOLERANCE: f64 = 1e-7;
+
 use crate::{Waveform, WaveformRuntime, WaveformUnit};
 use bevy::prelude::*;
 use bevy_widgetry_job::JobFailure;
@@ -22,8 +26,8 @@ impl WaveformAmplitude {
         f64::from(self.value)
             * match self.unit {
                 WaveformUnit::Volts => 1.0,
-                WaveformUnit::Millivolts => 1e-3,
-                WaveformUnit::Microvolts => 1e-6,
+                WaveformUnit::Millivolts => MILLIVOLTS_TO_VOLTS,
+                WaveformUnit::Microvolts => MICROVOLTS_TO_VOLTS,
             }
     }
 
@@ -47,7 +51,8 @@ impl WaveformAmplitude {
     }
 
     fn equivalent(self, other: Self) -> bool {
-        (self.volts() - other.volts()).abs() <= self.volts().abs().max(other.volts().abs()) * 1e-7
+        (self.volts() - other.volts()).abs()
+            <= self.volts().abs().max(other.volts().abs()) * EQUIVALENCE_RELATIVE_TOLERANCE
     }
 }
 

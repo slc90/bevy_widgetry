@@ -13,6 +13,10 @@ from pathlib import Path
 FIELDS = {"ProcessID", "SwapChainAddress", "QPCTime", "Dropped", "msUntilDisplayed"}
 
 
+NANOS_PER_SECOND = 1000000000
+MAX_CALIBRATION_DEVIATION_NS = 100000
+NANOS_PER_MILLISECOND = 1000000
+
 def load_rows(stream):
     reader = csv.DictReader(stream)
     if not FIELDS.issubset(reader.fieldnames or []):
@@ -28,17 +32,17 @@ def clock(protocol):
     if before < 0 or after < before:
         raise ValueError("Invalid calibration bracket")
     midpoint = (before + after) // 2
-    uncertainty = (after - before + 1) // 2 + (1000000000 + calibration["frequency"] - 1) // calibration["frequency"]
+    uncertainty = (after - before + 1) // 2 + (NANOS_PER_SECOND + calibration["frequency"] - 1) // calibration["frequency"]
 
     def mapped(qpc):
-        return midpoint + (int(qpc) - calibration["qpc"]) * 1000000000 // calibration["frequency"]
+        return midpoint + (int(qpc) - calibration["qpc"]) * NANOS_PER_SECOND // calibration["frequency"]
 
     if check := protocol.get("clock_check"):
         if check["frequency"] != calibration["frequency"] or check["after_ns"] < check["before_ns"]:
             raise ValueError("Invalid clock check")
         predicted = mapped(check["qpc"])
         deviation = max(abs(predicted - check["before_ns"]), abs(predicted - check["after_ns"]))
-        if deviation > 100000:
+        if deviation > MAX_CALIBRATION_DEVIATION_NS:
             raise ValueError("QPC/App clock drift exceeds 0.1ms")
         uncertainty += deviation
     return mapped, uncertainty
@@ -69,7 +73,7 @@ def correlate(protocol, content, rows, primary_surface, artifact):
             "source": "PresentMon-2.3.1-v1-QPCTime-plus-msUntilDisplayed",
             "artifact": str(artifact), "swapchain": row["SwapChainAddress"],
             "present_qpc": int(row["QPCTime"]), "hwnd": content["hwnd"],
-            "ns": mapped(row["QPCTime"]) + int(latency * 1000000),
+            "ns": mapped(row["QPCTime"]) + int(latency * NANOS_PER_MILLISECOND),
             "uncertainty_ns": uncertainty}
 
 

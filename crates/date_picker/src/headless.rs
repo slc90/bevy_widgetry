@@ -60,7 +60,7 @@ impl WidgetryDatePickerHeadless {
         world: &World,
         root: Entity,
         today: Option<Date>,
-    ) -> Result<[DatePickerDay; 42], DatePickerFailure> {
+    ) -> Result<[DatePickerDay; crate::model::GRID_CELL_COUNT], DatePickerFailure> {
         WidgetryDatePicker::days(world, root, today)
     }
     pub fn set_selected_date_in_world(

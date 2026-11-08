@@ -1,3 +1,6 @@
+const FALLBACK_Z_INDEX: i32 = 1000000;
+const ANIMATION_Z_INDEX: i32 = 1000001;
+
 use super::{SplashSession, presentation::SplashPresentation};
 use bevy::prelude::*;
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
@@ -15,7 +18,7 @@ pub(crate) fn setup(
         .spawn_scene_with_error_handler(bsn! {
             Name("SplashOpaqueCover")
             UiTargetCamera(gallery_camera)
-            GlobalZIndex(1000000)
+            GlobalZIndex(FALLBACK_Z_INDEX)
             @full_window()
             BackgroundColor({canvas_color()})
         })
@@ -25,7 +28,7 @@ pub(crate) fn setup(
     let overlay = commands.spawn_scene_with_error_handler(bsn! {
         Name("SplashDisplay")
         UiTargetCamera(gallery_camera)
-        GlobalZIndex(1000001)
+        GlobalZIndex(ANIMATION_Z_INDEX)
         @full_window()
         template(move |_| Ok(ImageNode { image: first.clone(), image_mode: NodeImageMode::Stretch, ..default() }))
         Children [@{skip}]

@@ -14,12 +14,40 @@ import numpy as np
 from PIL import Image
 
 
+DPI_AWARENESS_PER_MONITOR_V2 = -4
+CURSOR_SHOWING = 1
+DIB_RGB_COLORS = 0
+MONOCHROME_MASK_PLANES = 2
+BITMAP_PLANES = 1
+BITMAP_BITS_PER_PIXEL = 32
+BGRA_CHANNELS = 4
+RGB_CHANNELS = 3
+ALPHA_CHANNEL = 3
+RGBA_TO_BGRA = [2, 1, 0, 3]
+PREMULTIPLICATION_ROUNDING = (0, 127)
+MAX_CHANNEL_VALUE = 255
+CAPTURE_POLL_SECONDS = .025
+PREVIEW_PADDING = 10
+MILLISECONDS_PER_SECOND = 1000
+FINAL_PREVIEW_FRAME_MS = 25
+MAX_CONTACT_FRAMES = 12
+EXTENDED_WINDOW_STYLE_INDEX = -20
+TOPMOST_STYLE = 8
+HWND_TOPMOST = -1
+HWND_NOTOPMOST = -2
+RESTORE_WINDOW_FLAGS = 0x43
+POINTER_NUDGE = 2
+NUDGE_SETTLE_SECONDS = .04
+HOVER_SETTLE_SECONDS = .5
+CAPTURE_ANIMATION_CYCLES = 2
+CAPTURE_MARGIN_SECONDS = .2
+
 if sys.platform != "win32":
     raise SystemExit("native_cursor_probe.py requires an interactive Windows desktop")
 
 user = C.WinDLL("user32", use_last_error=True)
 gdi = C.WinDLL("gdi32", use_last_error=True)
-user.SetProcessDpiAwarenessContext(C.c_void_p(-4))
+user.SetProcessDpiAwarenessContext(C.c_void_p(DPI_AWARENESS_PER_MONITOR_V2))
 HANDLE = C.c_void_p
 
 
@@ -84,16 +112,16 @@ def snapshot():
     try:
         bm = BITMAP()
         check(get_object(ii.hbmColor or ii.hbmMask, C.sizeof(bm), C.byref(bm)), "GetObject")
-        height = bm.height if ii.hbmColor else bm.height // 2
+        height = bm.height if ii.hbmColor else bm.height // MONOCHROME_MASK_PLANES
         info = {"hotspot": [ii.xHotspot, ii.yHotspot], "size": [bm.width, height],
-                "position": [ci.pos.x, ci.pos.y], "visible": bool(ci.flags & 1), "handle": ci.hCursor}
+                "position": [ci.pos.x, ci.pos.y], "visible": bool(ci.flags & CURSOR_SHOWING), "handle": ci.hCursor}
         if not ii.hbmColor:
             return info, None
-        header = HEADER(size=C.sizeof(HEADER), width=bm.width, height=-height, planes=1, bits=32)
-        pixels = C.create_string_buffer(bm.width * height * 4)
+        header = HEADER(size=C.sizeof(HEADER), width=bm.width, height=-height, planes=BITMAP_PLANES, bits=BITMAP_BITS_PER_PIXEL)
+        pixels = C.create_string_buffer(bm.width * height * BGRA_CHANNELS)
         dc = check(get_dc(None), "GetDC")
         try:
-            check(get_dib(dc, ii.hbmColor, 0, height, pixels, C.byref(header), 0), "GetDIBits")
+            check(get_dib(dc, ii.hbmColor, 0, height, pixels, C.byref(header), DIB_RGB_COLORS), "GetDIBits")
         finally:
             release_dc(None, dc)
         image = Image.frombytes("RGBA", (bm.width, height), pixels.raw, "raw", "BGRA")
@@ -158,11 +186,11 @@ def source_hashes(target, directory):
     for index in range(target["frames"]):
         x, y = index % target["columns"] * width, index // target["columns"] * height
         rgba = np.array(source.crop((x, y, x + width, y + height)), dtype=np.uint16)
-        expected.add(hashlib.sha256(rgba[:, :, [2, 1, 0, 3]].astype(np.uint8).tobytes()).hexdigest())
-        for rounding in (0, 127):
+        expected.add(hashlib.sha256(rgba[:, :, RGBA_TO_BGRA].astype(np.uint8).tobytes()).hexdigest())
+        for rounding in PREMULTIPLICATION_ROUNDING:
             converted = rgba.copy()
-            converted[:, :, :3] = (rgba[:, :, :3] * rgba[:, :, 3:4] + rounding) // 255
-            expected.add(hashlib.sha256(converted[:, :, [2, 1, 0, 3]].astype(np.uint8).tobytes()).hexdigest())
+            converted[:, :, :RGB_CHANNELS] = (rgba[:, :, :RGB_CHANNELS] * rgba[:, :, ALPHA_CHANNEL:BGRA_CHANNELS] + rounding) // MAX_CHANNEL_VALUE
+            expected.add(hashlib.sha256(converted[:, :, RGBA_TO_BGRA].astype(np.uint8).tobytes()).hexdigest())
     return expected
 
 
@@ -180,7 +208,7 @@ def collect(seconds):
         records.append(info)
         if frame is not None:
             frames.append((frame, info["elapsed"]))
-        time.sleep(.025)
+        time.sleep(CAPTURE_POLL_SECONDS)
     return records, frames
 
 
@@ -188,15 +216,15 @@ def save(out, records, frames):
     out.mkdir(parents=True, exist_ok=True)
     (out / "native.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
     if frames:
-        size = (max(f.width for f, _ in frames) + 20, max(f.height for f, _ in frames) + 20)
+        size = (max(f.width for f, _ in frames) + PREVIEW_PADDING * 2, max(f.height for f, _ in frames) + PREVIEW_PADDING * 2)
         previews, timing = [], []
         for i, (frame, elapsed) in enumerate(frames):
             canvas = Image.new("RGBA", size, "#24283D")
-            canvas.alpha_composite(frame, (10, 10))
+            canvas.alpha_composite(frame, (PREVIEW_PADDING, PREVIEW_PADDING))
             previews.append(canvas)
-            timing.append(max(1, round((frames[i + 1][1] - elapsed) * 1000)) if i + 1 < len(frames) else 25)
+            timing.append(max(1, round((frames[i + 1][1] - elapsed) * MILLISECONDS_PER_SECOND)) if i + 1 < len(frames) else FINAL_PREVIEW_FRAME_MS)
         previews[0].save(out / "native.apng", save_all=True, append_images=previews[1:], duration=timing, loop=0, disposal=0, blend=0)
-        count = min(len(previews), 12)
+        count = min(len(previews), MAX_CONTACT_FRAMES)
         strip = Image.new("RGBA", (count * size[0], size[1]))
         for i in range(count):
             strip.paste(previews[i * len(previews) // count], (i * size[0], 0))
@@ -235,11 +263,11 @@ def capture_targets(args):
     original = W.POINT()
     check(get_pos(C.byref(original)), "GetCursorPos")
     previous_foreground = get_foreground()
-    was_topmost = bool(get_window_style(hwnd, -20) & 8)
+    was_topmost = bool(get_window_style(hwnd, EXTENDED_WINDOW_STYLE_INDEX) & TOPMOST_STYLE)
     raised = False
     try:
         if args.foreground:
-            check(set_window_pos(hwnd, W.HWND(-1), 0, 0, 0, 0, 0x43), "SetWindowPos")
+            check(set_window_pos(hwnd, W.HWND(HWND_TOPMOST), 0, 0, 0, 0, RESTORE_WINDOW_FLAGS), "SetWindowPos")
             raised = True
             check(foreground(hwnd), "SetForegroundWindow")
         for ordinal, target in enumerate(targets):
@@ -252,14 +280,14 @@ def capture_targets(args):
             pt = W.POINT(x, y)
             check(client_to_screen(hwnd, C.byref(pt)), "ClientToScreen")
             # A nudge restores native Mouse identity after a BRP Custom Pointer releases control.
-            check(set_pos(pt.x + 2, pt.y + 2), "SetCursorPos")
-            time.sleep(.04)
+            check(set_pos(pt.x + POINTER_NUDGE, pt.y + POINTER_NUDGE), "SetCursorPos")
+            time.sleep(NUDGE_SETTLE_SECONDS)
             check(set_pos(pt.x, pt.y), "SetCursorPos")
-            time.sleep(.5)
+            time.sleep(HOVER_SETTLE_SECONDS)
             hit = window_from_point(pt)
             if hit != hwnd and not is_child(hwnd, hit):
                 raise ValueError(f"{target['name']}: target position is covered by another window")
-            seconds = sum(durations(target)) / 1000 * 2 + .2
+            seconds = sum(durations(target)) / MILLISECONDS_PER_SECOND * CAPTURE_ANIMATION_CYCLES + CAPTURE_MARGIN_SECONDS
             records, frames = collect(seconds)
             for record in records:
                 record["matches_source_frame"] = record.get("sha256") in expected
@@ -275,7 +303,7 @@ def capture_targets(args):
         if raised:
             if is_window(hwnd):
                 actions.append(("restore window topmost state", lambda: set_window_pos(
-                    hwnd, W.HWND(-1 if was_topmost else -2), 0, 0, 0, 0, 0x43)))
+                    hwnd, W.HWND(HWND_TOPMOST if was_topmost else HWND_NOTOPMOST), 0, 0, 0, 0, RESTORE_WINDOW_FLAGS)))
             if previous_foreground and previous_foreground != hwnd and is_window(previous_foreground):
                 actions.append(("restore foreground window", lambda: foreground(previous_foreground)))
         for operation, restore in actions:

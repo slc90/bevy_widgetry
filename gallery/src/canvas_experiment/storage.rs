@@ -139,8 +139,8 @@ fn load_from(world: &mut World, id: &str, directory: PathBuf) -> Result<Session,
         || archive.session != id
         || archive.width == 0
         || archive.height == 0
-        || archive.width > 16_777_216
-        || archive.height > 16_777_216
+        || archive.width > super::MAX_CANVAS_DIMENSION
+        || archive.height > super::MAX_CANVAS_DIMENSION
         || archive.next_stage == 0
     {
         return Err(invalid_params(

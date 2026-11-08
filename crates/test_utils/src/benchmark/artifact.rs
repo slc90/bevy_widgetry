@@ -1,3 +1,5 @@
+const HASH_BUFFER_BYTES: usize = 65536;
+
 use bevy::prelude::{BevyError, Result};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -176,7 +178,7 @@ impl Artifact {
     fn hash(path: &Path) -> Result<String> {
         let mut file = File::open(path).map_err(error)?;
         let mut digest = Sha256::new();
-        let mut buffer = [0; 65536];
+        let mut buffer = [0; HASH_BUFFER_BYTES];
         loop {
             let size = file.read(&mut buffer).map_err(error)?;
             if size == 0 {

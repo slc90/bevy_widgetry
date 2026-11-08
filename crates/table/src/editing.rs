@@ -1,3 +1,7 @@
+const ERROR_POPUP_Z_INDEX: i32 = 100;
+const ERROR_FONT_SIZE: f32 = 14.0;
+const ERROR_MIN_WIDTH: f32 = 240.0;
+
 use crate::projection::TableRuntime;
 use crate::*;
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
@@ -515,9 +519,9 @@ fn begin<T: Send + Sync + 'static>(
             Text("") bevy_widgetry_core::text::WidgetryText
             BackgroundColor::default() BorderColor::default()
             bevy_widgetry_core::foreground::ResolvedForeground::default()
-            TextFont { font_size: bevy::text::FontSize::Px(14.0) }
-            Node { display: Display::None, position_type: PositionType::Absolute, top: percent(100), min_width: px(240) }
-            GlobalZIndex(100)
+            TextFont { font_size: bevy::text::FontSize::Px(ERROR_FONT_SIZE) }
+            Node { display: Display::None, position_type: PositionType::Absolute, top: percent(100), min_width: px(ERROR_MIN_WIDTH) }
+            GlobalZIndex(ERROR_POPUP_Z_INDEX)
         },
     ) {
         Ok(entity) => entity,

@@ -1,3 +1,19 @@
+const MILLISECONDS_PER_SECOND: f64 = 1000.0;
+const NANOS_PER_MILLISECOND: f64 = 1_000_000.0;
+const MEASUREMENT_SECONDS: f64 = 90.0;
+const BURST_START_SECONDS: f64 = 45.0;
+const BURST_HOLD: Duration = Duration::from_millis(100);
+const WARMUP_SECONDS: f64 = 12.0;
+const PREVIEW_DENSITY_DIVISOR: usize = 4;
+const CAPTURE_INTERVAL_FRAMES: u64 = 60;
+const CAPTURE_EXCLUSION_FRAMES: u64 = 4;
+const RGBA_CHANNELS: usize = 4;
+const REPLAY_MIN_BRIGHTNESS: u8 = 60;
+const REPLAY_MIN_CONTRAST: u8 = 20;
+const STRESS_CHANNEL_COUNT: u32 = 64;
+const PIXEL_SAMPLE_STRIDE: usize = 4;
+const LIVE_MIN_BRIGHTNESS: u8 = 50;
+
 mod navigation_readiness;
 
 use crate::pages::{WaveformDemoSources, WaveformDemoState};
@@ -173,12 +189,12 @@ fn measure(world: &mut World) -> Result {
         let now = Instant::now();
         let start = *state.start.get_or_insert(now);
         let elapsed = now.duration_since(start).as_secs_f64();
-        let interval = state.previous.map_or(0.0, |previous| now.duration_since(previous).as_secs_f64() * 1000.0);
+        let interval = state.previous.map_or(0.0, |previous| now.duration_since(previous).as_secs_f64() * MILLISECONDS_PER_SECOND);
         state.previous = Some(now);
         state.frame += 1;
         let frame = state.frame;
-        let update_ms = state.update_start.elapsed().as_secs_f64() * 1000.0;
-        if elapsed >= 90.0 {
+        let update_ms = state.update_start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND;
+        if elapsed >= MEASUREMENT_SECONDS {
             state.frames.flush().map_err(|error| crate::diagnostics::error(error))?;
             state.diagnostics.flush().map_err(|error| crate::diagnostics::error(error))?;
             let mut captures = BufWriter::new(File::create_new(state.output.join("observable.csv")).map_err(|error| crate::diagnostics::error(error))?);
@@ -189,8 +205,8 @@ fn measure(world: &mut World) -> Result {
             state.finished = true;
             return Ok(());
         }
-        if !state.replay && elapsed >= 45.0 && !state.burst_started {
-            world.resource_mut::<WaveformDemoSources>().hold_until = Some(now + Duration::from_millis(100));
+        if !state.replay && elapsed >= BURST_START_SECONDS && !state.burst_started {
+            world.resource_mut::<WaveformDemoSources>().hold_until = Some(now + BURST_HOLD);
             state.burst_started = true;
         }
         let last_seek = world.resource::<WaveformDemoSources>().last_seek.filter(|(_,entity,_)| *entity == root).map(|(time,_,frame)|(time,frame));
@@ -204,11 +220,11 @@ fn measure(world: &mut World) -> Result {
                 && file.as_ref().and_then(|stats|stats.last_read.as_ref()).is_some_and(|read|
                     read.request.range.end == displayed && read.request.target_generation == cursor.seek_generation
                     && read.request.session_generation == sample.session_generation && read.request.algorithm == runtime.algorithm()
-                    && read.request.output_len == if sample.preview { sample.output_width.div_ceil(4) } else {sample.output_width})
+                    && read.request.output_len == if sample.preview { sample.output_width.div_ceil(PREVIEW_DENSITY_DIVISOR) } else {sample.output_width})
         } else { true };
         let request_capture = if state.replay {
             last_seek.is_some_and(|(time, target)| snapshot_ready && target == displayed && state.captured_seek != Some(time)) && state.pending.is_none()
-        } else { elapsed > 12.0 && frame.is_multiple_of(60) && state.pending.is_none() };
+        } else { elapsed > WARMUP_SECONDS && frame.is_multiple_of(CAPTURE_INTERVAL_FRAMES) && state.pending.is_none() };
         let capture = state.pending.is_some() || frame <= state.capture_until || request_capture;
         let sample = world.get::<WaveformDemoState>(root).ok_or_else(|| crate::diagnostics::error("benchmark stress state missing"))?;
         let sources = world.resource::<WaveformDemoSources>();
@@ -218,14 +234,14 @@ fn measure(world: &mut World) -> Result {
         let generated_frame = sample.displayed_frame;
         let capture_algorithm = sample.algorithm.clone();
         let mesh_bytes: usize = world.resource::<Assets<Mesh>>().iter().map(|(_, mesh)| mesh.attributes().map(|(_, values)| values.get_bytes().len()).sum::<usize>() + mesh.get_index_buffer_bytes().map_or(0, <[u8]>::len)).sum();
-        if frame == 1 || frame.is_multiple_of(60) { state.active_entities = world.entities().count_spawned(); }
+        if frame == 1 || frame.is_multiple_of(CAPTURE_INTERVAL_FRAMES) { state.active_entities = world.entities().count_spawned(); }
         let active_entities = state.active_entities;
         let timing = world.resource::<RenderTiming>();
-        let extract_ms = timing.0.0.load(Ordering::Relaxed) as f64 / 1_000_000.0;
-        let render_ms = timing.0.1.load(Ordering::Relaxed) as f64 / 1_000_000.0;
+        let extract_ms = timing.0.0.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND;
+        let render_ms = timing.0.1.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND;
         let (queries, discarded, queued, query_ms, io_ms, cpu_ms, bytes, bucket) = file.as_ref().map_or((0,0,0,0.0,0.0,0.0,0,0), |stats| {
             let (query, io, bytes, bucket) = stats.last_read.as_ref().map_or((Duration::ZERO,Duration::ZERO,0,0), |read| (read.elapsed, read.read.io_time, read.read.bytes_read, read.read.bucket_size));
-            (stats.queries,stats.discarded_queries,stats.queued_readers,query.as_secs_f64()*1000.0,io.as_secs_f64()*1000.0,query.saturating_sub(io).as_secs_f64()*1000.0,bytes,bucket)
+            (stats.queries,stats.discarded_queries,stats.queued_readers,query.as_secs_f64()*MILLISECONDS_PER_SECOND,io.as_secs_f64()*MILLISECONDS_PER_SECOND,query.saturating_sub(io).as_secs_f64()*MILLISECONDS_PER_SECOND,bytes,bucket)
         });
         let identity = file.as_ref().and_then(|stats|stats.last_read.as_ref()).map_or_else(|| "0,0,0,0,".to_owned(), |read|format!("{},{},{},{},{:?}",read.request.id,read.request.target_generation,read.request.output_len,read.request.range.end,read.request.algorithm));
         let line = format!("{frame},{elapsed},{interval},{update_ms},{producer_ms},{},{},{},{},{},{},{},{},{},{mesh_bytes},{},{},{},{capture},{burst},{extract_ms},{render_ms},{active_entities},{},{},{queries},{discarded},{queued},{query_ms},{io_ms},{cpu_ms},{bytes},{bucket},{identity}\n", sample.producer_frame, sample.displayed_frame, sample.producer_frame.saturating_sub(sample.displayed_frame), sample.dropped_samples, sample.read_frames, sample.output_width, sample.height, sample.raw_capacity_bytes, sample.reduced_capacity_bytes, world.entities().len(), world.resource::<Assets<Image>>().len(), world.resource::<Assets<Mesh>>().len(), sample.algorithm, sample.preview);
@@ -241,7 +257,7 @@ fn measure(world: &mut World) -> Result {
         // It also includes the GPU readback overhead of this capture.
         if request_capture {
             if state.replay { state.captured_seek = last_seek.map(|(time,_)|time); }
-            state.capture_until = frame + 4;
+            state.capture_until = frame + CAPTURE_EXCLUSION_FRAMES;
             let capture_root = if state.replay {
                 world.query::<(Entity, &Name)>().iter(world).find(|(entity,name)| {
                     if name.as_str() != "WaveformPlot" { return false; }
@@ -265,11 +281,11 @@ fn measure(world: &mut World) -> Result {
 
 fn on_capture(event: On<ScreenshotCaptured>, mut state: ResMut<Measurement>) {
     if let Some((generated, source_frame, min, max, algorithm)) = state.pending.take() {
-        state.capture_until = state.frame + 4;
-        let upper_ms = generated.elapsed().as_secs_f64() * 1000.0;
+        state.capture_until = state.frame + CAPTURE_EXCLUSION_FRAMES;
+        let upper_ms = generated.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND;
         let nonempty = event.image.data.as_ref().is_some_and(|data| {
             let size = event.image.texture_descriptor.size;
-            let pixels = data.as_chunks::<4>().0;
+            let pixels = data.as_chunks::<RGBA_CHANNELS>().0;
             let max = max.min(UVec2::new(size.width, size.height));
             if state.replay {
                 return (min.y..max.y).any(|y| {
@@ -279,21 +295,26 @@ fn on_capture(event: On<ScreenshotCaptured>, mut state: ResMut<Measurement>) {
                             .is_some_and(|pixel| {
                                 let brightest = pixel[0].max(pixel[1]).max(pixel[2]);
                                 let darkest = pixel[0].min(pixel[1]).min(pixel[2]);
-                                brightest > 60 && brightest.saturating_sub(darkest) > 20
+                                brightest > REPLAY_MIN_BRIGHTNESS
+                                    && brightest.saturating_sub(darkest) > REPLAY_MIN_CONTRAST
                             })
                     })
                 });
             }
             // Non-background pixels across the whole screenshot could come only from sidebar Text.
             // Check every lane in the Stress region so a missing Waveform cannot count as success.
-            (0..64).all(|lane| {
-                let begin = min.y + (max.y - min.y) * lane / 64;
-                let end = min.y + (max.y - min.y) * (lane + 1) / 64;
+            (0..STRESS_CHANNEL_COUNT).all(|lane| {
+                let begin = min.y + (max.y - min.y) * lane / STRESS_CHANNEL_COUNT;
+                let end = min.y + (max.y - min.y) * (lane + 1) / STRESS_CHANNEL_COUNT;
                 (begin..end).any(|y| {
-                    (min.x..max.x).step_by(4).any(|x| {
+                    (min.x..max.x).step_by(PIXEL_SAMPLE_STRIDE).any(|x| {
                         pixels
                             .get((y * size.width + x) as usize)
-                            .is_some_and(|pixel| pixel[0] > 50 && pixel[1] > 50 && pixel[2] > 50)
+                            .is_some_and(|pixel| {
+                                pixel[0] > LIVE_MIN_BRIGHTNESS
+                                    && pixel[1] > LIVE_MIN_BRIGHTNESS
+                                    && pixel[2] > LIVE_MIN_BRIGHTNESS
+                            })
                     })
                 })
             })

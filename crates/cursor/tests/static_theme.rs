@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::{
     picking::{
         InteractionPlugin, PickingPlugin,
@@ -502,10 +504,7 @@ fn external_paths_are_lazy_and_stationary_loading_progresses_to_ready_or_failed(
             memory::{Dir, MemoryAssetReader},
         },
     };
-    use std::{
-        path::Path,
-        time::{Duration, Instant},
-    };
+    use std::{path::Path, time::Instant};
     let directory = Dir::default();
     directory.insert_asset_text(Path::new("pointer.cur24"), "pixels");
     directory.insert_asset_text(Path::new("broken.cur24"), "bad");
@@ -581,7 +580,7 @@ fn external_paths_are_lazy_and_stationary_loading_progresses_to_ready_or_failed(
         ));
         app.update();
     };
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     while !matches!(
         app.world().get::<CursorIcon>(window),
         Some(CursorIcon::Custom(_))
@@ -615,7 +614,7 @@ fn external_paths_are_lazy_and_stationary_loading_progresses_to_ready_or_failed(
         .resource::<AssetServer>()
         .get_handle::<Image>("broken.cur24")
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     while !matches!(
         app.world()
             .resource::<AssetServer>()

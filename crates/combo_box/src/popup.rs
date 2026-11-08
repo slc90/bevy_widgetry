@@ -1,3 +1,10 @@
+const SEARCH_FIELD_HEIGHT: f32 = 40.0;
+const SEARCH_PROMPT_GAP: f32 = 8.0;
+const POPUP_WINDOW_MARGIN: f32 = 8.0;
+const POPUP_BORDER_WIDTH: f32 = 1.0;
+pub(crate) const POPUP_BORDER_HEIGHT: f32 = POPUP_BORDER_WIDTH * 2.0;
+const POPUP_CORNER_RADIUS: f32 = 4.0;
+
 use bevy_widgetry_theme::WidgetryTheme;
 
 use crate::combo_box::WidgetryComboBox;
@@ -45,11 +52,11 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
             @bevy_widgetry_text_field::WidgetryTextField {
                 @children: {Some(Box::new(bsn_list! {
                     bevy_widgetry_text_field::WidgetryTextFieldPrefix
-                    Node { max_width: percent(50), margin: UiRect::right(px(8)) }
+                    Node { max_width: percent(50), margin: UiRect::right(px(SEARCH_PROMPT_GAP)) }
                     Children [{search_prompt.build()}]
                 }) as Box<dyn SceneList>)},
             }
-            Node { width: percent(100), height: px(40), flex_shrink: 0.0 }
+            Node { width: percent(100), height: px(SEARCH_FIELD_HEIGHT), flex_shrink: 0.0 }
             -- @{list} --
             crate::search::SearchEmpty
             Node { display: Display::None, min_height: px(item_height), flex_shrink: 0.0, align_items: AlignItems::Center }
@@ -65,15 +72,15 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
                 PopoverPlacement { side: PopoverSide::Bottom, align: PopoverAlign::Start, gap: 0.0 },
                 PopoverPlacement { side: PopoverSide::Top, align: PopoverAlign::Start, gap: 0.0 },
             ]},
-            window_margin: 8.0,
+            window_margin: POPUP_WINDOW_MARGIN,
         }
         template(|context| Ok(BackgroundColor(context.resource::<WidgetryTheme>().combo_box.popup.normal.background)))
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryTheme>().combo_box.popup.normal.border)))
         Node {
             position_type: PositionType::Absolute,
-            width: percent(100), height: px(2), box_sizing: BoxSizing::BorderBox,
+            width: percent(100), height: px(POPUP_BORDER_HEIGHT), box_sizing: BoxSizing::BorderBox,
             flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch,
-            border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(4)),
+            border: UiRect::all(px(POPUP_BORDER_WIDTH)), border_radius: BorderRadius::all(px(POPUP_CORNER_RADIUS)),
         }
         Children [{content}]
     }
@@ -400,11 +407,11 @@ pub(crate) fn sync_geometry<T: Send + Sync + 'static>(world: &mut World) {
         }
         let height = rows_height
             + if search {
-                40.0 + if count == 0 { empty_height } else { 0.0 }
+                SEARCH_FIELD_HEIGHT + if count == 0 { empty_height } else { 0.0 }
             } else {
                 0.0
             }
-            + 2.0;
+            + POPUP_BORDER_HEIGHT;
         if let Some(mut node) = world.get_mut::<Node>(popup)
             && node.height != px(height)
         {

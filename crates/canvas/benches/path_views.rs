@@ -1,3 +1,8 @@
+const GRID_COLUMNS: usize = 20;
+const GRID_SPACING: f32 = 50.0;
+const BENCH_VIEWPORT: UVec2 = UVec2::new(800, 600);
+const VIEW_SIZE: Vec2 = Vec2::new(350.0, 250.0);
+
 use bevy::prelude::*;
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, artifact::error, run};
@@ -45,7 +50,7 @@ fn fixture(count: usize) -> Result<Fixture> {
     add_ui_plugins(&mut app);
     app.add_plugins((TransformPlugin, CanvasPlugin));
     app.set_error_handler(ErrorCapture::handler());
-    let camera = spawn_ui_camera(&mut app, UVec2::new(800, 600), 1.0);
+    let camera = spawn_ui_camera(&mut app, BENCH_VIEWPORT, 1.0);
     let document = app.world_mut().spawn(CanvasDocument).id();
     let mut shape = None;
     for i in 0..count {
@@ -54,7 +59,11 @@ fn fixture(count: usize) -> Result<Fixture> {
                 app.world_mut(),
                 document,
                 path.clone(),
-                Transform::from_xyz((i % 20) as f32 * 50.0, (i / 20) as f32 * 50.0, 0.0),
+                Transform::from_xyz(
+                    (i % GRID_COLUMNS) as f32 * GRID_SPACING,
+                    (i / GRID_COLUMNS) as f32 * GRID_SPACING,
+                    0.0,
+                ),
                 CanvasPaint {
                     fill: Some(Color::WHITE),
                     stroke: Some(CanvasStroke {
@@ -70,7 +79,7 @@ fn fixture(count: usize) -> Result<Fixture> {
     }
     let shape = shape.ok_or_else(|| error("requires paths"))?;
     for _ in 0..2 {
-        let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {width:px(350),height:px(250)}}).map_err(BevyError::error)?.id();
+        let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
         CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape))
             .map_err(|error| error.into_bevy_error())?;
     }
@@ -86,7 +95,8 @@ fn fixture(count: usize) -> Result<Fixture> {
 }
 fn main() -> Result {
     let mut harness = Harness::new("canvas-path-criterion")?;
-    for count in [100, 1000] {
+    let entity_counts = [100, 1000];
+    for count in entity_counts {
         for mode in ["transform_only", "commands_update", "paint_update"] {
             run(
                 &mut harness,

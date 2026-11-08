@@ -1,3 +1,7 @@
+const OPTION_GAP: f32 = 6.0;
+const GROUP_PADDING: f32 = 8.0;
+const GROUP_BORDER_WIDTH: f32 = 1.0;
+const GROUP_CORNER_RADIUS: f32 = 4.0;
 use crate::WidgetryRadioOptionHeadless;
 use crate::{
     RadioGroupError, RadioGroupFailure,
@@ -336,10 +340,10 @@ impl WidgetryRadioGroup {
             Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,
-                row_gap: px(6),
-                padding: UiRect::all(px(8)),
-                border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(4)),
+                row_gap: px(OPTION_GAP),
+                padding: UiRect::all(px(GROUP_PADDING)),
+                border: UiRect::all(px(GROUP_BORDER_WIDTH)),
+                border_radius: BorderRadius::all(px(GROUP_CORNER_RADIUS)),
             }
             bevy_widgetry_core::foreground::ResolvedForeground
             BackgroundColor

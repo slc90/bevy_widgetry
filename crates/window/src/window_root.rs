@@ -1,3 +1,6 @@
+pub(crate) const WINDOW_CORNER_RADIUS: f32 = 8.0;
+const WINDOW_BORDER_WIDTH: f32 = 1.0;
+
 use bevy::{
     camera::RenderTarget,
     prelude::*,
@@ -33,8 +36,8 @@ fn window_root_node() -> Node {
         height: percent(100),
         min_width: px(0),
         min_height: px(0),
-        border: UiRect::all(px(1)),
-        border_radius: BorderRadius::all(px(8)),
+        border: UiRect::all(px(WINDOW_BORDER_WIDTH)),
+        border_radius: BorderRadius::all(px(WINDOW_CORNER_RADIUS)),
         flex_direction: FlexDirection::Column,
         ..default()
     }
@@ -46,7 +49,7 @@ fn window_content_node() -> Node {
         min_width: px(0),
         flex_grow: 1.0,
         min_height: px(0),
-        border_radius: BorderRadius::bottom(px(8)),
+        border_radius: BorderRadius::bottom(px(WINDOW_CORNER_RADIUS)),
         flex_direction: FlexDirection::Column,
         ..default()
     }

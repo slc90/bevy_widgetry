@@ -1,3 +1,9 @@
+const DEFAULT_SCALE_FACTOR: f32 = 1.25;
+const ALLOWED_SCALE_FACTORS: [f32; 4] = [1.0, 1.25, 1.5, 2.0];
+const DEFAULT_BRP_PORT: u16 = 15702;
+const BRP_PORT_RANGE: std::ops::RangeInclusive<u16> = 1024..=65534;
+const RENDER_WORLD_BRP_PORT: u16 = 15703;
+
 use crate::theme::GalleryTheme;
 use crate::{
     diagnostics::{self, GalleryError},
@@ -31,24 +37,24 @@ enum ConfigLanguage {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            scale_factor: 1.25,
+            scale_factor: DEFAULT_SCALE_FACTOR,
             theme: GalleryTheme::Dark,
             language: Language::English,
             brp_enabled: true,
-            brp_port: 15702,
+            brp_port: DEFAULT_BRP_PORT,
         }
     }
 }
 
 impl AppConfig {
     fn validate(&self) -> io::Result<()> {
-        if ![1.0, 1.25, 1.5, 2.0].contains(&self.scale_factor) {
+        if !ALLOWED_SCALE_FACTORS.contains(&self.scale_factor) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "scale_factor 必须为 1.0、1.25、1.5 或 2.0",
             ));
         }
-        if !(1024..=65534).contains(&self.brp_port) || self.brp_port == 15703 {
+        if !BRP_PORT_RANGE.contains(&self.brp_port) || self.brp_port == RENDER_WORLD_BRP_PORT {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "brp_port 必须为 1024..=65534，且不能占用 Render World 的 15703",

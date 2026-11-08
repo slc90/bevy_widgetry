@@ -1,3 +1,9 @@
+const ROW_HEADER_COLUMN: i16 = 1;
+const FROZEN_COLUMN: i16 = 2;
+const SCROLLING_COLUMN: i16 = 3;
+const HEADER_ROW: i16 = 1;
+const BODY_ROW: i16 = 2;
+
 use crate::{WidgetryTableColumnId, WidgetryTableLayout, WidgetryTableRowId, WidgetryTableStyle};
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
@@ -164,21 +170,21 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             }
             Children [
                 WidgetryTableCorner BackgroundColor::default() BorderColor::default()
-                    Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(1), overflow: Overflow::clip() }--
+                    Node { grid_column: GridPlacement::start(ROW_HEADER_COLUMN), grid_row: GridPlacement::start(HEADER_ROW), overflow: Overflow::clip() }--
                 WidgetryTableColumnHeaders ScrollPosition::default()
-                    Node { grid_column: GridPlacement::start(3), grid_row: GridPlacement::start(1), min_width: px(0), min_height: px(0), overflow: Overflow::scroll_x(), scrollbar_width: 0.0 }
+                    Node { grid_column: GridPlacement::start(SCROLLING_COLUMN), grid_row: GridPlacement::start(HEADER_ROW), min_width: px(0), min_height: px(0), overflow: Overflow::scroll_x(), scrollbar_width: 0.0 }
                     Children [TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 }]--
                 WidgetryTableRowHeaders ScrollPosition::default()
-                    Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(2), min_width: px(0), min_height: px(0), overflow: Overflow::scroll_y(), scrollbar_width: 0.0 }
+                    Node { grid_column: GridPlacement::start(ROW_HEADER_COLUMN), grid_row: GridPlacement::start(BODY_ROW), min_width: px(0), min_height: px(0), overflow: Overflow::scroll_y(), scrollbar_width: 0.0 }
                     Children [TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 }]--
                 WidgetryTableBody ScrollArea
-                    Node { grid_column: GridPlacement::start(3), grid_row: GridPlacement::start(2), min_width: px(0), min_height: px(0), overflow: Overflow::scroll(), scrollbar_width: 0.0 }
+                    Node { grid_column: GridPlacement::start(SCROLLING_COLUMN), grid_row: GridPlacement::start(BODY_ROW), min_width: px(0), min_height: px(0), overflow: Overflow::scroll(), scrollbar_width: 0.0 }
                     Children [TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 }]
                 -- WidgetryTableFrozenColumnHeaders
-                    Node {grid_column:GridPlacement::start(2),grid_row:GridPlacement::start(1),min_width:px(0),min_height:px(0),overflow:Overflow::clip()}
+                    Node {grid_column:GridPlacement::start(FROZEN_COLUMN),grid_row:GridPlacement::start(HEADER_ROW),min_width:px(0),min_height:px(0),overflow:Overflow::clip()}
                     Children [TableCanvas LayoutConfig{use_rounding:false} Node{flex_shrink:0.0}]
                 -- WidgetryTableFrozenBody ScrollPosition::default()
-                    Node {grid_column:GridPlacement::start(2),grid_row:GridPlacement::start(2),min_width:px(0),min_height:px(0),overflow:Overflow{x:OverflowAxis::Clip,y:OverflowAxis::Scroll},scrollbar_width:0.0}
+                    Node {grid_column:GridPlacement::start(FROZEN_COLUMN),grid_row:GridPlacement::start(BODY_ROW),min_width:px(0),min_height:px(0),overflow:Overflow{x:OverflowAxis::Clip,y:OverflowAxis::Scroll},scrollbar_width:0.0}
                     Children [TableCanvas LayoutConfig{use_rounding:false} Node{flex_shrink:0.0}]
             ]
         }

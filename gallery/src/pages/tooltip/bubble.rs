@@ -1,3 +1,18 @@
+const BUBBLE_GAP: f32 = 12.0;
+const BUBBLE_VERTICAL_OFFSET: f32 = 24.0;
+const BUBBLE_WINDOW_MARGIN: f32 = 8.0;
+const BUBBLE_Z_INDEX: i32 = 10000;
+
+const BUBBLE_MAX_WIDTH: f32 = 280.0;
+const BUBBLE_PADDING: f32 = 14.0;
+const BUBBLE_BORDER_WIDTH: f32 = 2.0;
+const BUBBLE_CORNER_RADIUS: f32 = 18.0;
+const ACCENT_WIDTH: f32 = 8.0;
+const ACCENT_HEIGHT: f32 = 32.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 10.0;
+
 use crate::i18n::{TextKey, TooltipKey, localized};
 use bevy::{
     prelude::*,
@@ -18,7 +33,7 @@ struct Bubble;
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node {flex_direction:FlexDirection::Column,row_gap:px(8),align_items:AlignItems::Start}
+        Node {flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP),align_items:AlignItems::Start}
         Children [
             @localized(TextKey::Tooltip(TooltipKey::CustomBubble)) WidgetryText--
             Anchor Name::new("TooltipBubbleAnchor") @WidgetryTooltipHeadless
@@ -43,16 +58,16 @@ fn show(event: On<ShowTooltip>, anchors: Query<(), With<Anchor>>, mut commands: 
         if !show.is_current(world) || show.popup(world).is_some() { return Ok(()); }
         let (Some(transform),Some(node),Some(camera))=(world.get::<UiGlobalTransform>(show.source),world.get::<ComputedNode>(show.source),world.get::<ComputedUiTargetCamera>(show.source).and_then(|target|target.get())) else { return Ok(()); };
         let center=transform.transform_point2(Vec2::ZERO)*node.inverse_scale_factor();
-        let left=center.x+node.size().x*node.inverse_scale_factor()/2.0+12.0;
-        let top=(center.y-24.0).max(8.0);
+        let left=center.x+node.size().x*node.inverse_scale_factor()/2.0+BUBBLE_GAP;
+        let top=(center.y-BUBBLE_VERTICAL_OFFSET).max(BUBBLE_WINDOW_MARGIN);
         let colors=world.resource::<WidgetryTheme>().tooltip.popup.normal;
         let accent=world.resource::<WidgetryTheme>().progress_bar.fill;
         let popup=spawn_scene(world,bsn!{
-            Bubble Name::new("TooltipBubblePopup") UiTargetCamera(camera) GlobalZIndex(10000) Pickable::IGNORE
-            Node {position_type:PositionType::Absolute,left:px(left),top:px(top),max_width:px(280),padding:UiRect::all(px(14)),border:UiRect::all(px(2)),border_radius:BorderRadius::all(px(18)),column_gap:px(10),align_items:AlignItems::Center}
+            Bubble Name::new("TooltipBubblePopup") UiTargetCamera(camera) GlobalZIndex(BUBBLE_Z_INDEX) Pickable::IGNORE
+            Node {position_type:PositionType::Absolute,left:px(left),top:px(top),max_width:px(BUBBLE_MAX_WIDTH),padding:UiRect::all(px(BUBBLE_PADDING)),border:UiRect::all(px(BUBBLE_BORDER_WIDTH)),border_radius:BorderRadius::all(px(BUBBLE_CORNER_RADIUS)),column_gap:px(CONTROL_GAP),align_items:AlignItems::Center}
             BackgroundColor({colors.background}) BorderColor::all(colors.border)
             Children [
-                Node {width:px(8),height:px(32),flex_shrink:0.0,border_radius:BorderRadius::MAX} BackgroundColor({accent}) Pickable::IGNORE--
+                Node {width:px(ACCENT_WIDTH),height:px(ACCENT_HEIGHT),flex_shrink:0.0,border_radius:BorderRadius::MAX} BackgroundColor({accent}) Pickable::IGNORE--
                 @localized(TextKey::Tooltip(TooltipKey::BubbleContent))
                 @WidgetryText {@colors:{WidgetryTextColorOverrides {normal:WidgetryTextStateColorOverrides {foreground:Some(colors.foreground)},disabled:WidgetryTextStateColorOverrides {foreground:Some(colors.foreground)}}}} Pickable::IGNORE
             ]

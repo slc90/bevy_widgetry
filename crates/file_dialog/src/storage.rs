@@ -221,12 +221,12 @@ impl WidgetryFileDialogStorage {
             if let Some((path, add)) = pin {
                 touched.pinned.insert(path.clone(), *add);
             }
-            if touched.pinned.len() > 1024 {
+            if touched.pinned.len() > crate::limits::MAX_PINNED_LOCATIONS {
                 return Err(failure(
                     FileDialogError::Capacity {
                         resource: "pending pinned mutations",
                         actual: touched.pinned.len(),
-                        limit: 1024,
+                        limit: crate::limits::MAX_PINNED_LOCATIONS,
                     },
                     "file_dialog.storage.merge",
                 ));
@@ -287,7 +287,7 @@ impl WidgetryFileDialogStorage {
     }
 
     fn validate_scope(&self, scope: &str) -> Result<(), FileDialogFailure> {
-        if scope.is_empty() || scope.len() > 128 {
+        if scope.is_empty() || scope.len() > crate::limits::MAX_SCOPE_LEN {
             return Err(failure(
                 FileDialogError::ScopeLength {
                     scope: scope.to_owned(),
@@ -296,12 +296,12 @@ impl WidgetryFileDialogStorage {
                 "file_dialog.storage.scope",
             ));
         }
-        if self.scopes.len() >= 256 && !self.scopes.contains_key(scope) {
+        if self.scopes.len() >= crate::limits::MAX_SCOPES && !self.scopes.contains_key(scope) {
             return Err(failure(
                 FileDialogError::Capacity {
                     resource: "storage scopes",
                     actual: self.scopes.len(),
-                    limit: 256,
+                    limit: crate::limits::MAX_SCOPES,
                 },
                 "file_dialog.storage.scope",
             ));
@@ -313,12 +313,12 @@ impl WidgetryFileDialogStorage {
 fn validate_snapshot(
     snapshot: &WidgetryFileDialogStorageSnapshot,
 ) -> Result<(), FileDialogFailure> {
-    if snapshot.pinned.len() > 1024 {
+    if snapshot.pinned.len() > crate::limits::MAX_PINNED_LOCATIONS {
         return Err(failure(
             FileDialogError::Capacity {
                 resource: "pinned folders",
                 actual: snapshot.pinned.len(),
-                limit: 1024,
+                limit: crate::limits::MAX_PINNED_LOCATIONS,
             },
             "file_dialog.storage.snapshot",
         ));

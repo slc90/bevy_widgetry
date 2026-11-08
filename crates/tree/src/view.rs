@@ -1,3 +1,6 @@
+const ITEM_CONTENT_GAP: f32 = 6.0;
+const EXPANDER_ICON_SIZE: f32 = 12.0;
+const EXPANDER_BUTTON_SIZE: f32 = 20.0;
 use crate::renderer::TreeContent;
 use crate::{
     TreeError, TreeViewFailure, TreeViewFault,
@@ -404,17 +407,17 @@ impl WidgetryTreeView {
                                 if !padding.is_finite() {
                                     return Err(failure(TreeError::Indent{node,depth,indent_width:indent,padding},"tree.indent").into_bevy_error());
                                 }
-                                Ok(Node { width: percent(100), align_items: AlignItems::Center, padding: UiRect::left(px(padding)), column_gap: px(6), ..default() })
+                                Ok(Node { width: percent(100), align_items: AlignItems::Center, padding: UiRect::left(px(padding)), column_gap: px(ITEM_CONTENT_GAP), ..default() })
                             })
                             Children [
                                 @WidgetryButton { @children: {Some(Box::new(bsn_list! {
-                                    @WidgetryIcon { @path: icon, @max_size: {Some(UVec2::splat(12))} }
+                                    @WidgetryIcon { @path: icon, @max_size: {Some(UVec2::splat(EXPANDER_ICON_SIZE as u32))} }
                                     template(|_| Ok(Pickable::IGNORE))
-                                    Node { width: px(12), height: px(12) }
+                                    Node { width: px(EXPANDER_ICON_SIZE), height: px(EXPANDER_ICON_SIZE) }
                                 }) as Box<dyn bevy::prelude::SceneList>)}, }
                                 template(move |_| Ok(TreeExpander { node }))
                                 template(move |_| Ok(visibility))
-                                Node { width: px(20), height: px(20), min_height: px(20), padding: UiRect::ZERO, flex_shrink: 0.0, align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+                                Node { width: px(EXPANDER_BUTTON_SIZE), height: px(EXPANDER_BUTTON_SIZE), min_height: px(EXPANDER_BUTTON_SIZE), padding: UiRect::ZERO, flex_shrink: 0.0, align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                                 on(on_expand)
 
                             -- template(move |_| Ok(TreeContent { node })) Node { min_width: px(0), flex_grow: 1.0 }]

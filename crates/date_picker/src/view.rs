@@ -1,3 +1,24 @@
+use crate::model::{
+    DAYS_PER_WEEK as WEEKDAY_COUNT, GRID_CELL_COUNT as DAY_CELL_COUNT,
+    GRID_WEEK_COUNT as VISIBLE_WEEK_COUNT,
+};
+use crate::navigation::{CANDIDATE_COLUMN_COUNT, CANDIDATE_COUNT, CANDIDATE_ROW_COUNT};
+const ROOT_WIDTH: f32 = 304.0;
+const ROOT_HEIGHT: f32 = 352.0;
+const ROOT_PADDING: f32 = 10.0;
+const ROOT_BORDER_WIDTH: f32 = 1.0;
+const ROOT_CORNER_RADIUS: f32 = 8.0;
+const NAVIGATION_HEIGHT: f32 = 36.0;
+const NAVIGATION_BUTTON_WIDTH: f32 = 32.0;
+const PANEL_HEIGHT: f32 = 268.0;
+const WEEKDAY_HEADER_HEIGHT: f32 = 28.0;
+const DAY_GRID_HEIGHT: f32 = 240.0;
+const CLEAR_ROW_HEIGHT: f32 = 26.0;
+const TODAY_RASTER_SIZE: u32 = 152;
+const TODAY_DISPLAY_SCALE: f32 = 0.25;
+const CELL_CORNER_RADIUS: f32 = 6.0;
+const CELL_FONT_SIZE: f32 = 14.0;
+
 use crate::{
     DatePickerError, DatePickerFailure, WidgetryDatePicker, WidgetryDatePickerNavigation as Nav,
     colors::ColorState,
@@ -75,13 +96,13 @@ enum Panel {
 struct TodayRing(usize);
 
 pub(crate) fn scene() -> impl Scene {
-    let weekdays: Vec<_> = (0..7)
+    let weekdays: Vec<_> = (0..WEEKDAY_COUNT)
         .map(|index| cell(Part::Weekday(index), format!("DatePickerWeekday{index}")))
         .collect();
-    let days: Vec<_> = (0..42)
+    let days: Vec<_> = (0..DAY_CELL_COUNT)
         .map(|index| cell(Part::Day(index), format!("DatePickerDay{index}")))
         .collect();
-    let candidates: Vec<_> = (0..12)
+    let candidates: Vec<_> = (0..CANDIDATE_COUNT)
         .map(|index| {
             cell(
                 Part::Candidate(index),
@@ -91,22 +112,22 @@ pub(crate) fn scene() -> impl Scene {
         .collect();
     bsn! {
         @Nav
-        Node { width: px(304), height: px(352), padding: UiRect::all(px(10)), flex_direction: FlexDirection::Column, flex_shrink: 0.0, border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(8)) }
+        Node { width: px(ROOT_WIDTH), height: px(ROOT_HEIGHT), padding: UiRect::all(px(ROOT_PADDING)), flex_direction: FlexDirection::Column, flex_shrink: 0.0, border: UiRect::all(px(ROOT_BORDER_WIDTH)), border_radius: BorderRadius::all(px(ROOT_CORNER_RADIUS)) }
         BackgroundColor BorderColor
         Children [
-            Node { height: px(36), flex_shrink: 0.0, justify_content: JustifyContent::SpaceBetween } Children [
-                @cell(Part::Previous, "DatePickerPrevious".into()) Node {width: px(32)}--
+            Node { height: px(NAVIGATION_HEIGHT), flex_shrink: 0.0, justify_content: JustifyContent::SpaceBetween } Children [
+                @cell(Part::Previous, "DatePickerPrevious".into()) Node {width: px(NAVIGATION_BUTTON_WIDTH)}--
                 @cell(Part::Title, "DatePickerTitle".into()) Node {flex_grow: 1.0}--
-                @cell(Part::Next, "DatePickerNext".into()) Node {width: px(32)}
+                @cell(Part::Next, "DatePickerNext".into()) Node {width: px(NAVIGATION_BUTTON_WIDTH)}
             ]--
             template(|_| Ok(Panel::Days)) Name("DatePickerDays")
-            Node {height: px(268), flex_direction: FlexDirection::Column, flex_shrink: 0.0} Children [
-                Node {height: px(28), display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::flex(7, 1.0)]}, flex_shrink: 0.0} Children [{weekdays}]--
-                Node {height: px(240), display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::flex(7, 1.0)]}, grid_template_rows: {vec![RepeatedGridTrack::flex(6, 1.0)]}, flex_shrink: 0.0} Children [{days}]
+            Node {height: px(PANEL_HEIGHT), flex_direction: FlexDirection::Column, flex_shrink: 0.0} Children [
+                Node {height: px(WEEKDAY_HEADER_HEIGHT), display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::flex(WEEKDAY_COUNT as u16, 1.0)]}, flex_shrink: 0.0} Children [{weekdays}]--
+                Node {height: px(DAY_GRID_HEIGHT), display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::flex(WEEKDAY_COUNT as u16, 1.0)]}, grid_template_rows: {vec![RepeatedGridTrack::flex(VISIBLE_WEEK_COUNT as u16, 1.0)]}, flex_shrink: 0.0} Children [{days}]
             ]--
             template(|_| Ok(Panel::Candidates)) Name("DatePickerCandidates")
-            Node {height: px(268), display: Display::None, grid_template_columns: {vec![RepeatedGridTrack::flex(3, 1.0)]}, grid_template_rows: {vec![RepeatedGridTrack::flex(4, 1.0)]}, flex_shrink: 0.0} Children [{candidates}]--
-            @cell(Part::Clear, "DatePickerClear".into()) Node {height: px(26), flex_shrink: 0.0}
+            Node {height: px(PANEL_HEIGHT), display: Display::None, grid_template_columns: {vec![RepeatedGridTrack::flex(CANDIDATE_COLUMN_COUNT as u16, 1.0)]}, grid_template_rows: {vec![RepeatedGridTrack::flex(CANDIDATE_ROW_COUNT as u16, 1.0)]}, flex_shrink: 0.0} Children [{candidates}]--
+            @cell(Part::Clear, "DatePickerClear".into()) Node {height: px(CLEAR_ROW_HEIGHT), flex_shrink: 0.0}
         ]
     }
 }
@@ -118,25 +139,25 @@ fn cell(part: Part, name: String) -> impl Scene {
             template(move |_| Ok(TodayRing(index))) Name({format!("DatePickerToday{index}")})
             @bevy_widgetry_core::icon::WidgetryIcon {
                 @path: {bevy_widgetry_asset::BuiltinIcon::DatePickerToday.path()},
-                @max_size: {Some(UVec2::splat(152))},
+                @max_size: {Some(UVec2::splat(TODAY_RASTER_SIZE))},
                 @colors: {bevy_widgetry_core::icon::WidgetryIconColorOverrides {
                     normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides {foreground: Some(Color::WHITE)},
                     disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides {foreground: Some(Color::WHITE)},
                 }},
             }
             Node {position_type: PositionType::Absolute}
-            UiTransform {scale: Vec2::splat(0.25)}
+            UiTransform {scale: Vec2::splat(TODAY_DISPLAY_SCALE)}
             Pickable::IGNORE Visibility::Hidden ZIndex(1)
         }),
         _ => None,
     };
     bsn! {
         template(move |_| Ok(part)) Name(name)
-        Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center, min_width: px(0), border_radius: BorderRadius::all(px(6)) }
+        Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center, min_width: px(0), border_radius: BorderRadius::all(px(CELL_CORNER_RADIUS)) }
         BackgroundColor
         Hovered(false) WidgetryPointerPressed
         @{(!matches!(part, Part::Weekday(_))).then_some(bsn! { bevy::ui_widgets::Button bevy::input_focus::tab_navigation::TabIndex(-1) })}
-        Children [Text("") TextFont {font_size: px(14)} Pickable::IGNORE-- {today}]
+        Children [Text("") TextFont {font_size: px(CELL_FONT_SIZE)} Pickable::IGNORE-- {today}]
     }
 }
 
@@ -377,7 +398,11 @@ fn apply(world: &mut World, root: Entity) -> Result<(), DatePickerFailure> {
                     },
                     View::Months(year) => language.year(year),
                     View::Years(start) => {
-                        format!("{} – {}", language.year(start), language.year(start + 11))
+                        format!(
+                            "{} – {}",
+                            language.year(start),
+                            language.year(start + (CANDIDATE_COUNT as i32 - 1))
+                        )
                     }
                 },
                 !matches!(view, View::Years(_)),
@@ -417,7 +442,9 @@ fn apply(world: &mut World, root: Entity) -> Result<(), DatePickerFailure> {
                 View::Days => (String::new(), false, false, false),
             },
             Part::Weekday(index) => (
-                language.weekday((week_start + index) % 7).into(),
+                language
+                    .weekday((week_start + index) % WEEKDAY_COUNT)
+                    .into(),
                 false,
                 false,
                 true,
@@ -473,7 +500,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), DatePickerFailure> {
         }
         world.entity_mut(text_entity).insert(TextColor(foreground));
     }
-    if day_count != 42 {
+    if day_count != DAY_CELL_COUNT {
         return Err(failure(
             DatePickerError::DayCount {
                 root,

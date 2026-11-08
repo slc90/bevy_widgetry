@@ -269,7 +269,7 @@ impl WidgetryTriStateCheckbox {
             template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             @WidgetryTriStateCheckboxHeadless
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6), min_height: px(24) }
+            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(crate::checkbox::LABEL_GAP), min_height: px(crate::checkbox::ROW_MIN_HEIGHT) }
             BackgroundColor
             BorderColor
             template(|_| Ok(ResolvedForeground::default()))

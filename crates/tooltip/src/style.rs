@@ -1,3 +1,10 @@
+const POPUP_GAP: f32 = 6.0;
+const POPUP_WINDOW_MARGIN: f32 = 8.0;
+const POPUP_PADDING_X: f32 = 8.0;
+const POPUP_PADDING_Y: f32 = 6.0;
+const POPUP_BORDER_WIDTH: f32 = 1.0;
+const POPUP_CORNER_RADIUS: f32 = 4.0;
+
 use crate::headless::{ShowTooltip, WidgetryTooltipHeadless, WidgetryTooltipHeadlessPlugin};
 use crate::{TooltipError, TooltipFailure, error::failure};
 use bevy::{
@@ -100,12 +107,12 @@ fn popup_scene(
         template(move |_| Ok(ChildOf(anchor)))
         Popover {
             positions: {vec![
-                PopoverPlacement { side: PopoverSide::Bottom, align: PopoverAlign::Center, gap: 6.0 },
-                PopoverPlacement { side: PopoverSide::Top, align: PopoverAlign::Center, gap: 6.0 },
-                PopoverPlacement { side: PopoverSide::Right, align: PopoverAlign::Center, gap: 6.0 },
-                PopoverPlacement { side: PopoverSide::Left, align: PopoverAlign::Center, gap: 6.0 },
+                PopoverPlacement { side: PopoverSide::Bottom, align: PopoverAlign::Center, gap: POPUP_GAP },
+                PopoverPlacement { side: PopoverSide::Top, align: PopoverAlign::Center, gap: POPUP_GAP },
+                PopoverPlacement { side: PopoverSide::Right, align: PopoverAlign::Center, gap: POPUP_GAP },
+                PopoverPlacement { side: PopoverSide::Left, align: PopoverAlign::Center, gap: POPUP_GAP },
             ]},
-            window_margin: 8.0,
+            window_margin: POPUP_WINDOW_MARGIN,
         }
         OverrideClip
         GlobalZIndex({z_index::TOOLTIP})
@@ -115,9 +122,9 @@ fn popup_scene(
         template(move |_| Ok(ResolvedForeground(colors.foreground)))
         Node {
             position_type: PositionType::Absolute,
-            padding: UiRect::axes(px(8), px(6)),
-            border: UiRect::all(px(1)),
-            border_radius: BorderRadius::all(px(4)),
+            padding: UiRect::axes(px(POPUP_PADDING_X), px(POPUP_PADDING_Y)),
+            border: UiRect::all(px(POPUP_BORDER_WIDTH)),
+            border_radius: BorderRadius::all(px(POPUP_CORNER_RADIUS)),
         }
         Children [{content}]
     }

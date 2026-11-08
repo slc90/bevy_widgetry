@@ -1,3 +1,11 @@
+const SORT_NAME_ASCENDING: u8 = 0;
+const SORT_NAME_DESCENDING: u8 = 1;
+const SORT_SIZE_ASCENDING: u8 = 2;
+const SORT_MODIFIED_DESCENDING: u8 = 3;
+
+const MAX_PATH_UNITS: usize = 32768;
+const FORMAT_VERSION: u32 = 1;
+
 use crate::error::native_preference_io;
 use crate::{FileDialogPreferenceFault as Fault, FileDialogPreferenceOperation as Phase};
 use crate::{
@@ -68,7 +76,7 @@ fn at(phase: Phase, scope: Option<&str>, error: io::Error) -> io::Error {
 }
 
 fn encode(path: &Path) -> io::Result<EncodedPath> {
-    if !path.is_absolute() || path.as_os_str().len() > 32768 {
+    if !path.is_absolute() || path.as_os_str().len() > MAX_PATH_UNITS {
         return Err(invalid(Fault::Path {
             path: path.to_owned(),
             issue: "relative or oversized",
@@ -86,7 +94,7 @@ fn encode(path: &Path) -> io::Result<EncodedPath> {
 
 fn decode(encoded: EncodedPath) -> io::Result<PathBuf> {
     let EncodedPath::Windows(units) = encoded;
-    if units.len() > 32768 || units.contains(&0) {
+    if units.len() > MAX_PATH_UNITS || units.contains(&0) {
         return Err(invalid(Fault::Path {
             path: PathBuf::from(OsString::from_wide(&units)),
             issue: "oversized or NUL encoded path",
@@ -124,7 +132,7 @@ pub(crate) fn load(path: &Path) -> io::Result<BTreeMap<String, WidgetryFileDialo
     }
     let document: Document = serde_json::from_slice(&bytes)
         .map_err(|error| at(Phase::DecodeJson, None, json_error(error)))?;
-    if document.version != 1 || document.scopes.len() > 256 {
+    if document.version != FORMAT_VERSION || document.scopes.len() > crate::limits::MAX_SCOPES {
         return Err(at(
             Phase::DecodeValues,
             None,
@@ -137,9 +145,9 @@ pub(crate) fn load(path: &Path) -> io::Result<BTreeMap<String, WidgetryFileDialo
     let mut result = BTreeMap::new();
     for (scope, prefs) in document.scopes {
         if scope.is_empty()
-            || scope.len() > 128
-            || prefs.pinned.len() > 1024
-            || prefs.filter.len() > 1024
+            || scope.len() > crate::limits::MAX_SCOPE_LEN
+            || prefs.pinned.len() > crate::limits::MAX_PINNED_LOCATIONS
+            || prefs.filter.len() > crate::limits::MAX_FILTER_ID_LEN
         {
             return Err(at(
                 Phase::DecodeValues,
@@ -153,10 +161,10 @@ pub(crate) fn load(path: &Path) -> io::Result<BTreeMap<String, WidgetryFileDialo
             ));
         }
         let sort = match prefs.sort {
-            0 => WidgetryFileDialogSort::NameAscending,
-            1 => WidgetryFileDialogSort::NameDescending,
-            2 => WidgetryFileDialogSort::SizeAscending,
-            3 => WidgetryFileDialogSort::ModifiedDescending,
+            SORT_NAME_ASCENDING => WidgetryFileDialogSort::NameAscending,
+            SORT_NAME_DESCENDING => WidgetryFileDialogSort::NameDescending,
+            SORT_SIZE_ASCENDING => WidgetryFileDialogSort::SizeAscending,
+            SORT_MODIFIED_DESCENDING => WidgetryFileDialogSort::ModifiedDescending,
             _ => {
                 return Err(at(
                     Phase::DecodeValues,
@@ -209,22 +217,22 @@ pub(crate) fn save(
     path: &Path,
     scopes: &BTreeMap<String, WidgetryFileDialogStorageSnapshot>,
 ) -> io::Result<()> {
-    if scopes.len() > 256 {
+    if scopes.len() > crate::limits::MAX_SCOPES {
         return Err(at(
             Phase::EncodeValues,
             None,
             invalid(Fault::ScopeCapacity {
                 actual: scopes.len(),
-                limit: 256,
+                limit: crate::limits::MAX_SCOPES,
             }),
         ));
     }
     let mut encoded = BTreeMap::new();
     for (scope, prefs) in scopes {
         if scope.is_empty()
-            || scope.len() > 128
-            || prefs.pinned.len() > 1024
-            || prefs.filter.0.len() > 1024
+            || scope.len() > crate::limits::MAX_SCOPE_LEN
+            || prefs.pinned.len() > crate::limits::MAX_PINNED_LOCATIONS
+            || prefs.filter.0.len() > crate::limits::MAX_FILTER_ID_LEN
         {
             return Err(at(
                 Phase::EncodeValues,
@@ -256,10 +264,10 @@ pub(crate) fn save(
                 system: prefs.show_system,
                 filter: prefs.filter.0.clone(),
                 sort: match prefs.sort {
-                    WidgetryFileDialogSort::NameAscending => 0,
-                    WidgetryFileDialogSort::NameDescending => 1,
-                    WidgetryFileDialogSort::SizeAscending => 2,
-                    WidgetryFileDialogSort::ModifiedDescending => 3,
+                    WidgetryFileDialogSort::NameAscending => SORT_NAME_ASCENDING,
+                    WidgetryFileDialogSort::NameDescending => SORT_NAME_DESCENDING,
+                    WidgetryFileDialogSort::SizeAscending => SORT_SIZE_ASCENDING,
+                    WidgetryFileDialogSort::ModifiedDescending => SORT_MODIFIED_DESCENDING,
                 },
                 pinned: prefs
                     .pinned
@@ -271,7 +279,7 @@ pub(crate) fn save(
         );
     }
     let bytes = serde_json::to_vec(&Document {
-        version: 1,
+        version: FORMAT_VERSION,
         scopes: encoded,
     })
     .map_err(|error| at(Phase::EncodeJson, None, json_error(error)))?;

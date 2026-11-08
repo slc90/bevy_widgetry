@@ -1,3 +1,33 @@
+const NUMBER_MULTIPLIER: u32 = 17;
+const NUMBER_OFFSET: u32 = 3;
+const NUMBER_FILTER_DIVISOR: u32 = 3;
+const PROGRESS_FILTER_MINIMUM: f32 = 0.5;
+const BUTTON_ROW_PERIOD: u32 = 5;
+const PROGRESS_SAMPLE_COUNT: u32 = 11;
+const PROGRESS_SAMPLE_STEPS: f32 = 10.0;
+const PROGRESS_UPDATE_STEP: f32 = 0.15;
+
+const CELL_VIEW_HEIGHT: f32 = 160.0;
+const OVERVIEW_HEIGHT: f32 = 440.0;
+const CUSTOM_CELL_PADDING: f32 = 4.0;
+const CUSTOM_CELL_BORDER_WIDTH: f32 = 2.0;
+const COMPACT_VIEW_HEIGHT: f32 = 240.0;
+const EXPANDED_VIEW_HEIGHT: f32 = 720.0;
+const BAR_WIDTH: f32 = 90.0;
+const BAR_HEIGHT: f32 = 10.0;
+const BOOLEAN_ICON_SIZE: f32 = 18.0;
+const HEADER_ICON_SIZE: f32 = 16.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 12.0;
+const GROUP_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 16.0;
+const LABEL_FONT_SIZE: f32 = 13.0;
+const CONTENT_FONT_SIZE: f32 = 14.0;
+const SUBHEADING_FONT_SIZE: f32 = 16.0;
+const TITLE_FONT_SIZE: f32 = 28.0;
+
 use crate::assets::GalleryIcon;
 mod copy;
 mod editing;
@@ -38,7 +68,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let sources = world.resource::<TableDemoSources>();
     let source = sources.sources[0];
     let layout = sources.layouts[0].clone();
-    let view = move || bsn! { @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()} } Node { width: percent(100), height: px(160) } };
+    let view = move || bsn! { @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()} } Node { width: percent(100), height: px(CELL_VIEW_HEIGHT) } };
     crate::color_showcase::pair(
         TextKey::Navigation(NavigationKey::Table),
         TextKey::Table(TableKey::OnlyCellSelectedBackground0F766EMovePointer),
@@ -243,10 +273,10 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         .collect::<Vec<_>>();
     bsn! {
         template(|_| Ok(TableDemo))
-        Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
+        Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP) }
         Children [
-            @localized(TextKey::Navigation(NavigationKey::Table)) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(28.0) }--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{buttons}]--
+            @localized(TextKey::Navigation(NavigationKey::Table)) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(TITLE_FONT_SIZE) }--
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP), flex_wrap: FlexWrap::Wrap } Children [{buttons}]--
             Node { flex_grow: 1.0, min_height: px(0), min_width: px(0) } Children [{panels}]
         ]
     }
@@ -304,7 +334,7 @@ fn panel(
         template(move |_| Ok(Name::new(format!("TableView{demo:?}"))))
         template(|_| Ok(ProjectionDemo { enabled: false, applied: None }))
         template(|_| Ok(DemoEvents::default())) TabIndex({if demo == Demo::Basic {0} else {-1}})
-        Node { width: percent(100), height: px(440), flex_shrink: 0.0 }
+        Node { width: percent(100), height: px(OVERVIEW_HEIGHT), flex_shrink: 0.0 }
         template(move |context| {
             if demo == Demo::Disabled { context.entity.insert(InteractionDisabled); }
             Ok(DemoTable(demo, 0))
@@ -314,7 +344,7 @@ fn panel(
         template(move |_| Ok(DemoPanel(demo)))
         Node {
             width: percent(100), height: percent(100), flex_direction: FlexDirection::Column,
-            row_gap: px(12), min_width: px(0),
+            row_gap: px(ITEM_GAP), min_width: px(0),
             display: {if demo == Demo::Basic {Display::Flex} else {Display::None}},
         }
         Children [
@@ -323,10 +353,10 @@ fn panel(
             @localized(TextKey::Table(TableKey::EditingDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::FrozenDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::ColumnReorderingDescription)) bevy_widgetry::text::WidgetryText--
-            @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
-            template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(SUBHEADING_FONT_SIZE) }--
+            template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(CONTENT_FONT_SIZE) }--
             {table}--
-            Node {column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap} Children [{controls}]
+            Node {column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP), flex_wrap: FlexWrap::Wrap} Children [{controls}]
             -- @copy::feedback(DemoTable(demo,0))
         ]
     }
@@ -344,7 +374,7 @@ fn shared_panel(
     compact.frozen_columns = 1;
     bsn! {
         template(|_| Ok(DemoPanel(Demo::Shared)))
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12), min_width: px(0), display: Display::None }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), min_width: px(0), display: Display::None }
         Children [
             @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
@@ -352,7 +382,7 @@ fn shared_panel(
             @localized(TextKey::Table(TableKey::ColumnReorderingDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::EditingDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::FrozenDescription)) bevy_widgetry::text::WidgetryText--
-            Node { width: percent(100), column_gap: px(16), align_items: AlignItems::Start } Children [
+            Node { width: percent(100), column_gap: px(CONTENT_GAP), align_items: AlignItems::Start } Children [
                 @shared_view(source, layout, 0, actions)--
                 @shared_view(source, compact, 1, other_actions)
             ]
@@ -410,20 +440,20 @@ fn shared_view(
     .collect::<Vec<_>>();
     let mut style = WidgetryTableStyle::default();
     if side == 1 {
-        style.cell.padding = UiRect::all(px(4));
-        style.cell.border = UiRect::all(px(2));
+        style.cell.padding = UiRect::all(px(CUSTOM_CELL_PADDING));
+        style.cell.border = UiRect::all(px(CUSTOM_CELL_BORDER_WIDTH));
     }
     bsn! {
-        Node { flex_basis: percent(50), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { flex_basis: percent(50), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
         Children [
             @localized(if side == 0 {TextKey::Table(TableKey::TableSharedA)} else {TextKey::Table(TableKey::TableSharedB)}) bevy_widgetry::text::WidgetryText--
-            template(move |_| Ok(DemoStatus { source, view })) Name({format!("TableStatus{name}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }--
+            template(move |_| Ok(DemoStatus { source, view })) Name({format!("TableStatus{name}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }--
             @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()}, @header_actions: {actions.clone()}, @editing: {WidgetryTableEditing::new(|_,_,_| true)} }
             template(move |_| Ok(view)) template(|_| Ok(DemoEvents::default()))
             Name({format!("TableView{name}")}) TabIndex(-1)
                 template(move |_| Ok(ProjectionDemo { enabled: side == 1, applied: None }))
-            Node { width: percent(100), height: px(240), flex_shrink: 0.0 }--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{controls}]
+            Node { width: percent(100), height: px(COMPACT_VIEW_HEIGHT), flex_shrink: 0.0 }--
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP), flex_wrap: FlexWrap::Wrap } Children [{controls}]
             -- @copy::feedback(view)
         ]
     }
@@ -630,7 +660,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                         row.label = TableLabel::Updated(row.edits);
                         row.number += 1;
                         row.enabled = !row.enabled;
-                        row.progress = (row.progress + 0.15) % 1.0;
+                        row.progress = (row.progress + PROGRESS_UPDATE_STEP) % 1.0;
                         info!(?root, edits = row.edits, "更新 Table 首行内容");
                     }
                 } else {
@@ -676,7 +706,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                                     notes: "Notes".to_owned(),
                                     index,
                                     label: TableLabel::Item(index),
-                                    number: index * 17 + 3,
+                                    number: index * NUMBER_MULTIPLIER + NUMBER_OFFSET,
                                     enabled: true,
                                     progress: 0.5,
                                     edits: 0,
@@ -705,7 +735,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     )
                 })?;
                 node.width = if node.width == percent(100) {
-                    px(720)
+                    px(EXPANDED_VIEW_HEIGHT)
                 } else {
                     percent(100)
                 };
@@ -805,15 +835,15 @@ fn project(
                     return false;
                 };
                 if let Some(value) = value.downcast_ref::<u32>() {
-                    value % 3 == 0
+                    value % NUMBER_FILTER_DIVISOR == 0
                 } else if let Some(value) = value.downcast_ref::<bool>() {
                     *value
                 } else if let Some(value) = value.downcast_ref::<ProgressValue>() {
-                    value.0 >= 0.5
+                    value.0 >= PROGRESS_FILTER_MINIMUM
                 } else if value.downcast_ref::<TableLabel>().is_some() {
                     row.index % 2 == 0
                 } else {
-                    row.index % 5 == 0
+                    row.index % BUTTON_ROW_PERIOD == 0
                 }
             })
         })
@@ -1282,9 +1312,9 @@ fn make_model(index: usize) -> Result<WidgetryTableModel<DemoRow>, BevyError> {
                 },
                 index: row,
                 label: TableLabel::Item(row),
-                number: row * 17 + 3,
+                number: row * NUMBER_MULTIPLIER + NUMBER_OFFSET,
                 enabled: row % 2 == 0,
-                progress: (row % 11) as f32 / 10.0,
+                progress: (row % PROGRESS_SAMPLE_COUNT) as f32 / PROGRESS_SAMPLE_STEPS,
                 edits: 0,
             })
             .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
@@ -1413,8 +1443,8 @@ impl Plugin for TableDemoPlugin {
             })).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &ProgressValue| {
                 let progress_percent = (value.0 * 100.0).clamp(0.0, 100.0);
-                bsn_list!{Node {width: percent(100), align_items: AlignItems::Center, column_gap: px(8)} Children [
-                    Node {width: px(90), height: px(10), overflow: Overflow::clip()} BackgroundColor(Color::srgb(0.24, 0.27, 0.32)) Children [
+                bsn_list!{Node {width: percent(100), align_items: AlignItems::Center, column_gap: px(CONTROL_GAP)} Children [
+                    Node {width: px(BAR_WIDTH), height: px(BAR_HEIGHT), overflow: Overflow::clip()} BackgroundColor(Color::srgb(0.24, 0.27, 0.32)) Children [
                         Node {width: percent(progress_percent), height: percent(100)} BackgroundColor(Color::srgb(0.22, 0.62, 0.90))
                     ]--
                     Text({format!("{progress_percent:.0}%")}) bevy_widgetry::text::WidgetryText
@@ -1422,14 +1452,14 @@ impl Plugin for TableDemoPlugin {
             })).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|_: &StarValue| bsn_list!{
                 @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(18, 18))} }
-                Node {width: px(18), height: px(18)}
+                Node {width: px(BOOLEAN_ICON_SIZE), height: px(BOOLEAN_ICON_SIZE)}
             })).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
                 |value: &String| bsn_list!{Text({ value.clone() }) bevy_widgetry::text::WidgetryText},
             )).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &CustomHeader| bsn_list!{
-                Node {align_items: AlignItems::Center, column_gap: px(8)} Children [
-                    @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(16, 16))} } Node {width: px(16), height: px(16)}--
+                Node {align_items: AlignItems::Center, column_gap: px(CONTROL_GAP)} Children [
+                    @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::splat(HEADER_ICON_SIZE as u32))} } Node {width: px(HEADER_ICON_SIZE), height: px(HEADER_ICON_SIZE)}--
                     @{value.0.scene()} bevy_widgetry::text::WidgetryText
                 ]
             })).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;

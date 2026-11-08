@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros)]
 
-use std::{sync::mpsc, time::Duration};
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+use std::sync::mpsc;
 
 use bevy::tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool, block_on};
 use bevy_widgetry_job::*;
@@ -78,7 +80,7 @@ fn running_is_registered_before_work_and_cannot_be_removed() {
             Ok(())
         })
         .unwrap();
-    started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    started_rx.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     assert_eq!(
         std::thread::spawn(move || query.status(id).unwrap().state)
             .join()
@@ -146,7 +148,7 @@ fn receiver_retains_unread_failure_after_record_removal() {
             Err(std::io::Error::other("read failed").into())
         })
         .unwrap();
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
     while !manager.status(id).unwrap().state.is_finished() {
         assert!(std::time::Instant::now() < deadline);
         std::thread::yield_now();

@@ -1,3 +1,6 @@
+const PAINT_DEPTH_RANGE: f32 = 100.0;
+pub(super) const STROKE_DEPTH_OFFSET: f32 = 0.01;
+
 use crate::error::CanvasFailureState;
 use crate::error::CanvasResult as RawResult;
 use crate::view::ViewState;
@@ -343,7 +346,7 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
             .proxies
             .remove(&shape);
     }
-    let spacing = 100.0 / shapes.len().max(1) as f32;
+    let spacing = PAINT_DEPTH_RANGE / shapes.len().max(1) as f32;
     observe(world, root, Stage::Geometry, Ok(()))?;
     let active = shapes
         .iter()
@@ -523,7 +526,7 @@ fn create_proxy(
                 template(move |_| Ok(Mesh2d(stroke.clone())))
                 template(move |_| Ok(MeshMaterial2d(stroke_material.clone())))
                 template(move |_| Ok(RenderLayers::none().with(layer)))
-                Pickable::IGNORE Transform::from_xyz(0.0, 0.0, 0.01) Visibility::default()
+                Pickable::IGNORE Transform::from_xyz(0.0, 0.0, STROKE_DEPTH_OFFSET) Visibility::default()
             ]
         },
     );

@@ -1,3 +1,10 @@
+const VERTICAL_BAR_WIDTH: f32 = 180.0;
+const HEADER_HEIGHT: f32 = 40.0;
+const HEADER_PADDING_X: f32 = 12.0;
+pub(crate) const HEADER_PADDING_Y: f32 = 6.0;
+const HEADER_BORDER_WIDTH: f32 = 1.0;
+pub(crate) const ELLIPSIS_WIDTH: f32 = 34.0;
+
 use crate::{TabsError, error::failure};
 use bevy::prelude::*;
 use bevy_widgetry_diagnostics::ErrorFrame;
@@ -84,11 +91,11 @@ impl WidgetryTabs {
                     @children: {props.children},
                 } Node {
                     flex_shrink: 0.0, min_width: px(0), min_height: px(0),
-                    width: {if horizontal { Val::Auto } else { px(180) }},
+                    width: {if horizontal { Val::Auto } else { px(VERTICAL_BAR_WIDTH) }},
                     height: {if horizontal {Val::Auto} else {percent(100)}},
                 } BackgroundColor
                 --
-                #Pages Node { min_width: px(0), min_height: px(0), flex_grow: 1.0, border: UiRect::all(px(1)) }
+                #Pages Node { min_width: px(0), min_height: px(0), flex_grow: 1.0, border: UiRect::all(px(HEADER_BORDER_WIDTH)) }
                 BackgroundColor BorderColor
             ]
         }
@@ -114,9 +121,9 @@ impl WidgetryTab {
             template(|_| Ok(bevy_widgetry_core::foreground::ResolvedForeground::default()))
             BackgroundColor BorderColor ZIndex(1)
             Node {
-                flex_shrink: 0.0, min_width: px(0), height: px(40),
-                padding: UiRect::axes(px(12), px(6)), border: UiRect::all(px(1)),
-                margin: UiRect { left: px(0), top: px(0), right: px(-1), bottom: px(-1) },
+                flex_shrink: 0.0, min_width: px(0), height: px(HEADER_HEIGHT),
+                padding: UiRect::axes(px(HEADER_PADDING_X), px(HEADER_PADDING_Y)), border: UiRect::all(px(HEADER_BORDER_WIDTH)),
+                margin: UiRect { left: px(0), top: px(0), right: px(-HEADER_BORDER_WIDTH), bottom: px(-HEADER_BORDER_WIDTH) },
                 align_items: AlignItems::Center, overflow: Overflow::clip(),
             }
             @{props.header}
@@ -126,7 +133,7 @@ impl WidgetryTab {
                 -- #TabEllipsis Text("…") bevy_widgetry_core::text::WidgetryText
                 Pickable::IGNORE ZIndex(2)
                 template(|_| Ok(bevy_widgetry_core::foreground::ResolvedForeground::default()))
-                Node { display: Display::None, position_type: PositionType::Absolute, right: px(0), top: px(6), bottom: px(6), width: px(34), overflow: Overflow::clip() }
+                Node { display: Display::None, position_type: PositionType::Absolute, right: px(0), top: px(HEADER_PADDING_Y), bottom: px(HEADER_PADDING_Y), width: px(ELLIPSIS_WIDTH), overflow: Overflow::clip() }
             ]
         }
     }

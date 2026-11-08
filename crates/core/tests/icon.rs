@@ -1,5 +1,11 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
+const RGBA_CHANNELS: usize = 4;
+const RGBA_CHANNEL_COUNT: u32 = 4;
+const ALPHA_CHANNEL: usize = 3;
+
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(2);
+
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, UiSystems};
@@ -298,7 +304,7 @@ fn runtime_mutations_survive_scene_initialization() {
         .id();
     advance_until(
         &mut app,
-        Duration::from_secs(2),
+        ASYNC_WAIT_TIMEOUT,
         &format!("Icon {entity:?} 初始 image child"),
         |world| world.get::<Children>(entity).is_some(),
     )
@@ -348,7 +354,7 @@ fn runtime_mutations_survive_scene_initialization() {
         .unwrap();
     advance_until(
         &mut app,
-        Duration::from_secs(2),
+        ASYNC_WAIT_TIMEOUT,
         &format!("Icon {entity:?} SVG 替换"),
         |world| world.get::<ImageNode>(child).unwrap().image != initial_image,
     )
@@ -389,7 +395,7 @@ fn asynchronous_icons_request_redraw_until_ready() {
     let mut previous = None;
     for path in [BuiltinIcon::WindowClose, BuiltinIcon::WindowRestore] {
         WidgetryIcon::set_svg_in_world(app.world_mut(), icon, path.path()).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(2);
+        let deadline = Instant::now() + ASYNC_WAIT_TIMEOUT;
         loop {
             app.world_mut()
                 .resource_mut::<Messages<RequestRedraw>>()
@@ -459,17 +465,17 @@ fn assert_image_ready(app: &App, icon: Entity) -> Entity {
             .as_ref()
             .expect("Icon 的真实 image child 应完成渲染准备")
             .len(),
-        (image.width() * image.height() * 4) as usize
+        (image.width() * image.height() * RGBA_CHANNEL_COUNT) as usize
     );
     assert!(
         image
             .data
             .as_ref()
             .expect("Icon 的真实 image child 应完成渲染准备")
-            .as_chunks::<4>()
+            .as_chunks::<RGBA_CHANNELS>()
             .0
             .iter()
-            .any(|pixel| pixel[3] > 0)
+            .any(|pixel| pixel[ALPHA_CHANNEL] > 0)
     );
     assert!(
         app.world()
@@ -505,7 +511,7 @@ fn assert_image_ready(app: &App, icon: Entity) -> Entity {
 fn wait_for_image(app: &mut App, icon: Entity) {
     advance_until(
         app,
-        Duration::from_secs(2),
+        ASYNC_WAIT_TIMEOUT,
         &format!("Icon {icon:?} image child"),
         |world| world.get::<Children>(icon).is_some(),
     )

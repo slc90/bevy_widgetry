@@ -105,7 +105,8 @@ fn validate(f: &mut Fixture) -> Result<u32> {
 
 fn main() -> Result {
     let mut harness = Harness::new("combo-box-search-criterion")?;
-    for count in [1000, 10_000] {
+    let item_counts = [1000, 10_000];
+    for count in item_counts {
         run(
             &mut harness,
             &format!("search/n{count}/query"),

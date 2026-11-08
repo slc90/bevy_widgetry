@@ -1,3 +1,13 @@
+const ACTION_MIN_WIDTH: f32 = 84.0;
+const ACTION_HEIGHT: f32 = 36.0;
+const NATIVE_WINDOW_SIZE: (u32, u32) = (460, 260);
+const TITLE_LEFT_PADDING: f32 = 12.0;
+const BODY_PADDING: f32 = 24.0;
+const BODY_GAP: f32 = 20.0;
+const CONTENT_GAP: f32 = 12.0;
+const ACTIONS_COLUMN_GAP: f32 = 12.0;
+const ACTIONS_ROW_GAP: f32 = 8.0;
+
 use crate::lifecycle::{MessageBoxState, forward_activation, handle_message_box_click};
 use bevy::prelude::*;
 use bevy_widgetry_button::WidgetryButton;
@@ -78,7 +88,7 @@ fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
         bevy::input_focus::tab_navigation::TabIndex::default()
         template(move |_| Ok(MessageBoxAction(result)))
         on(forward_activation)
-        Node { min_width: px(84), height: px(36), justify_content: JustifyContent::Center, align_items: AlignItems::Center }
+        Node { min_width: px(ACTION_MIN_WIDTH), height: px(ACTION_HEIGHT), justify_content: JustifyContent::Center, align_items: AlignItems::Center }
 
     }
 }
@@ -104,7 +114,7 @@ impl MessageBoxScene {
         } = props;
         let native = Window {
             title: title.clone(),
-            resolution: (460, 260).into(),
+            resolution: NATIVE_WINDOW_SIZE.into(),
             resizable: false,
             ..default()
         };
@@ -135,20 +145,20 @@ impl MessageBoxScene {
             on(handle_message_box_click)
             template(|context| Ok(ResolvedForeground(context.resource::<WidgetryTheme>().message_box.body.normal.foreground)))
             @owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme, Default::default(),
-                bsn_list!{Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
+                bsn_list!{Node { padding: UiRect::left(px(TITLE_LEFT_PADDING)), align_items: AlignItems::Center }
                     template(|_| Ok(Pickable::IGNORE))
                     Children [bevy_widgetry_window::WidgetryWindowTitle bevy_widgetry_core::text::WidgetryText template(|_| Ok(Pickable::IGNORE))]},
                 bsn_list!{
                     MessageBoxBody
                     ResolvedForeground
                     BackgroundColor
-                    Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), padding: UiRect::all(px(24)), row_gap: px(20) }
+                    Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), padding: UiRect::all(px(BODY_PADDING)), row_gap: px(BODY_GAP) }
                     Children [
                         @bevy_widgetry_scroll_area::WidgetryScrollArea { @children: {Some(Box::new(bsn_list! {
-                            Node {width:percent(100),max_width:percent(100),flex_shrink:0.0,flex_direction:FlexDirection::Column,row_gap:px(12)} Children [{content}]
+                            Node {width:percent(100),max_width:percent(100),flex_shrink:0.0,flex_direction:FlexDirection::Column,row_gap:px(CONTENT_GAP)} Children [{content}]
                         }) as Box<dyn SceneList>)} }
                         Node { width:percent(100),flex_grow:1.0,min_width:px(0),min_height:px(0) }--
-                        Node { justify_content: JustifyContent::Center, column_gap: px(12),row_gap:px(8),flex_wrap:FlexWrap::Wrap, flex_shrink: 0.0 } Children [{actions}]
+                        Node { justify_content: JustifyContent::Center, column_gap: px(ACTIONS_COLUMN_GAP),row_gap:px(ACTIONS_ROW_GAP),flex_wrap:FlexWrap::Wrap, flex_shrink: 0.0 } Children [{actions}]
                     ]
                 })
         }

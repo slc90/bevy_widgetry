@@ -1,3 +1,16 @@
+const DISABLED_TARGET_WIDTH: f32 = 300.0;
+const ACTION_WIDTH: f32 = 140.0;
+const ACTION_HEIGHT: f32 = 36.0;
+const TARGET_MIN_WIDTH: f32 = 160.0;
+const TARGET_HEIGHT: f32 = 88.0;
+const TARGET_BORDER_WIDTH: f32 = 1.0;
+const PREVIEW_SIZE: f32 = 80.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 12.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 12.0;
+
 use crate::assets::{GalleryCursorAnimation, GalleryCursorImage};
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::CursorKey;
@@ -99,10 +112,10 @@ fn release_previews(world: &mut World) {
 fn scene(kamuri: WidgetryCursorTheme) -> impl Scene {
     bsn! {
         #CursorDemo
-        Node { flex_direction: FlexDirection::Column, row_gap: px(12) }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
         Children [
             @localized(TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation)) WidgetryText--
-            Node { column_gap: px(12) }
+            Node { column_gap: px(CONTENT_GAP) }
             Children [@theme_button(WidgetryCursorTheme::system(), "System")-- @theme_button(kamuri.clone(), "Kamuri")]--
             @static_pointer_button()--
             @localized_binding(LocalizedText::with_args(TextKey::Cursor(CursorKey::CursorTheme), vec![("theme", String::new())]))
@@ -110,20 +123,20 @@ fn scene(kamuri: WidgetryCursorTheme) -> impl Scene {
             @localized(TextKey::Cursor(CursorKey::AnimationLoops)) WidgetryText--
             @localized(TextKey::Cursor(CursorKey::StationaryMouse)) WidgetryText--
             @localized(TextKey::Cursor(CursorKey::AnimationCoverage)) WidgetryText--
-            Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
+            Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(DETAIL_GAP), column_gap: px(CONTENT_GAP) }
             Children [{system_targets()}]--
             @localized(TextKey::Cursor(CursorKey::WidgetryExtendedSemanticsKamuriSystemComparison)) WidgetryText--
             @localized(TextKey::Cursor(CursorKey::ReadOnlySemantic)) WidgetryText--
-            Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
+            Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(DETAIL_GAP), column_gap: px(CONTENT_GAP) }
             Children [{hint_targets()}]--
             @localized(TextKey::Cursor(CursorKey::DisabledOverridesHints)) WidgetryText--
-            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(12), row_gap: px(8), align_items: AlignItems::Start }
+            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(CONTENT_GAP), row_gap: px(DETAIL_GAP), align_items: AlignItems::Start }
             Children [
                 #CursorDisabledPointer @target("Pointer / Disabled", Some(SystemCursorIcon::Pointer), None, 33)
-                Node { width: px(300), flex_shrink: 0.0 } InteractionDisabled--
+                Node { width: px(DISABLED_TARGET_WIDTH), flex_shrink: 0.0 } InteractionDisabled--
                 Node InteractionDisabled Children [
                     @target("ReadOnly / Disabled", None, Some(WidgetryCursorHint::ReadOnly), 33)
-                    Node { width: px(300), flex_shrink: 0.0 }
+                    Node { width: px(DISABLED_TARGET_WIDTH), flex_shrink: 0.0 }
                 ]
             ]
         ]
@@ -136,7 +149,7 @@ fn theme_button(theme: WidgetryCursorTheme, label: &'static str) -> impl Scene {
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text(label) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(ThemeChoice(theme.clone(),label)))
         on(select_theme)
-        Node { width: px(140), height: px(36), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+        Node { width: px(ACTION_WIDTH), height: px(ACTION_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
 
     }
 }
@@ -155,7 +168,7 @@ fn select_theme(event: On<Activate>, choices: Query<&ThemeChoice>, mut commands:
 
 fn static_pointer_button() -> impl Scene {
     bsn! {
-        Node {column_gap:px(12),align_items:AlignItems::Center,flex_wrap:FlexWrap::Wrap}
+        Node {column_gap:px(CONTENT_GAP),align_items:AlignItems::Center,flex_wrap:FlexWrap::Wrap}
         Children [
             Name::new("CursorStaticPointer")
             @WidgetryButton {@children:{Some(Box::new(bsn_list!{@localized(TextKey::Cursor(CursorKey::StaticPointer)) WidgetryText}) as Box<dyn SceneList>)}}
@@ -214,7 +227,7 @@ fn target(
 ) -> impl Scene {
     bsn! {
         Name({format!("CursorTarget{label}")})
-        Node { min_width: px(160), height: px(88), column_gap: px(8), border: UiRect::all(px(1)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+        Node { min_width: px(TARGET_MIN_WIDTH), height: px(TARGET_HEIGHT), column_gap: px(CONTROL_GAP), border: UiRect::all(px(TARGET_BORDER_WIDTH)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         template(|context| Ok(BorderColor::all(context.resource::<bevy_widgetry::theme::WidgetryTheme>().window.frame.normal.border)))
         @{system.map(|icon| bsn! { EntityCursor::System(icon) })}
         @{hint.map(|hint| bsn! { template(move |_| Ok(hint)) })}
@@ -225,7 +238,7 @@ fn target(
                 let assets = context.resource::<CursorPreviewAssets>();
                 Ok(ImageNode::from_atlas_image(assets.fallback.clone(), TextureAtlas { layout: assets.fallback_layout.clone(), index }))
             })
-            Node { width: px(80), height: px(80), flex_shrink: 0.0 }--
+            Node { width: px(PREVIEW_SIZE), height: px(PREVIEW_SIZE), flex_shrink: 0.0 }--
             Text(label) WidgetryText
         ]
     }

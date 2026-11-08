@@ -136,7 +136,8 @@ fn main() -> Result {
         "content_nodes,shape,operation,text_writes,inherited_writes"
     )
     .map_err(error)?;
-    for count in [100, 1000, 10000] {
+    let entity_counts = [100, 1000, 10000];
+    for count in entity_counts {
         for deep in [false, true] {
             let shape = if deep { "deep" } else { "shallow" };
             for action in ["idle", "disabled", "foreground", "theme"] {

@@ -1,3 +1,6 @@
+const NODE_HIT_RADIUS_SQUARED: f32 = 36.0;
+const NODE_HALF_SIZE: f32 = 4.0;
+
 use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasGeometry, CanvasPathCommand};
 use bevy::{math::DVec2, prelude::*};
@@ -116,7 +119,7 @@ pub(crate) fn hit(world: &World, shape: Entity, point: Vec2, zoom: f32) -> Resul
                 .into_iter()
                 .filter_map(|(h, p)| {
                     let d = point.distance_squared(p) * zoom * zoom;
-                    (d <= 36.0).then_some((h, d))
+                    (d <= NODE_HIT_RADIUS_SQUARED).then_some((h, d))
                 })
                 .min_by(|(_, a), (_, b)| a.total_cmp(b))
                 .map(|(h, _)| h)
@@ -150,7 +153,7 @@ pub(crate) fn mesh(data: &Overlay, zoom: f32) -> Mesh {
         } else {
             [Vec2::NEG_X, Vec2::NEG_Y, Vec2::X, Vec2::Y]
         };
-        polygon(&directions.map(|d| *center + d * (4.0 / zoom)));
+        polygon(&directions.map(|d| *center + d * (NODE_HALF_SIZE / zoom)));
     }
     crate::geometry::mesh(positions, indices)
 }

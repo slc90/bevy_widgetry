@@ -112,7 +112,10 @@ fn reachable(value: f32, endpoint: f32, step: f32) -> bool {
     }
     // Bound rounding allowance by the step so large offsets cannot accept arbitrary values.
     let magnitude = f64::from(value.abs().max(endpoint.abs())).max(distance);
-    let tolerance = (4.0 * f64::from(f32::EPSILON) * magnitude).min(step * 0.001);
+    let rounding_epsilon_factor = 4.0_f64;
+    let max_rounding_error_step_fraction = 0.001_f64;
+    let tolerance = (rounding_epsilon_factor * f64::from(f32::EPSILON) * magnitude)
+        .min(step * max_rounding_error_step_fraction);
     (distance - expected).abs() <= tolerance
 }
 
@@ -196,7 +199,8 @@ mod tests {
         for value in [0.0, 3.0, 6.0, 9.0, 10.0, 7.0, 4.0, 1.0] {
             assert!(state.validate(value).is_ok(), "{value}");
         }
-        assert!(state.validate(4.5).is_err());
+        let unreachable_between_grid_points = 4.5;
+        assert!(state.validate(unreachable_between_grid_points).is_err());
     }
 
     #[test]
@@ -230,14 +234,25 @@ mod tests {
             ..default()
         })
         .unwrap();
-        assert!(state.validate(1_000_004.5).is_err());
+        let unreachable_at_large_offset = 1_000_004.5;
+        assert!(state.validate(unreachable_at_large_offset).is_err());
+        let subnormal_max_bits = 10;
+        let subnormal_step_bits = 3;
+        let reachable_subnormal_bits = 4;
+        let unreachable_subnormal_bits = 5;
         let tiny = WidgetrySliderState::new(&WidgetrySliderHeadlessProps {
-            max: f32::from_bits(10),
-            step: Some(f32::from_bits(3)),
+            max: f32::from_bits(subnormal_max_bits),
+            step: Some(f32::from_bits(subnormal_step_bits)),
             ..default()
         })
         .unwrap();
-        assert!(tiny.validate(f32::from_bits(4)).is_ok());
-        assert!(tiny.validate(f32::from_bits(5)).is_err());
+        assert!(
+            tiny.validate(f32::from_bits(reachable_subnormal_bits))
+                .is_ok()
+        );
+        assert!(
+            tiny.validate(f32::from_bits(unreachable_subnormal_bits))
+                .is_err()
+        );
     }
 }

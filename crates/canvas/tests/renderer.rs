@@ -577,6 +577,8 @@ fn ellipse_views_share_geometry_update_parameters_and_reclaim_only_their_own_ass
 
 #[test]
 fn layout_maps_document_units_to_logical_pixels_with_independent_target() {
+    let comparison_tolerance = 1e-6;
+
     for scale in [1.0, 1.5, 2.0] {
         let (mut app, _, shape, view) = fixture(scale);
         let camera = app
@@ -616,8 +618,8 @@ fn layout_maps_document_units_to_logical_pixels_with_independent_target() {
             .unwrap()
             .computed
             .clip_from_view;
-        assert!((clip.x_axis.x - 2.0 / 300.0).abs() < 1e-6);
-        assert!((clip.y_axis.y - 2.0 / 200.0).abs() < 1e-6);
+        assert!((clip.x_axis.x - 2.0 / 300.0).abs() < comparison_tolerance);
+        assert!((clip.y_axis.y - 2.0 / 200.0).abs() < comparison_tolerance);
         let proxy = named(app.world_mut(), "CanvasShapeProxy");
         let original = *app.world().get::<Transform>(shape).unwrap();
         assert_eq!(*app.world().get::<Transform>(proxy).unwrap(), original);
@@ -637,7 +639,7 @@ fn layout_maps_document_units_to_logical_pixels_with_independent_target() {
             .unwrap()
             .computed
             .clip_from_view;
-        assert!((clip.x_axis.x - 2.0 / 400.0).abs() < 1e-6);
+        assert!((clip.x_axis.x - 2.0 / 400.0).abs() < comparison_tolerance);
         assert_eq!(*app.world().get::<Transform>(shape).unwrap(), original);
         app.world_mut()
             .entity_mut(view)
@@ -654,12 +656,14 @@ fn layout_maps_document_units_to_logical_pixels_with_independent_target() {
             .unwrap()
             .computed
             .clip_from_view;
-        assert!((clip.x_axis.x - 2.0 / logical_width).abs() < 1e-6);
+        assert!((clip.x_axis.x - 2.0 / logical_width).abs() < comparison_tolerance);
     }
 }
 
 #[test]
 fn zoom_changes_projection_without_rebuilding_geometry_across_layout_and_scale_changes() {
+    let comparison_tolerance = 1e-6;
+
     let (mut app, document, shape, view) = fixture(1.0);
     let ui_camera = app
         .world()
@@ -709,8 +713,8 @@ fn zoom_changes_projection_without_rebuilding_geometry_across_layout_and_scale_c
             .unwrap()
             .computed
             .clip_from_view;
-        assert!((clip.x_axis.x - 2.0 * zoom / width).abs() < 1e-6);
-        assert!((clip.y_axis.y - 2.0 * zoom / 200.0).abs() < 1e-6);
+        assert!((clip.x_axis.x - 2.0 * zoom / width).abs() < comparison_tolerance);
+        assert!((clip.y_axis.y - 2.0 * zoom / 200.0).abs() < comparison_tolerance);
         let image = app
             .world()
             .get::<RenderTarget>(camera)
@@ -740,6 +744,9 @@ fn zoom_changes_projection_without_rebuilding_geometry_across_layout_and_scale_c
 
 #[test]
 fn selection_outline_tracks_rotated_geometry_in_each_view_and_owns_only_its_assets() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+    let minimum_alignment = 0.999;
+
     let (mut app, document, shape, view) = fixture(1.0);
     let fill = named(app.world_mut(), "CanvasFill");
     let fill_mesh = positions(app.world(), fill);
@@ -762,17 +769,17 @@ fn selection_outline_tracks_rotated_geometry_in_each_view_and_owns_only_its_asse
         assert!(vertices.len() >= 57);
         for i in 0..8 {
             let square = &vertices[8 + i * 4..12 + i * 4];
-            assert!(((square[1][0] - square[0][0]) * zoom - 8.0).abs() < 0.001);
-            assert!(((square[3][1] - square[0][1]) * zoom - 8.0).abs() < 0.001);
+            assert!(((square[1][0] - square[0][0]) * zoom - 8.0).abs() < COMPARISON_TOLERANCE);
+            assert!(((square[3][1] - square[0][1]) * zoom - 8.0).abs() < COMPARISON_TOLERANCE);
         }
-        assert!(((vertices[45][0] - vertices[44][0]) * zoom - 4.0).abs() < 0.001);
+        assert!(((vertices[45][0] - vertices[44][0]) * zoom - 4.0).abs() < COMPARISON_TOLERANCE);
         let edge = Vec2::from_array([
             vertices[1][0] - vertices[0][0],
             vertices[1][1] - vertices[0][1],
         ])
         .normalize();
         let rotated = (transform.rotation * Vec3::X).truncate();
-        assert!(edge.dot(rotated).abs() > 0.999);
+        assert!(edge.dot(rotated).abs() > minimum_alignment);
         let normal = Vec2::new(-edge.y, edge.x);
         let width = Vec2::new(
             vertices[0][0] - vertices[4][0],
@@ -781,7 +788,7 @@ fn selection_outline_tracks_rotated_geometry_in_each_view_and_owns_only_its_asse
         .dot(normal)
         .abs()
             * zoom;
-        assert!((width - 2.0).abs() < 0.001);
+        assert!((width - 2.0).abs() < COMPARISON_TOLERANCE);
         assert_eq!(
             app.world().get::<Mesh2d>(outline).unwrap().0,
             outline_handle

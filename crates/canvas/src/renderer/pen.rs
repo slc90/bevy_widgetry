@@ -1,3 +1,8 @@
+const HANDLE_HALF_SIZE: f32 = 3.0;
+const HANDLE_COLOR: Color = Color::srgb(1.0, 0.75, 0.1);
+const PREVIEW_DEPTH: f32 = 102.0;
+const HANDLE_DEPTH_OFFSET: f32 = 0.02;
+
 use crate::error::CanvasResult as Result;
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
@@ -36,7 +41,7 @@ fn meshes(data: &crate::pen::Preview, zoom: f32) -> Result<[Mesh; 3]> {
     for p in &data.points {
         let base = positions.len() as u32;
         for d in [Vec2::NEG_X, Vec2::NEG_Y, Vec2::X, Vec2::Y] {
-            positions.push((*p + d * (3.0 / zoom)).extend(0.0).to_array());
+            positions.push((*p + d * (HANDLE_HALF_SIZE / zoom)).extend(0.0).to_array());
         }
         indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
     }
@@ -47,7 +52,7 @@ fn colors(data: &crate::pen::Preview) -> [Color; 3] {
     [
         data.paint.fill.unwrap_or(Color::NONE),
         data.paint.stroke.map_or(Color::NONE, |s| s.color),
-        Color::srgb(1.0, 0.75, 0.1),
+        HANDLE_COLOR,
     ]
 }
 
@@ -134,13 +139,13 @@ pub(super) fn sync(
         world,
         bsn! {
             Parts {fill:#Fill,stroke:#Stroke,handles:#Handles}
-            Name("CanvasPenPreview") template(move |_|Ok(ChildOf(content))) Transform::from_xyz(0.0,0.0,102.0) Visibility::default()
+            Name("CanvasPenPreview") template(move |_|Ok(ChildOf(content))) Transform::from_xyz(0.0,0.0,PREVIEW_DEPTH) Visibility::default()
             Children [
                 #Fill template(move |_|Ok(Mesh2d(fill.clone()))) template(move |_|Ok(MeshMaterial2d(fill_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(fv)) Transform::default() Pickable::IGNORE NoFrustumCulling
             --
-                #Stroke template(move |_|Ok(Mesh2d(stroke.clone()))) template(move |_|Ok(MeshMaterial2d(stroke_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(sv)) Transform::from_xyz(0.0,0.0,0.01) Pickable::IGNORE NoFrustumCulling
+                #Stroke template(move |_|Ok(Mesh2d(stroke.clone()))) template(move |_|Ok(MeshMaterial2d(stroke_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(sv)) Transform::from_xyz(0.0,0.0,super::STROKE_DEPTH_OFFSET) Pickable::IGNORE NoFrustumCulling
             --
-                #Handles template(move |_|Ok(Mesh2d(handles.clone()))) template(move |_|Ok(MeshMaterial2d(handle_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(hv)) Transform::from_xyz(0.0,0.0,0.02) Pickable::IGNORE NoFrustumCulling
+                #Handles template(move |_|Ok(Mesh2d(handles.clone()))) template(move |_|Ok(MeshMaterial2d(handle_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(hv)) Transform::from_xyz(0.0,0.0,HANDLE_DEPTH_OFFSET) Pickable::IGNORE NoFrustumCulling
             ]
         },
     );

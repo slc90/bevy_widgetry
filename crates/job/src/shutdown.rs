@@ -133,6 +133,8 @@ impl ShutdownHandle {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
 
     fn track(data: &mut ShutdownData, status: JobStatus, finished_at: Option<Instant>) {
@@ -322,9 +324,9 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        running.recv_timeout(Duration::from_secs(5)).unwrap();
+        running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let handle = manager.begin_shutdown(Duration::from_millis(10)).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while lock(&handle.shared).status.phase != ShutdownPhase::TimedOut {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();

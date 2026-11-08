@@ -1,3 +1,11 @@
+const HINT_TOP_MARGIN: f32 = 4.0;
+
+const HINT_FONT_SIZE: f32 = 14.0;
+const FIELD_CORNER_RADIUS: f32 = 4.0;
+const FIELD_PADDING_X: f32 = 10.0;
+const FIELD_PADDING_Y: f32 = 6.0;
+const FIELD_BORDER_WIDTH: f32 = 1.0;
+
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::text::EditableText;
@@ -89,19 +97,19 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
         bsn! {
         crate::count::CountDisplay
         Text(label) bevy_widgetry_core::text::WidgetryText
-        TextFont { font_size: FontSize::Px(14.0) }
+        TextFont { font_size: FontSize::Px(HINT_FONT_SIZE) }
         TextLayout { justify: Justify::Right }
         Pickable::IGNORE
-        Node { width: percent(100), flex_shrink: 0.0, margin: UiRect::top(px(4)) }
+        Node { width: percent(100), flex_shrink: 0.0, margin: UiRect::top(px(HINT_TOP_MARGIN)) }
         }
     });
     let hint = props.hint_text.map(|text| {
         bsn! {
             crate::hint::HintDisplay Text(text)
-            TextFont {font_size:FontSize::Px(14.0)}
+            TextFont {font_size:FontSize::Px(HINT_FONT_SIZE)}
         TextLayout {linebreak:bevy::text::LineBreak::WordOrCharacter}
             Pickable::IGNORE
-            Node {width:percent(100),min_width:px(0),flex_shrink:0.0,margin:UiRect::top(px(4))}
+            Node {width:percent(100),min_width:px(0),flex_shrink:0.0,margin:UiRect::top(px(HINT_TOP_MARGIN))}
         }
     });
     let editor_alignment = if props.auto_size.is_some() {
@@ -122,8 +130,8 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
             #TextFieldFrame TextFieldFrame { root: #TextFieldRoot }
             Node {
                 width: percent(100), min_width: px(0), min_height: px(0), flex_grow: 1.0, align_items: AlignItems::Center,
-                padding: UiRect::axes(px(10), px(6)),
-                border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(4)),
+                padding: UiRect::axes(px(FIELD_PADDING_X), px(FIELD_PADDING_Y)),
+                border: UiRect::all(px(FIELD_BORDER_WIDTH)), border_radius: BorderRadius::all(px(FIELD_CORNER_RADIUS)),
             }
             BackgroundColor BorderColor
             Children [

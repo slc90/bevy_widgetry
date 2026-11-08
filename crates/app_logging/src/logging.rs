@@ -1,3 +1,5 @@
+const WRITER_QUEUE_CAPACITY: usize = 1024;
+
 use crate::{
     error::{LoggingFailure, LoggingSource, LoggingStage, failure},
     writer::{self, FileWriter, LoggingGuard},
@@ -93,7 +95,7 @@ impl AppLogging {
         })?;
         let path = directory.join(name);
         let file = open_log_file(&path)?;
-        let (writer, guard) = writer::prepare(file, &path, 1024);
+        let (writer, guard) = writer::prepare(file, &path, WRITER_QUEUE_CAPACITY);
         Ok(Self {
             output: LogOutput { offset, writer },
             guard,

@@ -1,3 +1,5 @@
+const MAX_ACCEPTED_DEMO_NUMBER: u32 = 1000;
+
 use super::*;
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry::diagnostics::{ErrorFrame, WidgetryFailure};
@@ -218,7 +220,10 @@ fn resolve(world: &mut World, event: &WidgetryTableEditRequested) -> Result {
         return Ok(());
     }
     let language = *world.resource::<Language>();
-    let rejected = event.value.downcast_ref::<u32>().is_some_and(|v| *v > 1000);
+    let rejected = event
+        .value
+        .downcast_ref::<u32>()
+        .is_some_and(|v| *v > MAX_ACCEPTED_DEMO_NUMBER);
     if rejected {
         WidgetryTable::<DemoRow>::resolve_edit(
             world,

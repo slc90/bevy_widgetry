@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
@@ -138,7 +140,7 @@ fn real_ui_app() -> App {
     }).unwrap().id();
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "ComboBox 字体和 renderer icon 前置资源",
         |world| {
             world.resource::<Assets<Font>>().contains(&font)

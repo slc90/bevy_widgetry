@@ -210,10 +210,12 @@ mod tests {
         }
     }
 
+    const UNPAIRED_HIGH_SURROGATE: u16 = 0xd800;
+
     #[test]
     fn non_utf8_icon_keeps_the_original_windows_path() {
         use std::os::windows::ffi::OsStringExt;
-        let path = PathBuf::from(std::ffi::OsString::from_wide(&[0xd800]));
+        let path = PathBuf::from(std::ffi::OsString::from_wide(&[UNPAIRED_HIGH_SURROGATE]));
         let failure = set_exe_icon(&path).unwrap_err();
         assert!(
             matches!(failure.kind(), IconBuildError::InvalidPath { path: actual } if actual.ends_with(&path))

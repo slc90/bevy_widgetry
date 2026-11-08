@@ -1,3 +1,5 @@
+const PREVIEW_DEPTH: f32 = 102.0;
+
 use crate::error::CanvasResult as Result;
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
@@ -56,7 +58,7 @@ pub(super) fn sync(
         crate::input::DrawingKind::Rectangle => "CanvasRectanglePreview",
         crate::input::DrawingKind::Ellipse => "CanvasEllipsePreview",
     };
-    let transform = Transform::from_translation(center.extend(102.0));
+    let transform = Transform::from_translation(center.extend(PREVIEW_DEPTH));
     if let Some(entity) = current {
         let assets = world
             .get::<Preview>(entity)
@@ -171,7 +173,7 @@ pub(super) fn sync(
                 #Stroke template(move |_|Ok(Mesh2d(stroke.clone())))
                 template(move |_|Ok(MeshMaterial2d(stroke_material.clone())))
                 template(move |_|Ok(RenderLayers::none().with(layer)))
-                Transform::from_xyz(0.0,0.0,0.01) template(move |_|Ok(stroke_visibility)) Pickable::IGNORE NoFrustumCulling
+                Transform::from_xyz(0.0,0.0,super::STROKE_DEPTH_OFFSET) template(move |_|Ok(stroke_visibility)) Pickable::IGNORE NoFrustumCulling
             ]
         },
     );

@@ -1,3 +1,5 @@
+const ROUNDING_EPSILON_FACTOR: f32 = 8.0;
+
 use crate::{
     SplitterFailure, SplitterLayoutError as Problem,
     error::{LayoutKey, failure, layout, layout_kind},
@@ -260,7 +262,7 @@ fn reachable(
         .max
         .map_or(f32::INFINITY, |max| max.resolve(base))
         .min(available - b.min.resolve(base));
-    let tolerance = 8.0 * f32::EPSILON * base.max(1.0);
+    let tolerance = ROUNDING_EPSILON_FACTOR * f32::EPSILON * base.max(1.0);
     if lower > upper + tolerance {
         return Ok(None);
     }
@@ -579,7 +581,7 @@ fn update(
             if base <= state.thickness || !base.is_finite() {
                 return Ok(false);
             }
-            let tolerance = 8.0 * f32::EPSILON * base.max(1.0);
+            let tolerance = ROUNDING_EPSILON_FACTOR * f32::EPSILON * base.max(1.0);
             // Validate percentage limits only after the native root has adopted its new range.
             if bounds_changed
                 || base < min - tolerance

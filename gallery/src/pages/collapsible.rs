@@ -1,3 +1,14 @@
+const PANEL_WIDTH: f32 = 420.0;
+
+const DETAIL_GAP: f32 = 4.0;
+const ITEM_GAP: f32 = 6.0;
+const GROUP_GAP: f32 = 10.0;
+const SECTION_GAP: f32 = 16.0;
+const PAGE_GAP: f32 = 20.0;
+const CONTROL_GAP: f32 = 6.0;
+const CONTENT_GAP: f32 = 24.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::{CollapsibleKey, Language, LocalizedText, TextKey, localized};
 use bevy::{prelude::*, ui::InteractionDisabled, ui_widgets::Activate};
@@ -69,10 +80,10 @@ fn label(key: CollapsibleKey) -> impl Scene {
 fn scene() -> impl Scene {
     bsn! {
         Name("CollapsibleDemo")
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16), flex_shrink: 0.0 }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(SECTION_GAP), flex_shrink: 0.0 }
         Children [
             @label(CollapsibleKey::Description) Node { max_width: percent(100) }--
-            Node { width: percent(100), flex_wrap: FlexWrap::Wrap, column_gap: px(24), row_gap: px(20), align_items: AlignItems::Start }
+            Node { width: percent(100), flex_wrap: FlexWrap::Wrap, column_gap: px(CONTENT_GAP), row_gap: px(PAGE_GAP), align_items: AlignItems::Start }
             Children [
                 @example("CollapsibleBasic", true, CollapsibleKey::Basic, CollapsibleKey::BasicHint, KeyCode::F8, bsn_list! {
                     @WidgetryCheckBox Name("CollapsibleCheckBox") Children [@label(CollapsibleKey::Enabled)]--
@@ -97,11 +108,11 @@ fn example(
     content: impl SceneList,
 ) -> impl Scene {
     let content = Some(Box::new(bsn_list! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(10), width: percent(100) } Children [{content}]
+        Node { flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP), width: percent(100) } Children [{content}]
     }) as Box<dyn SceneList>);
     bsn! {
         ExampleParts { card: #Card, status: #Status }
-        Node { width: px(420), max_width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(10), flex_shrink: 0.0 }
+        Node { width: px(PANEL_WIDTH), max_width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP), flex_shrink: 0.0 }
         Children [
             #Card Name(name)
             template(|_| Ok(CollapsibleDemoState::default()))
@@ -109,13 +120,13 @@ fn example(
             @WidgetryCollapsible {
                 @expanded: expanded,
                 @header: {Some(Box::new(bsn! {
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(4), min_width: px(0) }
-                    Children [@label(title)-- @label(hint) TextFont { font_size: bevy::text::FontSize::Px(14.0) }]
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), min_width: px(0) }
+                    Children [@label(title)-- @label(hint) TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }]
                 }) as Box<dyn Scene>)},
                 @children: {content},
             }
             Node { width: percent(100) } on(changed)--
-            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(6), row_gap: px(6) }
+            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP) }
             Children [
                 @action(name, CollapsibleKey::Expand, Action::Expand)--
                 @action(name, CollapsibleKey::Collapse, Action::Collapse)--

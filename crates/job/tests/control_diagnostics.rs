@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::tasks::{IoTaskPool, TaskPool, block_on};
 use bevy_widgetry_job::*;
 use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
@@ -80,7 +82,6 @@ fn missing_pool_preserves_the_requested_kind_label_and_capacity() {
 #[test]
 fn cancellation_and_natural_end_have_no_error_but_sending_after_completion_is_a_real_failure() {
     use std::sync::{Arc, mpsc};
-    use std::time::Duration;
     IoTaskPool::get_or_init(TaskPool::new);
     let manager = JobManager::default();
     let (sender, ready) = mpsc::channel();
@@ -93,7 +94,7 @@ fn cancellation_and_natural_end_have_no_error_but_sending_after_completion_is_a_
             Ok(())
         })
         .unwrap();
-    let context = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+    let context = ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     let logs = LogCapture::default();
     logs.run(|| {
         manager.cancel(id).unwrap();
@@ -116,7 +117,7 @@ fn cancellation_and_natural_end_have_no_error_but_sending_after_completion_is_a_
             Ok(())
         })
         .unwrap();
-    let context = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+    let context = ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     assert!(matches!(
         block_on(receiver.recv()).unwrap(),
         JobRead::Finished(JobOutcome::Completed)

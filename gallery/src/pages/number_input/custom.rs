@@ -1,3 +1,18 @@
+const EDITOR_WIDTH: f32 = 300.0;
+const EDITOR_PADDING: f32 = 12.0;
+const EDITOR_CORNER_RADIUS: f32 = 12.0;
+const EDITOR_UNDERLINE_WIDTH: f32 = 3.0;
+const EDITOR_MIN_HEIGHT: f32 = 28.0;
+const STEP_COLUMN_WIDTH: f32 = 36.0;
+const STEP_BUTTON_HEIGHT: f32 = 24.0;
+const STEP_BUTTON_BORDER_WIDTH: f32 = 1.0;
+const STEP_BUTTON_CORNER_RADIUS: f32 = 4.0;
+
+const DETAIL_GAP: f32 = 4.0;
+const ITEM_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 8.0;
+const LABEL_FONT_SIZE: f32 = 20.0;
+
 use crate::i18n::{Language, NumberInputKey, TextKey, localized, tr_args};
 use bevy::prelude::*;
 use bevy::text::TextCursorStyle;
@@ -21,21 +36,21 @@ struct StepAppearance;
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(8)}
+        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(ITEM_GAP)}
         Children [
             @localized(TextKey::NumberInput(NumberInputKey::CustomEditing)) WidgetryText--
             #Root @WidgetryNumberInputHeadless<f64> {@value:{Some(12.345)},@decimals:{Some(2)}}
             WidgetryNumberInputEditor {field:#Field} Name::new("NumberCustom")
             on(committed)
-            Node {width:px(300),padding:UiRect::all(px(12)),border:UiRect::bottom(px(3)),border_radius:BorderRadius::all(px(12))}
+            Node {width:px(EDITOR_WIDTH),padding:UiRect::all(px(EDITOR_PADDING)),border:UiRect::bottom(px(EDITOR_UNDERLINE_WIDTH)),border_radius:BorderRadius::all(px(EDITOR_CORNER_RADIUS))}
             BackgroundColor BorderColor
             Children [
                 #Field @WidgetryTextFieldHeadless {editor:#Editor}
                 Node {width:percent(100)}
                 Children [Node {width:percent(100)} Children [
                     #Editor @WidgetryTextFieldEditor {root:#Field}
-                    Name::new("NumberCustomEditor") Node {width:percent(100),min_height:px(28)}
-                    TextFont {font_size:FontSize::Px(20.0)}
+                    Name::new("NumberCustomEditor") Node {width:percent(100),min_height:px(EDITOR_MIN_HEIGHT)}
+                    TextFont {font_size:FontSize::Px(LABEL_FONT_SIZE)}
                 ]]
             ]--
             Status {root:#Root} Name::new("NumberCustomStatus") Text::new("") WidgetryText--
@@ -49,33 +64,33 @@ fn stepped_scene(repeat: bool) -> impl Scene {
     let repeat_up = repeat.then_some(bsn! {WidgetryNumberInputRepeat});
     let repeat_down = repeat.then_some(bsn! {WidgetryNumberInputRepeat});
     bsn! {
-        Node {flex_direction:FlexDirection::Column,row_gap:px(8)}
+        Node {flex_direction:FlexDirection::Column,row_gap:px(ITEM_GAP)}
         Children [
             @localized(TextKey::NumberInput(if repeat {NumberInputKey::CustomRepeat} else {NumberInputKey::CustomStepping})) WidgetryText--
             #Root @WidgetryNumberInputHeadless<f64> {@value:{Some(10.0)},@min:{Some(0.0)},@max:{Some(100.0)},@step:5.0}
             WidgetryNumberInputEditor {field:#Field} Name::new(if repeat {"NumberCustomRepeat"} else {"NumberCustomStep"}) on(committed)
-            Node {width:px(300),padding:UiRect::all(px(12)),column_gap:px(8),align_items:AlignItems::Center,border:UiRect::bottom(px(3)),border_radius:BorderRadius::all(px(12))}
+            Node {width:px(EDITOR_WIDTH),padding:UiRect::all(px(EDITOR_PADDING)),column_gap:px(CONTROL_GAP),align_items:AlignItems::Center,border:UiRect::bottom(px(EDITOR_UNDERLINE_WIDTH)),border_radius:BorderRadius::all(px(EDITOR_CORNER_RADIUS))}
             BackgroundColor BorderColor
             Children [
                 #Field @WidgetryTextFieldHeadless {editor:#Editor}
                 Node {flex_grow:1.0,min_width:px(0)}
                 Children [Node {width:percent(100)} Children [
                     #Editor @WidgetryTextFieldEditor {root:#Field}
-                    Name::new(if repeat {"NumberCustomRepeatEditor"} else {"NumberCustomStepEditor"}) Node {width:percent(100),min_height:px(28)} TextFont {font_size:FontSize::Px(20.0)}
+                    Name::new(if repeat {"NumberCustomRepeatEditor"} else {"NumberCustomStepEditor"}) Node {width:percent(100),min_height:px(EDITOR_MIN_HEIGHT)} TextFont {font_size:FontSize::Px(LABEL_FONT_SIZE)}
                 ]]--
-                Node {flex_direction:FlexDirection::Column,row_gap:px(4),width:px(36),flex_shrink:0.0}
+                Node {flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP),width:px(STEP_COLUMN_WIDTH),flex_shrink:0.0}
                 Children [
                     WidgetryNumberInputStep {root:#Root,increase:true} @{repeat_up} Name::new(if repeat {"NumberCustomRepeatIncrease"} else {"NumberCustomIncrease"})
                     template(|_|Ok(StepAppearance))
                     bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
                     bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
-                    Node {width:percent(100),height:px(24),justify_content:JustifyContent::Center,align_items:AlignItems::Center,border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4))} BorderColor BackgroundColor
+                    Node {width:percent(100),height:px(STEP_BUTTON_HEIGHT),justify_content:JustifyContent::Center,align_items:AlignItems::Center,border:UiRect::all(px(STEP_BUTTON_BORDER_WIDTH)),border_radius:BorderRadius::all(px(STEP_BUTTON_CORNER_RADIUS))} BorderColor BackgroundColor
                     Children [Text::new("+") WidgetryText Pickable::IGNORE]--
                     WidgetryNumberInputStep {root:#Root,increase:false} @{repeat_down} Name::new(if repeat {"NumberCustomRepeatDecrease"} else {"NumberCustomDecrease"})
                     template(|_|Ok(StepAppearance))
                     bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
                     bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
-                    Node {width:percent(100),height:px(24),justify_content:JustifyContent::Center,align_items:AlignItems::Center,border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4))} BorderColor BackgroundColor
+                    Node {width:percent(100),height:px(STEP_BUTTON_HEIGHT),justify_content:JustifyContent::Center,align_items:AlignItems::Center,border:UiRect::all(px(STEP_BUTTON_BORDER_WIDTH)),border_radius:BorderRadius::all(px(STEP_BUTTON_CORNER_RADIUS))} BorderColor BackgroundColor
                     Children [Text::new("−") WidgetryText Pickable::IGNORE]
                 ]
             ]--

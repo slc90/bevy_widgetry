@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::text::{FontSource, TextLayoutInfo};
@@ -85,7 +87,7 @@ fn both_build_phases_measure_deferred_text_in_same_frame() {
         .load::<Font>(BuiltinFont::Default.path());
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         &format!("调度测试 Font {:?}", font.id()),
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

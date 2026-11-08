@@ -1,3 +1,6 @@
+// The middle third accepts inside drops, so its half-height is one sixth of the row.
+const INSIDE_HALF_HEIGHT_DIVISOR: f32 = 6.0;
+
 use crate::source::DataSource;
 use crate::{
     WidgetryListKey, WidgetryListProjection, WidgetryListView, WidgetryListViewItem,
@@ -377,7 +380,7 @@ fn candidate<T: Send + Sync + 'static, K: WidgetryListKey>(
             placement: if world
                 .get_resource::<Commit<T, K>>()
                 .is_some_and(|commit| commit.inside)
-                && local.y.abs() < node.size().y / 6.0
+                && local.y.abs() < node.size().y / INSIDE_HALF_HEIGHT_DIVISOR
             {
                 Edge::Inside
             } else if local.y < 0.0 {

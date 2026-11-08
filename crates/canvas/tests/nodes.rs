@@ -68,6 +68,8 @@ fn coordinate(command: &mut CanvasPathCommand, role: usize) -> &mut Vec2 {
 
 #[test]
 fn node_drag_edits_only_the_target_local_coordinate_and_preserves_shared_shape_identity() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     for id in pointer_ids() {
         for mirrored in [false, true] {
             for (command, role) in [
@@ -147,7 +149,7 @@ fn node_drag_edits_only_the_target_local_coordinate_and_preserves_shared_shape_i
                 let wanted = *coordinate(&mut expected.commands[command], role);
                 let edited = coordinate(&mut actual.commands[command], role);
                 assert!(
-                    edited.distance(wanted) < 0.001,
+                    edited.distance(wanted) < COMPARISON_TOLERANCE,
                     "target coordinate must move"
                 );
                 *edited = wanted;

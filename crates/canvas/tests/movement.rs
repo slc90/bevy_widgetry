@@ -11,6 +11,8 @@ mod common;
 use common::*;
 
 fn assert_position(app: &App, shape: Entity, expected: Vec2) {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     let actual = app
         .world()
         .get::<Transform>(shape)
@@ -18,13 +20,15 @@ fn assert_position(app: &App, shape: Entity, expected: Vec2) {
         .translation
         .truncate();
     assert!(
-        (actual - expected).length() < 0.001,
+        (actual - expected).length() < COMPARISON_TOLERANCE,
         "actual {actual:?}, expected {expected:?}"
     );
 }
 
 #[test]
 fn first_press_only_selects_and_next_press_moves_with_grab_offset_at_current_zoom() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     for id in pointer_ids() {
         for (scale, ui_scale, zoom) in [(1.0, 1.0, 0.5), (1.5, 1.0, 2.0), (2.0, 1.5, 1.0)] {
             let (mut app, a, b, shape, _, base) = fixture(id, scale, ui_scale);
@@ -158,7 +162,7 @@ fn first_press_only_selects_and_next_press_moves_with_grab_offset_at_current_zoo
                     t.translation
                         .truncate()
                         .distance(Vec2::new(200.0, 80.0) / zoom)
-                        < 0.001
+                        < COMPARISON_TOLERANCE
                 })
                 .count();
             assert_eq!(proxies, 2);

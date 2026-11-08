@@ -61,7 +61,8 @@ fn fixture(count: usize, pointers: usize) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("pointer-hover-criterion")?;
-    for count in [10, 1000, 10000] {
+    let entity_counts = [10, 1000, 10000];
+    for count in entity_counts {
         for pointers in [1, 2] {
             for action in ["idle", "move"] {
                 run(

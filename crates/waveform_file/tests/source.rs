@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy_widgetry_waveform::*;
 use bevy_widgetry_waveform_file::*;
 use std::time::{Duration, Instant};
@@ -32,7 +34,7 @@ fn wait(
     source: &DiskWaveformSource,
     request: &WaveformReadRequest,
 ) -> Result<Vec<ReducedChannel>, WaveformReadError> {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     loop {
         match source.read_reduced(request)? {
             WaveformReducedReadStatus::Ready {
@@ -231,7 +233,7 @@ fn reader_creation_respects_global_shutdown() {
     let source = DiskWaveformSource::open(&path, &manager).unwrap();
     let id = source.job_id();
     manager.cancel(id).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     while !manager.status(id).unwrap().state.is_finished() {
         assert!(Instant::now() < deadline);
         std::thread::yield_now();

@@ -1,3 +1,22 @@
+const BASIC_SAMPLE_RATE: u32 = 100;
+const STRESS_SAMPLE_RATE: u32 = 64000;
+const STRESS_CAPACITY_FRAMES: usize = 704000;
+const STRESS_CHANNEL_COUNT: usize = 64;
+const BASIC_CAPACITY_FRAMES: usize = 3100;
+const REPLAY_SAMPLE_RATE: u32 = 8000;
+const REPLAY_FRAME_COUNT: u64 = 240000;
+const REPLAY_CHANNEL_COUNT: usize = 4;
+const MILLISECONDS_PER_SECOND: f64 = 1000.0;
+
+const CHANNEL_VIEW_HEIGHT: f32 = 160.0;
+const ALGORITHM_COMBO_WIDTH: f32 = 140.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 12.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 12.0;
+const LABEL_FONT_SIZE: f32 = 24.0;
+
 use crate::assets::GalleryWaveform;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::NavigationKey;
@@ -24,7 +43,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
             @Waveform { @source: {Some(source.clone() as Arc<dyn WaveformSource>)},
                 @config: {WaveformConfig { visible_duration_ms: 5000, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }} }
             template(|_| Ok(ColorWaveform))
-            Node { width: percent(100), height: px(160) }
+            Node { width: percent(100), height: px(CHANNEL_VIEW_HEIGHT) }
         }
     };
     crate::color_showcase::pair(
@@ -154,7 +173,7 @@ struct AlgorithmParts {
 fn algorithm_selector() -> impl Scene {
     bsn! {
         AlgorithmParts { model: #AlgorithmModel, combo: #AlgorithmCombo }
-        Node { align_items: AlignItems::Center, column_gap: px(12) }
+        Node { align_items: AlignItems::Center, column_gap: px(CONTENT_GAP) }
         Children [
             #AlgorithmModel
             template(|_| {
@@ -165,7 +184,7 @@ fn algorithm_selector() -> impl Scene {
             })--
             @localized(TextKey::Waveform(WaveformKey::Algorithm)) bevy_widgetry::text::WidgetryText--
             #AlgorithmCombo
-            Name::new("WaveformAlgorithm") Node { width: px(140) } on(change_algorithm)--
+            Name::new("WaveformAlgorithm") Node { width: px(ALGORITHM_COMBO_WIDTH) } on(change_algorithm)--
             @localized(TextKey::Waveform(WaveformKey::AlgorithmHint)) bevy_widgetry::text::WidgetryText
         ]
     }
@@ -202,14 +221,16 @@ impl FromWorld for DemoSources {
                     "Sawtooth".into(),
                     "Triangle".into(),
                 ],
-                3100,
+                BASIC_CAPACITY_FRAMES,
                 100,
                 true,
             )),
             stress: Arc::new(LiveSource::new(
-                (1..=64).map(|index| format!("Electrode {index}")).collect(),
-                704000,
-                64000,
+                (1..=STRESS_CHANNEL_COUNT)
+                    .map(|index| format!("Electrode {index}"))
+                    .collect(),
+                STRESS_CAPACITY_FRAMES,
+                STRESS_SAMPLE_RATE,
                 false,
             )),
             replay: None,
@@ -248,11 +269,11 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
     let disk_controls = disk::scene(&sources.disk);
     bsn! {
         #WaveformDemo
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
         Children [
-            @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
+            @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }--
             @localized(TextKey::Waveform(WaveformKey::MeasurementHint)) bevy_widgetry::text::WidgetryText--
-            Node { column_gap: px(8) } Children [
+            Node { column_gap: px(CONTROL_GAP) } Children [
                 @{mode_button(DemoMode::Live, WaveformKey::ModeLive, "WaveformModeLive")}--
                 @{mode_button(DemoMode::Replay, WaveformKey::ModeReplay, "WaveformModeReplay")}--
                 @{mode_button(DemoMode::Disk, WaveformKey::ModeDisk, "WaveformModeDisk")}
@@ -261,7 +282,7 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
             Children [@localized(TextKey::Waveform(WaveformKey::ShowTimeGrid)) bevy_widgetry::text::WidgetryText]--
             @{algorithm_selector()}--
             Name::new("WaveformLivePane") template(|_|Ok(ModePane(DemoMode::Live)))
-            Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
             Children [
                 @localized(TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5)) bevy_widgetry::text::WidgetryText--
                 #BasicLiveWaveform @{basic}--
@@ -270,10 +291,10 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
                 #WaveformStatus @localized(TextKey::Waveform(WaveformKey::WaitingForWaveformPage)) bevy_widgetry::text::WidgetryText template(|_|Ok(StressStatus))
             ]--
             Name::new("WaveformReplayPane") template(|_|Ok(ModePane(DemoMode::Replay)))
-            Node { display: Display::None, width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Node { display: Display::None, width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
             Children [@localized(TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5)) bevy_widgetry::text::WidgetryText-- #BasicReplayWaveform @{replay}]--
             Name::new("WaveformDiskPane") template(|_|Ok(ModePane(DemoMode::Disk)))
-            Node { display: Display::None, width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Node { display: Display::None, width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
             Children [@{disk_controls}-- #DiskReplayWaveform @{disk_wave}]
         ]
     }
@@ -377,7 +398,7 @@ fn drive(world: &mut World) -> Result {
         if sources.mode == DemoMode::Live {
             sources.elapsed += delta;
         }
-        sources.frame_ms = delta.as_secs_f64() * 1000.0;
+        sources.frame_ms = delta.as_secs_f64() * MILLISECONDS_PER_SECOND;
         sources.burst = sources.hold_until.is_some();
         if let Some(until) = sources.hold_until {
             if now < until {
@@ -387,16 +408,20 @@ fn drive(world: &mut World) -> Result {
             sources.hold_until = None;
         }
         let start = Instant::now();
-        let basic_frame = sample_boundary(sources.elapsed, 100)
+        let basic_frame = sample_boundary(sources.elapsed, BASIC_SAMPLE_RATE)
             .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?;
-        let stress_frame = sample_boundary(sources.elapsed, 64000)
+        let stress_frame = sample_boundary(sources.elapsed, STRESS_SAMPLE_RATE)
             .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?;
         if sources.mode == DemoMode::Live {
-            sources.basic.produce(basic_frame, 100, true)?;
-            sources.stress.produce(stress_frame, 64000, false)?;
+            sources
+                .basic
+                .produce(basic_frame, BASIC_SAMPLE_RATE, true)?;
+            sources
+                .stress
+                .produce(stress_frame, STRESS_SAMPLE_RATE, false)?;
             sources.generated_at = start;
         }
-        sources.producer_ms = start.elapsed().as_secs_f64() * 1000.0;
+        sources.producer_ms = start.elapsed().as_secs_f64() * MILLISECONDS_PER_SECOND;
         sources.gestures.retain(|root, saved| {
             world
                 .get::<WaveformRuntime>(*root)
@@ -445,7 +470,10 @@ fn drive(world: &mut World) -> Result {
             if sources.asset_failure.take().is_some() {
                 info!("Gallery 内置回放资源已恢复");
             }
-            if asset.0.rate != 8000 || asset.0.frames != 240000 || asset.0.channels.len() != 4 {
+            if asset.0.rate != REPLAY_SAMPLE_RATE
+                || asset.0.frames != REPLAY_FRAME_COUNT
+                || asset.0.channels.len() != REPLAY_CHANNEL_COUNT
+            {
                 return Err(crate::diagnostics::error(
                     "Basic Replay asset specification mismatch",
                 ));
@@ -501,7 +529,7 @@ fn drive(world: &mut World) -> Result {
                     let rate = world
                         .get::<WaveformRuntime>(root)
                         .and_then(WaveformRuntime::metadata)
-                        .map_or(8000, |metadata| metadata.sample_rate);
+                        .map_or(REPLAY_SAMPLE_RATE, |metadata| metadata.sample_rate);
                     let mut state = world
                         .get_mut::<WaveformDemoState>(root)
                         .ok_or_else(|| crate::diagnostics::error("Replay demo state missing"))?;
@@ -519,9 +547,9 @@ fn drive(world: &mut World) -> Result {
                 DemoKind::Replay | DemoKind::Disk => 0,
             };
             let rate = match kind {
-                DemoKind::Basic => 100,
-                DemoKind::Stress => 64000,
-                DemoKind::Replay | DemoKind::Disk => 8000,
+                DemoKind::Basic => BASIC_SAMPLE_RATE,
+                DemoKind::Stress => STRESS_SAMPLE_RATE,
+                DemoKind::Replay | DemoKind::Disk => REPLAY_SAMPLE_RATE,
             };
             let old = world
                 .get::<WaveformRuntime>(root)
@@ -529,8 +557,8 @@ fn drive(world: &mut World) -> Result {
                 .buffered_range()
                 .end;
             let capacity = match kind {
-                DemoKind::Basic => Some(3100),
-                DemoKind::Stress => Some(704000),
+                DemoKind::Basic => Some(BASIC_CAPACITY_FRAMES as u64),
+                DemoKind::Stress => Some(STRESS_CAPACITY_FRAMES as u64),
                 DemoKind::Replay | DemoKind::Disk => None,
             };
             let mut state = world
@@ -626,7 +654,7 @@ fn status(
                         format!(
                             "{:.1}",
                             if sources.frame_ms > 0.0 {
-                                1000.0 / sources.frame_ms
+                                MILLISECONDS_PER_SECOND / sources.frame_ms
                             } else {
                                 0.0
                             }

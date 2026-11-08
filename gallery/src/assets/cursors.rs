@@ -1,3 +1,5 @@
+const ATLAS_ROWS: u32 = 6;
+
 use super::{
     GalleryCursorAnimation, constants::EMBEDDED_SOURCE, cursor_animation::KAMURI_ANIMATIONS,
 };
@@ -23,7 +25,13 @@ impl GalleryCursorImage {
             .with_source(EMBEDDED_SOURCE)
     }
     pub(crate) fn atlas_layout(self) -> TextureAtlasLayout {
-        let mut layout = TextureAtlasLayout::from_grid(UVec2::splat(80), 8, 6, None, None);
+        let mut layout = TextureAtlasLayout::from_grid(
+            UVec2::splat(super::cursor_animation::FRAME_SIZE),
+            super::cursor_animation::ATLAS_COLUMNS,
+            ATLAS_ROWS,
+            None,
+            None,
+        );
         layout.textures.truncate(GalleryCursorAnimation::ALL.len());
         layout
     }

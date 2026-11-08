@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const POSITION_TOLERANCE: f32 = 0.003;
+
 use bevy::{
     picking::{hover::PointerCaptureMap, pointer::*},
     prelude::*,
@@ -73,7 +75,10 @@ fn fixture_shape(kind: usize, id: PointerId) -> (App, Entity, Entity, Entity, Lo
 }
 
 fn near(a: Vec2, b: Vec2) {
-    assert!(a.distance(b) < 0.003, "actual={a:?}, expected={b:?}");
+    assert!(
+        a.distance(b) < POSITION_TOLERANCE,
+        "actual={a:?}, expected={b:?}"
+    );
 }
 
 fn outline(app: &mut App) -> Vec<[f32; 3]> {

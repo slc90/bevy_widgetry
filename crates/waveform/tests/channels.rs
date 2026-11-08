@@ -64,6 +64,8 @@ fn fixture(channels: usize, count: WaveformChannelCount) -> (App, Entity, Arc<So
 
 #[test]
 fn actual_density_obeys_minimum_and_fewer_channels_fill_the_viewport() {
+    let comparison_tolerance = 0.001;
+
     for (channels, target, height) in [
         (6, WaveformChannelCount::Count(16), 100.0),
         (64, WaveformChannelCount::Count(8), 75.0),
@@ -74,7 +76,10 @@ fn actual_density_obeys_minimum_and_fewer_channels_fill_the_viewport() {
         let (mut app, root, _) = fixture(channels, target);
         let layout = Waveform::channel_layout(app.world(), root).unwrap();
         assert_eq!(layout.viewport_height, 600.0);
-        assert!((layout.row_height - height).abs() < 0.001, "{layout:?}");
+        assert!(
+            (layout.row_height - height).abs() < comparison_tolerance,
+            "{layout:?}"
+        );
         assert_eq!(layout.content_height, height * channels as f32);
         let labels = app
             .world_mut()
@@ -85,12 +90,14 @@ fn actual_density_obeys_minimum_and_fewer_channels_fill_the_viewport() {
             .collect::<Vec<_>>();
         assert_eq!(labels.len(), channels);
         assert_eq!(labels[0].0, "Sensor 0");
-        assert!((labels[1].1 - labels[0].1 - height).abs() < 0.001);
+        assert!((labels[1].1 - labels[0].1 - height).abs() < comparison_tolerance);
     }
 }
 
 #[test]
 fn fractional_scroll_matches_waveform_centers_and_keeps_top_anchor_on_density_and_resize() {
+    let comparison_tolerance = 0.01;
+
     let (mut app, root, source) = fixture(64, WaveformChannelCount::Count(8));
     let viewport = app
         .world_mut()
@@ -120,12 +127,18 @@ fn fractional_scroll_matches_waveform_centers_and_keeps_top_anchor_on_density_an
     for _ in 0..2 {
         app.update();
     }
-    assert!((app.world().get::<ScrollPosition>(viewport).unwrap().y - 93.75).abs() < 0.01);
+    assert!(
+        (app.world().get::<ScrollPosition>(viewport).unwrap().y - 93.75).abs()
+            < comparison_tolerance
+    );
     app.world_mut().get_mut::<Node>(root).unwrap().height = px(872.375);
     for _ in 0..2 {
         app.update();
     }
-    assert!((app.world().get::<ScrollPosition>(viewport).unwrap().y - 125.05859).abs() < 0.01);
+    assert!(
+        (app.world().get::<ScrollPosition>(viewport).unwrap().y - 125.05859).abs()
+            < comparison_tolerance
+    );
     assert_eq!(source.1.load(Ordering::Relaxed), reads);
     let runtime = app.world().get::<WaveformRuntime>(root).unwrap();
     assert_eq!(runtime.revision(), revision);
@@ -175,7 +188,7 @@ fn fractional_scroll_matches_waveform_centers_and_keeps_top_anchor_on_density_an
             (transform.translation.y
                 - (plot_top + (index as f32 + 0.5) * layout.row_height - layout.scroll_offset))
                 .abs()
-                < 0.01
+                < comparison_tolerance
         );
         if transform.translation.y > plot_top + 1.0
             && transform.translation.y < plot_top + plot_height - 1.0
@@ -183,7 +196,7 @@ fn fractional_scroll_matches_waveform_centers_and_keeps_top_anchor_on_density_an
             assert!(
                 centers
                     .iter()
-                    .any(|center| (center - transform.translation.y).abs() < 0.01)
+                    .any(|center| (center - transform.translation.y).abs() < comparison_tolerance)
             );
         }
     }

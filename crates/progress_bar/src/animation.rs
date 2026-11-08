@@ -1,3 +1,5 @@
+const EASING_EXPONENT: i32 = 3;
+
 use crate::WidgetryProgressState;
 use bevy::prelude::*;
 
@@ -77,7 +79,7 @@ impl Animation {
         self.elapsed = (self.elapsed + delta).min(DURATION);
         let t = self.elapsed.as_secs_f32() / DURATION.as_secs_f32();
         self.visible = if self.active() {
-            self.start + (ratio(self.target) - self.start) * (1.0 - (1.0 - t).powi(3))
+            self.start + (ratio(self.target) - self.start) * (1.0 - (1.0 - t).powi(EASING_EXPONENT))
         } else {
             ratio(self.target)
         };
@@ -87,6 +89,11 @@ impl Animation {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const EASING_SAMPLE_INTERVAL: Duration = Duration::from_millis(50);
+    const INITIAL_LOOP_ADVANCE: Duration = Duration::from_millis(400);
+    const LOOP_SAMPLE_INTERVAL: Duration = Duration::from_millis(100);
+    const MAX_WINDOW_END: f32 = 1.00001;
+
     use super::*;
 
     fn value(value: f32) -> WidgetryProgressState {
@@ -97,12 +104,12 @@ mod tests {
     fn cubic_ease_out_moves_faster_at_start_and_lands_exactly() {
         let mut animation = Animation::new(value(0.2));
         animation.retarget(value(1.0));
-        animation.advance(Duration::from_millis(50));
+        animation.advance(EASING_SAMPLE_INTERVAL);
         let first = animation.visible - 0.2;
-        animation.advance(Duration::from_millis(50));
+        animation.advance(EASING_SAMPLE_INTERVAL);
         let second = animation.visible - 0.2 - first;
         assert!(first > second && second > 0.0);
-        animation.advance(Duration::from_millis(50));
+        animation.advance(EASING_SAMPLE_INTERVAL);
         assert_eq!(animation.visible, 1.0);
         assert!(!animation.active());
         assert!(!animation.retarget(value(1.0)));
@@ -113,13 +120,13 @@ mod tests {
         let mut animation = Animation::new(WidgetryProgressState::Indeterminate);
         let initial = animation.window();
         assert!(initial.1 > 0.0);
-        animation.advance(Duration::from_millis(400));
+        animation.advance(INITIAL_LOOP_ADVANCE);
         assert!(animation.window().0 > initial.0);
         assert!(!animation.retarget(WidgetryProgressState::Indeterminate));
         for _ in 0..100 {
-            animation.advance(Duration::from_millis(100));
+            animation.advance(LOOP_SAMPLE_INTERVAL);
             let (left, width) = animation.window();
-            assert!(left >= 0.0 && width >= 0.0 && left + width <= 1.00001);
+            assert!(left >= 0.0 && width >= 0.0 && left + width <= MAX_WINDOW_END);
         }
         animation.retarget(value(0.75));
         assert_eq!(animation.window(), (0.0, 0.75));

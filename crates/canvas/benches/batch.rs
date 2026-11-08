@@ -1,3 +1,10 @@
+const GRID_COLUMNS: usize = 50;
+const GRID_SPACING: f32 = 14.0;
+const BENCH_VIEWPORT: UVec2 = UVec2::new(800, 600);
+const VIEW_MARGIN: f32 = 40.0;
+const VIEW_SIZE: Vec2 = Vec2::new(200.0, 160.0);
+const SECONDARY_VIEW_LEFT: f32 = 300.0;
+
 use bevy::{
     picking::{hover::PointerCaptureMap, pointer::*},
     prelude::*,
@@ -35,17 +42,21 @@ fn fixture(count: usize) -> Result<Fixture> {
         .world_mut()
         .spawn((
             Window {
-                resolution: bevy::window::WindowResolution::new(800, 600),
+                resolution: bevy::window::WindowResolution::new(BENCH_VIEWPORT.x, BENCH_VIEWPORT.y),
                 ..default()
             },
             bevy::window::PrimaryWindow,
         ))
         .id();
-    let camera = spawn_picking_camera(&mut app, window, UVec2::new(800, 600), 1.0);
+    let camera = spawn_picking_camera(&mut app, window, BENCH_VIEWPORT, 1.0);
     let document = app.world_mut().spawn(CanvasDocument).id();
     let mut shapes = Vec::new();
     for i in 0..count {
-        let transform = Transform::from_xyz((i % 50) as f32 * 14.0, (i / 50) as f32 * 14.0, 0.0);
+        let transform = Transform::from_xyz(
+            (i % GRID_COLUMNS) as f32 * GRID_SPACING,
+            (i / GRID_COLUMNS) as f32 * GRID_SPACING,
+            0.0,
+        );
         let shape = match i % 3 {
             0 => CanvasDocument::create_rectangle(
                 app.world_mut(),
@@ -86,8 +97,8 @@ fn fixture(count: usize) -> Result<Fixture> {
         };
         shapes.push(shape);
     }
-    let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(40),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?.id();
-    let other=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(300),top:px(40),width:px(200),height:px(160)}}).map_err(BevyError::error)?.id();
+    let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(VIEW_MARGIN),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
+    let other=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(SECONDARY_VIEW_LEFT),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
     CanvasView::set_selection_in_world(app.world_mut(), view, shapes.clone())
         .map_err(|error| error.into_bevy_error())?;
     CanvasView::set_selection_in_world(app.world_mut(), other, [shapes[0]])
@@ -141,7 +152,8 @@ fn fixture(count: usize) -> Result<Fixture> {
 }
 fn main() -> Result {
     let mut harness = Harness::new("canvas-batch-criterion")?;
-    for count in [100, 1000] {
+    let entity_counts = [100, 1000];
+    for count in entity_counts {
         run(
             &mut harness,
             &format!("canvas_batch/views2/shapes{count}/move_all_and_frame"),
@@ -165,8 +177,10 @@ fn main() -> Result {
                 );
                 frame(&mut f.app)?;
                 for (i, shape) in f.shapes.iter().enumerate() {
-                    let expected =
-                        Vec2::new((i % 50) as f32 * 14.0, (i / 50) as f32 * 14.0) + delta;
+                    let expected = Vec2::new(
+                        (i % GRID_COLUMNS) as f32 * GRID_SPACING,
+                        (i / GRID_COLUMNS) as f32 * GRID_SPACING,
+                    ) + delta;
                     if f.app
                         .world()
                         .get::<Transform>(*shape)

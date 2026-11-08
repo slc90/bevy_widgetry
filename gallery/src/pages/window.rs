@@ -1,3 +1,7 @@
+const PAGE_PADDING: f32 = 24.0;
+
+const DETAIL_GAP: f32 = 24.0;
+
 mod file_dialog;
 mod independent;
 mod message_box;
@@ -14,7 +18,7 @@ struct DemoText;
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(DemoText))
-        Node { width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, padding: UiRect::all(px(24)), row_gap: px(24) }
+        Node { width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, padding: UiRect::all(px(PAGE_PADDING)), row_gap: px(DETAIL_GAP) }
         Children [@independent::scene()-- @message_box::scene()-- @file_dialog::scene()]
     }
 }

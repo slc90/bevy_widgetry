@@ -293,7 +293,16 @@ impl CanvasDocument {
 }
 
 fn polygon(points: &[Vec2], closed: bool) -> Result<Vec<CanvasPathCommand>> {
-    if points.len() < if closed { 3 } else { 2 } || points.iter().any(|point| !point.is_finite()) {
+    let min_polygon_points = 3;
+    let min_polyline_points = 2;
+    if points.len()
+        < if closed {
+            min_polygon_points
+        } else {
+            min_polyline_points
+        }
+        || points.iter().any(|point| !point.is_finite())
+    {
         return Err(crate::error::invalid(crate::CanvasIssue::ContourPoints));
     }
     let mut commands = Vec::with_capacity(points.len() + usize::from(closed));

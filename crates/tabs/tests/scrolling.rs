@@ -252,6 +252,8 @@ fn selection_during_resize_uses_the_clamped_viewport_position() {
 
 #[test]
 fn wheel_scrolling_with_hover_or_focus_outline_does_not_reveal_the_old_selection() {
+    let comparison_tolerance = 0.01;
+
     for orientation in [TabsOrientation::Horizontal, TabsOrientation::Vertical] {
         let (mut app, root) = fixture(orientation, 10, 0, 1.25);
         let header = WidgetryTabs::header(app.world(), root, 3).unwrap();
@@ -291,7 +293,10 @@ fn wheel_scrolling_with_hover_or_focus_outline_does_not_reveal_the_old_selection
             .get::<ScrollPosition>(viewport(app.world(), root))
             .unwrap()
             .0;
-        assert!((position.length() - 100.0).abs() < 0.01, "{position:?}");
+        assert!(
+            (position.length() - 100.0).abs() < comparison_tolerance,
+            "{position:?}"
+        );
         assert_eq!(WidgetryTabs::selected_index(app.world(), root).unwrap(), 0);
         assert_eq!(app.world().resource::<Changes>().0, 0);
     }

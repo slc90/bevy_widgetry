@@ -10,20 +10,31 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 
+DEFAULT_CELL_SIZE = 128
+DEFAULT_COLUMNS = 4
+DEFAULT_HOTSPOT = (44, 108)
+FRAME_COUNT = 12
+ATLAS_ROWS = 3
+SOURCE_FRAME_SIZE = 320
+ANIMATION_FPS = 8
+HOTSPOT_PREVIEW_FRAME = 5
+HOTSPOT_RING_RADIUS = 4
+HOTSPOT_CROSS_HALF_SIZE = 11
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def build(folder, cell=128, columns=4, hotspot=(44, 108)):
+def build(folder, cell=DEFAULT_CELL_SIZE, columns=DEFAULT_COLUMNS, hotspot=DEFAULT_HOTSPOT):
     src = folder / 'frames_master_320'
-    paths = [src / f'pointer_{i:02d}.png' for i in range(12)]
+    paths = [src / f'pointer_{i:02d}.png' for i in range(FRAME_COUNT)]
     missing = [str(p) for p in paths if not p.is_file()]
     if missing:
         raise FileNotFoundError('Missing: ' + ', '.join(missing))
     frames = []
     for p in paths:
         with Image.open(p) as item:
-            if item.mode != 'RGBA' or item.size != (320, 320):
+            if item.mode != 'RGBA' or item.size != (SOURCE_FRAME_SIZE, SOURCE_FRAME_SIZE):
                 raise ValueError(f'Expected 320x320 RGBA: {p}; got {item.mode} {item.size}')
             if item.getpixel((0, 0))[3] != 0:
                 raise ValueError(f'Background is not transparent: {p}')
@@ -37,15 +48,15 @@ def build(folder, cell=128, columns=4, hotspot=(44, 108)):
         dst = image.resize((cell, cell), Image.Resampling.LANCZOS)
         dst.save(runtime / f'pointer_{idx:02d}.png', optimize=True)
         resized.append(dst)
-    atlas = Image.new('RGBA', (cell * columns, cell * 3), (0, 0, 0, 0))
+    atlas = Image.new('RGBA', (cell * columns, cell * ATLAS_ROWS), (0, 0, 0, 0))
     for index, image in enumerate(resized):
         atlas.paste(image, ((index % columns) * cell, (index // columns) * cell))
     atlas_out = folder / f'pointer_atlas_{cell}.png'
     atlas.save(atlas_out, optimize=True)
     resized[0].save(folder / f'pointer_static_{cell}.png', optimize=True)
-    master = Image.new('RGBA', (320 * columns, 320 * 3), (0, 0, 0, 0))
+    master = Image.new('RGBA', (SOURCE_FRAME_SIZE * columns, SOURCE_FRAME_SIZE * ATLAS_ROWS), (0, 0, 0, 0))
     for index, image in enumerate(frames):
-        master.paste(image, ((index % columns) * 320, (index // columns) * 320))
+        master.paste(image, ((index % columns) * SOURCE_FRAME_SIZE, (index // columns) * SOURCE_FRAME_SIZE))
     master.save(folder / 'pointer_atlas_master_320.png', optimize=True)
     with Image.open(atlas_out) as actual:
         for index, expected in enumerate(resized):
@@ -53,12 +64,12 @@ def build(folder, cell=128, columns=4, hotspot=(44, 108)):
             y = (index // columns) * cell
             if actual.crop((x, y, x + cell, y + cell)).tobytes() != expected.tobytes():
                 raise RuntimeError(f'Atlas pixel mismatch for frame {index}')
-    marked = resized[5].copy()
+    marked = resized[HOTSPOT_PREVIEW_FRAME].copy()
     draw = ImageDraw.Draw(marked)
     x, y = hotspot
-    draw.ellipse((x-4, y-4, x+4, y+4), outline='#ff1665', width=2)
-    draw.line((x-11, y, x+11, y), fill='#ff1665', width=1)
-    draw.line((x, y-11, x, y+11), fill='#ff1665', width=1)
+    draw.ellipse((x-HOTSPOT_RING_RADIUS, y-HOTSPOT_RING_RADIUS, x+HOTSPOT_RING_RADIUS, y+HOTSPOT_RING_RADIUS), outline='#ff1665', width=2)
+    draw.line((x-HOTSPOT_CROSS_HALF_SIZE, y, x+HOTSPOT_CROSS_HALF_SIZE, y), fill='#ff1665', width=1)
+    draw.line((x, y-HOTSPOT_CROSS_HALF_SIZE, x, y+HOTSPOT_CROSS_HALF_SIZE), fill='#ff1665', width=1)
     (folder / 'previews').mkdir(exist_ok=True)
     marked.save(folder / 'previews/pointer_hotspot_check.png')
     config = f'''# Custom delivery format; not a Bevy built-in schema.
@@ -68,23 +79,23 @@ atlas = "pointer_atlas_{cell}.png"
 static_fallback = "pointer_static_{cell}.png"
 frame_size = [{cell}, {cell}]
 columns = {columns}
-rows = 3
-frame_count = 12
-fps = 8
+rows = {ATLAS_ROWS}
+frame_count = {FRAME_COUNT}
+fps = {ANIMATION_FPS}
 loop = true
 hotspot = [{x}, {y}]
-source_master_frame_size = [320, 320]
+source_master_frame_size = [{SOURCE_FRAME_SIZE}, {SOURCE_FRAME_SIZE}]
 '''
     (folder / 'pointer.meta.toml').write_text(config, encoding='utf-8')
     manifest = {
-        'frames': 12, 'fps': 8, 'loop': True,
+        'frames': FRAME_COUNT, 'fps': ANIMATION_FPS, 'loop': True,
         'runtime_size': [cell, cell], 'hotspot': [x, y],
         'hotspot_status': 'provisional; manual Windows mouse test required',
         'alpha': 'RGBA',
         'source_frames': [{'path': str(p.relative_to(folder)), 'sha256': digest(p)} for p in paths],
         'runtime_frames': [{'path': str((runtime / f'pointer_{i:02d}.png').relative_to(folder)),
-                            'sha256': digest(runtime / f'pointer_{i:02d}.png')} for i in range(12)],
-        'atlas': {'path': atlas_out.name, 'sha256': digest(atlas_out), 'grid': [4, 3]},
+                            'sha256': digest(runtime / f'pointer_{i:02d}.png')} for i in range(FRAME_COUNT)],
+        'atlas': {'path': atlas_out.name, 'sha256': digest(atlas_out), 'grid': [DEFAULT_COLUMNS, ATLAS_ROWS]},
     }
     (folder / 'pointer-build-manifest.json').write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False), encoding='utf-8'
@@ -95,11 +106,11 @@ source_master_frame_size = [320, 320]
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--pointer-dir', required=True, type=Path)
-    p.add_argument('--size', type=int, default=128)
-    p.add_argument('--hotspot-x', type=int, default=44)
-    p.add_argument('--hotspot-y', type=int, default=108)
+    p.add_argument('--size', type=int, default=DEFAULT_CELL_SIZE)
+    p.add_argument('--hotspot-x', type=int, default=DEFAULT_HOTSPOT[0])
+    p.add_argument('--hotspot-y', type=int, default=DEFAULT_HOTSPOT[1])
     args = p.parse_args()
-    build(args.pointer_dir, args.size, 4, (args.hotspot_x, args.hotspot_y))
+    build(args.pointer_dir, args.size, DEFAULT_COLUMNS, (args.hotspot_x, args.hotspot_y))
 
 
 if __name__ == '__main__':

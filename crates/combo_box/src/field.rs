@@ -1,3 +1,7 @@
+const CHEVRON_SIZE: f32 = 16.0;
+const FIELD_HEIGHT: f32 = 36.0;
+const FIELD_PADDING_X: f32 = 10.0;
+
 use crate::combo_box::{ComboDiagnostics, WidgetryComboBox};
 use crate::popup::ComboBoxPopup;
 use crate::{
@@ -265,15 +269,15 @@ pub(crate) fn scene() -> impl Scene {
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {
             ComboBoxFieldContent Node { align_items: AlignItems::Center }--
             ComboBoxDropdownIcon
-                @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
-                Node { width: px(16), height: px(16), flex_shrink: 0.0 }
+                @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::splat(CHEVRON_SIZE as u32))} }
+                Node { width: px(CHEVRON_SIZE), height: px(CHEVRON_SIZE), flex_shrink: 0.0 }
         }) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { ComboBoxButtonContent Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::SpaceBetween } }) as Box<dyn bevy::prelude::Scene>)}, }
         Node {
-            width: percent(100), height: px(36),
+            width: percent(100), height: px(FIELD_HEIGHT),
             flex_direction: FlexDirection::Row,
             justify_content: JustifyContent::SpaceBetween,
             align_items: AlignItems::Center,
-            padding: UiRect::axes(px(10), px(0)),
+            padding: UiRect::axes(px(FIELD_PADDING_X), px(0)),
             border: UiRect::all(px(1)),
         }
 

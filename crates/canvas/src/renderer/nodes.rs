@@ -1,3 +1,6 @@
+const HANDLE_COLOR: Color = Color::srgb(1.0, 0.75, 0.1);
+const NODE_DEPTH: f32 = 103.0;
+
 use crate::error::CanvasResult as Result;
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
@@ -58,14 +61,14 @@ pub(super) fn sync(
         .add(crate::nodes::mesh(&data, zoom));
     let material = world
         .resource_mut::<Assets<ColorMaterial>>()
-        .add(ColorMaterial::from(Color::srgb(1.0, 0.75, 0.1)));
+        .add(ColorMaterial::from(HANDLE_COLOR));
     let (m, c) = (mesh.clone(), material.clone());
     match bevy_widgetry_core::scene::spawn_scene(
         world,
         bsn! {
             Name("CanvasPathNodes") template(move |_|Ok(Mesh2d(m.clone()))) template(move |_|Ok(MeshMaterial2d(c.clone())))
             template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(ChildOf(content)))
-            Transform::from_xyz(0.0,0.0,103.0) Visibility::default() Pickable::IGNORE NoFrustumCulling
+            Transform::from_xyz(0.0,0.0,NODE_DEPTH) Visibility::default() Pickable::IGNORE NoFrustumCulling
         },
     ) {
         Ok(e) => {

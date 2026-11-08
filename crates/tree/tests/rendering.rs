@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, UiSystems};
@@ -136,7 +138,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     }
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "Tree Font 与 expander SVG 前置就绪",
         |world| {
             world.resource::<Assets<Font>>().contains(&font)

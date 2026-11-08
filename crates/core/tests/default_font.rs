@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::prelude::*;
 use bevy::text::{EditableText, FontSource};
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
@@ -129,7 +131,7 @@ fn builtin_default_loads_through_bevy_asset_server() {
     assert_eq!(handle.path(), Some(&BuiltinFont::Default.path()));
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         &format!("默认 Font {:?}", handle.id()),
         |world| world.resource::<Assets<Font>>().contains(handle.id()),
     )

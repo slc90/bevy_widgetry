@@ -1,3 +1,14 @@
+const LOCATION_PADDING_X: f32 = 8.0;
+
+const CONTROL_FONT_SIZE: f32 = 14.0;
+const FILTER_LABEL_WIDTH: f32 = 76.0;
+const FILTER_ROW_HEIGHT: f32 = 28.0;
+const FILTER_MAX_VISIBLE_ITEMS: usize = 6;
+const CONTROL_GAP: f32 = 8.0;
+const SELECTION_SUMMARY_ITEMS: usize = 3;
+const LOCATION_MIN_HEIGHT: f32 = 30.0;
+const LOCATION_PADDING_Y: f32 = 4.0;
+
 use crate::style::{Part, PartKind};
 use crate::*;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -92,7 +103,7 @@ pub(crate) fn models(world: &mut World, root: Entity, state: &WidgetryFileDialog
 }
 
 fn button(root: Entity, action: UiAction, name: &'static str, label: &'static str) -> impl Scene {
-    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label.into(), 14.0)}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))  }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label.into(), CONTROL_FONT_SIZE)}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))  }
 }
 
 pub(crate) fn file_type(root: Entity, style: &WidgetryFileDialogStyle) -> impl Scene {
@@ -100,14 +111,14 @@ pub(crate) fn file_type(root: Entity, style: &WidgetryFileDialogStyle) -> impl S
         let label = choice.1.clone();
         bsn_list! { Node {width:percent(100),min_width:px(0),overflow:Overflow::clip()}
             @bevy_widgetry_tooltip::WidgetryTooltip {
-                @content:{bevy_widgetry_tooltip::TooltipContentFactory::new(move || bsn_list! { @crate::style::text_scene(label.clone(),14.0) })}
+                @content:{bevy_widgetry_tooltip::TooltipContentFactory::new(move || bsn_list! { @crate::style::text_scene(label.clone(),CONTROL_FONT_SIZE) })}
             }
-            Children [ @crate::style::text_scene(choice.1.clone(),14.0) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()} ]
+            Children [ @crate::style::text_scene(choice.1.clone(),CONTROL_FONT_SIZE) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()} ]
         }
     });
     bsn! { Name("FileDialogFileTypeRow") Node {width:percent(100),flex_shrink:0.0,column_gap:px(style.spacing),align_items:AlignItems::Center} Children [
-        @crate::style::text_scene("File type:".into(),style.font_size) Node {width:px(76),flex_shrink:0.0}--
-        @WidgetryComboBox::<FilterChoice> {@source:root,@item_height:28.0,@max_visible_items:6,@renderer:renderer}
+        @crate::style::text_scene("File type:".into(),style.font_size) Node {width:px(FILTER_LABEL_WIDTH),flex_shrink:0.0}--
+        @WidgetryComboBox::<FilterChoice> {@source:root,@item_height:FILTER_ROW_HEIGHT,@max_visible_items:FILTER_MAX_VISIBLE_ITEMS,@renderer:renderer}
             template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<FilterChoice>>::new(root)))
             Name("FileDialogFilter") template(move |_| Ok(Part {root,kind:PartKind::Filter})) Node {flex_grow:1.0,min_width:px(0)} TabIndex(-1)
     ] }
@@ -115,12 +126,12 @@ pub(crate) fn file_type(root: Entity, style: &WidgetryFileDialogStyle) -> impl S
 
 pub(crate) fn panels(root: Entity) -> impl SceneList {
     bsn_list! {
-        Name("FileDialogFolderPanel") template(move |_| Ok(Part {root, kind: PartKind::FolderPanel})) Node { display: Display::None, column_gap: px(8), width: percent(100), align_items: AlignItems::Center } Children [
-            @crate::style::text_scene("New folder".into(), 14.0)-- @crate::style::editor_scene(root, PartKind::Folder, "FileDialogFolderName", String::new())--
+        Name("FileDialogFolderPanel") template(move |_| Ok(Part {root, kind: PartKind::FolderPanel})) Node { display: Display::None, column_gap: px(CONTROL_GAP), width: percent(100), align_items: AlignItems::Center } Children [
+            @crate::style::text_scene("New folder".into(), CONTROL_FONT_SIZE)-- @crate::style::editor_scene(root, PartKind::Folder, "FileDialogFolderName", String::new())--
             @button(root, UiAction::FolderCreate, "FileDialogFolderCreate", "Create")-- @button(root, UiAction::FolderCancel, "FileDialogFolderCancel", "Dismiss")
         ]--
-        Name("FileDialogOverwritePanel") template(move |_| Ok(Part {root, kind: PartKind::OverwritePanel})) Node { display: Display::None, column_gap: px(8), width: percent(100), align_items: AlignItems::Center } Children [
-            @crate::style::text_scene("Target exists. Replace?".into(), 14.0)-- @button(root, UiAction::Overwrite(true), "FileDialogOverwriteYes", "Replace")-- @button(root, UiAction::Overwrite(false), "FileDialogOverwriteNo", "Keep editing")
+        Name("FileDialogOverwritePanel") template(move |_| Ok(Part {root, kind: PartKind::OverwritePanel})) Node { display: Display::None, column_gap: px(CONTROL_GAP), width: percent(100), align_items: AlignItems::Center } Children [
+            @crate::style::text_scene("Target exists. Replace?".into(), CONTROL_FONT_SIZE)-- @button(root, UiAction::Overwrite(true), "FileDialogOverwriteYes", "Replace")-- @button(root, UiAction::Overwrite(false), "FileDialogOverwriteNo", "Keep editing")
         ]
     }
 }
@@ -345,7 +356,7 @@ fn selection_summary(state: &WidgetryFileDialogState) -> String {
     let names = state
         .selected()
         .iter()
-        .take(3)
+        .take(SELECTION_SUMMARY_ITEMS)
         .filter_map(|id| state.snapshot()?.entry(*id))
         .map(|entry| entry.name().to_string_lossy().into_owned())
         .collect::<Vec<_>>()
@@ -364,7 +375,7 @@ fn selection_summary(state: &WidgetryFileDialogState) -> String {
         format!(
             "{} {kind} selected: {names}{}",
             state.selected().len(),
-            if state.selected().len() > 3 {
+            if state.selected().len() > SELECTION_SUMMARY_ITEMS {
                 "; …"
             } else {
                 ""
@@ -380,7 +391,7 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
     let font = world
         .get::<WidgetryFileDialogStyle>(root)
         .map(|style| style.font_size)
-        .unwrap_or(14.0);
+        .unwrap_or(CONTROL_FONT_SIZE);
     if world
         .get::<SidebarProjection>(area)
         .is_some_and(|projection| {
@@ -430,7 +441,7 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
             let accessible_label = label.clone();
             let scene = bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label, font) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()}}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, justify_content: JustifyContent::FlexStart } }) as Box<dyn bevy::prelude::Scene>)}, } Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
             template(move |_| {let mut node=accesskit::Node::new(accesskit::Role::Button);node.set_label(accessible_label.clone());Ok(bevy::a11y::AccessibilityNode(node))})
-            template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(30), flex_shrink: 0.0,border:UiRect::ZERO,padding:UiRect::axes(px(8),px(4)),justify_content:JustifyContent::FlexStart,align_items:AlignItems::Center,overflow:Overflow::clip()}
+            template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(LOCATION_MIN_HEIGHT), flex_shrink: 0.0,border:UiRect::ZERO,padding:UiRect::axes(px(LOCATION_PADDING_X),px(LOCATION_PADDING_Y)),justify_content:JustifyContent::FlexStart,align_items:AlignItems::Center,overflow:Overflow::clip()}
              };
             rows.push(
                 bevy_widgetry_core::scene::spawn_scene(world, scene).map_err(|error| {

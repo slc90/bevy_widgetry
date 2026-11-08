@@ -1,3 +1,6 @@
+const CELL_PADDING_X: f32 = 6.0;
+const REGION_BORDER_WIDTH: f32 = 1.0;
+const READ_ONLY_SELECTION_TINT: f32 = 0.12;
 use crate::projection::TableRuntime;
 use crate::runtime_error::{RuntimeDiagnostics, Site, entity_site};
 use crate::runtime_error::{RuntimeResult, required};
@@ -290,12 +293,12 @@ pub struct WidgetryTableStyle {
 impl Default for WidgetryTableStyle {
     fn default() -> Self {
         let item = WidgetryTableRegionStyle {
-            padding: UiRect::horizontal(px(6)),
-            border: UiRect::all(px(1)),
+            padding: UiRect::horizontal(px(CELL_PADDING_X)),
+            border: UiRect::all(px(REGION_BORDER_WIDTH)),
         };
         Self {
             table: WidgetryTableRegionStyle {
-                border: UiRect::all(px(1)),
+                border: UiRect::all(px(REGION_BORDER_WIDTH)),
                 ..default()
             },
             column_header: item.clone(),
@@ -340,7 +343,9 @@ fn style_shell(
     };
     let background =
         if !disabled && !selected && world.get::<crate::editing::ReadOnlyCell>(entity).is_some() {
-            state.background.mix(&colors.selected.background, 0.12)
+            state
+                .background
+                .mix(&colors.selected.background, READ_ONLY_SELECTION_TINT)
         } else {
             state.background
         };

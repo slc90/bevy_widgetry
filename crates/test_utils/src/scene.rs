@@ -1,3 +1,6 @@
+const DEFAULT_TEST_VIEWPORT: UVec2 = UVec2::splat(600);
+const MANUAL_FRAME_DURATION: Duration = Duration::from_millis(16);
+
 use bevy::prelude::*;
 use bevy::{
     input::{
@@ -55,7 +58,7 @@ pub fn text_input_app() -> App {
 pub fn text_edit_app() -> App {
     let mut app = text_input_app();
     add_ui_plugins(&mut app);
-    spawn_ui_camera(&mut app, UVec2::splat(600), 1.0);
+    spawn_ui_camera(&mut app, DEFAULT_TEST_VIEWPORT, 1.0);
     app
 }
 
@@ -145,7 +148,7 @@ pub fn picking_app() -> App {
         is_touch_enabled: false,
     });
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
-        Duration::from_millis(16),
+        MANUAL_FRAME_DURATION,
     ));
     app
 }

@@ -1,3 +1,5 @@
+const DRAG_ACTIVATION_DISTANCE_SQUARED: f32 = 16.0;
+
 use crate::runtime_error::{RuntimeResult, required};
 
 use crate::{
@@ -368,7 +370,7 @@ fn apply<T: Send + Sync + 'static>(
     session.active |= distance
         .unwrap_or(session.location.position - session.start)
         .length_squared()
-        >= 16.0;
+        >= DRAG_ACTIVATION_DISTANCE_SQUARED;
     if session.active {
         world.entity_mut(root).insert(SuppressClick);
         let destination = endpoint(world, root, &session)?;

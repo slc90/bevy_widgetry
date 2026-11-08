@@ -7,6 +7,8 @@
     feature = "text_field"
 ))]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::{
     input::{
         ButtonState,
@@ -147,7 +149,7 @@ fn editing_app(combo_first: bool) -> App {
         .load::<Font>(BuiltinFont::Default.path());
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "facade 编辑前置字体",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

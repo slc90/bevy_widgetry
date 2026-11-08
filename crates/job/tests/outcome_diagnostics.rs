@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool};
 use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
 use bevy_widgetry_job::*;
@@ -8,7 +10,6 @@ use std::{
     error::Error,
     io,
     sync::{Arc, mpsc},
-    time::Duration,
 };
 
 fn receive(receiver: &mut JobReceiver<()>) -> JobFailure {
@@ -56,7 +57,7 @@ fn real_execution_backends_share_the_work_origin_with_snapshots_and_two_subscrib
         .unwrap();
         let mut second = manager.subscribe::<()>(id).unwrap();
         gate.notify(usize::MAX);
-        let origin = original.recv_timeout(Duration::from_secs(5)).unwrap();
+        let origin = original.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let a = receive(&mut first);
         let b = receive(&mut second);
         let JobOutcome::Failed(snapshot) = manager.status(id).unwrap().outcome.unwrap() else {

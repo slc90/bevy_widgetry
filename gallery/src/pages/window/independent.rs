@@ -1,3 +1,12 @@
+const LAUNCH_BUTTON_WIDTH: f32 = 160.0;
+const LAUNCH_BUTTON_HEIGHT: f32 = 40.0;
+const TITLE_PADDING: f32 = 12.0;
+const CONTENT_PADDING: f32 = 24.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 12.0;
+
 use super::DemoText;
 use crate::assets::GalleryImage;
 use crate::i18n::WindowKey;
@@ -14,11 +23,11 @@ use bevy_widgetry::{
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
         Children [
             @localized(TextKey::Window(WindowKey::IndependentWindow)) bevy_widgetry::text::WidgetryText--
             #WindowThemeButton @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Window(WindowKey::Theme)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
-                Node { width: px(160), height: px(40), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+                Node { width: px(LAUNCH_BUTTON_WIDTH), height: px(LAUNCH_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                 on(|_: On<Activate>, commands: Commands, language: Res<Language>| open_window(commands, WidgetryWindowBackground::Theme, LocalizedText::new(TextKey::Window(WindowKey::Theme)), *language, "WindowThemeDemo".into()))
                 --
             @image_buttons(GalleryImage::WindowBackground1,TextKey::Window(WindowKey::Background1), "WindowBackground1")--
@@ -29,10 +38,10 @@ pub(super) fn scene() -> impl Scene {
 
 fn image_buttons(image: GalleryImage, label: TextKey, prefix: &'static str) -> impl Scene {
     bsn! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
         Children [
             @localized(label) bevy_widgetry::text::WidgetryText--
-            Node { column_gap: px(12) } Children [
+            Node { column_gap: px(CONTROL_GAP) } Children [
                 @image_button(image, WidgetryWindowImageMode::Stretch, 1.0,TextKey::Window(WindowKey::Stretch), prefix, "Stretch")--
                 @image_button(image, WidgetryWindowImageMode::Cover, 1.0,TextKey::Window(WindowKey::Cover), prefix, "Cover")--
                 @image_button(image, WidgetryWindowImageMode::Cover, 0.5,TextKey::Window(WindowKey::Cover50), prefix, "Cover50")
@@ -67,7 +76,7 @@ fn image_button(
     bsn! {
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(Name::new(button_name.clone())))
-        Node { width: px(160), height: px(40), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+        Node { width: px(LAUNCH_BUTTON_WIDTH), height: px(LAUNCH_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(move |_: On<Activate>, commands: Commands, assets: Res<AssetServer>, language: Res<Language>| {
             let background = WidgetryWindowBackground::Image(WidgetryWindowImageBackground {
                 image: assets.load(image.path()), mode, opacity,
@@ -90,12 +99,12 @@ fn open_window(
         @owned_widgetry_window(Window { title: title.render(language), resolution: (640, 400).into(), ..default() }, WidgetryWindowControlsConfig::default(), background, Default::default(),
             bsn_list!{
                 @demo_text()
-                Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
+                Node { padding: UiRect::left(px(TITLE_PADDING)), align_items: AlignItems::Center }
                 Children [bevy_widgetry::window::WidgetryWindowTitle bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))]
             },
             bsn_list!{
                 @demo_text()
-                Node { padding: UiRect::all(px(24)), flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
+                Node { padding: UiRect::all(px(CONTENT_PADDING)), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start }
                 Children [
                     @localized(TextKey::Window(WindowKey::ThisIsAnIndependentWidgetryWindow)) bevy_widgetry::text::WidgetryText--
 

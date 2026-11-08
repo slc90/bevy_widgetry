@@ -1,3 +1,12 @@
+const RGBA_CHANNELS: u32 = 4;
+const OPAQUE_CHANNEL: u8 = 255;
+const RING_HALF_WIDTH: f32 = 4.5;
+const RING_RADIUS: f32 = 40.0;
+const ARC_GAP_HALF_ANGLE: f32 = std::f32::consts::PI / 6.0;
+const ARC_EDGE_SHARPNESS: f32 = 40.0;
+const TRACK_ALPHA_FACTOR: f32 = 0.22;
+const SPIN_PERIOD_SECONDS: f32 = 1.2;
+
 use crate::{ButtonError, ButtonFailure, WidgetryButton, WidgetryButtonLoading, error::failure};
 use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
@@ -148,18 +157,23 @@ fn present(world: &mut World, root: Entity, active: bool) -> Result<(), ButtonFa
 
 fn mask(arc: bool) -> Image {
     const SIZE: u32 = 96;
-    let mut data = Vec::with_capacity((SIZE * SIZE * 4) as usize);
+    let mut data = Vec::with_capacity((SIZE * SIZE * RGBA_CHANNELS) as usize);
     for y in 0..SIZE {
         for x in 0..SIZE {
             let point = Vec2::new(x as f32 + 0.5, y as f32 + 0.5) - Vec2::splat(SIZE as f32 / 2.0);
-            let ring = (4.5 - (point.length() - 40.0).abs()).clamp(0.0, 1.0);
+            let ring = (RING_HALF_WIDTH - (point.length() - RING_RADIUS).abs()).clamp(0.0, 1.0);
             let angle = point.y.atan2(point.x).abs();
             let coverage = if arc {
-                ((angle - std::f32::consts::PI / 6.0) * 40.0 + 0.5).clamp(0.0, 1.0)
+                ((angle - ARC_GAP_HALF_ANGLE) * ARC_EDGE_SHARPNESS + 0.5).clamp(0.0, 1.0)
             } else {
                 1.0
             };
-            data.extend_from_slice(&[255, 255, 255, (ring * coverage * 255.0).round() as u8]);
+            data.extend_from_slice(&[
+                OPAQUE_CHANNEL,
+                OPAQUE_CHANNEL,
+                OPAQUE_CHANNEL,
+                (ring * coverage * f32::from(OPAQUE_CHANNEL)).round() as u8,
+            ]);
         }
     }
     Image::new(
@@ -207,7 +221,9 @@ fn update_spinner_images(
         let color = if is_arc {
             foreground.0
         } else {
-            foreground.0.with_alpha(foreground.0.alpha() * 0.22)
+            foreground
+                .0
+                .with_alpha(foreground.0.alpha() * TRACK_ALPHA_FACTOR)
         };
         let handle = if is_arc { arc } else { track };
         if image.image != *handle {
@@ -229,7 +245,7 @@ fn animate_spinners(
     let Some(time) = time else {
         return;
     };
-    let step = Rot2::radians(time.delta_secs() * std::f32::consts::TAU / 1.2);
+    let step = Rot2::radians(time.delta_secs() * std::f32::consts::TAU / SPIN_PERIOD_SECONDS);
     let mut active = false;
     for (children, loading) in &roots {
         if !loading.is_active() {

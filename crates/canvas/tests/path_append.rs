@@ -265,6 +265,8 @@ fn small_contours_and_zero_length_line_remain_ordinary_editable_path_commands() 
 
 #[test]
 fn rounded_ellipse_endpoints_cannot_silently_change_the_other_radius() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     for radius in [0.1, 0.15] {
         let (mut world, document, shape) = fixture();
         rejected(&mut world, document, shape, |w| {
@@ -291,7 +293,8 @@ fn rounded_ellipse_endpoints_cannot_silently_change_the_other_radius() {
         .bounds(&Transform::default(), &CanvasPaint::default())
         .unwrap();
     assert!(
-        (bounds.min.y + 100.0).abs() < 0.001 && (bounds.max.y - 100.0).abs() < 0.001,
+        (bounds.min.y + 100.0).abs() < COMPARISON_TOLERANCE
+            && (bounds.max.y - 100.0).abs() < COMPARISON_TOLERANCE,
         "ellipse radii changed: {bounds:?}"
     );
     assert_eq!(bounds.min.x, 1_000_000.0 - 0.125);

@@ -1,3 +1,15 @@
+const LAZY_LOAD_DELAY: Duration = Duration::from_millis(800);
+const SELECTION_SUMMARY_LIMIT: usize = 16;
+const SELECTION_SUMMARY_EDGE_ITEMS: usize = 4;
+
+const ITEM_VIEW_HEIGHT: f32 = 160.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 20.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 24.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::TreeKey;
 use crate::i18n::{CommonKey, NavigationKey};
@@ -21,7 +33,7 @@ pub(crate) struct TreeDemoPlugin;
 
 pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let source = world.resource::<DemoSources>().models[0];
-    let view = move || bsn! { @WidgetryTreeView { @source: source } Node { width: percent(100), height: px(160) } };
+    let view = move || bsn! { @WidgetryTreeView { @source: source } Node { width: percent(100), height: px(ITEM_VIEW_HEIGHT) } };
     crate::color_showcase::pair(
         TextKey::Navigation(NavigationKey::Tree),
         TextKey::Tree(TreeKey::OnlyItemSelectedBackground0F766EMovePointer2),
@@ -107,7 +119,7 @@ enum Action {
 pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
     bsn! {
         template(|_| Ok(TreeDemo))
-        Node { width: percent(100), flex_shrink: 0.0, display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::auto(3)], column_gap: px(24), row_gap: px(20) }
+        Node { width: percent(100), flex_shrink: 0.0, display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::auto(3)], column_gap: px(CONTENT_GAP), row_gap: px(ITEM_GAP) }
         Children [
             @panel(sources[4], 4,TextKey::Tree(TreeKey::TreeSharedA),TextKey::Tree(TreeKey::TreeSharedDescription))--
             @panel(sources[4], 5,TextKey::Tree(TreeKey::TreeSharedB),TextKey::Tree(TreeKey::TreeSharedDescription))--
@@ -157,13 +169,13 @@ fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> i
     })
     .collect::<Vec<_>>();
     bsn! {
-        Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
         Children [
             @localized(title) bevy_widgetry::text::WidgetryText--
-            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
-            template(move |_| Ok(TreeStatus { source, view_kind: kind })) Name({format!("TreeStatus{kind}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }--
+            template(move |_| Ok(TreeStatus { source, view_kind: kind })) Name({format!("TreeStatus{kind}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }--
             @WidgetryTreeView { @source: source, @draggable: {kind != 5} } template(move |_| Ok(DemoTreeView(kind))) Name({format!("TreeView{kind}")}) Node { width: percent(100), height: px(if kind == 5 { 194 } else { 258 }), flex_shrink: 0.0 }--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{controls}]
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP), flex_wrap: FlexWrap::Wrap } Children [{controls}]
         ]
     }
 }
@@ -397,8 +409,7 @@ fn on_tree_event(
                         .field("node", format_args!("{:?}", node)),
                     ));
                 }
-                let deadline =
-                    world.resource::<Time<Real>>().elapsed() + Duration::from_millis(800);
+                let deadline = world.resource::<Time<Real>>().elapsed() + LAZY_LOAD_DELAY;
                 world.entity_mut(node).insert(LoadDeadline(deadline));
                 info!(?node, "开始加载 Tree children");
                 Ok(())
@@ -498,11 +509,11 @@ fn update_status(world: &mut World) {
             let state = selection;
             let mut nodes = state.selected_ids().iter().copied().collect::<Vec<_>>();
             nodes.sort();
-            if nodes.len() > 16 {
+            if nodes.len() > SELECTION_SUMMARY_LIMIT {
                 nodes = nodes
                     .iter()
-                    .take(4)
-                    .chain(nodes.iter().rev().take(4))
+                    .take(SELECTION_SUMMARY_EDGE_ITEMS)
+                    .chain(nodes.iter().rev().take(SELECTION_SUMMARY_EDGE_ITEMS))
                     .copied()
                     .collect();
             }

@@ -117,10 +117,10 @@ impl WidgetryFileDialogState {
                 if self.preferences.pinned.contains(&path) {
                     return Ok(false);
                 }
-                if self.preferences.pinned.len() >= 1024 {
+                if self.preferences.pinned.len() >= crate::limits::MAX_PINNED_LOCATIONS {
                     return Err(self.contract(FileDialogStateFault::PinnedCapacity {
                         actual: self.preferences.pinned.len(),
-                        limit: 1024,
+                        limit: crate::limits::MAX_PINNED_LOCATIONS,
                     }));
                 }
                 self.preferences.pinned.push(path);

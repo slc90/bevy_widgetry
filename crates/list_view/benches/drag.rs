@@ -15,7 +15,8 @@ struct Fixture {
 
 fn main() -> Result {
     let mut harness = Harness::new("list-drag")?;
-    for count in [1_000, 10_000, 100_000] {
+    let item_counts = [1_000, 10_000, 100_000];
+    for count in item_counts {
         run(
             &mut harness,
             &format!("list_drag/n{count}/move_and_update"),

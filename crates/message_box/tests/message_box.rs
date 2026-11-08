@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::camera::{RenderTarget, visibility::VisibilitySystems};
 use bevy::window::WindowRef;
 use bevy::{
@@ -633,7 +635,7 @@ fn rendering_app() -> App {
         .load::<Font>(BuiltinFont::Default.path());
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "MessageBox 前置字体",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

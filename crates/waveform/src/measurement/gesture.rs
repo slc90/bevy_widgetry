@@ -1,3 +1,5 @@
+const EDGE_HIT_MARGIN: f32 = 5.0;
+
 use bevy::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -16,16 +18,16 @@ pub(super) fn hit(rect: Option<Rect>, point: Vec2) -> Edit {
     let Some(rect) = rect else {
         return Edit::Draw;
     };
-    let pad = Vec2::splat(5.0);
+    let pad = Vec2::splat(EDGE_HIT_MARGIN);
     if !Rect::from_corners(rect.min - pad, rect.max + pad).contains(point) {
         return Edit::Draw;
     }
-    let left = (point.x - rect.min.x).abs() <= 5.0
+    let left = (point.x - rect.min.x).abs() <= EDGE_HIT_MARGIN
         && (point.x - rect.min.x).abs() <= (point.x - rect.max.x).abs();
-    let right = !left && (point.x - rect.max.x).abs() <= 5.0;
-    let top = (point.y - rect.min.y).abs() <= 5.0
+    let right = !left && (point.x - rect.max.x).abs() <= EDGE_HIT_MARGIN;
+    let top = (point.y - rect.min.y).abs() <= EDGE_HIT_MARGIN
         && (point.y - rect.min.y).abs() <= (point.y - rect.max.y).abs();
-    let bottom = !top && (point.y - rect.max.y).abs() <= 5.0;
+    let bottom = !top && (point.y - rect.max.y).abs() <= EDGE_HIT_MARGIN;
     if left || right || top || bottom {
         Edit::Resize {
             left,
@@ -109,19 +111,23 @@ mod tests {
                 edit,
                 rect,
                 point,
-                point + Vec2::splat(5.0),
+                point + Vec2::splat(EDGE_HIT_MARGIN),
                 Vec2::splat(100.0),
             );
             assert_eq!(
                 changed.min,
-                rect.min + Vec2::new(if left { 5.0 } else { 0.0 }, if top { 5.0 } else { 0.0 })
+                rect.min
+                    + Vec2::new(
+                        if left { EDGE_HIT_MARGIN } else { 0.0 },
+                        if top { EDGE_HIT_MARGIN } else { 0.0 }
+                    )
             );
             assert_eq!(
                 changed.max,
                 rect.max
                     + Vec2::new(
-                        if right { 5.0 } else { 0.0 },
-                        if bottom { 5.0 } else { 0.0 }
+                        if right { EDGE_HIT_MARGIN } else { 0.0 },
+                        if bottom { EDGE_HIT_MARGIN } else { 0.0 }
                     )
             );
         }

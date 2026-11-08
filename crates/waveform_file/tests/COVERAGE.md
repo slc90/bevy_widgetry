@@ -13,3 +13,4 @@
 
 - Source 并发回归同时检查已完成失败在取消、同 reader 替换、Source 销毁及阻塞查询迟到后被明确废弃时，只记录同源处理 DEBUG；错误构造于捕获作用域，真实执行线程显式携带测试 dispatcher。既有受管 Job 控制报告直接共享，不再匹配旧 enum 包装。
 - Reader 模块回归还覆盖：同一次队列中毒跨 stats/read/终态只保留一个 origin；工作线程真实 I/O 错误经过请求通道到 WaveformRuntime 保留 origin、原生原因和结构化现场；查询失败与队列中毒同时到达时全部保留；工作线程已持锁 panic 后 Source Drop 才发现的队列故障也在真实退出后消费。清理与传播不依赖错误链的固定包装深度。
+- `recording.rs` 的固定 wire fixture 独立检查原始有效性记录、MinMax span、六层 LTTB 数据点及索引偏移、文件头/尾与 JSON 字段；同时直接打开独立组装的 fixture，避免仅靠读写 round-trip 掩盖共同布局错误。

@@ -1,3 +1,24 @@
+const WORK_SEED: u64 = 0x6a09e667f3bcc909;
+const CPU_WORK_ITERATIONS: i32 = 8_000_000;
+const LIGHT_WORK_ITERATIONS: i32 = 128;
+const WORK_MIX_ROTATION: u32 = 13;
+const WORK_MIX_MULTIPLIER: u64 = 0x9e3779b97f4a7c15;
+const WORK_MIX_SHIFT: i32 = 7;
+const BATCH_VALUES: u64 = 8192;
+const FAILURE_DELAY: Duration = Duration::from_millis(500);
+const IO_BATCH_DELAY: Duration = Duration::from_millis(80);
+const LATE_COMPLETION_DELAY: Duration = Duration::from_secs(3);
+const THREAD_CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(50);
+const CANCEL_CLEANUP_DELAY: Duration = Duration::from_millis(200);
+const SLOW_READER_INTERVAL: Duration = Duration::from_millis(200);
+const MAX_DEMO_RUNS: usize = 8;
+
+const STATUS_PADDING: f32 = 10.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 12.0;
+const CONTROL_GAP: f32 = 8.0;
+
 use crate::{
     gallery::{GalleryPage, mount_page, unmount_page},
     i18n::{JobKey, Language, LocalizedText, TextKey, localized, localized_args},
@@ -277,13 +298,13 @@ fn scene() -> impl Scene {
     bsn! {
         Name("JobDemo") Parts { rows: #Rows, operation: #Operation, selection: #Selection }
         template(|_| Ok(JobDemoState::default()))
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12), flex_shrink: 0.0 }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), flex_shrink: 0.0 }
         Children [
             @localized(TextKey::Job(JobKey::Description)) WidgetryText Node { max_width: percent(100) }--
-            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8), max_width: percent(100) } Children [{buttons}]--
+            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP), max_width: percent(100) } Children [{buttons}]--
             #Selection Name("JobSelection") @localized(TextKey::Job(JobKey::Ready)) WidgetryText--
             #Operation Name("JobOperationResult") Text("") WidgetryText--
-            #Rows Name("JobRows") Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
+            #Rows Name("JobRows") Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
         ]
     }
 }
@@ -291,7 +312,7 @@ fn scene() -> impl Scene {
 fn row(id: JobId, mode: Mode) -> impl Scene {
     bsn! {
         Name({format!("JobRow{}", id.get())}) Row { status: #Status, a: #A, b: #B }
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), padding: UiRect::all(px(10)), flex_shrink: 0.0 }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), padding: UiRect::all(px(STATUS_PADDING)), flex_shrink: 0.0 }
         Children [
             Name({format!("JobSelect{}", id.get())}) template(move |_| Ok(Select(id)))
             @WidgetryButton { @children: {Some(Box::new(bsn_list! { @localized_args(TextKey::Job(JobKey::Select), vec![("id",id.get().to_string()),("kind",format!("{mode:?}"))]) WidgetryText }) as Box<dyn SceneList>)} }
@@ -304,13 +325,22 @@ fn row(id: JobId, mode: Mode) -> impl Scene {
 }
 
 fn batch(sequence: u32, cpu: bool) -> DemoEvent {
-    let mut value = u64::from(sequence).wrapping_add(0x6a09e667f3bcc909);
-    for _ in 0..if cpu { 8_000_000 } else { 128 } {
-        value = value.rotate_left(13).wrapping_mul(0x9e3779b97f4a7c15) ^ (value >> 7);
+    let mut value = u64::from(sequence).wrapping_add(WORK_SEED);
+    for _ in 0..if cpu {
+        CPU_WORK_ITERATIONS
+    } else {
+        LIGHT_WORK_ITERATIONS
+    } {
+        value = value
+            .rotate_left(WORK_MIX_ROTATION)
+            .wrapping_mul(WORK_MIX_MULTIPLIER)
+            ^ (value >> WORK_MIX_SHIFT);
     }
     DemoEvent::Batch {
         sequence,
-        values: (0..8192).map(|index| value.wrapping_add(index)).collect(),
+        values: (0..BATCH_VALUES)
+            .map(|index| value.wrapping_add(index))
+            .collect(),
     }
 }
 
@@ -335,7 +365,7 @@ async fn async_work(
     produced: Arc<AtomicU32>,
 ) -> std::result::Result<(), JobFailure> {
     if matches!(mode, Mode::Failure) {
-        futures_timer::Delay::new(Duration::from_millis(500)).await;
+        futures_timer::Delay::new(FAILURE_DELAY).await;
         return Err(JobFailure::external(
             RequestedDemoFailure,
             bevy_widgetry::diagnostics::ErrorFrame::new("gallery.job.work"),
@@ -347,7 +377,7 @@ async fn async_work(
             return Ok(());
         }
         if matches!(mode, Mode::Io) {
-            futures_timer::Delay::new(Duration::from_millis(80)).await;
+            futures_timer::Delay::new(IO_BATCH_DELAY).await;
         }
         if !send(&context, batch(sequence, matches!(mode, Mode::Cpu))).await? {
             return Ok(());
@@ -375,7 +405,7 @@ fn thread_work(
     produced: Arc<AtomicU32>,
 ) -> std::result::Result<(), JobFailure> {
     if matches!(mode, Mode::LateComplete) {
-        std::thread::sleep(Duration::from_secs(3));
+        std::thread::sleep(LATE_COMPLETION_DELAY);
         return match context.send_blocking(DemoEvent::Progress {
             processed: 1,
             total,
@@ -387,10 +417,10 @@ fn thread_work(
     for sequence in 1..=total {
         let canceled = bevy::tasks::block_on(futures_util::future::select(
             Box::pin(context.cancelled()),
-            Box::pin(futures_timer::Delay::new(Duration::from_millis(50))),
+            Box::pin(futures_timer::Delay::new(THREAD_CANCEL_POLL_INTERVAL)),
         ));
         if matches!(canceled, futures_util::future::Either::Left(_)) {
-            std::thread::sleep(Duration::from_millis(200));
+            std::thread::sleep(CANCEL_CLEANUP_DELAY);
             context.acknowledge_cancel();
             return Ok(());
         }
@@ -409,7 +439,7 @@ fn thread_work(
                     }
                 }
                 Ok(SendStatus::Canceled) => {
-                    std::thread::sleep(Duration::from_millis(200));
+                    std::thread::sleep(CANCEL_CLEANUP_DELAY);
                     context.acknowledge_cancel();
                     return Ok(());
                 }
@@ -421,7 +451,7 @@ fn thread_work(
 }
 
 fn start(world: &mut World, demo: &mut Demo, mode: Mode) -> std::result::Result<String, WorkError> {
-    if demo.runs.len() >= 8 {
+    if demo.runs.len() >= MAX_DEMO_RUNS {
         return Err(
             crate::i18n::tr(*world.resource::<Language>(), TextKey::Job(JobKey::Limit)).into(),
         );
@@ -680,7 +710,7 @@ impl Consumer {
             self.finished = Some(outcome);
             self.receiver = None;
         }
-        self.next_read = slow.then_some(now + Duration::from_millis(200));
+        self.next_read = slow.then_some(now + SLOW_READER_INTERVAL);
         Ok(())
     }
 
@@ -814,6 +844,8 @@ fn redraw(
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
 
     #[test]
@@ -833,7 +865,7 @@ mod tests {
         let (gate, release) = std::sync::mpsc::channel();
         let (id, mut receiver) = manager
             .spawn_thread::<(), _>(Default::default(), move |_| {
-                release.recv_timeout(Duration::from_secs(5)).unwrap();
+                release.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 Err(failure)
             })
             .unwrap();

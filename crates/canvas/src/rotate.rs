@@ -1,3 +1,6 @@
+const HANDLE_HIT_MARGIN: f32 = 2.0;
+const SNAP_ANGLE_RADIANS: f64 = std::f64::consts::PI / 12.0;
+
 use crate::CanvasDocument;
 use crate::error::CanvasResult as Result;
 use bevy::{math::DVec2, prelude::*};
@@ -23,7 +26,7 @@ pub(crate) fn hit(world: &mut World, shape: Entity, point: Vec2, zoom: f32) -> R
             (control(crate::selection::frame(world, shape)?, zoom) - point).length_squared()
                 * zoom
                 * zoom
-                <= (HANDLE_SIZE * 0.5 + 2.0).powi(2),
+                <= (HANDLE_SIZE * 0.5 + HANDLE_HIT_MARGIN).powi(2),
         )
     })()
     .map_err(|error| error.at("shape", shape))
@@ -80,7 +83,7 @@ impl Rotate {
             2.0 * f64::from(self.transform.rotation.z).atan2(f64::from(self.transform.rotation.w));
         let mut angle = base + delta;
         if snap {
-            let step = std::f64::consts::PI / 12.0;
+            let step = SNAP_ANGLE_RADIANS;
             angle = (angle / step).round() * step;
         }
         let mut transform = self.transform;

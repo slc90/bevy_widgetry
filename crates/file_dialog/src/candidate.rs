@@ -111,6 +111,10 @@ async fn publish(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy_widgetry_job::{JobError, JobKind, JobOutcome, JobRead};
     use std::io;
@@ -131,7 +135,7 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        let context = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        let context = ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         assert!(matches!(
             receiver.recv_blocking().unwrap(),
             JobRead::Finished(JobOutcome::Completed)
@@ -309,7 +313,7 @@ mod tests {
     }
 
     fn wait(manager: &JobManager, id: JobId) {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + ASYNC_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(Instant::now() < deadline);
             thread::yield_now();
@@ -331,7 +335,7 @@ mod tests {
                 )
                 .unwrap();
                 assert_ne!(
-                    entered.recv_timeout(Duration::from_secs(5)).unwrap(),
+                    entered.recv_timeout(TEST_WAIT_TIMEOUT).unwrap(),
                     thread::current().id()
                 );
                 assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
@@ -343,7 +347,7 @@ mod tests {
                         sentinel.send(()).unwrap();
                     })
                     .detach();
-                ready.recv_timeout(Duration::from_secs(5)).unwrap();
+                ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 if cancel {
                     manager.cancel(id).unwrap();
                 }
@@ -431,7 +435,7 @@ mod tests {
                             Ok(())
                         })
                         .unwrap();
-                    let context = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+                    let context = ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                     assert!(matches!(
                         receiver.recv_blocking().unwrap(),
                         JobRead::Finished(JobOutcome::Completed)
@@ -489,7 +493,7 @@ mod tests {
             )
             .unwrap();
             if !native {
-                entered.recv_timeout(Duration::from_secs(5)).unwrap();
+                entered.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 stop.release();
             }
             let JobRead::Item(reply) = receiver.recv_blocking().unwrap() else {
@@ -658,7 +662,7 @@ mod tests {
             )
             .unwrap();
             if panic_backend {
-                entered.recv_timeout(Duration::from_secs(5)).unwrap();
+                entered.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 stop.release();
             }
             wait(&manager, id);

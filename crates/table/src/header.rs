@@ -1,3 +1,8 @@
+const SORT_ICON_SIZE: UVec2 = UVec2::splat(16);
+
+const SORT_BUTTON_WIDTH: f32 = 24.0;
+const ACTIONS_RIGHT_MARGIN: f32 = 6.0;
+
 use crate::runtime_error::{RuntimeResult, required};
 
 use crate::{
@@ -80,15 +85,15 @@ pub(crate) fn ensure(
             Button TabIndex(-1)
             template(move |_| Ok(WidgetryTableHeaderAction { column, kind }))
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Node { width: px(24), height: percent(100), flex_shrink: 0.0, align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-            Children [@WidgetryIcon { @path: {BuiltinIcon::TableSort.path()}, @max_size: {Some(UVec2::splat(16))} }]
+            Node { width: px(SORT_BUTTON_WIDTH), height: percent(100), flex_shrink: 0.0, align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+            Children [@WidgetryIcon { @path: {BuiltinIcon::TableSort.path()}, @max_size: {Some(SORT_ICON_SIZE)} }]
         })
         .collect::<Vec<_>>();
         let entity = spawn_scene(
             world,
             bsn! {
                 template(move |_| Ok(next))
-                Node { flex_shrink: 0.0, height: percent(100), margin: UiRect::right(px(6)) }
+                Node { flex_shrink: 0.0, height: percent(100), margin: UiRect::right(px(ACTIONS_RIGHT_MARGIN)) }
                 Children [{buttons}]
             },
         )

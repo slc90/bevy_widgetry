@@ -1,3 +1,9 @@
+const RGBA_CHANNELS: usize = 4;
+const RGB_CHANNELS: usize = 3;
+const OPAQUE_ALPHA: u8 = 255;
+const ICON_REQUEST_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+const DISPLAY_ICON_SIZE: f32 = 16.0;
+
 #[allow(unsafe_code)]
 mod native;
 
@@ -96,22 +102,23 @@ fn failure(key: Option<IconKey>, operation: &'static str, source: std::io::Error
 // GDI's unused alpha bytes are not reliable for legacy icons; Bevy needs straight RGBA.
 fn straight_rgba(black: &[u8], white: &[u8]) -> Vec<u8> {
     black
-        .as_chunks::<4>()
+        .as_chunks::<{ RGBA_CHANNELS }>()
         .0
         .iter()
-        .zip(white.as_chunks::<4>().0.iter())
+        .zip(white.as_chunks::<{ RGBA_CHANNELS }>().0.iter())
         .flat_map(|(black, white)| {
-            let transparency = (0..3)
+            let transparency = (0..RGB_CHANNELS)
                 .map(|i| white[i].saturating_sub(black[i]))
                 .max()
-                .unwrap_or(255);
-            let alpha = 255 - transparency;
+                .unwrap_or(OPAQUE_ALPHA);
+            let alpha = OPAQUE_ALPHA - transparency;
             let channel = |index| {
                 if alpha == 0 {
                     0
                 } else {
-                    ((u32::from(black[index]) * 255 + u32::from(alpha) / 2) / u32::from(alpha))
-                        .min(255) as u8
+                    ((u32::from(black[index]) * u32::from(OPAQUE_ALPHA) + u32::from(alpha) / 2)
+                        / u32::from(alpha))
+                    .min(u32::from(OPAQUE_ALPHA)) as u8
                 }
             };
             [channel(2), channel(1), channel(0), alpha]
@@ -231,7 +238,7 @@ fn spawn_worker(
                     if crate::retention::cancel_if_requested(&context) {
                         return Ok(());
                     }
-                    let keys = match requests.recv_timeout(std::time::Duration::from_millis(10)) {
+                    let keys = match requests.recv_timeout(ICON_REQUEST_POLL_INTERVAL) {
                         Ok(keys) => keys,
                         Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
                         Err(error) => {
@@ -332,7 +339,7 @@ impl IconState {
                     })
                 })?;
                 let image = if let Some(Pixels(bytes)) = pixels {
-                    if bytes.len() != (SIZE * SIZE * 4) as usize {
+                    if bytes.len() != (SIZE * SIZE * RGBA_CHANNELS as u32) as usize {
                         return Err(failure(
                             Some(key.clone()),
                             "file_dialog.icons.pixels",
@@ -456,10 +463,10 @@ pub(crate) fn scene(entry: &WidgetryFileDialogEntry) -> impl Scene {
     };
     bsn! {
         Name("FileDialogEntryIcon") template(move |_| Ok(Slot {key:key.clone(),shown:None}))
-        Node {width:px(16),height:px(16),flex_shrink:0.0} template(|_| Ok(Pickable::IGNORE))
+        Node {width:px(DISPLAY_ICON_SIZE),height:px(DISPLAY_ICON_SIZE),flex_shrink:0.0} template(|_| Ok(Pickable::IGNORE))
         Children [
-            @WidgetryIcon {@path:{fallback.path()},@max_size:{Some(UVec2::splat(16))}} Node {width:px(16),height:px(16)} template(|_| Ok(Pickable::IGNORE))--
-            Name("FileDialogNativeIcon") ImageNode::default() Node {width:px(16),height:px(16),display:Display::None} template(|_| Ok(Pickable::IGNORE))
+            @WidgetryIcon {@path:{fallback.path()},@max_size:{Some(UVec2::splat(DISPLAY_ICON_SIZE as u32))}} Node {width:px(DISPLAY_ICON_SIZE),height:px(DISPLAY_ICON_SIZE)} template(|_| Ok(Pickable::IGNORE))--
+            Name("FileDialogNativeIcon") ImageNode::default() Node {width:px(DISPLAY_ICON_SIZE),height:px(DISPLAY_ICON_SIZE),display:Display::None} template(|_| Ok(Pickable::IGNORE))
         ]
     }
 }
@@ -636,6 +643,8 @@ pub(crate) fn update(world: &mut World) {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use crate::*;
     use std::sync::{Arc, Mutex, mpsc};
@@ -665,7 +674,7 @@ mod tests {
     }
 
     fn finish(state: &mut IconState, world: &mut World) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while state.worker.as_ref().is_some_and(Worker::busy) {
             let mut budget = RESULTS_PER_UPDATE;
             state.poll(world, &mut budget).unwrap();
@@ -788,7 +797,7 @@ mod tests {
             })
             .unwrap(),
         );
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         WidgetryFileDialog::apply(
             app.world_mut(),
             root,
@@ -1045,7 +1054,7 @@ mod tests {
             .unwrap(),
         );
         let id = state.worker.as_ref().unwrap().id.unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while threads.lock().unwrap().len() < BATCH {
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(1));
@@ -1087,7 +1096,7 @@ mod tests {
         assert_eq!(state.worker.as_ref().unwrap().id, Some(id));
         assert_eq!(world.resource::<Assets<Image>>().len(), BATCH + 1);
         drop(state);
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while manager.find_status(id).is_some() {
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(1));
@@ -1115,7 +1124,7 @@ mod tests {
             .unwrap(),
         );
         let id = state.worker.as_ref().unwrap().id.unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(1));
@@ -1160,21 +1169,21 @@ mod tests {
         let mut state = IconState::new(identity());
         state.worker = Some(batch);
         let owner = world.spawn(state).id();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let (sentinel, check) = mpsc::channel();
         bevy::tasks::IoTaskPool::get()
             .spawn(async move {
                 sentinel.send(()).unwrap();
             })
             .detach();
-        check.recv_timeout(Duration::from_secs(5)).unwrap();
+        check.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         world.despawn(owner);
         assert!(matches!(
             manager.status(id).unwrap().state,
             bevy_widgetry_job::JobState::Stopping
         ));
         release.send(()).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while manager.find_status(id).is_some() {
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(1));

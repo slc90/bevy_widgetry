@@ -6,6 +6,15 @@ import sys
 from pathlib import Path
 
 
+P95_QUANTILE = 0.95
+P99_QUANTILE = 0.99
+MIN_P95_SAMPLES = 100
+MIN_P99_SAMPLES = 1000
+MIN_STEADY_SAMPLES = 1000
+WARMUP_SECONDS = 12
+MILLISECONDS_PER_SECOND = 1000
+RENDER_WARMUP_FRAMES = 720
+
 def distribution(values):
     values = sorted(values)
     if not values:
@@ -13,8 +22,8 @@ def distribution(values):
     return {
         "samples": len(values),
         "median": statistics.median(values),
-        "p95": values[math.ceil(len(values) * 0.95) - 1] if len(values) >= 100 else None,
-        "p99": values[math.ceil(len(values) * 0.99) - 1] if len(values) >= 1000 else None,
+        "p95": values[math.ceil(len(values) * P95_QUANTILE) - 1] if len(values) >= MIN_P95_SAMPLES else None,
+        "p99": values[math.ceil(len(values) * P99_QUANTILE) - 1] if len(values) >= MIN_P99_SAMPLES else None,
         "max": values[-1],
     }
 
@@ -25,14 +34,14 @@ def main():
         directory = directory / "run"
     with (directory / "frames.csv").open(encoding="utf-8") as file:
         frames = list(csv.DictReader(file))
-    steady = [frame for frame in frames if float(frame["elapsed_s"]) > 12 and frame["capture"] == "false" and frame["burst"] == "false"]
-    if len(steady) < 1000:
+    steady = [frame for frame in frames if float(frame["elapsed_s"]) > WARMUP_SECONDS and frame["capture"] == "false" and frame["burst"] == "false"]
+    if len(steady) < MIN_STEADY_SAMPLES:
         raise ValueError("稳态样本不足，不能形成 P99 baseline")
     result = {key: distribution(float(frame[key]) for frame in steady) for key in ["interval_ms", "main_update_ms", "producer_ms"]}
     for key in ["asset_extract_ms", "render_schedule_ms"]:
         if key in frames[0]:
             result[key] = distribution(float(frame[key]) for frame in steady)
-    result["fps_steady"] = 1000 / statistics.mean(float(frame["interval_ms"]) for frame in steady)
+    result["fps_steady"] = MILLISECONDS_PER_SECOND / statistics.mean(float(frame["interval_ms"]) for frame in steady)
     result["fps_all"] = (len(frames) - 1) / (float(frames[-1]["elapsed_s"]) - float(frames[0]["elapsed_s"]))
     result["throughput_frames_per_second"] = (int(frames[-1]["producer_frame"]) - int(frames[0]["producer_frame"])) / (float(frames[-1]["elapsed_s"]) - float(frames[0]["elapsed_s"]))
     result["maximum_backlog"] = max(int(frame["backlog"]) for frame in frames)
@@ -47,7 +56,7 @@ def main():
     diagnostics = {}
     with (directory / "render.csv").open(encoding="utf-8") as file:
         for row in csv.DictReader(file):
-            if int(row["frame"]) > 720:
+            if int(row["frame"]) > RENDER_WARMUP_FRAMES:
                 diagnostics.setdefault(row["path"], []).append(float(row["value"]))
     result["render_diagnostics"] = {name: distribution(values) for name, values in diagnostics.items() if "elapsed_" in name or "allocator" in name}
     with (directory / "summary.json").open("x", encoding="utf-8") as file:

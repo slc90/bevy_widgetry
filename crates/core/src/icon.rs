@@ -675,6 +675,8 @@ impl Plugin for WidgetryIconPlugin {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(2);
+
     use super::*;
     use bevy::asset::io::{
         AssetSourceBuilder, AssetSourceId,
@@ -1199,7 +1201,7 @@ mod tests {
                 let failed = app.world().get::<WidgetryIcon>(icon).unwrap().svg.clone();
                 advance_until(
                     &mut app,
-                    Duration::from_secs(2),
+                    ASYNC_WAIT_TIMEOUT,
                     &format!("{path} 的 SVG load failure"),
                     |world| {
                         world

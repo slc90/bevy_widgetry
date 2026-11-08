@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 use bevy::{
     input::{
         ButtonState,
@@ -210,7 +212,7 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
         .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
-        std::time::Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "TextField font",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

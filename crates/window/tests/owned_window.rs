@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
 use bevy::{
     camera::RenderTarget,
     prelude::*,
@@ -333,7 +335,7 @@ fn wait_for_title_icons(app: &mut App) {
     assert!(!icons.is_empty());
     advance_until(
         app,
-        Duration::from_secs(5),
+        ASYNC_WAIT_TIMEOUT,
         "Window title icon image children",
         |world| {
             icons.iter().all(|icon| {

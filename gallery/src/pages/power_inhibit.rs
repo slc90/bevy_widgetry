@@ -1,3 +1,7 @@
+const PAGE_MAX_WIDTH: f32 = 1000.0;
+
+const DETAIL_GAP: f32 = 20.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::{
     LocalizedText, NavigationKey, PowerInhibitKey, TextKey, localized, localized_binding,
@@ -82,7 +86,7 @@ fn exit(world: &mut World) -> Result {
 fn scene(state: DemoState) -> impl Scene {
     bsn! {
         Name::new("PowerInhibitDemo")
-        Node { width: percent(100), max_width: px(1000), flex_direction: FlexDirection::Column, row_gap: px(20), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { width: percent(100), max_width: px(PAGE_MAX_WIDTH), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::Navigation(NavigationKey::PowerInhibit)) WidgetryText--
             @localized(TextKey::PowerInhibit(PowerInhibitKey::Description)) WidgetryText--

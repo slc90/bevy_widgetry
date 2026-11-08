@@ -1,3 +1,5 @@
+const MAX_PENDING_SELECTION_INTENTS: usize = 128;
+
 use crate::*;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -241,14 +243,14 @@ impl WidgetryFileDialogState {
         if self
             .selection_job
             .as_ref()
-            .is_some_and(|job| job.intents.len() >= 128)
+            .is_some_and(|job| job.intents.len() >= MAX_PENDING_SELECTION_INTENTS)
         {
             return Err(self.contract(FileDialogStateFault::SelectionCapacity {
                 actual: self
                     .selection_job
                     .as_ref()
                     .map_or(0, |job| job.intents.len()),
-                limit: 128,
+                limit: MAX_PENDING_SELECTION_INTENTS,
             }));
         }
         let revision = self

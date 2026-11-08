@@ -10,6 +10,20 @@ use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
 use std::time::Duration;
 
+const EXPECTED_INITIAL_DELAY_MS: u64 = 400;
+const EXPECTED_REPEAT_INTERVAL_MS: u64 = 100;
+const BOUNDARY_ADVANCE_MS: u64 = 1;
+const LONG_IDLE_MS: u64 = 10_000;
+const LONG_FRAME_MS: u64 = 2_000;
+const SHORT_PRESS_DURATION_MS: u64 = 100;
+const LONG_WAIT_MS: u64 = 1_000;
+const OVERDUE_FRAME_MS: u64 = 500;
+const TEST_VIEWPORT: UVec2 = UVec2::splat(600);
+const ROOT_OFFSET: f32 = 40.0;
+const INCREASE_BUTTON_POSITION: Vec2 = Vec2::new(226.0, 56.0);
+const LAYOUT_UPDATES: usize = 6;
+const TEST_STEP: i32 = 3;
+
 #[derive(Resource, Default)]
 struct Changes(Vec<(Entity, i32)>);
 
@@ -34,23 +48,23 @@ fn fixture(pointer: PointerId, max: i32) -> (App, Entity, Location) {
         .spawn((Window::default(), bevy::window::PrimaryWindow))
         .id();
     let camera =
-        bevy_widgetry_test_utils::spawn_picking_camera(&mut app, window, UVec2::splat(600), 1.0);
+        bevy_widgetry_test_utils::spawn_picking_camera(&mut app, window, TEST_VIEWPORT, 1.0);
     let root = spawn_scene(app.world_mut(), bsn! {
-        @WidgetryNumberInput<i32> { @value: {Some(0)}, @min: {Some(0)}, @max: {Some(max)}, @step: 3 }
-        Node { position_type: PositionType::Absolute, left: px(40), top: px(40) }
+        @WidgetryNumberInput<i32> { @value: {Some(0)}, @min: {Some(0)}, @max: {Some(max)}, @step: TEST_STEP }
+        Node { position_type: PositionType::Absolute, left: px(ROOT_OFFSET), top: px(ROOT_OFFSET) }
         template(move |_| Ok(UiTargetCamera(camera)))
     }).unwrap();
     if pointer != PointerId::Mouse {
         app.world_mut().spawn(pointer);
     }
-    for _ in 0..6 {
+    for _ in 0..LAYOUT_UPDATES {
         app.update();
     }
     let at = Location {
         target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
             .normalize(None)
             .unwrap(),
-        position: Vec2::new(226.0, 56.0),
+        position: INCREASE_BUTTON_POSITION,
     };
     input(
         &mut app,
@@ -132,7 +146,7 @@ fn value(app: &App, root: Entity) -> i32 {
 fn short_press_and_delayed_repeats_use_real_time_without_frame_catchup() {
     for pointer in bevy_widgetry_test_utils::pointer_ids() {
         let (mut app, root, at) = fixture(pointer, 100);
-        advance(&mut app, 10_000);
+        advance(&mut app, LONG_IDLE_MS);
         input(
             &mut app,
             pointer,
@@ -140,17 +154,17 @@ fn short_press_and_delayed_repeats_use_real_time_without_frame_catchup() {
             PointerAction::Press(PointerButton::Primary),
         );
         assert_eq!(value(&app, root), 3);
-        advance(&mut app, 399);
+        advance(&mut app, EXPECTED_INITIAL_DELAY_MS - BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), 3);
-        advance(&mut app, 1);
+        advance(&mut app, BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), 6);
-        advance(&mut app, 99);
+        advance(&mut app, EXPECTED_REPEAT_INTERVAL_MS - BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), 6);
-        advance(&mut app, 1);
+        advance(&mut app, BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), 9);
-        advance(&mut app, 2_000);
+        advance(&mut app, LONG_FRAME_MS);
         assert_eq!(value(&app, root), 12);
-        advance(&mut app, 99);
+        advance(&mut app, EXPECTED_REPEAT_INTERVAL_MS - BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), 12);
         input(
             &mut app,
@@ -158,7 +172,7 @@ fn short_press_and_delayed_repeats_use_real_time_without_frame_catchup() {
             &at,
             PointerAction::Release(PointerButton::Primary),
         );
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         assert_eq!(value(&app, root), 12);
         input(
             &mut app,
@@ -166,14 +180,14 @@ fn short_press_and_delayed_repeats_use_real_time_without_frame_catchup() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        advance(&mut app, 100);
+        advance(&mut app, SHORT_PRESS_DURATION_MS);
         input(
             &mut app,
             pointer,
             &at,
             PointerAction::Release(PointerButton::Primary),
         );
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         assert_eq!(value(&app, root), 15);
         assert_eq!(
             app.world().resource::<Changes>().0,
@@ -192,9 +206,9 @@ fn endpoints_remain_enabled_and_only_real_changes_notify() {
         &at,
         PointerAction::Press(PointerButton::Primary),
     );
-    advance(&mut app, 400);
+    advance(&mut app, EXPECTED_INITIAL_DELAY_MS);
     for _ in 0..8 {
-        advance(&mut app, 100);
+        advance(&mut app, EXPECTED_REPEAT_INTERVAL_MS);
     }
     assert_eq!(value(&app, root), 10);
     assert_eq!(
@@ -217,7 +231,7 @@ fn cancel_and_inherited_disable_stop_repeats_and_repress_starts_a_new_delay() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        advance(&mut app, 400);
+        advance(&mut app, EXPECTED_INITIAL_DELAY_MS);
         assert_eq!(value(&app, root), 6);
         let parent = spawn_scene(app.world_mut(), bsn! { Node }).unwrap();
         if disable {
@@ -229,13 +243,13 @@ fn cancel_and_inherited_disable_stop_repeats_and_repress_starts_a_new_delay() {
         } else {
             input(&mut app, pointer, &at, PointerAction::Cancel);
         }
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         assert_eq!(value(&app, root), 6);
         app.world_mut()
             .entity_mut(parent)
             .remove::<InteractionDisabled>();
         app.world_mut().flush();
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         assert_eq!(value(&app, root), 6);
         input(
             &mut app,
@@ -256,9 +270,9 @@ fn cancel_and_inherited_disable_stop_repeats_and_repress_starts_a_new_delay() {
             PointerAction::Press(PointerButton::Primary),
         );
         assert_eq!(value(&app, root), 9);
-        advance(&mut app, 399);
+        advance(&mut app, EXPECTED_INITIAL_DELAY_MS - BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), 9);
-        advance(&mut app, 1);
+        advance(&mut app, BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), 12);
     }
 }
@@ -274,7 +288,12 @@ fn active_hold_requests_frames_and_release_stops_requests() {
         &at,
         PointerAction::Press(PointerButton::Primary),
     );
-    for delay in [0, 100, 300, 100] {
+    for delay in [
+        0,
+        EXPECTED_REPEAT_INTERVAL_MS,
+        EXPECTED_INITIAL_DELAY_MS - EXPECTED_REPEAT_INTERVAL_MS,
+        EXPECTED_REPEAT_INTERVAL_MS,
+    ] {
         app.world_mut()
             .resource_mut::<Messages<RequestRedraw>>()
             .clear();
@@ -290,7 +309,7 @@ fn active_hold_requests_frames_and_release_stops_requests() {
         &at,
         PointerAction::Release(PointerButton::Primary),
     );
-    advance(&mut app, 100);
+    advance(&mut app, EXPECTED_REPEAT_INTERVAL_MS);
     assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
 }
 
@@ -304,7 +323,7 @@ fn release_and_repress_in_one_frame_restart_the_delay() {
         &at,
         PointerAction::Press(PointerButton::Primary),
     );
-    advance(&mut app, 400);
+    advance(&mut app, EXPECTED_INITIAL_DELAY_MS);
     assert_eq!(value(&app, root), 6);
     for action in [
         PointerAction::Release(PointerButton::Primary),
@@ -312,11 +331,11 @@ fn release_and_repress_in_one_frame_restart_the_delay() {
     ] {
         queue(&mut app, pointer, &at, action);
     }
-    advance(&mut app, 500);
+    advance(&mut app, OVERDUE_FRAME_MS);
     assert_eq!(value(&app, root), 9);
-    advance(&mut app, 399);
+    advance(&mut app, EXPECTED_INITIAL_DELAY_MS - BOUNDARY_ADVANCE_MS);
     assert_eq!(value(&app, root), 9);
-    advance(&mut app, 1);
+    advance(&mut app, BOUNDARY_ADVANCE_MS);
     assert_eq!(value(&app, root), 12);
 }
 
@@ -330,7 +349,7 @@ fn unrelated_secondary_release_does_not_restart_the_primary_hold_delay() {
         &at,
         PointerAction::Press(PointerButton::Primary),
     );
-    advance(&mut app, 400);
+    advance(&mut app, EXPECTED_INITIAL_DELAY_MS);
     assert_eq!(value(&app, root), 6);
     input(
         &mut app,
@@ -344,7 +363,7 @@ fn unrelated_secondary_release_does_not_restart_the_primary_hold_delay() {
         &at,
         PointerAction::Release(PointerButton::Secondary),
     );
-    advance(&mut app, 100);
+    advance(&mut app, EXPECTED_REPEAT_INTERVAL_MS);
     assert_eq!(value(&app, root), 9);
     input(
         &mut app,
@@ -352,7 +371,7 @@ fn unrelated_secondary_release_does_not_restart_the_primary_hold_delay() {
         &at,
         PointerAction::Release(PointerButton::Primary),
     );
-    advance(&mut app, 500);
+    advance(&mut app, OVERDUE_FRAME_MS);
     assert_eq!(value(&app, root), 9);
 }
 
@@ -373,7 +392,7 @@ fn another_pointer_cannot_restart_or_cancel_the_owners_repeat_clock() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        advance(&mut app, 400);
+        advance(&mut app, EXPECTED_INITIAL_DELAY_MS);
         assert_eq!(value(&app, root), 6);
         input(
             &mut app,
@@ -387,7 +406,7 @@ fn another_pointer_cannot_restart_or_cancel_the_owners_repeat_clock() {
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        advance(&mut app, 100);
+        advance(&mut app, EXPECTED_REPEAT_INTERVAL_MS);
         assert_eq!(value(&app, root), 9);
         input(
             &mut app,
@@ -395,7 +414,7 @@ fn another_pointer_cannot_restart_or_cancel_the_owners_repeat_clock() {
             &at,
             PointerAction::Release(PointerButton::Primary),
         );
-        advance(&mut app, 100);
+        advance(&mut app, EXPECTED_REPEAT_INTERVAL_MS);
         assert_eq!(value(&app, root), 12);
         input(
             &mut app,
@@ -403,7 +422,7 @@ fn another_pointer_cannot_restart_or_cancel_the_owners_repeat_clock() {
             &at,
             PointerAction::Release(PointerButton::Primary),
         );
-        advance(&mut app, 500);
+        advance(&mut app, OVERDUE_FRAME_MS);
         assert_eq!(value(&app, root), 12);
     }
 }
@@ -430,7 +449,7 @@ fn native_mouse_window_focus_loss_cancels_without_cancelling_custom_pointer() {
             PointerAction::Press(PointerButton::Primary),
         );
         focus_event(&mut app, window, false);
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         let expected = if pointer == PointerId::Mouse { 3 } else { 6 };
         assert_eq!(value(&app, root), expected);
         let mouse = app
@@ -448,7 +467,7 @@ fn native_mouse_window_focus_loss_cancels_without_cancelling_custom_pointer() {
             &at,
             PointerAction::Move { delta: Vec2::ZERO },
         );
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         let expected = if pointer == PointerId::Mouse { 3 } else { 9 };
         assert_eq!(value(&app, root), expected);
         input(
@@ -464,9 +483,9 @@ fn native_mouse_window_focus_loss_cancels_without_cancelling_custom_pointer() {
             PointerAction::Press(PointerButton::Primary),
         );
         assert_eq!(value(&app, root), expected + 3);
-        advance(&mut app, 399);
+        advance(&mut app, EXPECTED_INITIAL_DELAY_MS - BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), expected + 3);
-        advance(&mut app, 1);
+        advance(&mut app, BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), expected + 6);
     }
 }
@@ -489,9 +508,9 @@ fn focus_loss_and_regain_in_one_frame_do_not_resume_the_mouse_hold() {
     for focused in [false, true] {
         focus_event(&mut app, window, focused);
     }
-    advance(&mut app, 400);
+    advance(&mut app, EXPECTED_INITIAL_DELAY_MS);
     assert_eq!(value(&app, root), 3);
-    advance(&mut app, 1_000);
+    advance(&mut app, LONG_WAIT_MS);
     assert_eq!(value(&app, root), 3);
 }
 
@@ -525,9 +544,9 @@ fn a_fresh_press_after_regaining_focus_in_one_frame_gets_its_own_hold() {
         advance(&mut app, 0);
         let start = if previous_hold { 6 } else { 3 };
         assert_eq!(value(&app, root), start);
-        advance(&mut app, 399);
+        advance(&mut app, EXPECTED_INITIAL_DELAY_MS - BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), start);
-        advance(&mut app, 1);
+        advance(&mut app, BOUNDARY_ADVANCE_MS);
         assert_eq!(value(&app, root), start + 3);
     }
 }
@@ -551,7 +570,7 @@ fn a_press_before_focus_loss_cannot_survive_a_same_frame_refocus() {
     focus_event(&mut app, window, true);
     advance(&mut app, 0);
     assert_eq!(value(&app, root), 3);
-    advance(&mut app, 400);
+    advance(&mut app, EXPECTED_INITIAL_DELAY_MS);
     assert_eq!(value(&app, root), 3);
 }
 
@@ -573,7 +592,7 @@ fn the_first_accepted_button_owns_the_hold_until_its_release() {
         );
         advance(&mut app, 0);
         assert_eq!(value(&app, root), 3);
-        advance(&mut app, 400);
+        advance(&mut app, EXPECTED_INITIAL_DELAY_MS);
         assert_eq!(value(&app, root), 6);
         input(
             &mut app,
@@ -581,7 +600,7 @@ fn the_first_accepted_button_owns_the_hold_until_its_release() {
             &at,
             PointerAction::Release(PointerButton::Primary),
         );
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         assert_eq!(value(&app, root), 9);
         input(
             &mut app,
@@ -589,7 +608,7 @@ fn the_first_accepted_button_owns_the_hold_until_its_release() {
             &at,
             PointerAction::Release(PointerButton::Secondary),
         );
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         assert_eq!(value(&app, root), 9);
     }
 }
@@ -611,7 +630,7 @@ fn secondary_and_middle_mouse_holds_cancel_on_window_focus_loss() {
         );
         assert_eq!(value(&app, root), 3);
         focus_event(&mut app, window, false);
-        advance(&mut app, 1_000);
+        advance(&mut app, LONG_WAIT_MS);
         assert_eq!(value(&app, root), 3);
     }
 }
@@ -640,8 +659,8 @@ fn every_press_separated_by_native_focus_loss_starts_an_independent_hold() {
     );
     advance(&mut app, 0);
     assert_eq!(value(&app, root), 6);
-    advance(&mut app, 399);
+    advance(&mut app, EXPECTED_INITIAL_DELAY_MS - BOUNDARY_ADVANCE_MS);
     assert_eq!(value(&app, root), 6);
-    advance(&mut app, 1);
+    advance(&mut app, BOUNDARY_ADVANCE_MS);
     assert_eq!(value(&app, root), 9);
 }

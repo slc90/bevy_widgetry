@@ -567,9 +567,12 @@ fn position_ellipsis(world: &mut World, header: Entity, ellipsis: Entity) {
     let position = inverse.transform_point2(transform.translation) + parent_node.size() * 0.5
         - parent_node.border.min_inset;
     let scale = node.inverse_scale_factor;
-    let left = (position.x + node.size().x * 0.5 - node.border.max_inset.x) * scale - 34.0;
-    let top = (position.y - node.size().y * 0.5 + node.border.min_inset.y) * scale + 6.0;
-    let height = (node.size().y - node.border.min_inset.y - node.border.max_inset.y) * scale - 12.0;
+    let left = (position.x + node.size().x * 0.5 - node.border.max_inset.x) * scale
+        - crate::tabs::ELLIPSIS_WIDTH;
+    let top = (position.y - node.size().y * 0.5 + node.border.min_inset.y) * scale
+        + crate::tabs::HEADER_PADDING_Y;
+    let height = (node.size().y - node.border.min_inset.y - node.border.max_inset.y) * scale
+        - (crate::tabs::HEADER_PADDING_Y * 2.0);
     if let Some(mut output) = world.get_mut::<Node>(ellipsis)
         && (output.left != px(0)
             || output.top != px(0)
@@ -625,7 +628,7 @@ fn project_title(world: &mut World, header: Entity, text: Entity, elide: bool) {
     clip.max.x = clip.max.x.min(
         header_node.size().x * 0.5
             - header_node.border.max_inset.x
-            - 34.0 / header_node.inverse_scale_factor,
+            - crate::tabs::ELLIPSIS_WIDTH / header_node.inverse_scale_factor,
     );
     let mapping = inverse * header_transform.affine();
     let origin = text_node.content_box().min;

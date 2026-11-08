@@ -1,3 +1,6 @@
+const DETAIL_GAP: f32 = 4.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use super::*;
 use bevy_widgetry::table::{
     WidgetryTableCopyAppExt, WidgetryTableCopyFormatter, WidgetryTableCopyFormatterRegistry,
@@ -52,10 +55,10 @@ pub(super) fn register_columns(world: &mut World, sources: &[Entity; 8]) {
 
 pub(super) fn feedback(view: DemoTable) -> impl Scene {
     bsn! {
-        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(4),min_width:px(0)}
+        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP),min_width:px(0)}
         Children [
             @localized(TextKey::Table(TableKey::CopyDescription)) bevy_widgetry::text::WidgetryText--
-            template(move |_|Ok(Feedback(view))) Text("") bevy_widgetry::text::WidgetryText TextFont{font_size:FontSize::Px(14.0)} Name({format!("TableCopyFeedback{:?}{}",view.0,view.1)})--
+            template(move |_|Ok(Feedback(view))) Text("") bevy_widgetry::text::WidgetryText TextFont{font_size:FontSize::Px(LABEL_FONT_SIZE)} Name({format!("TableCopyFeedback{:?}{}",view.0,view.1)})--
             @localized(TextKey::Table(TableKey::CopyPasteHint)) bevy_widgetry::text::WidgetryText--
             @WidgetryTextField{@multiline:true,@visible_lines:{Some(2.0)}} Name({format!("TableCopyPaste{:?}{}",view.0,view.1)}) Node{width:percent(100),min_width:px(0)}
         ]

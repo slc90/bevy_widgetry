@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::expect_used)]
 
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::ecs::error::Severity;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -164,7 +166,7 @@ fn long_url_wraps_without_truncating_content() {
     let label = text(app.world(), root);
     let outcome = advance_until(
         &mut app,
-        std::time::Duration::from_secs(5),
+        ASYNC_WAIT_TIMEOUT,
         "wrapped URL layout",
         |world| {
             world

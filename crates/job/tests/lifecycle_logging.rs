@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool, block_on};
 use bevy_widgetry_job::*;
 use bevy_widgetry_test_utils::LogCapture;
@@ -61,7 +63,7 @@ fn lifecycle_events_match_real_execution_and_are_not_repeated_by_observation() {
                 }
             }
             .unwrap();
-            running.recv_timeout(Duration::from_secs(5)).unwrap();
+            running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             if mode != 0 {
                 assert_eq!(manager.cancel(id).unwrap(), CancelResult::CancelRequested);
                 assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyStopping);
@@ -154,7 +156,7 @@ impl Drop for ThreadCleanup {
     #[allow(clippy::unwrap_used)]
     fn drop(&mut self) {
         self.0.send(()).unwrap();
-        self.1.recv_timeout(Duration::from_secs(5)).unwrap();
+        self.1.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     }
 }
 
@@ -172,7 +174,7 @@ fn check_thread_cleanup_logs(
         CLEANUP.with(|slot| *slot.borrow_mut() = Some(ThreadCleanup(entered, released)));
         Ok(())
     })?;
-    cleaning.recv_timeout(Duration::from_secs(5))?;
+    cleaning.recv_timeout(TEST_WAIT_TIMEOUT)?;
     let count = |stage| {
         logs.records()
             .iter()

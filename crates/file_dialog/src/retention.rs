@@ -1,3 +1,8 @@
+const CPU_QUEUE_RETRY_DELAY: Duration = Duration::from_millis(1);
+const SHUTDOWN_RETAIN_POLL_INTERVAL: Duration = Duration::from_millis(5);
+const WORK_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const RETAIN_REQUEST_RESERVE: usize = 3;
+
 use crate::*;
 use bevy::prelude::*;
 use bevy_widgetry_job::{
@@ -147,7 +152,7 @@ pub(crate) async fn retain_result<T: Send + Sync + 'static>(
                 Ok(()) => break,
                 Err(CpuSendError::Busy(returned)) => {
                     work = *returned;
-                    futures_timer::Delay::new(Duration::from_millis(1)).await;
+                    futures_timer::Delay::new(CPU_QUEUE_RETRY_DELAY).await;
                 }
                 Err(CpuSendError::Closed) => {
                     if control.stopped(service) {
@@ -202,10 +207,10 @@ fn run(
             }
             // World Components may still hold handles when the App drops the runtime Resource first.
             // Keep the final owner on the worker until other handles are released so large payloads are not destroyed during App Drop.
-            thread::sleep(Duration::from_millis(5));
+            thread::sleep(SHUTDOWN_RETAIN_POLL_INTERVAL);
             continue;
         }
-        let work = match receiver.recv_timeout(Duration::from_millis(10)) {
+        let work = match receiver.recv_timeout(WORK_POLL_INTERVAL) {
             Ok(work) => work,
             Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
             Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
@@ -236,7 +241,7 @@ fn run(
             continue;
         }
         if let CpuWork::Retain(_, items, reply) = work {
-            let accepted = retained.len() < RETAINED_CAPACITY - 3;
+            let accepted = retained.len() < RETAINED_CAPACITY - RETAIN_REQUEST_RESERVE;
             if accepted {
                 for item in items {
                     retain_unique(&mut retained, item);
@@ -490,6 +495,8 @@ fn retain_unique(retained: &mut Vec<Retained>, item: Retained) {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
 
     #[test]
@@ -521,7 +528,7 @@ mod tests {
             JobRead::Item(_)
         ));
         let CpuWork::DirectoryBatch(mut batch, reply) =
-            inbox.receiver.recv_timeout(Duration::from_secs(5)).unwrap()
+            inbox.receiver.recv_timeout(TEST_WAIT_TIMEOUT).unwrap()
         else {
             panic!("expected directory batch")
         };
@@ -594,7 +601,7 @@ mod tests {
                 receiver.recv_blocking().unwrap(),
                 JobRead::Item(_)
             ));
-            let work = inbox.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+            let work = inbox.receiver.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             if stopped {
                 service.shutdown.store(true, Ordering::Release);
             }
@@ -670,7 +677,7 @@ mod tests {
                 })
                 .unwrap();
             if let Some(inbox) = inbox {
-                let work = inbox.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+                let work = inbox.receiver.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 service.shutdown.store(true, Ordering::Release);
                 drop(work);
             }
@@ -790,7 +797,7 @@ mod tests {
         assert!(manager.outcome(id).unwrap().is_none());
         assert!(Arc::strong_count(&paths) >= 2);
         drop(paths);
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(std::time::Instant::now() < deadline);
             thread::yield_now();
@@ -888,7 +895,7 @@ mod tests {
     fn exited_cpu_worker_cannot_accept_a_late_batch_that_needs_a_reply() {
         let service = Retention::start(&test_manager()).unwrap();
         service.stop();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while service.active() {
             assert!(std::time::Instant::now() < deadline);
             thread::yield_now();
@@ -928,7 +935,7 @@ mod tests {
                 state.query(),
             )
             .unwrap();
-            let work = cpu.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+            let work = cpu.receiver.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             assert_eq!(manager.status(id).unwrap().state, JobState::Running);
             assert!(matches!(receiver.try_recv(), Ok(JobRead::Item(_))));
             assert!(matches!(

@@ -1,3 +1,11 @@
+const TITLE_PADDING: f32 = 12.0;
+const BODY_PADDING: f32 = 24.0;
+const ACTION_MIN_WIDTH: f32 = 96.0;
+const ACTION_HEIGHT: f32 = 36.0;
+
+const ITEM_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 12.0;
+
 use crate::i18n::{CloseKey, Language, LocalizedText, LocalizedWindowTitle, TextKey, localized};
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::NonSendMarker;
@@ -120,12 +128,12 @@ fn open_confirmation(world: &mut World, parent: Entity) -> Result {
             WidgetryWindowControlsConfig { minimize_visible: false, maximize_visible: false, resizable: false, ..default() },
             WidgetryWindowBackground::Theme, default(),
             bsn_list! {
-                Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
+                Node { padding: UiRect::left(px(TITLE_PADDING)), align_items: AlignItems::Center }
                 template(|_| Ok(Pickable::IGNORE))
                 Children [WidgetryWindowTitle WidgetryText template(|_| Ok(Pickable::IGNORE))]
             },
             bsn_list! {
-                Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, padding: UiRect::all(px(24)), row_gap: px(16) }
+                Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, padding: UiRect::all(px(BODY_PADDING)), row_gap: px(ITEM_GAP) }
                 Children [
                     @localized(TextKey::GalleryClose(CloseKey::Prompt)) WidgetryText--
                     @WidgetryRadioGroup template(|_| Ok(CloseChoices)) Name("GalleryCloseChoices") Children [
@@ -135,7 +143,7 @@ fn open_confirmation(world: &mut World, parent: Entity) -> Result {
                             WidgetryWindowInitialFocus(0)
                             Children [@localized(TextKey::GalleryClose(CloseKey::Hide)) WidgetryText]
                     ]--
-                    Node { justify_content: JustifyContent::End, column_gap: px(12) }
+                    Node { justify_content: JustifyContent::End, column_gap: px(CONTROL_GAP) }
                     Children [@dialog_button(true, CloseKey::Confirm)-- @dialog_button(false, CloseKey::Cancel)]
                 ]
             })
@@ -168,7 +176,7 @@ fn dialog_button(confirm: bool, label: CloseKey) -> impl Scene {
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::GalleryClose(label)) WidgetryText}) as Box<dyn SceneList>)}, }
         Name({if confirm { "GalleryCloseConfirm" } else { "GalleryCloseCancel" }})
         TabIndex::default()
-        Node { min_width: px(96), height: px(36), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+        Node { min_width: px(ACTION_MIN_WIDTH), height: px(ACTION_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(move |_: On<Activate>, mut commands: Commands| {
             commands.queue(move |world: &mut World| -> Result {
                 let Some(root) = world.resource::<GalleryTrayState>().dialog else { return Ok(()); };

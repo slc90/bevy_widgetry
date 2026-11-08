@@ -1,3 +1,8 @@
+const LABEL_GAP: f32 = 6.0;
+const OPTION_MIN_HEIGHT: f32 = 24.0;
+const INDICATOR_SIZE: f32 = 16.0;
+const CHECKED_DOT_SIZE: f32 = 8.0;
+
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui_widgets::RadioButton;
@@ -48,14 +53,14 @@ impl WidgetryRadioOption {
             Node {
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
-                column_gap: px(6),
-                min_height: px(24),
+                column_gap: px(LABEL_GAP),
+                min_height: px(OPTION_MIN_HEIGHT),
             }
             template(|_| Ok(ResolvedForeground::default()))
             Children [
                 template(|_| Ok(RadioIndicator))
                 Node {
-                    width: px(16), height: px(16),
+                    width: px(INDICATOR_SIZE), height: px(INDICATOR_SIZE),
                     border: UiRect::all(px(2)),
                     border_radius: BorderRadius::MAX,
                     align_items: AlignItems::Center,
@@ -65,7 +70,7 @@ impl WidgetryRadioOption {
                 BackgroundColor
                 Children [
                     template(|_| Ok(RadioDot))
-                    Node { width: px(8), height: px(8), border_radius: BorderRadius::MAX }
+                    Node { width: px(CHECKED_DOT_SIZE), height: px(CHECKED_DOT_SIZE), border_radius: BorderRadius::MAX }
                     BackgroundColor
                 ]
             ]

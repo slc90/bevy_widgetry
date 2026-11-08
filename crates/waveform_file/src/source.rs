@@ -1,3 +1,5 @@
+const IDLE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+
 use crate::{DiskReaderError, DiskReaderFailure, ReaderStopReason, Recording};
 use bevy_widgetry_diagnostics::ErrorFrame;
 use bevy_widgetry_job::{
@@ -320,7 +322,7 @@ fn run(
         // A Manager-wide cancellation has no business Condvar notification.
         // A bounded wait observes it without occupying any shared task-pool worker.
         while state.queued.is_empty() && !state.shutdown && !context.is_cancelled() {
-            state = match wake.wait_timeout(state, std::time::Duration::from_millis(10)) {
+            state = match wake.wait_timeout(state, IDLE_POLL_INTERVAL) {
                 Ok((state, _)) => state,
                 Err(error) => poisoned_queue(
                     shared,
@@ -462,6 +464,8 @@ fn stop_queue(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy_widgetry_job::{JobState, ShutdownMessage};
     use bevy_widgetry_waveform::{WaveformAlgorithm, WaveformSessionKind, WaveformUnit};
@@ -513,7 +517,7 @@ mod tests {
         }
     }
     fn wait(mut done: impl FnMut() -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !done() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -657,7 +661,7 @@ mod tests {
             failure.is_some()
         });
         let failure = failure.unwrap();
-        let original = original.recv_timeout(Duration::from_secs(5)).unwrap();
+        let original = original.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let origin = original.diagnostics().next().unwrap().origin();
         assert!(Arc::ptr_eq(
             failure.diagnostics().next().unwrap().origin(),
@@ -731,7 +735,7 @@ mod tests {
             Err(query_failure.clone())
         });
         source.read_reduced(&request(1, 2)).unwrap();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let state = source.state.clone();
         assert!(
             std::thread::spawn(move || {
@@ -846,13 +850,13 @@ mod tests {
         let manager = source.manager.clone();
         let id = source.job;
         source.read_reduced(&request(1, 1)).unwrap();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let (dropped, finished) = mpsc::channel();
         let dropper = std::thread::spawn(move || {
             drop(source);
             dropped.send(()).unwrap();
         });
-        finished.recv_timeout(Duration::from_secs(5)).unwrap();
+        finished.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         dropper.join().unwrap();
         assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
         let shutdown = manager.begin_shutdown(Duration::ZERO).unwrap();
@@ -943,7 +947,7 @@ mod tests {
             })
         });
         source.read_reduced(&request(1, 1)).unwrap();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         source.cancel_reads(1);
         let latest = request(2, 2);
         source.read_reduced(&latest).unwrap();
@@ -1034,7 +1038,7 @@ mod tests {
         let id = source.job;
         let mut observer = manager.subscribe::<()>(id).unwrap();
         source.read_reduced(&request(1, 1)).unwrap();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         drop(source);
         assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
         let shutdown = manager.begin_shutdown(Duration::from_secs(5)).unwrap();

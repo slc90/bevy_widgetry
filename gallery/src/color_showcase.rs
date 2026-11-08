@@ -1,3 +1,9 @@
+const GROUP_BOTTOM_MARGIN: f32 = 12.0;
+const CATALOG_HEIGHT: f32 = 350.0;
+
+const ITEM_GAP: f32 = 6.0;
+const GROUP_GAP: f32 = 8.0;
+
 use crate::i18n::ColorShowcaseKey;
 use crate::i18n::{TextKey, localized};
 mod catalog;
@@ -62,7 +68,7 @@ pub(crate) fn scene(page: GalleryPage) -> impl Scene {
     ))
     .then(|| section(page, Section::Examples));
     bsn! {
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), flex_shrink: 0.0, margin: UiRect::bottom(px(12)) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP), flex_shrink: 0.0, margin: UiRect::bottom(px(GROUP_BOTTOM_MARGIN)) }
         Children [@section(page, Section::Catalog)-- @{examples}]
     }
 }
@@ -71,7 +77,7 @@ fn section(page: GalleryPage, section: Section) -> impl Scene {
     bsn! {
         template(move |_| Ok(Showcase { page, section, expanded: BTreeSet::new(), content: None }))
         Name({format!("Color{page:?}{section:?}")})
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(6) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
         Children [
             @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(match section { Section::Catalog => TextKey::ColorShowcase(ColorShowcaseKey::ExpandThemeColors), Section::Examples => TextKey::ColorShowcase(ColorShowcaseKey::ExpandOverrides) }) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } template(|_| Ok(Toggle { path: String::new() }))
                 Name({format!("Color{page:?}{section:?}Toggle")})
@@ -139,10 +145,10 @@ fn refresh(world: &mut World, root: Entity) -> Result {
             ChildOf(root)
             Name({format!("Color{page:?}{section:?}Content")})
             @WidgetryScrollArea {
-                @content: bsn! { Node { row_gap: px(8) } },
+                @content: bsn! { Node { row_gap: px(GROUP_GAP) } },
                 @children: bsn_list!{@localized(description) WidgetryText-- {content}},
             }
-            Node { width: percent(100), height: px(350), flex_shrink: 0.0 }
+            Node { width: percent(100), height: px(CATALOG_HEIGHT), flex_shrink: 0.0 }
         },
     )
     .map_err(|error| {

@@ -1,3 +1,13 @@
+const COMBO_WIDTH: f32 = 200.0;
+const ITEM_ICON_SIZE: f32 = 16.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 6.0;
+const CONTENT_GAP: f32 = 8.0;
+const PANEL_GAP: f32 = 16.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use crate::assets::GalleryIcon;
 mod custom;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
@@ -148,30 +158,30 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     // Bound generic expansion of the Gallery Scene so nested ComboBox composition cannot exhaust the main thread stack.
     let content: Box<dyn Scene> = Box::new(bsn! {
         template(|_| Ok(ComboBoxPage))
-        Node { flex_direction: FlexDirection::Column, row_gap: px(16) }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
         Children [
             @localized(TextKey::ComboBox(ComboBoxKey::Renderers)) bevy_widgetry::text::WidgetryText--
 
-                Node { flex_direction: FlexDirection::Row, column_gap: px(16), flex_wrap: FlexWrap::Wrap, row_gap: px(8) }
+                Node { flex_direction: FlexDirection::Row, column_gap: px(PANEL_GAP), flex_wrap: FlexWrap::Wrap, row_gap: px(DETAIL_GAP) }
                 Children [
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Common(CommonKey::Text)) bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Text")]--
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Common(CommonKey::IconText)) bevy_widgetry::text::WidgetryText-- @combo(sources[1], "Icon + Text")]--
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Common(CommonKey::Icon)) bevy_widgetry::text::WidgetryText-- @combo(sources[2], "Icon")]--
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Disabled") InteractionDisabled]
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) } Children [@localized(TextKey::Common(CommonKey::Text)) bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Text")]--
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) } Children [@localized(TextKey::Common(CommonKey::IconText)) bevy_widgetry::text::WidgetryText-- @combo(sources[1], "Icon + Text")]--
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) } Children [@localized(TextKey::Common(CommonKey::Icon)) bevy_widgetry::text::WidgetryText-- @combo(sources[2], "Icon")]--
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) } Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Disabled") InteractionDisabled]
                 ]
             --
             @localized(TextKey::ComboBox(ComboBoxKey::LocalSearch)) bevy_widgetry::text::WidgetryText--
-            @localized(TextKey::ComboBox(ComboBoxKey::SearchInstructions)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
-            Node { column_gap: px(16), flex_wrap: FlexWrap::Wrap, row_gap: px(8) } Children [
+            @localized(TextKey::ComboBox(ComboBoxKey::SearchInstructions)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }--
+            Node { column_gap: px(PANEL_GAP), flex_wrap: FlexWrap::Wrap, row_gap: px(DETAIL_GAP) } Children [
                 @combo(sources[3], "Search")--
                 @combo(sources[3], "Search Disabled") InteractionDisabled
             ]--
-            SearchStatus Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+            SearchStatus Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }--
             @localized(TextKey::ComboBox(ComboBoxKey::DataDriven)) bevy_widgetry::text::WidgetryText--
-            @localized(TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+            @localized(TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }--
             @combo(sources[3], "Data-Driven") template(|_| Ok(DynamicComboBox))--
-            template(|_| Ok(DemoStatus::default())) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
-            Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]--
+            template(|_| Ok(DemoStatus::default())) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }--
+            Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(CONTENT_GAP), row_gap: px(DETAIL_GAP) } Children [{controls}]--
             @custom::scene(sources[0])
         ]
     });
@@ -207,13 +217,13 @@ fn combo(source: Entity, name: &'static str) -> impl Scene {
             @renderer: {WidgetryListViewRenderer::new(|item: &ComboBoxDemoItem| {
                 let icon = item.icon.map(demo_icon);
                 let text = item.label.as_ref().map(|label| item_text(label.clone(), item.edits));
-                bsn_list!{Node { align_items: AlignItems::Center, column_gap: px(6) } Children [{bsn_list!{@icon-- @text}}]}
+                bsn_list!{Node { align_items: AlignItems::Center, column_gap: px(CONTROL_GAP) } Children [{bsn_list!{@icon-- @text}}]}
             })},
         }
         template(move |_| Ok(ComboBoxDemo(name)))
         Name::new({format!("ComboBox {name}")})
         on(on_selection_changed)
-        Node { width: px(200), flex_shrink: 0.0 }
+        Node { width: px(COMBO_WIDTH), flex_shrink: 0.0 }
     }
 }
 
@@ -234,7 +244,7 @@ fn on_selection_changed(
 
 fn action_button(label: TextKey, action: Action) -> impl Scene {
     bsn! {
-        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }}) as Box<dyn bevy::prelude::SceneList>)}, }
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(DemoAction(action)))
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(operate)
@@ -447,8 +457,8 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
 
 fn demo_icon(icon: GalleryIcon) -> impl Scene {
     bsn! {
-        @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::new(16, 16))} }
-        Node { width: px(16), height: px(16) }
+        @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(ITEM_ICON_SIZE as u32))} }
+        Node { width: px(ITEM_ICON_SIZE), height: px(ITEM_ICON_SIZE) }
     }
 }
 

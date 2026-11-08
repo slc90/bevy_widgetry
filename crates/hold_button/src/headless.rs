@@ -14,6 +14,10 @@ use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use std::time::Duration;
 
+pub(crate) const DEFAULT_CHARGE_DURATION: Duration = Duration::from_secs(3);
+pub(crate) const DEFAULT_DECAY_DURATION: Duration = Duration::from_millis(1200);
+const SUCCESS_ROUNDING_EPSILON_FACTOR: f32 = 8.0;
+
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryHoldButtonHeadlessProps)]
 #[require(Node, bevy::picking::hover::Hovered, bevy::input_focus::tab_navigation::TabIndex(-1), bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::Button)), WidgetryHoldButtonState, WidgetryHoldButtonProgress, Timing)]
@@ -27,8 +31,8 @@ pub struct WidgetryHoldButtonHeadlessProps {
 impl Default for WidgetryHoldButtonHeadlessProps {
     fn default() -> Self {
         Self {
-            charge_duration: Duration::from_secs(3),
-            decay_duration: Duration::from_millis(1200),
+            charge_duration: DEFAULT_CHARGE_DURATION,
+            decay_duration: DEFAULT_DECAY_DURATION,
         }
     }
 }
@@ -155,7 +159,7 @@ impl WidgetryHoldButtonState {
                 } else {
                     (progress.0 + dt / timing.charge.as_secs_f32()).min(1.0)
                 };
-                if progress.0 >= 1.0 - 8.0 * f32::EPSILON {
+                if progress.0 >= 1.0 - SUCCESS_ROUNDING_EPSILON_FACTOR * f32::EPSILON {
                     progress.0 = 1.0;
                     self.succeeded = true;
                     self.successes = self.successes.wrapping_add(1);
@@ -591,6 +595,15 @@ fn tick(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
+    const FIXTURE_FRAME_DURATION: Duration = Duration::from_millis(100);
+    const IDLE_BEFORE_PRESS: Duration = Duration::from_secs(5);
+    const FRESH_FRAME_DURATION: Duration = Duration::from_millis(16);
+    const DELAYED_VIRTUAL_DELTA: Duration = Duration::from_millis(250);
+    const EXPECTED_FRESH_SECONDS: f32 = 0.016;
+    const EXPECTED_CHARGE_SECONDS: f32 = 3.0;
+    const BEFORE_CHARGE_FRAMES: usize = 29;
+    const CHARGE_FRAMES: usize = 30;
+
     use super::*;
     use bevy_widgetry_test_utils::{add_keyboard_dispatch, queue_key, scene_app};
 
@@ -603,7 +616,7 @@ mod tests {
         app.add_plugins(WidgetryHoldButtonHeadlessPlugin)
             .init_resource::<Count>();
         app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
-            Duration::from_millis(100),
+            FIXTURE_FRAME_DURATION,
         ));
         app.add_observer(
             |_: On<bevy::ui_widgets::Activate>, mut count: ResMut<Count>| count.0 += 1,
@@ -694,9 +707,11 @@ mod tests {
 
     #[test]
     fn fresh_press_excludes_idle_time_and_a_delayed_virtual_delta() {
+        let comparison_tolerance = 0.00001;
+
         let (mut app, root, window) = fixture();
         app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
-            Duration::from_secs(5),
+            IDLE_BEFORE_PRESS,
         ));
         key(
             &mut app,
@@ -707,15 +722,18 @@ mod tests {
         );
         assert_eq!(progress(&app, root), 0.0);
         app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
-            Duration::from_millis(16),
+            FRESH_FRAME_DURATION,
         ));
         app.add_systems(
             PreUpdate,
-            (|mut time: ResMut<Time>| time.advance_by(Duration::from_millis(250)))
+            (|mut time: ResMut<Time>| time.advance_by(DELAYED_VIRTUAL_DELTA))
                 .after(bevy::input_focus::InputFocusSystems::Dispatch),
         );
         app.update();
-        assert!((progress(&app, root) - 0.016 / 3.0).abs() < 0.00001);
+        assert!(
+            (progress(&app, root) - EXPECTED_FRESH_SECONDS / EXPECTED_CHARGE_SECONDS).abs()
+                < comparison_tolerance
+        );
         assert_eq!(app.world().resource::<Count>().0, 0);
     }
 
@@ -729,7 +747,7 @@ mod tests {
             ButtonState::Pressed,
             false,
         );
-        frames(&mut app, 29);
+        frames(&mut app, BEFORE_CHARGE_FRAMES);
         assert_eq!(app.world().resource::<Count>().0, 0);
         key(
             &mut app,
@@ -764,7 +782,7 @@ mod tests {
                 ButtonState::Pressed,
                 false,
             );
-            frames(&mut app, 29);
+            frames(&mut app, BEFORE_CHARGE_FRAMES);
             let target = if kind % 2 == 0 { root } else { parent };
             if kind < 2 {
                 *app.world_mut().get_mut::<Visibility>(target).unwrap() = Visibility::Hidden;
@@ -786,11 +804,13 @@ mod tests {
 
     #[test]
     fn keyboard_success_is_immediate_one_shot_and_release_resets() {
+        let comparison_tolerance = 0.00001;
+
         for code in [KeyCode::Enter, KeyCode::Space] {
             let (mut app, root, window) = fixture();
             key(&mut app, window, code, ButtonState::Pressed, false);
             frames(&mut app, 15);
-            assert!((progress(&app, root) - 0.5).abs() < 0.00001);
+            assert!((progress(&app, root) - 0.5).abs() < comparison_tolerance);
             key(&mut app, window, code, ButtonState::Pressed, true);
             frames(&mut app, 14);
             assert_eq!(app.world().resource::<Count>().0, 1);
@@ -800,7 +820,7 @@ mod tests {
             key(&mut app, window, code, ButtonState::Released, false);
             assert_eq!(progress(&app, root), 0.0);
             key(&mut app, window, code, ButtonState::Pressed, false);
-            frames(&mut app, 30);
+            frames(&mut app, CHARGE_FRAMES);
             assert_eq!(app.world().resource::<Count>().0, 2);
         }
     }
@@ -913,7 +933,7 @@ mod tests {
             ButtonState::Pressed,
             false,
         );
-        frames(&mut app, 30);
+        frames(&mut app, CHARGE_FRAMES);
         assert_eq!(app.world().resource::<Count>().0, 1);
     }
 
@@ -965,6 +985,8 @@ mod tests {
 
     #[test]
     fn partial_release_decays_at_fixed_rate_and_repress_resumes() {
+        let comparison_tolerance = 0.00001;
+
         let mut s = WidgetryHoldButtonState {
             owner: Some(InputSource::Key(KeyCode::Enter, Entity::PLACEHOLDER)),
             ..default()
@@ -972,10 +994,10 @@ mod tests {
         let mut p = WidgetryHoldButtonProgress::default();
         let t = Timing::default();
         assert!(!s.advance(&mut p, &t, 1.8));
-        assert!((p.0 - 0.6).abs() < 0.00001);
+        assert!((p.0 - 0.6).abs() < comparison_tolerance);
         s.end(&mut p);
         assert!(!s.advance(&mut p, &t, 0.36));
-        assert!((p.0 - 0.3).abs() < 0.00001);
+        assert!((p.0 - 0.3).abs() < comparison_tolerance);
         s.owner = Some(InputSource::Key(KeyCode::Enter, Entity::PLACEHOLDER));
         assert!(s.advance(&mut p, &t, 2.1));
         assert_eq!(p.0, 1.0);

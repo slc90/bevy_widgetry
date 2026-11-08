@@ -1,3 +1,12 @@
+const TITLE_PADDING: f32 = 12.0;
+
+const LABEL_FONT_SIZE: f32 = 16.0;
+
+const INVALID_PARAMS_CODE: i16 = -32602;
+const MAX_CANVAS_DIMENSION: u32 = 16_777_216;
+const MIN_FIT_ZOOM: f32 = 0.1;
+const MAX_FIT_ZOOM: f32 = 10.0;
+
 use bevy::camera::RenderTarget;
 use bevy::prelude::*;
 use bevy::window::{ClosingWindow, RequestRedraw, WindowCloseRequested, WindowRef};
@@ -109,7 +118,7 @@ fn params<T: serde::de::DeserializeOwned>(value: Option<Value>) -> Result<T, Brp
 
 fn invalid_params(error: impl ToString) -> BrpError {
     BrpError {
-        code: -32602,
+        code: INVALID_PARAMS_CODE,
         message: error.to_string(),
         data: None,
     }
@@ -128,8 +137,8 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
         // f32 represents every integer through 2^24; larger dimensions cannot retain pixel coordinates.
         if request.width == 0
             || request.height == 0
-            || request.width > 16_777_216
-            || request.height > 16_777_216
+            || request.width > MAX_CANVAS_DIMENSION
+            || request.height > MAX_CANVAS_DIMENSION
         {
             return Err(invalid_params("Dimensions must be in 1..=16777216"));
         }
@@ -354,7 +363,7 @@ fn describe(world: &mut World, id: &str, session: &Session) -> BrpResult {
         "view": view.map(Entity::to_bits), "zoom": zoom,
         "center": center.map(|center| [center.x, center.y]),
         "shape_count": CanvasDocument::shape_order(world, session.document).map_err(crate::diagnostics::managed_response_error)?.len(),
-        "fit_limited": zoom.is_some_and(|zoom| zoom == 0.1 || zoom == 10.0),
+        "fit_limited": zoom.is_some_and(|zoom| zoom == MIN_FIT_ZOOM || zoom == MAX_FIT_ZOOM),
         "persistence": {"saved": !session.dirty, "error": session.save_error},
         "next_stage": session.next_stage,
     }))
@@ -387,8 +396,8 @@ fn open_window(world: &mut World, id: &str, session: &mut Session) -> Result {
     let scene = bsn! {
         @widgetry_window(native, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
             bsn_list! {
-                Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
-                Children [WidgetryWindowTitle bevy_widgetry::text::WidgetryText TextFont {font_size:FontSize::Px(16.0)} Pickable::IGNORE]
+                Node { padding: UiRect::left(px(TITLE_PADDING)), align_items: AlignItems::Center }
+                Children [WidgetryWindowTitle bevy_widgetry::text::WidgetryText TextFont {font_size:FontSize::Px(LABEL_FONT_SIZE)} Pickable::IGNORE]
             },
             bsn_list! {
                 @CanvasView { @document: {Some(document)}, @center: {size.as_vec2() * 0.5} }
@@ -535,7 +544,9 @@ fn fit_views(world: &mut World) -> Result {
         .collect::<Result<Vec<_>>>()?;
     for (view, available, size, previous) in changed {
         if available != previous && available.min_element() > 0.0 {
-            let zoom = (available / size.as_vec2()).min_element().clamp(0.1, 10.0);
+            let zoom = (available / size.as_vec2())
+                .min_element()
+                .clamp(MIN_FIT_ZOOM, MAX_FIT_ZOOM);
             CanvasView::set_zoom_in_world(world, view, zoom)
                 .map_err(|error| error.into_bevy_error())?;
             CanvasView::set_center_in_world(world, view, size.as_vec2() * 0.5)

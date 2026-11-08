@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::{
     picking::{
         InteractionPlugin, PickingPlugin,
@@ -542,7 +544,7 @@ fn stationary_cold_paths_load_only_active_atlases_and_stop_waking_on_failure() {
             LoadState::Loading
         ));
         app.register_asset_loader(AtlasLoader);
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         loop {
             clear_redraw(&mut app);
             app.world_mut().write_message(PointerHits::new(

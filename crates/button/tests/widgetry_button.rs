@@ -1,6 +1,11 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const PATCHED_WIDTH: f32 = 137.0;
+const PATCHED_PADDING: f32 = 3.0;
+
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(2);
+
 use bevy::{
     app::App,
     input_focus::tab_navigation::TabIndex,
@@ -116,7 +121,7 @@ mod background {
     fn spawned_button_is_default(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -140,7 +145,7 @@ mod background {
     fn hover_updates_background(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -166,7 +171,7 @@ mod background {
     fn clearing_hover_restores_default(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -207,7 +212,7 @@ mod background {
     fn pressing_updates_background(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -246,7 +251,7 @@ mod background {
     fn removing_pressed_restores_default(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -287,7 +292,7 @@ mod background {
     fn disabling_updates_background(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -337,7 +342,7 @@ mod background_priority {
     fn removing_pressed_falls_back_to_hover(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -381,7 +386,7 @@ mod background_priority {
     fn removing_disabled_falls_back_to_pressed(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -427,7 +432,7 @@ mod background_priority {
     fn removing_disabled_falls_back_to_hover(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(137), padding: UiRect::all(px(3)) }  })
+            .spawn_scene(bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("owned") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Node { width: px(PATCHED_WIDTH), padding: UiRect::all(px(PATCHED_PADDING)) }  })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -529,8 +534,8 @@ fn assert_transition_style(
     assert_style(app, entity, background, border, foreground);
     let node = app.world().get::<Node>(entity).unwrap();
     assert_eq!(node, expected_node);
-    assert_eq!(node.width, px(137));
-    assert_eq!(node.padding, UiRect::all(px(3)));
+    assert_eq!(node.width, px(PATCHED_WIDTH));
+    assert_eq!(node.padding, UiRect::all(px(PATCHED_PADDING)));
     let children = app.world().get::<Children>(entity).unwrap();
     assert_eq!(children.to_vec(), expected_children);
     assert_eq!(children.len(), 2);
@@ -743,16 +748,11 @@ fn foreground_propagates_to_children() {
     let content = app.world().get::<Children>(button).unwrap()[0];
     let children = app.world().get::<Children>(content).unwrap().to_vec();
     let child = children[0];
-    advance_until(
-        &mut app,
-        Duration::from_secs(2),
-        "Button icon image",
-        |world| {
-            children[1..]
-                .iter()
-                .all(|icon| world.get::<Children>(*icon).is_some())
-        },
-    )
+    advance_until(&mut app, ASYNC_WAIT_TIMEOUT, "Button icon image", |world| {
+        children[1..]
+            .iter()
+            .all(|icon| world.get::<Children>(*icon).is_some())
+    })
     .unwrap();
     let image = app.world().get::<Children>(children[1]).unwrap()[0];
     let explicit_image = app.world().get::<Children>(children[2]).unwrap()[0];

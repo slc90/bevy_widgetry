@@ -214,7 +214,8 @@ fn validate(fixture: &mut Fixture) -> Result<u32> {
 
 fn main() -> Result {
     let mut harness = Harness::new("combo-box-owners-criterion")?;
-    for count in [10, 100, 1000] {
+    let entity_counts = [10, 100, 1000];
+    for count in entity_counts {
         for action in ["idle", "repair_one", "hover_one", "scroll_one"] {
             run(
                 &mut harness,

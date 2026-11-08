@@ -1,3 +1,6 @@
+const TEST_VIEWPORT: UVec2 = UVec2::new(600, 400);
+const TABLE_SIZE: Vec2 = Vec2::new(286.0, 144.0);
+
 use bevy::camera::NormalizedRenderTarget;
 use bevy::input::{mouse::MouseScrollUnit, touch::TouchPhase};
 use bevy::picking::{
@@ -23,8 +26,8 @@ pub fn fixture(rows: u32, columns: u32) -> (App, Entity, Entity, Entity) {
         .entity_mut(pointer)
         .insert(bevy::picking::pointer::PointerLocation::new(Location {
             target: NormalizedRenderTarget::None {
-                width: 600,
-                height: 400,
+                width: TEST_VIEWPORT.x,
+                height: TEST_VIEWPORT.y,
             },
             position: Vec2::ZERO,
         }));
@@ -34,7 +37,7 @@ pub fn fixture(rows: u32, columns: u32) -> (App, Entity, Entity, Entity) {
 pub fn uninitialized_fixture(rows: u32, columns: u32) -> (App, Entity, Entity, Entity) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
+    spawn_ui_camera(&mut app, TEST_VIEWPORT, 1.0);
     app.register_widgetry_table::<u32>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
         bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText}
@@ -58,7 +61,7 @@ pub fn uninitialized_fixture(rows: u32, columns: u32) -> (App, Entity, Entity, E
             .unwrap();
     }
     let source = app.world_mut().spawn(model).id();
-    let root = app.world_mut().spawn_scene(bsn! { @WidgetryTable::<u32> { @source: source } Node { width: px(286), height: px(144) } }).unwrap().id();
+    let root = app.world_mut().spawn_scene(bsn! { @WidgetryTable::<u32> { @source: source } Node { width: px(TABLE_SIZE.x), height: px(TABLE_SIZE.y) } }).unwrap().id();
     let body = app
         .world()
         .get::<Children>(root)
@@ -97,8 +100,8 @@ pub fn scroll(app: &mut App, body: Entity, delta: Vec2) {
             PointerId::Mouse,
             Location {
                 target: NormalizedRenderTarget::None {
-                    width: 600,
-                    height: 400,
+                    width: TEST_VIEWPORT.x,
+                    height: TEST_VIEWPORT.y,
                 },
                 position: Vec2::ZERO,
             },

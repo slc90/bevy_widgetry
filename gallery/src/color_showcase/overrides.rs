@@ -1,3 +1,15 @@
+const SCROLL_CONTENT_WIDTH: f32 = 700.0;
+const SCROLL_CONTENT_HEIGHT: f32 = 360.0;
+const SCROLL_VIEWPORT_HEIGHT: f32 = 160.0;
+
+const ITEM_GAP: f32 = 6.0;
+const GROUP_GAP: f32 = 8.0;
+const SECTION_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 16.0;
+const PANEL_GAP: f32 = 20.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use crate::assets::GalleryIcon;
 use crate::i18n::{ButtonKey, CheckBoxKey, ScrollAreaKey, TextFieldKey, TooltipKey};
 use crate::i18n::{ColorShowcaseKey, CommonKey, NavigationKey};
@@ -72,16 +84,16 @@ pub(crate) fn pair(
     .collect();
     bsn! {
         template(|_| Ok(Pair))
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), flex_shrink: 0.0 }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP), flex_shrink: 0.0 }
         Children [
             @localized(label) WidgetryText--
-            @localized(description) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
-            template(|_| Ok(PairBody)) Node { width: percent(100), column_gap: px(20), align_items: AlignItems::Start }
+            @localized(description) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }--
+            template(|_| Ok(PairBody)) Node { width: percent(100), column_gap: px(PANEL_GAP), align_items: AlignItems::Start }
                 Children [
-                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [@localized(TextKey::ColorShowcase(ColorShowcaseKey::PureTheme)) WidgetryText-- @{pure}]--
-                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [@localized(TextKey::ColorShowcase(ColorShowcaseKey::OverridesViaPublicApi)) WidgetryText-- @{sample}]
+                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) } Children [@localized(TextKey::ColorShowcase(ColorShowcaseKey::PureTheme)) WidgetryText-- @{pure}]--
+                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) } Children [@localized(TextKey::ColorShowcase(ColorShowcaseKey::OverridesViaPublicApi)) WidgetryText-- @{sample}]
                 ]--
-            Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [{controls}]--
+            Node { column_gap: px(CONTROL_GAP), flex_wrap: FlexWrap::Wrap, row_gap: px(ITEM_GAP) } Children [{controls}]--
             template(|_| Ok(Status)) @localized(TextKey::ColorShowcase(ColorShowcaseKey::CurrentThemeParentEnabled)) WidgetryText
         ]
     }
@@ -141,7 +153,7 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
 }
 
 pub(super) fn button_examples() -> impl Scene {
-    bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
+    bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(SECTION_GAP) } Children [
         @pair(TextKey::Button(ButtonKey::HoldTitle), TextKey::Button(ButtonKey::HoldOverrides), hold_button(), hold_button(), hold_colors)--
         @pair(TextKey::Navigation(NavigationKey::Button),TextKey::Button(ButtonKey::OnlyHoveredBackground7C3AedRealHoverPressed), button(), button(), button_colors)--
         @pair(TextKey::Button(ButtonKey::LinkButton), TextKey::Button(ButtonKey::LinkOverrideDescription), link_button(), link_button(), link_button_colors)--
@@ -170,7 +182,7 @@ fn link_button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<
 }
 
 fn button() -> impl Scene {
-    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@icon()-- @localized(TextKey::Button(ButtonKey::HoverPress)) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, column_gap: px(8) } }) as Box<dyn bevy::prelude::Scene>)}, } Node { column_gap: px(8), align_items: AlignItems::Center }  }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@icon()-- @localized(TextKey::Button(ButtonKey::HoverPress)) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, column_gap: px(CONTROL_GAP) } }) as Box<dyn bevy::prelude::Scene>)}, } Node { column_gap: px(CONTROL_GAP), align_items: AlignItems::Center }  }
 }
 
 pub(super) fn icon() -> impl Scene {
@@ -189,7 +201,7 @@ fn button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool,
 }
 
 fn radio() -> impl Scene {
-    bsn! { @WidgetryRadioGroup Node { column_gap: px(16) } Children [
+    bsn! { @WidgetryRadioGroup Node { column_gap: px(CONTENT_GAP) } Children [
         @WidgetryRadioOption Children [@localized(TextKey::Common(CommonKey::Apple)) WidgetryText]--
         @WidgetryRadioOption Children [@localized(TextKey::Common(CommonKey::Orange)) WidgetryText]
     ] }
@@ -232,7 +244,7 @@ fn checkbox_colors(world: &mut World, entity: Entity, apply: bool) -> Result<boo
 }
 
 pub(super) fn text_field_examples() -> impl Scene {
-    bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
+    bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(SECTION_GAP) } Children [
         @pair(TextKey::Navigation(NavigationKey::TextField),TextKey::TextField(TextFieldKey::OnlyEditableFocusedBorder7C3AedClickTo), field(false), field(false), field_colors)--
         @pair(TextKey::Common(CommonKey::ReadOnly),TextKey::TextField(TextFieldKey::OnlyReadOnlyFocusedBorder7C3AedSelect), field(true), field(true), field_colors)
     ] }
@@ -276,7 +288,7 @@ pub(super) fn scroll_examples() -> impl Scene {
 }
 
 fn scroll() -> impl Scene {
-    bsn! { @WidgetryScrollArea { @axis: ScrollAxis::Both, @children: bsn_list!{Node { width: px(700), height: px(360), flex_shrink: 0.0 } Children [@localized(TextKey::ScrollArea(ScrollAreaKey::ScrollHoverVerticalThumb)) WidgetryText]} } Node { width: percent(100), height: px(160) } }
+    bsn! { @WidgetryScrollArea { @axis: ScrollAxis::Both, @children: bsn_list!{Node { width: px(SCROLL_CONTENT_WIDTH), height: px(SCROLL_CONTENT_HEIGHT), flex_shrink: 0.0 } Children [@localized(TextKey::ScrollArea(ScrollAreaKey::ScrollHoverVerticalThumb)) WidgetryText]} } Node { width: percent(100), height: px(SCROLL_VIEWPORT_HEIGHT) } }
 }
 
 fn scroll_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {

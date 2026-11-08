@@ -1,3 +1,13 @@
+const EDITOR_WIDTH: f32 = 480.0;
+const EDITOR_MIN_HEIGHT: f32 = 88.0;
+const EDITOR_PADDING: f32 = 12.0;
+const EDITOR_BORDER_WIDTH: f32 = 2.0;
+const EDITOR_CORNER_RADIUS: f32 = 16.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 8.0;
+const LABEL_FONT_SIZE: f32 = 24.0;
+
 use crate::i18n::{Language, SliderKey, TextKey, localized, tr_args};
 use bevy::{
     prelude::*,
@@ -25,14 +35,14 @@ enum Action {
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("SliderNumericDemo")
-        Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(8), align_items:AlignItems::Start, flex_shrink:0.0 }
+        Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(DETAIL_GAP), align_items:AlignItems::Start, flex_shrink:0.0 }
         Children [
             @localized(TextKey::Slider(SliderKey::NumericDescription)) WidgetryText--
             @WidgetrySliderHeadless { @max:10.0, @step:{Some(3.0)}, @value:{Some(4.0)} }
             Name("SliderNumericReadout") template(|_|Ok(NumericReadout::default())) on(changed)
-            Node { width:px(480), max_width:percent(100), min_height:px(88), padding:UiRect::all(px(12)), border:UiRect::all(px(2)), border_radius:BorderRadius::all(px(16)), align_items:AlignItems::Center }
-            BackgroundColor BorderColor Text("") WidgetryText TextFont {font_size:FontSize::Px(24.0)}--
-            Node { column_gap:px(8), row_gap:px(8), flex_wrap:FlexWrap::Wrap }
+            Node { width:px(EDITOR_WIDTH), max_width:percent(100), min_height:px(EDITOR_MIN_HEIGHT), padding:UiRect::all(px(EDITOR_PADDING)), border:UiRect::all(px(EDITOR_BORDER_WIDTH)), border_radius:BorderRadius::all(px(EDITOR_CORNER_RADIUS)), align_items:AlignItems::Center }
+            BackgroundColor BorderColor Text("") WidgetryText TextFont {font_size:FontSize::Px(LABEL_FONT_SIZE)}--
+            Node { column_gap:px(CONTROL_GAP), row_gap:px(DETAIL_GAP), flex_wrap:FlexWrap::Wrap }
             Children [
                 @control(Action::Set(0.0),SliderKey::NumericMin,"SliderNumericMin")--
                 @control(Action::Set(4.0),SliderKey::NumericFour,"SliderNumericFour")--

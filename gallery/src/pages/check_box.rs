@@ -1,3 +1,6 @@
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 16.0;
+
 use bevy_widgetry::check_box::WidgetryTriStateCheckboxHeadless;
 mod switch;
 mod tri_symbol;
@@ -21,20 +24,20 @@ struct DisabledIndeterminateDemo;
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(CheckBoxDemo))
-        Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Navigation(NavigationKey::CheckBox)) bevy_widgetry::text::WidgetryText--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) } Children [
                 @localized(TextKey::Common(CommonKey::Normal)) bevy_widgetry::text::WidgetryText--
                 @WidgetryCheckBox Name("CheckBoxNormalDemo") on(on_binary_change) Children [@localized(TextKey::CheckBox(CheckBoxKey::ReceiveUpdates)) bevy_widgetry::text::WidgetryText]
             ]--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) } Children [
                 @localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText--
                 @WidgetryCheckBox Name("CheckBoxUncheckedDisabledDemo") InteractionDisabled Children [@localized(TextKey::CheckBox(CheckBoxKey::Unchecked)) bevy_widgetry::text::WidgetryText]--
                 @WidgetryCheckBox Name("CheckBoxCheckedDisabledDemo") Checked InteractionDisabled Children [@localized(TextKey::CheckBox(CheckBoxKey::Checked)) bevy_widgetry::text::WidgetryText]--
                 @WidgetryTriStateCheckbox template(|_| Ok(DisabledIndeterminateDemo)) InteractionDisabled Children [@localized(TextKey::CheckBox(CheckBoxKey::Indeterminate)) bevy_widgetry::text::WidgetryText]
             ]--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) } Children [
                 @localized(TextKey::CheckBox(CheckBoxKey::TriState)) bevy_widgetry::text::WidgetryText--
                 @WidgetryTriStateCheckbox Name("TriStateCheckBoxNormalDemo") on(on_tri_state_change) Children [@localized(TextKey::CheckBox(CheckBoxKey::TriStateCheckBox)) bevy_widgetry::text::WidgetryText]
             ]--

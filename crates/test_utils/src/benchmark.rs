@@ -1,3 +1,13 @@
+const LIFECYCLE_SAMPLES: usize = 20;
+const MICROSECONDS_PER_SECOND: f64 = 1_000_000.0;
+const P95_PERCENTILE: usize = 95;
+const PERCENT_SCALE: usize = 100;
+const BENCHMARK_VIEWPORT: UVec2 = UVec2::new(1920, 1080);
+const FONT_LOAD_TIMEOUT: Duration = Duration::from_secs(10);
+const CRITERION_SAMPLES: usize = 20;
+const CRITERION_WARMUP: Duration = Duration::from_millis(100);
+const CRITERION_MEASUREMENT: Duration = Duration::from_millis(500);
+
 pub mod artifact;
 
 use artifact::{Artifact, error};
@@ -191,7 +201,11 @@ fn sample<F>(
     mut operation: impl FnMut(&mut F, usize) -> Result,
     mut entities: impl FnMut(&mut F) -> Result<u32>,
 ) -> Result {
-    let count = if lifecycle { 20 } else { SAMPLES };
+    let count = if lifecycle {
+        LIFECYCLE_SAMPLES
+    } else {
+        SAMPLES
+    };
     let mut fixture = setup()?;
     let mut durations = Vec::with_capacity(count);
     let start_entities = entities(&mut fixture)?;
@@ -208,7 +222,7 @@ fn sample<F>(
         }
         let start = Instant::now();
         operation(&mut fixture, index)?;
-        durations.push(start.elapsed().as_secs_f64() * 1_000_000.0);
+        durations.push(start.elapsed().as_secs_f64() * MICROSECONDS_PER_SECOND);
         end_entities = black_box(entities(&mut fixture)?);
         peak_entities = peak_entities.max(end_entities);
     }
@@ -222,7 +236,10 @@ fn sample<F>(
     let p95 = if lifecycle {
         String::new()
     } else {
-        format!("{:.3}", durations[(count * 95).div_ceil(100) - 1])
+        format!(
+            "{:.3}",
+            durations[(count * P95_PERCENTILE).div_ceil(PERCENT_SCALE) - 1]
+        )
     };
     writeln!(
         harness.csv,
@@ -244,7 +261,7 @@ pub fn missing(description: &str) -> BevyError {
 pub fn ui_app() -> Result<App> {
     let mut app = crate::scene_app();
     crate::add_ui_plugins(&mut app);
-    crate::spawn_ui_camera(&mut app, UVec2::new(1920, 1080), 1.0);
+    crate::spawn_ui_camera(&mut app, BENCHMARK_VIEWPORT, 1.0);
     app.add_plugins(WidgetryAssetPlugin);
     let font = app
         .world()
@@ -252,7 +269,7 @@ pub fn ui_app() -> Result<App> {
         .load::<Font>(BuiltinFont::Default.path());
     crate::advance_until(
         &mut app,
-        Duration::from_secs(10),
+        FONT_LOAD_TIMEOUT,
         "benchmark 内建字体",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )
@@ -317,9 +334,9 @@ impl Harness {
                 .any(|argument| argument == "--discard-baseline");
         let mut criterion = Criterion::default()
             .output_directory(&report)
-            .sample_size(20)
-            .warm_up_time(Duration::from_millis(100))
-            .measurement_time(Duration::from_millis(500))
+            .sample_size(CRITERION_SAMPLES)
+            .warm_up_time(CRITERION_WARMUP)
+            .measurement_time(CRITERION_MEASUREMENT)
             .configure_from_args();
         if let Some(saved) = saved {
             ensure_new_baseline(&report, &saved)?;

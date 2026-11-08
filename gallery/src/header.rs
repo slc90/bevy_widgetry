@@ -1,3 +1,9 @@
+const TITLE_LEFT_PADDING: f32 = 12.0;
+const LOGO_SIZE: f32 = 16.0;
+const THEME_COMBO_WIDTH: f32 = 160.0;
+
+const CONTROL_GAP: f32 = 8.0;
+
 use crate::assets::GalleryIcon;
 use crate::config::{AppConfig, ConfigFile};
 use crate::i18n::HeaderKey;
@@ -119,22 +125,22 @@ pub(crate) fn scene(
             width: percent(100), height: percent(100),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::SpaceBetween,
-            padding: UiRect::left(px(12)),
+            padding: UiRect::left(px(TITLE_LEFT_PADDING)),
         }
         Children [
             template(|_| Ok(Pickable::IGNORE))
-            Node { align_items: AlignItems::Center, column_gap: px(8) }
+            Node { align_items: AlignItems::Center, column_gap: px(CONTROL_GAP) }
             Children [
                 @WidgetryIcon {
                     @path: {GalleryIcon::Logo.path()},
                     @max_size: { Some(UVec2::new(24, 24)) },
                 }
                 template(|_| Ok(Pickable::IGNORE))
-                Node { width: px(16), height: px(16) }--
+                Node { width: px(LOGO_SIZE), height: px(LOGO_SIZE) }--
                 bevy_widgetry::window::WidgetryWindowTitle bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))
             ]--
             template(|_| Ok(Pickable::IGNORE))
-            Node { height: percent(100), align_items: AlignItems::Center, column_gap: px(8) }
+            Node { height: percent(100), align_items: AlignItems::Center, column_gap: px(CONTROL_GAP) }
             GlobalZIndex({z_index::LOCAL_OVERLAY})
             Children [@{language}-- @{scale}-- @{theme}]
         ]
@@ -410,7 +416,7 @@ fn language_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
             })},
         }
         template(|_| Ok(LanguageComboBox))
-        Node { width: px(160) }
+        Node { width: px(THEME_COMBO_WIDTH) }
     })
 }
 

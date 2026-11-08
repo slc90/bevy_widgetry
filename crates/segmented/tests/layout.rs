@@ -40,8 +40,12 @@ fn widths(app: &App, children: &[Entity]) -> Vec<f32> {
 }
 
 fn assert_equal(widths: &[f32]) {
+    let pixel_tolerance = 1.0;
+
     assert!(
-        widths.iter().all(|width| (width - widths[0]).abs() <= 1.0),
+        widths
+            .iter()
+            .all(|width| (width - widths[0]).abs() <= pixel_tolerance),
         "{widths:?}"
     );
     assert!(widths[0] > 0.0);
@@ -123,6 +127,8 @@ fn intrinsic_equal_width_uses_content_without_a_fixed_group_width() {
 
 #[test]
 fn vertical_layout_preserves_content_heights_and_uses_the_shared_style() {
+    let pixel_tolerance = 1.0;
+
     use bevy::input_focus::{FocusCause, InputFocus};
     use bevy::ui::Checked;
     use bevy_widgetry_segmented::SegmentedOrientation;
@@ -146,7 +152,7 @@ fn vertical_layout_preserves_content_heights_and_uses_the_shared_style() {
     let children = app.world().get::<Children>(root).unwrap().to_vec();
     let first = app.world().get::<ComputedNode>(children[0]).unwrap().size();
     let second = app.world().get::<ComputedNode>(children[1]).unwrap().size();
-    assert!((first.x - second.x).abs() <= 1.0);
+    assert!((first.x - second.x).abs() <= pixel_tolerance);
     assert!(second.y > first.y + 20.0);
     let a = app
         .world()

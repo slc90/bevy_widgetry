@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const TRANSFORM_POSITION_TOLERANCE: f32 = 0.002;
+
 use bevy::{
     picking::{hover::PointerCaptureMap, pointer::*},
     prelude::*,
@@ -15,6 +17,8 @@ use coordinates::at_document;
 
 #[test]
 fn rounded_bounds_and_svg_preserve_the_rectangle_radius() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();
     let rectangle = CanvasRectangle {
@@ -26,7 +30,7 @@ fn rounded_bounds_and_svg_preserve_the_rectangle_radius() {
         .bounds(&transform, &CanvasPaint::default())
         .unwrap();
     let extent = 50.0 / 2.0_f32.sqrt() + 10.0;
-    assert!(bounds.max.distance(Vec2::splat(extent)) < 0.001);
+    assert!(bounds.max.distance(Vec2::splat(extent)) < COMPARISON_TOLERANCE);
     CanvasDocument::create_rectangle(
         &mut world,
         document,
@@ -44,6 +48,8 @@ fn rounded_bounds_and_svg_preserve_the_rectangle_radius() {
 
 #[test]
 fn parameter_sizes_clamp_before_crossing_the_fixed_corner_and_radius_fits_the_new_size() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     let id = pointer_ids()[1];
     for ellipse in [false, true] {
         let (mut app, a, _, old, _, base) = fixture(id, 1.0, 1.0);
@@ -101,7 +107,7 @@ fn parameter_sizes_clamp_before_crossing_the_fixed_corner_and_radius_fits_the_ne
                 .transform_point(Vec3::splat(-0.5))
                 .truncate()
                 .distance(Vec2::new(-40.0, -30.0))
-                < 0.001
+                < COMPARISON_TOLERANCE
         );
         input(
             &mut app,
@@ -140,7 +146,7 @@ fn parameter_sizes_clamp_before_crossing_the_fixed_corner_and_radius_fits_the_ne
             _ => panic!("must keep type"),
         };
         assert!(
-            size.distance(Vec2::splat(3.0)) < 0.001,
+            size.distance(Vec2::splat(3.0)) < COMPARISON_TOLERANCE,
             "regrab must resize local geometry: {size:?}"
         );
         assert_eq!(
@@ -189,8 +195,8 @@ fn parameter_sizes_clamp_before_crossing_the_fixed_corner_and_radius_fits_the_ne
                 .unwrap()
                 .rectangle()
                 .unwrap();
-            assert!(rectangle.size.distance(Vec2::ONE) < 0.001);
-            assert!((rectangle.corner_radius - 0.1).abs() < 0.001);
+            assert!(rectangle.size.distance(Vec2::ONE) < COMPARISON_TOLERANCE);
+            assert!((rectangle.corner_radius - 0.1).abs() < COMPARISON_TOLERANCE);
             assert_eq!(*app.world().get::<Transform>(shape).unwrap(), transform);
         }
     }
@@ -450,7 +456,7 @@ fn typed_size_handles_keep_the_opposite_geometry_corner_and_original_transform_s
                 };
                 assert!(
                     size.distance(Vec2::new(80.0, 60.0) + Vec2::new(20.0, 10.0) * axes.abs())
-                        < 0.002,
+                        < TRANSFORM_POSITION_TOLERANCE,
                     "size={size:?}, axes={axes:?}, ellipse={ellipse}"
                 );
                 assert!(
@@ -462,7 +468,7 @@ fn typed_size_handles_keep_the_opposite_geometry_corner_and_original_transform_s
                                 .transform_point((-Vec2::new(40.0, 30.0) * axes).extend(0.0))
                                 .truncate()
                         )
-                        < 0.002
+                        < TRANSFORM_POSITION_TOLERANCE
                 );
                 input(&mut app, id, &at, PointerAction::Cancel);
                 assert_eq!(*app.world().get::<Transform>(shape).unwrap(), changed);

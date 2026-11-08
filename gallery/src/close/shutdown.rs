@@ -1,3 +1,9 @@
+const SHUTDOWN_OVERLAY_Z_INDEX: i32 = 1000;
+const OVERLAY_PADDING: f32 = 32.0;
+
+const ITEM_GAP: f32 = 20.0;
+const CONTROL_GAP: f32 = 16.0;
+
 use super::GalleryTrayState;
 use crate::{
     gallery::GalleryPageHost,
@@ -265,16 +271,16 @@ struct Panel {
 fn panel() -> impl Scene {
     bsn! {
         Name("GalleryShutdown") Panel { status: #Status, details: #Details, actions: #Actions }
-        GlobalZIndex(1000)
+        GlobalZIndex(SHUTDOWN_OVERLAY_Z_INDEX)
         Node { position_type: PositionType::Absolute, left: px(0), top: px(0), width: percent(100), height: percent(100),
-            flex_direction: FlexDirection::Column, padding: UiRect::all(px(32)), row_gap: px(20) }
+            flex_direction: FlexDirection::Column, padding: UiRect::all(px(OVERLAY_PADDING)), row_gap: px(ITEM_GAP) }
         Children [
             #Status Name("GalleryShutdownStatus") Text("") WidgetryText--
             #Details Name("GalleryShutdownDetails") Text("") WidgetryText--
-            #Actions Node { display: Display::None, flex_direction: FlexDirection::Column, row_gap: px(20) }
+            #Actions Node { display: Display::None, flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
             Children [
                 @localized(TextKey::GalleryClose(CloseKey::ForceWarning)) WidgetryText--
-                Node { column_gap: px(16) } Children [@decision(false, CloseKey::ContinueWaiting)-- @decision(true, CloseKey::ForceExit)]
+                Node { column_gap: px(CONTROL_GAP) } Children [@decision(false, CloseKey::ContinueWaiting)-- @decision(true, CloseKey::ForceExit)]
             ]
         ]
     }
@@ -371,6 +377,8 @@ fn show(world: &mut World) -> Result {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy::app::OnAppExitSystems;
     use bevy::log::Level;
@@ -402,12 +410,12 @@ mod tests {
                 Ok::<_, bevy_widgetry::job::JobFailure>(())
             })
             .unwrap();
-        running.recv_timeout(Duration::from_secs(5)).unwrap();
+        running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         (result.0, result.1, release)
     }
 
     fn await_exit(app: &mut App) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while app.should_exit().is_none() {
             assert!(Instant::now() < deadline);
             app.update();

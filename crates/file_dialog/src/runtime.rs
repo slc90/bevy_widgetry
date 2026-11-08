@@ -1,3 +1,6 @@
+const MAX_SESSIONS: usize = 8;
+const MAX_MESSAGES_PER_UPDATE: usize = 64;
+
 use crate::directory::DirectoryEvent;
 use crate::preferences_job::Reply as PreferencesReply;
 use crate::projection::ProjectionResult;
@@ -203,7 +206,7 @@ impl Default for WidgetryFileDialogRuntimeOptions {
     fn default() -> Self {
         Self {
             automatic: true,
-            max_sessions: 8,
+            max_sessions: MAX_SESSIONS,
             max_messages_per_update: 8,
             update_budget: std::time::Duration::from_millis(2),
         }
@@ -237,9 +240,9 @@ pub(crate) fn update(world: &mut World) -> Result {
     }
     if options.update_budget.is_zero()
         || options.max_sessions == 0
-        || options.max_sessions > 8
+        || options.max_sessions > MAX_SESSIONS
         || options.max_messages_per_update == 0
-        || options.max_messages_per_update > 64
+        || options.max_messages_per_update > MAX_MESSAGES_PER_UPDATE
     {
         return Err(crate::error::internal_error(
             FileDialogInternalFault::RuntimeOptions {
@@ -2114,6 +2117,8 @@ fn finish_abandoned_jobs(mut retired: Vec<(JobManager, JobId)>) {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
 
     #[test]
@@ -2405,7 +2410,7 @@ mod tests {
                     }
                     _ => runtime.preference_save = Some(job),
                 }
-                ready.recv_timeout(Duration::from_secs(5)).unwrap();
+                ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 let shutdown = manager.begin_shutdown(Duration::from_secs(5)).unwrap();
                 drop(runtime);
                 release.send(()).unwrap();
@@ -2414,7 +2419,7 @@ mod tests {
                     _ => panic!("expected late failure"),
                 };
                 let diagnostic = failure.diagnostics().next().unwrap();
-                let deadline = Instant::now() + Duration::from_secs(5);
+                let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
                 while logs
                     .diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
                     .is_empty()
@@ -2464,7 +2469,7 @@ mod tests {
             pending: None,
         });
         app.insert_resource(runtime);
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         drop(app);
         assert_eq!(
             manager.status(id).unwrap().state,
@@ -2476,7 +2481,7 @@ mod tests {
             _ => panic!("expected late session failure"),
         };
         let diagnostic = failure.diagnostics().next().unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while logs
             .diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
             .is_empty()
@@ -2566,7 +2571,7 @@ mod tests {
 
     fn wait_retention_started(runtime: &Runtime) {
         let retention = runtime.retention.as_ref().unwrap();
-        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while retention.live.load(Ordering::Acquire) == 0 {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -2575,7 +2580,7 @@ mod tests {
 
     fn wait_retention_stop(runtime: &Runtime) {
         let retention = runtime.retention.as_ref().unwrap();
-        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !retention.shutdown.load(Ordering::Acquire) {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -2583,7 +2588,7 @@ mod tests {
     }
 
     fn wait_job(manager: &JobManager, id: JobId) {
-        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -3196,9 +3201,7 @@ mod tests {
                 receiver,
                 pending: None,
             });
-            ready
-                .recv_timeout(std::time::Duration::from_secs(5))
-                .unwrap();
+            ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             if !panicked {
                 manager.cancel(id).unwrap();
             }
@@ -3552,9 +3555,7 @@ mod tests {
                 Ok(())
             })
             .map_err(BevyError::error)?;
-        ready
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         session.directory = Some(DirectoryJob {
             manager: manager.clone(),
             id,
@@ -3564,7 +3565,7 @@ mod tests {
         let mut retired = Vec::new();
         session.stop(&mut retired)?;
         release.send(()).unwrap();
-        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -3644,9 +3645,7 @@ mod tests {
         let mut runtime = Runtime::default();
         runtime.retention = Some(service.clone());
         runtime.sessions.insert(root, session);
-        waiting
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .unwrap();
+        waiting.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         assert!(!manager.status(id).unwrap().state.is_finished());
         let logs = bevy_widgetry_test_utils::LogCapture::default();
         let failure = logs
@@ -3664,7 +3663,7 @@ mod tests {
             1
         );
         release.send(()).unwrap();
-        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() && Instant::now() < deadline {
             std::thread::yield_now();
         }
@@ -3715,7 +3714,7 @@ mod tests {
                 Ok(())
             })
             .map_err(BevyError::error)?;
-        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();

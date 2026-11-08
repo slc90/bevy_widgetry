@@ -1,3 +1,5 @@
+const MIN_CHANGED_PIXELS: usize = 3;
+
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
@@ -202,7 +204,7 @@ fn on_capture(
                 }
             }
         }
-        if changed < 3 {
+        if changed < MIN_CHANGED_PIXELS {
             redraw.write(RequestRedraw);
             return Ok(());
         }

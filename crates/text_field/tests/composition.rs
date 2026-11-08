@@ -206,6 +206,8 @@ fn readding_select_all_in_one_frame_preserves_focus_selection_and_later_removal(
 
 #[test]
 fn remaining_width_and_oversized_slots_do_not_shrink_user_content() {
+    let pixel_tolerance = 1.0;
+
     for slot_width in [80.0, 200.0] {
         let mut app = editing_app();
         app.add_plugins(WidgetryTextFieldPlugin);
@@ -252,7 +254,7 @@ fn remaining_width_and_oversized_slots_do_not_shrink_user_content() {
             .x;
         assert_eq!(prefix, slot_width);
         assert_eq!(suffix, slot_width);
-        assert!((input - (available - prefix - suffix).max(0.0)).abs() <= 1.0);
+        assert!((input - (available - prefix - suffix).max(0.0)).abs() <= pixel_tolerance);
     }
 }
 

@@ -1,3 +1,7 @@
+const TITLE_ICON_SIZE: UVec2 = UVec2::splat(16);
+
+const TITLE_BAR_HEIGHT: f32 = 36.0;
+
 use crate::{
     scene::WidgetryWindowControlsConfig,
     title_bar::{close::CloseButton, maximize::MaximizeButton, minimize::MinimizeButton},
@@ -36,9 +40,9 @@ fn title_bar_node() -> Node {
     Node {
         width: percent(100),
         min_width: px(0),
-        height: px(36),
+        height: px(TITLE_BAR_HEIGHT),
         flex_shrink: 0.0,
-        border_radius: BorderRadius::top(px(8)),
+        border_radius: BorderRadius::top(px(crate::window_root::WINDOW_CORNER_RADIUS)),
         flex_direction: FlexDirection::Row,
         align_items: AlignItems::Stretch,
         border: UiRect::bottom(px(1)),
@@ -120,7 +124,7 @@ fn system_icon(icon: BuiltinIcon) -> impl Scene {
     bsn! {
         @WidgetryIcon {
             @path: {icon.path()},
-            @max_size: { Some(UVec2::new(16, 16)) },
+            @max_size: { Some(TITLE_ICON_SIZE) },
         }
         template(|_| Ok(Pickable::IGNORE))
     }

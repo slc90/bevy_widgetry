@@ -49,8 +49,10 @@ fn visible(app: &App, clip: Entity) -> f32 {
 
 #[test]
 fn real_state_commits_immediately_while_visual_eases_and_then_stops_redrawing() {
+    let comparison_tolerance = 0.0001;
+
     let (mut app, bar, clip) = fixture(value(0.3));
-    assert!((visible(&app, clip) - 0.3).abs() < 0.0001);
+    assert!((visible(&app, clip) - 0.3).abs() < comparison_tolerance);
     for target in [0.6, 1.0, 0.2, 0.0] {
         let start = visible(&app, clip);
         WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(target)).unwrap();
@@ -59,15 +61,15 @@ fn real_state_commits_immediately_while_visual_eases_and_then_stops_redrawing() 
             value(target)
         );
         app.update();
-        assert!((visible(&app, clip) - start).abs() < 0.0001);
+        assert!((visible(&app, clip) - start).abs() < comparison_tolerance);
         app.update();
         let first = visible(&app, clip);
         assert!((first - start).abs() > (target - start).abs() * 0.3);
-        assert!((first - target).abs() > 0.0001);
+        assert!((first - target).abs() > comparison_tolerance);
         for _ in 0..4 {
             app.update();
         }
-        assert!((visible(&app, clip) - target).abs() < 0.0001);
+        assert!((visible(&app, clip) - target).abs() < comparison_tolerance);
     }
     for _ in 0..4 {
         app.update();
@@ -81,6 +83,8 @@ fn real_state_commits_immediately_while_visual_eases_and_then_stops_redrawing() 
 
 #[test]
 fn retargeting_uses_the_visible_position_and_noop_does_not_restart() {
+    let comparison_tolerance = 0.0001;
+
     let (mut app, bar, clip) = fixture(value(0.3));
     WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(0.6)).unwrap();
     app.update();
@@ -90,7 +94,7 @@ fn retargeting_uses_the_visible_position_and_noop_does_not_restart() {
     WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(0.8)).unwrap();
     app.update();
     let expected = middle + (0.8 - middle) * (1.0 - 0.8_f32.powi(3));
-    assert!((visible(&app, clip) - expected).abs() < 0.0001);
+    assert!((visible(&app, clip) - expected).abs() < comparison_tolerance);
     app.update();
     let continued = visible(&app, clip);
     assert!(continued > middle && continued < 0.8);
@@ -98,18 +102,20 @@ fn retargeting_uses_the_visible_position_and_noop_does_not_restart() {
     for _ in 0..4 {
         app.update();
     }
-    assert!((visible(&app, clip) - 0.8).abs() < 0.0001);
+    assert!((visible(&app, clip) - 0.8).abs() < comparison_tolerance);
 }
 
 #[test]
 fn first_change_after_idle_does_not_consume_idle_time() {
+    let comparison_tolerance = 0.0001;
+
     let (mut app, bar, clip) = fixture(value(0.65));
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         Duration::from_secs(2),
     ));
     WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(1.0)).unwrap();
     app.update();
-    assert!((visible(&app, clip) - 0.65).abs() < 0.0001);
+    assert!((visible(&app, clip) - 0.65).abs() < comparison_tolerance);
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         Duration::from_millis(30),
     ));
@@ -119,6 +125,8 @@ fn first_change_after_idle_does_not_consume_idle_time() {
 
 #[test]
 fn resizing_and_recoloring_mid_transition_keep_the_target_and_timing() {
+    let pixel_tolerance = 1.0;
+
     use bevy_widgetry_progress_bar::WidgetryProgressBarColorOverrides;
 
     let (mut app, bar, clip) = fixture(value(0.2));
@@ -151,7 +159,9 @@ fn resizing_and_recoloring_mid_transition_keep_the_target_and_timing() {
         Vec2::new(500.0, 24.0)
     );
     let clipped = app.world().get::<ComputedNode>(clip).unwrap();
-    assert!((clipped.size().x * clipped.inverse_scale_factor - 498.0 * after).abs() < 1.0);
+    assert!(
+        (clipped.size().x * clipped.inverse_scale_factor - 498.0 * after).abs() < pixel_tolerance
+    );
     for _ in 0..3 {
         app.update();
     }
@@ -211,6 +221,8 @@ fn indeterminate_starts_visible_moves_right_and_cycles_without_changing_state() 
 
 #[test]
 fn mode_changes_interrupt_and_snap_while_same_indeterminate_does_not_reset_phase() {
+    let comparison_tolerance = 0.0001;
+
     let (mut app, bar, clip) = fixture(value(0.2));
     WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(0.9)).unwrap();
     app.update();
@@ -237,7 +249,7 @@ fn mode_changes_interrupt_and_snap_while_same_indeterminate_does_not_reset_phase
     for target in [0.75, 0.0, 1.0] {
         WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(target)).unwrap();
         app.update();
-        assert!((visible(&app, clip) - target).abs() < 0.0001);
+        assert!((visible(&app, clip) - target).abs() < comparison_tolerance);
         for _ in 0..4 {
             app.update();
         }

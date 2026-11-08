@@ -40,7 +40,8 @@ fn fixture(count: usize) -> Result<Fixture> {
 
 fn main() -> Result {
     let mut harness = Harness::new("canvas-order-criterion")?;
-    for count in [100, 1000, 10000] {
+    let entity_counts = [100, 1000, 10000];
+    for count in entity_counts {
         run(
             &mut harness,
             &format!("canvas_order/shapes{count}/reorder_and_query"),

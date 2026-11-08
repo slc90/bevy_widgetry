@@ -1,3 +1,4 @@
+const MILLISECONDS_PER_SECOND: u64 = 1000;
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run};
 use bevy_widgetry_waveform::*;
@@ -313,7 +314,7 @@ fn benchmark(
                 &bevy_widgetry_job::JobManager::default(),
             )
             .map_err(bevy_widgetry_job::JobFailure::into_bevy_error)?;
-            let capacity = u64::from(rate) * u64::from(duration) / 1000;
+            let capacity = u64::from(rate) * u64::from(duration) / MILLISECONDS_PER_SECOND;
             let root = app
                 .world_mut()
                 .spawn((

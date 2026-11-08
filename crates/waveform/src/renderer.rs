@@ -1,3 +1,5 @@
+const TIME_GRID_DEPTH: f32 = -0.1;
+const TIME_GRID_ALPHA: f32 = 0.12;
 use crate::geometry::{empty_mesh, recolor_mesh, update_mesh};
 use crate::view_error::ViewResult;
 use crate::view_error::{ViewErrors, ViewFailureState};
@@ -137,7 +139,7 @@ fn initialize_root(world: &mut World, root: Entity) -> ViewResult {
                 template(move |_| Ok(Mesh2d(grid_handle.clone())))
                 template(move |_| Ok(MeshMaterial2d(grid_material_handle.clone())))
                 template(move |_| Ok(RenderLayers::none().with(layer)))
-                Transform::from_xyz(0.0, 0.0, -0.1)
+                Transform::from_xyz(0.0, 0.0, TIME_GRID_DEPTH)
                 Visibility::default()
                 template(|_| Ok(Aabb::from_min_max(Vec3::new(-0.5, -0.5, 0.0), Vec3::new(0.5, 0.5, 0.0))))
                 Pickable::IGNORE
@@ -378,7 +380,7 @@ fn update_grid(world: &mut World, root: Entity, size: UVec2) -> ViewResult {
     } else {
         theme.text.normal.foreground
     }
-    .with_alpha(0.12);
+    .with_alpha(TIME_GRID_ALPHA);
     let key = (revision, size, color, visible);
     let renderer = world
         .get::<Renderer>(root)

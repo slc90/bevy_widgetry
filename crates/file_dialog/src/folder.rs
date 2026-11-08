@@ -49,6 +49,10 @@ pub(crate) fn spawn(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy_widgetry_job::{JobKind, JobOutcome, JobRead};
     use std::io;
@@ -128,7 +132,7 @@ mod tests {
                 let manager = JobManager::default();
                 let (id, mut receiver) = spawn(&manager, backend, request).unwrap();
                 assert_ne!(
-                    ready.recv_timeout(Duration::from_secs(5)).unwrap(),
+                    ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap(),
                     thread::current().id()
                 );
                 assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
@@ -138,7 +142,7 @@ mod tests {
                     manager.cancel(id).unwrap();
                 }
                 release.send(()).unwrap();
-                let deadline = Instant::now() + Duration::from_secs(10);
+                let deadline = Instant::now() + ASYNC_WAIT_TIMEOUT;
                 while !manager.status(id).unwrap().state.is_finished() {
                     assert!(Instant::now() < deadline);
                     thread::yield_now();

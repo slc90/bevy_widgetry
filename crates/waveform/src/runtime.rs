@@ -1,3 +1,7 @@
+const ASYNC_SAMPLE_THRESHOLD: usize = 262_144;
+const PREVIEW_DENSITY_DIVISOR: usize = 4;
+const INCREMENTAL_REBUILD_CAPACITY_DIVISOR: usize = 4;
+
 use crate::source::PlanarRing;
 use crate::{
     ChannelView, MinMaxReducer, PlanarBuffer, ReducedChannel, ReductionInput, ReductionStats,
@@ -316,7 +320,7 @@ impl WaveformRuntime {
     }
     fn density(&self, output_len: usize) -> usize {
         if self.preview {
-            output_len.div_ceil(4)
+            output_len.div_ceil(PREVIEW_DENSITY_DIVISOR)
         } else {
             output_len
         }
@@ -495,7 +499,7 @@ impl WaveformRuntime {
             && output_len > 0
             && (end == self.ring.range.end || following && end > self.ring.range.end)
             && (self.ring.range.end - self.ring.range.start) as usize * self.channel_count()
-                >= 262_144
+                >= ASYNC_SAMPLE_THRESHOLD
         {
             self.start_reduction(
                 self.ring.clone(),
@@ -522,7 +526,7 @@ impl WaveformRuntime {
         let kind = if capacity != self.ring.capacity()
             || (self.rebuild || self.output_len != output_len)
                 && output_len > 0
-                && capacity * metadata.channel_count >= 262_144
+                && capacity * metadata.channel_count >= ASYNC_SAMPLE_THRESHOLD
         {
             WaveformUpdateKind::FullRead
         } else {
@@ -606,7 +610,7 @@ impl WaveformRuntime {
                 })?;
             self.staging.convert_to_volts(unit);
             if kind == WaveformUpdateKind::FullRead
-                || self.ring.range.is_empty() && frames * channels >= 262_144
+                || self.ring.range.is_empty() && frames * channels >= ASYNC_SAMPLE_THRESHOLD
             {
                 replacement = Some(Arc::new(
                     PlanarRing::from_staging(std::mem::take(&mut self.staging), target, capacity)
@@ -624,7 +628,7 @@ impl WaveformRuntime {
                 Arc::get_mut(&mut self.ring)
                     .ok_or_else(|| runtime_error(crate::WaveformError::RingBorrowed))?
                     .append(target, &self.staging);
-                if frames > capacity / 4 {
+                if frames > capacity / INCREMENTAL_REBUILD_CAPACITY_DIVISOR {
                     self.staging = PlanarBuffer::default();
                 }
             }
@@ -642,7 +646,8 @@ impl WaveformRuntime {
         let next_ring = replacement.as_ref().unwrap_or(&self.ring);
         if rebuild
             && output_len > 0
-            && (next_ring.range.end - next_ring.range.start) as usize * channels >= 262_144
+            && (next_ring.range.end - next_ring.range.start) as usize * channels
+                >= ASYNC_SAMPLE_THRESHOLD
         {
             let ring = next_ring.clone();
             self.start_reduction(
@@ -698,7 +703,7 @@ impl WaveformRuntime {
         }
         if output_len > 0
             && (self.ring.range.end - self.ring.range.start) as usize * self.channel_count()
-                >= 262_144
+                >= ASYNC_SAMPLE_THRESHOLD
         {
             let result = self.start_reduction(
                 self.ring.clone(),
@@ -1306,6 +1311,9 @@ fn redraw_pending_reductions(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+    const EXPECTED_ASYNC_FRAME_THRESHOLD: u64 = 262_144;
     use super::*;
     use std::time::Duration;
 
@@ -1333,7 +1341,7 @@ mod tests {
             output: &mut Vec<ReducedChannel>,
         ) -> ReductionStats {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            if input.buffered.end - input.buffered.start >= 262_144 {
+            if input.buffered.end - input.buffered.start >= EXPECTED_ASYNC_FRAME_THRESHOLD {
                 if let Some((entered, gate)) = self.gate.take() {
                     entered.send(()).unwrap();
                     gate.lock().unwrap().recv().unwrap();
@@ -1345,7 +1353,7 @@ mod tests {
     }
 
     fn settle(runtime: &mut WaveformRuntime, position: Duration, width: usize) {
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while runtime.update(position, width).unwrap().kind == WaveformUpdateKind::Pending {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
@@ -1385,7 +1393,7 @@ mod tests {
             WaveformUpdateKind::Pending
         );
         let old = runtime.pending_reduction_job().unwrap();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         runtime.set_preview(true).unwrap();
         runtime.request_position(Duration::from_secs(10)).unwrap();
         for _ in 0..3 {
@@ -1403,7 +1411,7 @@ mod tests {
             bevy_widgetry_job::JobState::Stopping
         );
         release.send(()).unwrap();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(old).unwrap().state.is_finished() {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
@@ -1444,7 +1452,7 @@ mod tests {
         settle(&mut runtime, Duration::from_secs(1), 1200);
         let snapshot = runtime.reduced_channels().to_vec();
         runtime.update(Duration::from_secs(30), 1200).unwrap();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         assert_eq!(
             runtime.update(Duration::from_secs(1), 1200).unwrap().kind,
             WaveformUpdateKind::Pending
@@ -1490,7 +1498,7 @@ mod tests {
         let revision = runtime.revision();
         runtime.update(Duration::from_secs(10), 600).unwrap();
         let id = runtime.pending_reduction_job().unwrap();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
@@ -1552,7 +1560,7 @@ mod tests {
         runtime.update(Duration::from_secs(10), 600).unwrap();
         let pending = runtime.pending_reduction.as_ref().unwrap();
         let job = pending.job;
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(job).unwrap().state.is_finished() {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
@@ -1650,12 +1658,12 @@ mod tests {
         runtime.update(Duration::from_secs(1), 1200).unwrap();
         runtime.update(Duration::from_secs(10), 600).unwrap();
         let job = runtime.pending_reduction_job().unwrap();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         runtime
             .set_algorithm(crate::WaveformAlgorithm::Lttb)
             .unwrap();
         release.send(()).unwrap();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(job).unwrap().state.is_finished() {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
@@ -1717,7 +1725,7 @@ mod tests {
         runtime.update(Duration::from_secs(10), 600).unwrap();
         let id = runtime.pending_reduction_job().unwrap();
         let mut observer = manager.subscribe::<()>(id).unwrap();
-        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let shutdown = manager.begin_shutdown(Duration::from_secs(5)).unwrap();
         drop(runtime);
         assert_eq!(
@@ -1733,7 +1741,7 @@ mod tests {
             }
         };
         let diagnostic = failure.diagnostics().next().unwrap();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while logs
             .diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
             .is_empty()
@@ -1783,7 +1791,7 @@ mod tests {
         let revision = runtime.revision();
         runtime.update(Duration::from_secs(10), 600).unwrap();
         let id = runtime.pending_reduction_job().unwrap();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
@@ -1856,7 +1864,7 @@ mod tests {
             retired: false,
         });
         manager.cancel(job).unwrap();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(job).unwrap().state.is_finished() {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
@@ -1926,7 +1934,7 @@ mod tests {
             .unwrap();
         assert!(runtime.pending_reduction.is_some());
         assert!(!runtime.is_running());
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + TEST_WAIT_TIMEOUT;
         while runtime.pending_reduction.is_some() {
             runtime.update(Duration::ZERO, 1200).unwrap();
             assert!(std::time::Instant::now() < deadline);

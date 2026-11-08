@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 use bevy::{
     input::{
         ButtonState,
@@ -41,7 +43,7 @@ fn fixture(value: f64, read_only: bool) -> Fixture {
         .load::<Font>(BuiltinFont::Default.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "NumberInput layout font",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

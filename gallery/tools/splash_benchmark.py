@@ -9,6 +9,13 @@ import subprocess
 import sys
 
 
+P95_QUANTILE = 0.95
+FRAME_BUDGET_MS = 16.7
+LONG_FRAME_THRESHOLD_MS = 25
+WARMUP_MS = 2000
+VIEWPORT = [1920, 1080]
+PROCESS_TIMEOUT_SECONDS = 90
+
 def statistics(values):
     values = sorted(values)
     if not values:
@@ -16,9 +23,9 @@ def statistics(values):
     return {
         "samples": len(values), "mean": sum(values) / len(values),
         "p50": values[int((len(values) - 1) * 0.5)],
-        "p95": values[int((len(values) - 1) * 0.95)], "max": values[-1],
-        "over_16_7ms": sum(value > 16.7 for value in values),
-        "over_25ms": sum(value > 25 for value in values),
+        "p95": values[int((len(values) - 1) * P95_QUANTILE)], "max": values[-1],
+        "over_16_7ms": sum(value > FRAME_BUDGET_MS for value in values),
+        "over_25ms": sum(value > LONG_FRAME_THRESHOLD_MS for value in values),
     }
 
 
@@ -26,14 +33,14 @@ def summarize(path, mode):
     with path.open(encoding="utf-8") as source:
         all_rows = list(csv.DictReader(source))
     active = [row for row in all_rows if row["splash_active"] == "true"]
-    steady_start = 2000.0
+    steady_start = float(WARMUP_MS)
     if mode == "play":
         if not active:
             raise RuntimeError("完整播放未观察到 Splash")
         cleaned = [row for row in all_rows if float(row["startup_ms"]) > float(active[-1]["startup_ms"]) and row["splash_active"] == "false"]
         if not cleaned:
             raise RuntimeError("完整播放未清理 Splash")
-        steady_start = float(cleaned[0]["elapsed_ms"]) + 2000.0
+        steady_start = float(cleaned[0]["elapsed_ms"]) + float(WARMUP_MS)
     rows = [row for row in all_rows if float(row["elapsed_ms"]) >= steady_start]
     summary = {"samples": len(rows), "steady_start_ms": steady_start}
     for field in ("update_ms", "frame_interval_ms", "present_interval_ms"):
@@ -90,7 +97,7 @@ def main():
         subprocess.run(["cargo", "build", "--locked", "--release", "-p", "widget_gallery"], cwd=root, check=True)
     binary = (args.binary or root / "target/release/widget_gallery.exe").resolve()
     args.output.mkdir(parents=True, exist_ok=True)
-    report = {"platform": platform.platform(), "binary": str(binary), "profile": "release", "viewport": [1920, 1080], "warmup_ms": 2000,
+    report = {"platform": platform.platform(), "binary": str(binary), "profile": "release", "viewport": VIEWPORT, "warmup_ms": WARMUP_MS,
               "timing": "update=First到Last；frame=Last间隔；present=主窗口DX12 present后的Render间隔，非桌面显示latency；render/splash_total=全部Camera提交的GPU timestamp；其他同名GPU路径仅末次Camera样本；startup=benchmark安装后（DX12初始化后）至主线程观察present，不是进程冷启动",
               "instrumentation": "仅测量模式持续RequestRedraw，保留desktop_app；未清除OS或Shader cache；play稳态从实际cleanup再预热2秒后起算，其他模式从首present预热2秒起算；另列完整演出帧；日志/CSV/GPU诊断带来测量开销",
               "git": subprocess.check_output(["git", "describe", "--always", "--dirty"], cwd=root, text=True).strip(),
@@ -112,7 +119,7 @@ def main():
             if mode == "gallery":
                 env["GALLERY_SPLASH_DISABLE"] = "1"
             with (args.output / f"{name}.log").open("w", encoding="utf-8") as log:
-                subprocess.run([str(binary)], cwd=root, env=env, stdout=log, stderr=log, check=True, timeout=90)
+                subprocess.run([str(binary)], cwd=root, env=env, stdout=log, stderr=log, check=True, timeout=PROCESS_TIMEOUT_SECONDS)
             log_text = (args.output / f"{name}.log").read_text(encoding="utf-8")
             if "panicked at" in log_text or " ERROR " in log_text:
                 raise RuntimeError(f"{name} 运行日志包含错误，检查对应 log")

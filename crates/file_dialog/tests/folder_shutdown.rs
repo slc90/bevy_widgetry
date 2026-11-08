@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::prelude::*;
 use bevy::tasks::{IoTaskPool, TaskPoolBuilder};
 use bevy_widgetry_file_dialog::*;
@@ -96,7 +98,7 @@ fn slow_folder_operations_leave_a_single_io_thread_available_during_shutdown() -
         )?;
     }
     app.update();
-    ready.recv_timeout(Duration::from_secs(5)).unwrap();
+    ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     let (sentinel, received) = mpsc::channel();
     IoTaskPool::get()
         .spawn(async move {

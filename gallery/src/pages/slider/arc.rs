@@ -1,3 +1,23 @@
+const DIRECTION_DEADZONE_SQUARED: f32 = 4.0;
+const TRACK_HIT_MARGIN: f32 = 18.0;
+const THUMB_HIT_RADIUS: f32 = 16.0;
+
+const TICK_INTERVALS: i32 = 48;
+const TICK_ORIGIN: f32 = 98.0;
+
+const TICK_RADIUS: f32 = 3.0;
+
+const TICK_DIAMETER: f32 = 6.0;
+const CONTROL_DIAMETER: f32 = 200.0;
+const CONTROL_BORDER_WIDTH: f32 = 2.0;
+const THUMB_DIAMETER: f32 = 22.0;
+const INITIAL_THUMB_LEFT: f32 = 100.0;
+const INITIAL_THUMB_TOP: f32 = 30.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 8.0;
+const LABEL_FONT_SIZE: f32 = 22.0;
+
 use crate::i18n::{Language, SliderKey, TextKey, localized, tr_args};
 use bevy::{
     input::keyboard::KeyboardInput,
@@ -50,7 +70,7 @@ fn local_point(world: &World, input: SliderPointerInput) -> Option<Vec2> {
     let local = transform
         .try_inverse()?
         .transform_point2(input.position * target.scale_factor() / scale - origin);
-    let local = local * (200.0 / node.size().x);
+    let local = local * (CONTROL_DIAMETER / node.size().x);
     local.is_finite().then_some(local)
 }
 
@@ -98,7 +118,7 @@ impl SliderDragStrategy for ArcDrag {
         let Some(local) = local_point(world, input) else {
             return Ok(SliderProjection::Wait);
         };
-        if local.length_squared() < 4.0 {
+        if local.length_squared() < DIRECTION_DEADZONE_SQUARED {
             return Ok(SliderProjection::Wait);
         }
         let raw = f64::from(local.y.atan2(local.x));
@@ -107,14 +127,14 @@ impl SliderDragStrategy for ArcDrag {
 }
 impl ArcDrag {
     fn begin(local: Vec2, state: &WidgetrySliderState) -> Option<(f64, Self)> {
-        if !(RADIUS - 18.0..=RADIUS + 18.0).contains(&local.length()) {
+        if !(RADIUS - TRACK_HIT_MARGIN..=RADIUS + TRACK_HIT_MARGIN).contains(&local.length()) {
             return None;
         }
         let raw = f64::from(local.y.atan2(local.x));
         let ratio = (state.value() - state.min()) / (state.max() - state.min());
         let knob_angle = START + f64::from(ratio) * SPAN;
         let knob = Vec2::new(knob_angle.cos() as f32, knob_angle.sin() as f32) * RADIUS;
-        let on_knob = local.distance_squared(knob) <= 16.0_f32.powi(2);
+        let on_knob = local.distance_squared(knob) <= THUMB_HIT_RADIUS.powi(2);
         let angle = if on_knob {
             knob_angle + (raw - knob_angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
                 - std::f64::consts::PI
@@ -175,40 +195,40 @@ enum Action {
 }
 
 fn dots() -> impl SceneList {
-    (0..=48).map(|index| {
-        let ratio = index as f32 / 48.0;
+    (0..=TICK_INTERVALS).map(|index| {
+        let ratio = index as f32 / TICK_INTERVALS as f32;
         let angle = START + f64::from(ratio)*SPAN;
-        let x = 98.0 + angle.cos() as f32 * RADIUS;
-        let y = 98.0 + angle.sin() as f32 * RADIUS;
+        let x = TICK_ORIGIN + angle.cos() as f32 * RADIUS;
+        let y = TICK_ORIGIN + angle.sin() as f32 * RADIUS;
         bsn! {
             template(move |_|Ok(ArcDot(ratio))) Pickable::IGNORE BackgroundColor
-            Node { position_type:PositionType::Absolute,left:px(x-3.0),top:px(y-3.0),width:px(6),height:px(6),border_radius:BorderRadius::MAX }
+            Node { position_type:PositionType::Absolute,left:px(x-TICK_RADIUS),top:px(y-TICK_RADIUS),width:px(TICK_DIAMETER),height:px(TICK_DIAMETER),border_radius:BorderRadius::MAX }
         }
     }).collect::<Vec<_>>()
 }
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node {flex_direction:FlexDirection::Column,align_items:AlignItems::Start,row_gap:px(8),flex_shrink:0.0}
+        Node {flex_direction:FlexDirection::Column,align_items:AlignItems::Start,row_gap:px(DETAIL_GAP),flex_shrink:0.0}
         Children [
             @localized(TextKey::Slider(SliderKey::ArcDescription)) WidgetryText--
             @WidgetrySliderHeadless { @value:{Some(50.0)} }
             template(|_|Ok(WidgetrySliderInteraction::new(ArcStrategy)))
             template(|_|Ok(ArcReadout::default()))
             Name("SliderArc") TabIndex(0) on(changed) on(ended)
-            Node {width:px(200),height:px(200),flex_shrink:0.0,border:UiRect::all(px(2)),border_radius:BorderRadius::MAX}
+            Node {width:px(CONTROL_DIAMETER),height:px(CONTROL_DIAMETER),flex_shrink:0.0,border:UiRect::all(px(CONTROL_BORDER_WIDTH)),border_radius:BorderRadius::MAX}
             BorderColor BackgroundColor
             Children [
                 {dots()}--
                 ArcKnob Name("SliderArcKnob") Pickable::IGNORE BackgroundColor
-                Node {position_type:PositionType::Absolute,width:px(22),height:px(22),left:px(100),top:px(30),border_radius:BorderRadius::MAX}
+                Node {position_type:PositionType::Absolute,width:px(THUMB_DIAMETER),height:px(THUMB_DIAMETER),left:px(INITIAL_THUMB_LEFT),top:px(INITIAL_THUMB_TOP),border_radius:BorderRadius::MAX}
                 UiTransform {translation:Val2::percent(-50,-50)}--
                 ArcLabel Text("") WidgetryText Pickable::IGNORE
-                TextFont {font_size:FontSize::Px(22.0)}
+                TextFont {font_size:FontSize::Px(LABEL_FONT_SIZE)}
                 Node {position_type:PositionType::Absolute,left:percent(50),top:percent(50)}
                 UiTransform {translation:Val2::percent(-50,-50)}
             ]--
-            Node {column_gap:px(8),row_gap:px(8),flex_wrap:FlexWrap::Wrap}
+            Node {column_gap:px(CONTROL_GAP),row_gap:px(DETAIL_GAP),flex_wrap:FlexWrap::Wrap}
             Children [
                 @control(Action::Focus,SliderKey::ArcFocus,"SliderArcFocus")--
                 @control(Action::Disabled,SliderKey::ArcDisabled,"SliderArcDisabled")--
@@ -310,8 +330,8 @@ fn update(
             }
             if let Ok(mut node) = knobs.get_mut(*child) {
                 let angle = START + f64::from(ratio) * SPAN;
-                node.left = px(98.0 + angle.cos() as f32 * RADIUS);
-                node.top = px(98.0 + angle.sin() as f32 * RADIUS);
+                node.left = px(TICK_ORIGIN + angle.cos() as f32 * RADIUS);
+                node.top = px(TICK_ORIGIN + angle.sin() as f32 * RADIUS);
                 if let Ok(mut background) = backgrounds.get_mut(*child) {
                     background.set_if_neq(BackgroundColor(color));
                 }
@@ -337,6 +357,8 @@ mod tests {
     use bevy_widgetry_core::scene::spawn_scene;
     #[test]
     fn external_arc_session_crosses_angle_cut_both_ways_and_keeps_grab_offset() {
+        let comparison_tolerance = 1e-9;
+
         let mut app = bevy_widgetry_test_utils::scene_app();
         let root = spawn_scene(
             app.world_mut(),
@@ -350,13 +372,15 @@ mod tests {
             angle,
             offset: position(angle, &state) - 50.0,
         };
-        assert!((drag.advance(angle, &state) - 50.0).abs() < 1e-9);
+        assert!((drag.advance(angle, &state) - 50.0).abs() < comparison_tolerance);
         let after = drag.advance((-179.0_f64).to_radians(), &state);
-        assert!((after - (50.0 + 2.0 / 270.0 * 100.0)).abs() < 1e-9);
-        assert!((drag.advance(angle, &state) - 50.0).abs() < 1e-9);
+        assert!((after - (50.0 + 2.0 / 270.0 * 100.0)).abs() < comparison_tolerance);
+        assert!((drag.advance(angle, &state) - 50.0).abs() < comparison_tolerance);
     }
     #[test]
     fn endpoint_thumb_can_be_grabbed_on_the_gap_side_without_jumping() {
+        let comparison_tolerance = 1e-8;
+
         let mut app = bevy_widgetry_test_utils::scene_app();
         for (value, angle) in [
             (0.0, 130.0_f64.to_radians()),
@@ -372,10 +396,12 @@ mod tests {
             let (initial, mut drag) = ArcDrag::begin(local, &state).unwrap();
             assert_eq!(initial, f64::from(value));
             let raw = f64::from(local.y.atan2(local.x));
-            assert!((drag.advance(raw, &state) - f64::from(value)).abs() < 1e-8);
+            assert!((drag.advance(raw, &state) - f64::from(value)).abs() < comparison_tolerance);
             let inward = if value == 0.0 { 0.02 } else { -0.02 };
             let next = drag.advance(raw + inward, &state);
-            assert!((next - (f64::from(value) + inward / SPAN * 100.0)).abs() < 1e-8);
+            assert!(
+                (next - (f64::from(value) + inward / SPAN * 100.0)).abs() < comparison_tolerance
+            );
         }
         let root = spawn_scene(app.world_mut(), bsn! {@WidgetrySliderHeadless}).unwrap();
         let state = *WidgetrySliderHeadless::state(app.world(), root).unwrap();

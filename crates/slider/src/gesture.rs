@@ -60,7 +60,8 @@ pub(crate) fn directional(state: &WidgetrySliderState, anchor: f64, delta: f64) 
             } else {
                 from_max
             };
-            let steps = (delta.abs() / step + 1e-6).floor();
+            let step_rounding_allowance = 1e-6;
+            let steps = (delta.abs() / step + step_rounding_allowance).floor();
             (anchor + delta.signum() * steps * step).clamp(min, max) as f32
         }
     }

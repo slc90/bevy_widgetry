@@ -1,3 +1,23 @@
+const FREQUENCY_CHANNEL_CYCLE: u64 = 7;
+const PHASE_CHANNEL_CYCLE: u64 = 4;
+const SQUARE_DUTY_CYCLE: f32 = 0.5;
+const SQUARE_AMPLITUDE: f32 = 0.8;
+const TRIANGLE_AMPLITUDE: f32 = 0.6;
+const SPIKE_FRAME_OFFSET: u64 = 11;
+const SPIKE_AMPLITUDE: f32 = 1.5;
+const AMPLITUDE_CHANNEL_CYCLE: usize = 4;
+const AMPLITUDE_CHANNEL_STEP: f32 = 0.15;
+
+const MAGIC: &[u8; 4] = b"WFRM";
+const HEADER_LEN: usize = 24;
+const WORD_LEN: usize = 4;
+const VERSION_OFFSET: usize = 4;
+const RATE_OFFSET: usize = 8;
+const CHANNEL_COUNT_OFFSET: usize = 12;
+const FRAME_COUNT_FIELD: std::ops::Range<usize> = 16..24;
+const FORMAT_VERSION: u32 = 1;
+const SAMPLE_LEN: usize = 4;
+
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::prelude::*;
 use bevy_widgetry::waveform::{
@@ -53,36 +73,36 @@ impl AssetLoader for ReplayLoader {
 
 fn parse(bytes: &[u8]) -> io::Result<ReplayData> {
     let invalid = || io::Error::new(io::ErrorKind::InvalidData, "invalid WFRM payload");
-    if bytes.len() < 24 || &bytes[..4] != b"WFRM" {
+    if bytes.len() < HEADER_LEN || &bytes[..MAGIC.len()] != MAGIC {
         return Err(invalid());
     }
     let word = |offset| -> io::Result<u32> {
         Ok(u32::from_le_bytes(
-            bytes[offset..offset + 4]
+            bytes[offset..offset + WORD_LEN]
                 .try_into()
                 .map_err(|_| invalid())?,
         ))
     };
-    let rate = word(8)?;
-    let count = word(12)? as usize;
-    let frames = u64::from_le_bytes(bytes[16..24].try_into().map_err(|_| invalid())?);
+    let rate = word(RATE_OFFSET)?;
+    let count = word(CHANNEL_COUNT_OFFSET)? as usize;
+    let frames = u64::from_le_bytes(bytes[FRAME_COUNT_FIELD].try_into().map_err(|_| invalid())?);
     let length = usize::try_from(frames).map_err(|_| invalid())?;
-    if word(4)? != 1
+    if word(VERSION_OFFSET)? != FORMAT_VERSION
         || rate == 0
         || count == 0
         || length == 0
         || count
             .checked_mul(length)
-            .and_then(|n| n.checked_mul(4))
-            .and_then(|n| n.checked_add(24))
+            .and_then(|n| n.checked_mul(SAMPLE_LEN))
+            .and_then(|n| n.checked_add(HEADER_LEN))
             != Some(bytes.len())
     {
         return Err(invalid());
     }
     let mut channels = Vec::with_capacity(count);
-    for channel in bytes[24..].chunks_exact(length * 4) {
+    for channel in bytes[HEADER_LEN..].chunks_exact(length * SAMPLE_LEN) {
         let mut values = Vec::with_capacity(length);
-        for sample in channel.as_chunks::<4>().0 {
+        for sample in channel.as_chunks::<SAMPLE_LEN>().0 {
             let value = f32::from_le_bytes(*sample);
             if !value.is_finite() {
                 return Err(invalid());
@@ -175,28 +195,33 @@ impl LiveSource {
         let start = storage.end;
         let capacity = storage.capacity;
         for (channel, values) in storage.channels.iter_mut().enumerate() {
-            let period = u64::from(rate) * (channel as u64 % 7 + 1);
+            let period = u64::from(rate) * (channel as u64 % FREQUENCY_CHANNEL_CYCLE + 1);
             for frame in start..target {
-                let phase =
-                    ((frame + period * (channel as u64 % 4) / 4) % period) as f32 / period as f32;
+                let phase = ((frame
+                    + period * (channel as u64 % PHASE_CHANNEL_CYCLE) / PHASE_CHANNEL_CYCLE)
+                    % period) as f32
+                    / period as f32;
                 let value = if basic {
                     match channel {
                         0 => (phase * std::f32::consts::TAU).sin(),
                         1 => {
-                            if phase < 0.5 {
-                                0.8
+                            if phase < SQUARE_DUTY_CYCLE {
+                                SQUARE_AMPLITUDE
                             } else {
-                                -0.8
+                                -SQUARE_AMPLITUDE
                             }
                         }
                         2 => phase * 2.0 - 1.0,
-                        _ => (1.0 - (phase * 2.0 - 1.0).abs() * 2.0) * 0.6,
+                        _ => (1.0 - (phase * 2.0 - 1.0).abs() * 2.0) * TRIANGLE_AMPLITUDE,
                     }
                 } else {
-                    if frame % u64::from(rate) == 11 + channel as u64 {
-                        1.5
+                    if frame % u64::from(rate) == SPIKE_FRAME_OFFSET + channel as u64 {
+                        SPIKE_AMPLITUDE
                     } else {
-                        (phase * 2.0 - 1.0) * (1.0 - (channel % 4) as f32 * 0.15)
+                        (phase * 2.0 - 1.0)
+                            * (1.0
+                                - (channel % AMPLITUDE_CHANNEL_CYCLE) as f32
+                                    * AMPLITUDE_CHANNEL_STEP)
                     }
                 };
                 if values.len() == capacity {

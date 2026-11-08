@@ -120,6 +120,9 @@ fn press(app: &mut App, at: &Location, action: PointerAction) {
 
 #[test]
 fn bsn_geometry_projects_endpoints_and_vertical_fill_from_the_bottom() {
+    let comparison_tolerance = 0.02;
+    let pixel_tolerance = 1.1;
+
     for vertical in [false, true] {
         for (diameter, thickness) in [(20.0, 6.0), (28.0, 10.0)] {
             let (mut app, root, _, _) = fixture(vertical, diameter, thickness, 1.0, 1.0);
@@ -151,19 +154,19 @@ fn bsn_geometry_projects_endpoints_and_vertical_fill_from_the_bottom() {
                         thumb_center.x - track_center.x
                     } - expected)
                         .abs()
-                        < 0.02
+                        < comparison_tolerance
                 );
                 let fill_length = if vertical {
                     size(app.world(), fill).y
                 } else {
                     size(app.world(), fill).x
                 };
-                assert!((fill_length - length * value / 10.0).abs() < 1.1);
+                assert!((fill_length - length * value / 10.0).abs() < pixel_tolerance);
                 let fill_center = center(app.world(), fill);
                 if vertical {
                     assert!(
                         (fill_center.y + fill_length * 0.5 - (track_center.y + length * 0.5)).abs()
-                            < 0.02
+                            < comparison_tolerance
                     );
                 }
             }
@@ -188,6 +191,8 @@ fn bsn_geometry_projects_endpoints_and_vertical_fill_from_the_bottom() {
 
 #[test]
 fn actual_thumb_geometry_and_root_length_keep_input_aligned_at_scale() {
+    let comparison_tolerance = 0.001;
+
     for vertical in [false, true] {
         for (dpi, ui_scale) in [(1.0, 1.0), (1.5, 1.0), (1.5, 1.5)] {
             let (mut app, root, _, mut at) = fixture(vertical, 28.0, 10.0, dpi, ui_scale);
@@ -220,7 +225,8 @@ fn actual_thumb_geometry_and_root_length_keep_input_aligned_at_scale() {
                 };
             moved(&mut app, &mut at, target);
             assert!(
-                (WidgetrySliderHeadless::value(app.world(), root).unwrap() - 7.0).abs() < 0.001
+                (WidgetrySliderHeadless::value(app.world(), root).unwrap() - 7.0).abs()
+                    < comparison_tolerance
             );
             press(
                 &mut app,
@@ -386,6 +392,8 @@ fn color_commands_validate_at_execution_and_failed_requests_preserve_overrides()
 
 #[test]
 fn track_click_uses_the_actual_center_after_fractional_scale_layout_rounding() {
+    let comparison_tolerance = 0.00001;
+
     for vertical in [false, true] {
         let (mut app, root, _, mut at) = fixture(vertical, 20.0, 6.0, 1.25, 1.0);
         WidgetrySliderHeadless::set_value_in_world(app.world_mut(), root, 0.0).unwrap();
@@ -394,7 +402,10 @@ fn track_click_uses_the_actual_center_after_fractional_scale_layout_rounding() {
         let midpoint = center(app.world(), track) / 1.25;
         moved(&mut app, &mut at, midpoint);
         press(&mut app, &at, PointerAction::Press(PointerButton::Primary));
-        assert!((WidgetrySliderHeadless::value(app.world(), root).unwrap() - 5.0).abs() < 0.00001);
+        assert!(
+            (WidgetrySliderHeadless::value(app.world(), root).unwrap() - 5.0).abs()
+                < comparison_tolerance
+        );
     }
 }
 

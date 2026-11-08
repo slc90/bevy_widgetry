@@ -8,6 +8,7 @@ use std::collections::HashSet;
 
 #[test]
 fn builtin_font_resolves_to_valid_embedded_font() {
+    const TRUETYPE_SFNT_VERSION: [u8; 4] = [0, 1, 0, 0];
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryAssetPlugin));
     let server = app.world().resource::<AssetServer>();
@@ -19,7 +20,7 @@ fn builtin_font_resolves_to_valid_embedded_font() {
         reader.read_to_end(&mut bytes).await.unwrap();
         bytes
     });
-    assert!(bytes.starts_with(&[0, 1, 0, 0]));
+    assert!(bytes.starts_with(&TRUETYPE_SFNT_VERSION));
     let font = Font::from_bytes(bytes);
     assert!(!font.data.is_empty());
 }

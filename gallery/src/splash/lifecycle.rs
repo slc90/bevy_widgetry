@@ -1,3 +1,7 @@
+const DEFAULT_TIMEOUT_MS: f32 = 15000.0;
+const MAX_TIMEOUT_MS: f32 = 60000.0;
+const FADE_DURATION_MS: f32 = 200.0;
+
 use super::{
     SplashSession, SplashStatus,
     animation::{SplashAnimationClock, SplashPreview},
@@ -51,7 +55,7 @@ pub(super) fn install(app: &mut App) -> Result {
     app.insert_resource(SplashValidation {
         assets_delay_ms: duration("GALLERY_SPLASH_ASSETS_DELAY_MS", 0.0)?,
         gallery_delay_ms: duration("GALLERY_SPLASH_GALLERY_DELAY_MS", 0.0)?,
-        timeout_ms: duration("GALLERY_SPLASH_TIMEOUT_MS", 15000.0)?,
+        timeout_ms: duration("GALLERY_SPLASH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS)?,
     })
     .init_resource::<SplashLifecycle>()
     .register_type::<SplashLifecycle>()
@@ -76,7 +80,7 @@ fn duration(name: &str, default_value: f32) -> Result<f32> {
                 .field("value", format_args!("{:?}", value)),
         )
     })?;
-    if !value.is_finite() || !(0.0..=60000.0).contains(&value) {
+    if !value.is_finite() || !(0.0..=MAX_TIMEOUT_MS).contains(&value) {
         return Err(crate::diagnostics::at(
             "Splash 验证时间必须位于0–60000ms",
             bevy_widgetry::diagnostics::ErrorFrame::new("Splash 验证时间必须位于0–60000ms")
@@ -128,7 +132,7 @@ fn advance(
             .single()
             .is_ok_and(|content| content.0 == GalleryPage::Button)
         && lifecycle.active_ms >= validation.gallery_delay_ms;
-    if !preview.retain && status.elapsed_ms >= 5000.0 {
+    if !preview.retain && status.elapsed_ms >= super::animation::ANIMATION_DURATION_MS {
         session.finish_requested = true;
     }
     for mut visible in &mut skip {
@@ -169,7 +173,8 @@ fn advance(
             | SplashPhase::WaitingFirstSplashPresent
             | SplashPhase::HoldingForGallery
     );
-    if waiting || (lifecycle.phase == SplashPhase::Fading && lifecycle.fade_ms >= 200.0) {
+    if waiting || (lifecycle.phase == SplashPhase::Fading && lifecycle.fade_ms >= FADE_DURATION_MS)
+    {
         lifecycle.wait_ms += clock.visible_delta_ms;
         if lifecycle.wait_ms >= validation.timeout_ms {
             failure = Some(format!("Splash 等待超时: {:?}", lifecycle.phase));
@@ -186,14 +191,14 @@ fn advance(
         commands.entity(fallback).try_despawn();
     }
     if lifecycle.phase == SplashPhase::Fading {
-        lifecycle.fade_ms = (lifecycle.fade_ms + clock.visible_delta_ms).min(200.0);
-        status.alpha = 1.0 - lifecycle.fade_ms / 200.0;
+        lifecycle.fade_ms = (lifecycle.fade_ms + clock.visible_delta_ms).min(FADE_DURATION_MS);
+        status.alpha = 1.0 - lifecycle.fade_ms / FADE_DURATION_MS;
         if let Ok(mut image) = display.get_mut(session.overlay) {
             image.color.set_alpha(status.alpha);
         } else {
             failure = Some("Splash 显示节点丢失".into());
         }
-        if lifecycle.fade_ms >= 200.0 {
+        if lifecycle.fade_ms >= FADE_DURATION_MS {
             presentation.submit_terminal();
         }
         if presentation.terminal_presented.load(Ordering::Acquire) {

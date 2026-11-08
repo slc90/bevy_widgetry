@@ -1,3 +1,16 @@
+const CYCLE_OPTION_COUNT: usize = 3;
+const EQUAL_OPTIONS_WIDTH: f32 = 360.0;
+const PANEL_WIDTH: f32 = 440.0;
+
+const DETAIL_GAP: f32 = 6.0;
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 12.0;
+const SECTION_GAP: f32 = 16.0;
+const PAGE_GAP: f32 = 20.0;
+const CONTROL_GAP: f32 = 16.0;
+const CONTENT_GAP: f32 = 24.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::{LocalizedText, NavigationKey, SegmentedKey, TextKey, localized, localized_args};
 use bevy::prelude::*;
@@ -61,7 +74,7 @@ fn scene() -> impl Scene {
             SegmentedKey::Equal,
             "SegmentedEqual",
             bsn! {
-                @WidgetrySegmented { @equal_width: true } Node { width: px(360) }
+                @WidgetrySegmented { @equal_width: true } Node { width: px(EQUAL_OPTIONS_WIDTH) }
                 Children [{date_options("SegmentedEqual")}]
             },
             0,
@@ -102,11 +115,11 @@ fn scene() -> impl Scene {
         )),
     ];
     bsn! {
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(SECTION_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Navigation(NavigationKey::Segmented)) WidgetryText--
             @localized(TextKey::Segmented(SegmentedKey::Description)) WidgetryText Node { max_width: percent(100) }--
-            Node { column_gap: px(16), row_gap: px(12), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Center }
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(GROUP_GAP), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Center }
             Children [
                 @action(SegmentedKey::FocusBefore, "SegmentedFocusBefore") bevy::input_focus::tab_navigation::TabIndex(0)--
                 @demo(SegmentedKey::Basic, "SegmentedBasic", bsn! {
@@ -119,12 +132,12 @@ fn scene() -> impl Scene {
                 }, 0)--
                 @action(SegmentedKey::FocusAfter, "SegmentedFocusAfter") bevy::input_focus::tab_navigation::TabIndex(0)
             ]--
-            Node { column_gap: px(16), row_gap: px(8), flex_wrap: FlexWrap::Wrap }
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP), flex_wrap: FlexWrap::Wrap }
             Children [
                 @action(SegmentedKey::Programmatic, "SegmentedSelectNext") on(select_next)--
                 @action(SegmentedKey::ToggleDisabled, "SegmentedToggleDisabled") on(toggle_disabled)
             ]--
-            Node { column_gap: px(24), row_gap: px(20), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Start }
+            Node { column_gap: px(CONTENT_GAP), row_gap: px(PAGE_GAP), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Start }
             Children [{examples}]--
             @custom::scene()
         ]
@@ -140,13 +153,13 @@ fn demo(
     let control: Box<dyn Scene> = Box::new(control);
     bsn! {
         template(|_| Ok(SegmentedDemoState::default())) Name({format!("{name}Demo")})
-        Node { width: px(440), max_width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(6), align_items: AlignItems::Start }
+        Node { width: px(PANEL_WIDTH), max_width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Segmented(title)) WidgetryText--
             @{control} Name(name) on(selection_changed)--
             template(|_| Ok(Status)) Name({format!("{name}Status")})
             @localized_args(TextKey::Segmented(SegmentedKey::Status), vec![("index", initial.to_string()), ("events", "0".into()), ("programmatic", "0".into())])
-            WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }
+            WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }
         ]
     }
 }
@@ -252,7 +265,11 @@ fn select_next(
     for root in &targets {
         commands.queue(move |world: &mut World| -> Result {
             let index = selected_index(world, root)?;
-            WidgetrySegmentedHeadless::set_selected(&mut world.commands(), root, (index + 1) % 3);
+            WidgetrySegmentedHeadless::set_selected(
+                &mut world.commands(),
+                root,
+                (index + 1) % CYCLE_OPTION_COUNT,
+            );
             world
                 .commands()
                 .queue(move |world: &mut World| report(world, root, false));

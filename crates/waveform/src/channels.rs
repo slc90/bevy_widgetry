@@ -1,3 +1,5 @@
+const LABEL_PADDING_X: f32 = 4.0;
+
 use crate::view::ChannelParts;
 use crate::view_error::ViewResult;
 use crate::view_error::{ViewErrors, ViewFailureState};
@@ -343,7 +345,7 @@ fn prepare_one(world: &mut World, root: Entity) -> ViewResult {
                 template(move |_| Ok(ChildOf(content)))
                 Text(label) WidgetryText TextLayout::no_wrap()
                 Node { grid_column: GridPlacement::start(1), align_self: AlignSelf::Center,
-                    width: percent(100), padding: UiRect::horizontal(px(4)), overflow: Overflow::clip() }
+                    width: percent(100), padding: UiRect::horizontal(px(LABEL_PADDING_X)), overflow: Overflow::clip() }
                 Pickable::IGNORE
             }).map_err(|error| error.into_bevy_error())?;
         }

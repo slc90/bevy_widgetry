@@ -1,3 +1,12 @@
+const BUTTON_WIDTH: f32 = 96.0;
+const BUTTON_HEIGHT: f32 = 64.0;
+const BUTTON_CORNER_RADIUS: f32 = 12.0;
+const UNCHECKED_SYMBOL_SIZE: f32 = 28.0;
+const UNCHECKED_SYMBOL_BORDER: f32 = 3.0;
+
+const ITEM_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 8.0;
+
 use crate::i18n::{CheckBoxKey, Language, TextKey, localized, tr_args};
 use bevy::{
     input_focus::{FocusCause, InputFocus},
@@ -34,12 +43,12 @@ impl GalleryTriSymbol {
             @WidgetryTriStateCheckboxHeadless
             Name("GalleryTriSymbol")
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Node { width: px(96), height: px(64), border_radius: BorderRadius::all(px(12)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+            Node { width: px(BUTTON_WIDTH), height: px(BUTTON_HEIGHT), border_radius: BorderRadius::all(px(BUTTON_CORNER_RADIUS)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
             BackgroundColor
             on(changed)
             Children [
                 template(|_| Ok(Symbol)) Pickable::IGNORE
-                Node { width: px(28), height: px(28), border_radius: BorderRadius::MAX, border: UiRect::all(px(3)) }
+                Node { width: px(UNCHECKED_SYMBOL_SIZE), height: px(UNCHECKED_SYMBOL_SIZE), border_radius: BorderRadius::MAX, border: UiRect::all(px(UNCHECKED_SYMBOL_BORDER)) }
                 BackgroundColor
                 template(|_| Ok(BorderColor::all(Color::WHITE)))
             ]
@@ -50,12 +59,12 @@ impl GalleryTriSymbol {
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("GalleryTriSymbolDemo")
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::CheckBox(CheckBoxKey::TriSymbolDescription)) WidgetryText--
             @GalleryTriSymbol--
             Name("GalleryTriSymbolStatus") template(|_| Ok(Status)) Text("") WidgetryText--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap }
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP), flex_wrap: FlexWrap::Wrap }
             Children [
                 @control(Action::Set(WidgetryCheckState::Unchecked), CheckBoxKey::Unchecked, "GalleryTriSetUnchecked")--
                 @control(Action::Set(WidgetryCheckState::Checked), CheckBoxKey::Checked, "GalleryTriSetChecked")--

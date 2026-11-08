@@ -1,3 +1,8 @@
+pub(crate) const DAYS_PER_WEEK: usize = 7;
+pub(crate) const GRID_WEEK_COUNT: usize = 6;
+pub(crate) const GRID_CELL_COUNT: usize = DAYS_PER_WEEK * GRID_WEEK_COUNT;
+pub(crate) const MONTHS_PER_YEAR: i64 = 12;
+
 use crate::{
     DatePickerError, DatePickerFailure,
     error::{failure, missing},
@@ -183,17 +188,21 @@ impl State {
         };
         let offset = (i32::from(first.weekday().number_days_from_monday())
             - i32::from(self.week_start.number_days_from_monday()))
-        .rem_euclid(7);
+        .rem_euclid(DAYS_PER_WEEK as i32);
         let start = first.to_julian_day() - offset;
-        Date::from_julian_day(start).is_ok() && Date::from_julian_day(start + 41).is_ok()
+        Date::from_julian_day(start).is_ok()
+            && Date::from_julian_day(start + (GRID_CELL_COUNT as i32 - 1)).is_ok()
     }
 
-    fn grid(&self, today: Option<Date>) -> Result<[DatePickerDay; 42], DatePickerFailure> {
+    fn grid(
+        &self,
+        today: Option<Date>,
+    ) -> Result<[DatePickerDay; GRID_CELL_COUNT], DatePickerFailure> {
         let first = Date::from_calendar_date(self.displayed.year, self.displayed.month, 1)
             .map_err(|source| self.calendar_error(source, None, None))?;
         let offset = (i32::from(first.weekday().number_days_from_monday())
             - i32::from(self.week_start.number_days_from_monday()))
-        .rem_euclid(7);
+        .rem_euclid(DAYS_PER_WEEK as i32);
         let start = first.to_julian_day() - offset;
         let mut result = [DatePickerDay {
             date: first,
@@ -201,7 +210,7 @@ impl State {
             is_selectable: false,
             is_selected: false,
             is_today: false,
-        }; 42];
+        }; GRID_CELL_COUNT];
         for (index, day) in result.iter_mut().enumerate() {
             let date = Date::from_julian_day(start + index as i32).map_err(|source| {
                 self.calendar_error(source, Some(index), Some(start + index as i32))
@@ -246,7 +255,7 @@ impl WidgetryDatePicker {
         world: &World,
         root: Entity,
         today: Option<Date>,
-    ) -> Result<[DatePickerDay; 42], DatePickerFailure> {
+    ) -> Result<[DatePickerDay; GRID_CELL_COUNT], DatePickerFailure> {
         state(world, root)?.grid(today).map_err(|error| {
             error.with_context(ErrorFrame::new("date_picker.days").field("root", root))
         })
@@ -363,9 +372,9 @@ impl WidgetryDatePicker {
     ) -> Result<bool, DatePickerFailure> {
         let current = state(world, root)?;
         let month = current.displayed;
-        let total =
-            i64::from(month.year) * 12 + i64::from(month.month as u8) - 1 + i64::from(delta);
-        let year = i32::try_from(total.div_euclid(12)).map_err(|source| {
+        let total = i64::from(month.year) * MONTHS_PER_YEAR + i64::from(month.month as u8) - 1
+            + i64::from(delta);
+        let year = i32::try_from(total.div_euclid(MONTHS_PER_YEAR)).map_err(|source| {
             failure(
                 DatePickerError::MonthShift {
                     displayed: month,
@@ -375,8 +384,8 @@ impl WidgetryDatePicker {
                 ErrorFrame::new("date_picker.shift_month").field("root", root),
             )
         })?;
-        let shifted_month =
-            Month::try_from((total.rem_euclid(12) + 1) as u8).map_err(|source| {
+        let shifted_month = Month::try_from((total.rem_euclid(MONTHS_PER_YEAR) + 1) as u8)
+            .map_err(|source| {
                 failure(
                     DatePickerError::Calendar {
                         displayed: month,

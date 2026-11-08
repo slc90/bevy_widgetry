@@ -1,3 +1,5 @@
+const FIRST_PRINTABLE_UTF16_UNIT: u16 = 32;
+
 use crate::*;
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
@@ -30,7 +32,7 @@ pub(crate) fn valid_name(name: &OsStr) -> Result<(), String> {
     }
     let units: Vec<_> = name.encode_wide().collect();
     if units.iter().any(|unit| {
-        *unit < 32
+        *unit < FIRST_PRINTABLE_UTF16_UNIT
             || b"<>:\"/\\|?*"
                 .iter()
                 .any(|character| *unit == u16::from(*character))

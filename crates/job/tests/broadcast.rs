@@ -1,11 +1,13 @@
 #![allow(clippy::disallowed_macros)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::tasks::{IoTaskPool, TaskPool, block_on};
 use bevy_widgetry_job::*;
 use event_listener::Event;
 use std::{
     sync::{Arc, mpsc},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 #[allow(clippy::unwrap_used)]
@@ -31,7 +33,7 @@ fn item<T>(receiver: &mut JobReceiver<T>) -> Arc<T> {
 
 #[allow(clippy::unwrap_used)]
 fn wait_finished(manager: &JobManager, id: JobId) {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     while !manager.status(id).unwrap().state.is_finished() {
         assert!(Instant::now() < deadline);
         std::thread::yield_now();
@@ -62,7 +64,7 @@ fn independent_receivers_share_payload_and_new_subscriptions_skip_history() {
         JobAccessError::TypeMismatch { .. }
     ));
     start.notify(usize::MAX);
-    received.recv_timeout(Duration::from_secs(5)).unwrap();
+    received.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     let mut late = manager.subscribe::<Payload>(id).unwrap();
     let a = item(&mut first);
     let b = item(&mut second);
@@ -107,7 +109,7 @@ fn full_buffer_backpressures_until_slow_receiver_is_dropped() {
         .unwrap();
     let slow = manager.subscribe::<usize>(id).unwrap();
     start.notify(usize::MAX);
-    received.recv_timeout(Duration::from_secs(5)).unwrap();
+    received.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     assert_eq!(*item(&mut fast), 1);
     assert!(matches!(fast.try_recv(), Ok(JobRead::Empty)));
     assert_eq!(manager.status(id).unwrap().state, JobState::Running);
@@ -157,7 +159,7 @@ fn no_receivers_discards_items_without_blocking_or_failing_and_later_subscriptio
         .unwrap();
     drop(initial);
     start.notify(usize::MAX);
-    received.recv_timeout(Duration::from_secs(5)).unwrap();
+    received.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     let mut later = manager.subscribe::<usize>(id).unwrap();
     assert!(matches!(later.try_recv(), Ok(JobRead::Empty)));
     more.notify(usize::MAX);

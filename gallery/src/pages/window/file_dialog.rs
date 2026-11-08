@@ -1,3 +1,13 @@
+const ERROR_SUMMARY_CHARACTERS: usize = 240;
+const PATH_SUMMARY_ITEMS: usize = 8;
+
+const LAUNCH_BUTTON_HEIGHT: f32 = 40.0;
+const LAUNCH_BUTTON_PADDING_X: f32 = 12.0;
+const LAUNCH_BUTTON_PADDING_Y: f32 = 6.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 12.0;
+
 use crate::i18n::WindowKey;
 use crate::i18n::{Language, LocalizedText, LocalizedWindowTitle, TextKey, localized, tr};
 use bevy::{prelude::*, ui::Checked, ui_widgets::Activate, window::PrimaryWindow};
@@ -45,23 +55,23 @@ enum Demo {
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("GalleryFileDialogs") template(|_| Ok(PageOwner))
-        Node {width:percent(100), min_width:px(0), flex_direction:FlexDirection::Column, row_gap:px(8)}
+        Node {width:percent(100), min_width:px(0), flex_direction:FlexDirection::Column, row_gap:px(DETAIL_GAP)}
         Children [
             @localized(TextKey::Window(WindowKey::FileDialog)) bevy_widgetry::text::WidgetryText--
             @WidgetryCheckBox Name("GalleryFileDialogModality") template(|_| Ok(ModalityToggle)) Children [@localized(TextKey::Window(WindowKey::ModalBlocksMainWindow)) bevy_widgetry::text::WidgetryText]--
             @localized(TextKey::Window(WindowKey::ChooseFilesOrFoldersTypeAFile)) bevy_widgetry::text::WidgetryText--
-            Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [@demo_item(Demo::OpenFile)-- @demo_item(Demo::OpenFiles)-- @demo_item(Demo::SelectFolder)]--
-            Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [@demo_item(Demo::SelectFolders)-- @demo_item(Demo::OpenImage)-- @demo_item(Demo::SaveFile)]
+            Node {width:percent(100), column_gap:px(CONTROL_GAP), align_items:AlignItems::Start} Children [@demo_item(Demo::OpenFile)-- @demo_item(Demo::OpenFiles)-- @demo_item(Demo::SelectFolder)]--
+            Node {width:percent(100), column_gap:px(CONTROL_GAP), align_items:AlignItems::Start} Children [@demo_item(Demo::SelectFolders)-- @demo_item(Demo::OpenImage)-- @demo_item(Demo::SaveFile)]
         ]
     }
 }
 
 fn demo_item(operation: Demo) -> impl Scene {
     bsn! {
-        Node {flex_direction:FlexDirection::Column, flex_basis:px(0), flex_grow:1.0, min_width:px(0), row_gap:px(8)}
+        Node {flex_direction:FlexDirection::Column, flex_basis:px(0), flex_grow:1.0, min_width:px(0), row_gap:px(DETAIL_GAP)}
         Children [
             @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(operation.title()) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Name({format!("GalleryFileDialog{}Launcher",operation.key())}) template(move |_| Ok(operation))
-                Node {height:px(40), padding:UiRect::axes(px(12),px(6)), align_self:AlignSelf::Start, align_items:AlignItems::Center}
+                Node {height:px(LAUNCH_BUTTON_HEIGHT), padding:UiRect::axes(px(LAUNCH_BUTTON_PADDING_X),px(LAUNCH_BUTTON_PADDING_Y)), align_self:AlignSelf::Start, align_items:AlignItems::Center}
                 on(open_dialog) --
             Name({format!("GalleryFileDialog{}Result",operation.key())}) @localized(TextKey::Window(WindowKey::Result)) bevy_widgetry::text::WidgetryText TextLayout {linebreak:LineBreak::AnyCharacter}
                 Node {max_width:percent(100)} template(|_| Ok(DemoResult::default()))
@@ -145,8 +155,8 @@ fn bounded_path(path: &Path) -> String {
         },
         _ => text.into_owned(),
     };
-    let mut summary: String = text.chars().take(240).collect();
-    if text.chars().nth(240).is_some() {
+    let mut summary: String = text.chars().take(ERROR_SUMMARY_CHARACTERS).collect();
+    if text.chars().nth(ERROR_SUMMARY_CHARACTERS).is_some() {
         summary.push('…');
     }
     summary
@@ -168,11 +178,11 @@ fn summary(result: &WidgetryFileDialogResult) -> (usize, LocalizedText) {
         }
     };
     let mut text = String::new();
-    for path in paths.iter().take(8) {
+    for path in paths.iter().take(PATH_SUMMARY_ITEMS) {
         text.push('\n');
         text.push_str(&bounded_path(path));
     }
-    if paths.len() > 8 {
+    if paths.len() > PATH_SUMMARY_ITEMS {
         text.push_str("\n…");
     }
     (

@@ -1,4 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 mod common;
 use bevy::prelude::*;
 use bevy_widgetry_table::*;
@@ -408,7 +410,7 @@ fn native_editor_copy_ownership() {
         .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
-        std::time::Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "Table editor font",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

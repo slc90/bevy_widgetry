@@ -1,3 +1,6 @@
+pub(crate) const MITER_LIMIT: f64 = 4.0;
+pub(crate) const RELATIVE_TESSELLATION_TOLERANCE: f64 = 1.0 / 4096.0;
+
 use crate::error::CanvasResult as Result;
 use bevy::math::DVec2;
 use bevy::prelude::*;
@@ -83,7 +86,7 @@ impl CanvasPath {
             let margin = paint.stroke.map_or(0.0, |stroke| {
                 // Miter limit four; a rotated square cap can extend sqrt(2) radii along either axis.
                 let factor = if stroke.join == crate::CanvasLineJoin::Miter {
-                    4.0
+                    MITER_LIMIT
                 } else if stroke.cap == crate::CanvasLineCap::Square {
                     std::f64::consts::SQRT_2
                 } else {

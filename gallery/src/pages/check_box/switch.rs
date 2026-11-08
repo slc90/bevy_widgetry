@@ -1,3 +1,14 @@
+const CHECKED_THUMB_LEFT: f32 = 44.0;
+const ROW_MIN_HEIGHT: f32 = 52.0;
+const TRACK_WIDTH: f32 = 76.0;
+const TRACK_HEIGHT: f32 = 36.0;
+const THUMB_DIAMETER: f32 = 28.0;
+const THUMB_INSET: f32 = 4.0;
+
+const ITEM_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 12.0;
+
 use crate::i18n::{CheckBoxKey, Language, TextKey, localized, tr, tr_args};
 use bevy::{
     input_focus::{FocusCause, InputFocus},
@@ -34,15 +45,15 @@ impl GalleryCheckSwitch {
             @WidgetryCheckBoxHeadless
             Name("GalleryCheckSwitch")
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Node { min_height: px(52), column_gap: px(12), align_items: AlignItems::Center }
+            Node { min_height: px(ROW_MIN_HEIGHT), column_gap: px(CONTENT_GAP), align_items: AlignItems::Center }
             on(requested)
             Children [
                 Name("GalleryCheckSwitchTrack") template(|_| Ok(Track)) Pickable::IGNORE
-                Node { width: px(76), height: px(36), flex_shrink: 0.0, border_radius: BorderRadius::MAX }
+                Node { width: px(TRACK_WIDTH), height: px(TRACK_HEIGHT), flex_shrink: 0.0, border_radius: BorderRadius::MAX }
                 BackgroundColor
                 Children [
                     Name("GalleryCheckSwitchThumb") template(|_| Ok(Thumb)) Pickable::IGNORE
-                    Node { width: px(28), height: px(28), position_type: PositionType::Absolute, top: px(4), left: px(4), border_radius: BorderRadius::MAX }
+                    Node { width: px(THUMB_DIAMETER), height: px(THUMB_DIAMETER), position_type: PositionType::Absolute, top: px(THUMB_INSET), left: px(THUMB_INSET), border_radius: BorderRadius::MAX }
                     BackgroundColor({Color::WHITE})
                 ]--
                 @localized(TextKey::CheckBox(CheckBoxKey::ReceiveUpdates)) WidgetryText Pickable::IGNORE
@@ -54,12 +65,12 @@ impl GalleryCheckSwitch {
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("GalleryCheckSwitchDemo")
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::CheckBox(CheckBoxKey::SwitchDescription)) WidgetryText--
             @GalleryCheckSwitch--
             Name("GalleryCheckSwitchStatus") template(|_| Ok(Status)) Text("") WidgetryText--
-            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) }
+            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP) }
             Children [
                 @control(Action::Focus, CheckBoxKey::SwitchFocus, "GalleryCheckSwitchFocus")--
                 @control(Action::Disabled, CheckBoxKey::SwitchDisabled, "GalleryCheckSwitchDisabled")--
@@ -168,7 +179,11 @@ fn update_visuals(
                 if parent.parent() != track {
                     continue;
                 }
-                let left = px(if checked { 44 } else { 4 });
+                let left = px(if checked {
+                    CHECKED_THUMB_LEFT
+                } else {
+                    THUMB_INSET
+                });
                 if node.left != left {
                     node.left = left;
                 }

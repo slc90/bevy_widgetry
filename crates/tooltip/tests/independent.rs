@@ -1,4 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+
+const EXPECTED_COLD_DELAY_MS: u64 = 200;
+const POST_HIDE_WAIT_MS: u64 = 500;
 use bevy::{
     camera::NormalizedRenderTarget,
     ecs::entity::EntityHashMap,
@@ -63,7 +66,7 @@ fn hover(app: &mut App, anchor: Option<Entity>) {
 fn show(app: &mut App, anchor: Entity) -> ShowTooltip {
     hover(app, Some(anchor));
     advance(app, 0);
-    advance(app, 200);
+    advance(app, EXPECTED_COLD_DELAY_MS);
     *app.world().resource::<Lifecycle>().shown.last().unwrap()
 }
 
@@ -79,7 +82,7 @@ fn external_popup_cleanup_does_not_depend_on_anchor_parenting_or_local_observers
         assert_eq!(event.popup(app.world()), Some(popup));
         assert!(app.world().get::<ChildOf>(popup).is_none());
         assert!(app.world().get::<WidgetryTooltip>(anchor).is_none());
-        advance(&mut app, 500);
+        advance(&mut app, POST_HIDE_WAIT_MS);
         assert_eq!(app.world().resource::<Lifecycle>().shown.len(), 1);
         if despawn {
             app.world_mut().despawn(anchor);
@@ -185,7 +188,7 @@ fn independent_plugin_cancels_native_mouse_tooltip_on_window_focus_loss() {
     advance(&mut app, 0);
     assert!(app.world().get_entity(popup).is_err());
     assert_eq!(app.world().resource::<Lifecycle>().hidden.len(), 1);
-    advance(&mut app, 500);
+    advance(&mut app, POST_HIDE_WAIT_MS);
     assert_eq!(app.world().resource::<Lifecycle>().shown.len(), 1);
 }
 

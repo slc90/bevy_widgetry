@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -51,7 +53,7 @@ fn fixture_title(
             .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
         advance_until(
             &mut app,
-            std::time::Duration::from_secs(10),
+            ASYNC_WAIT_TIMEOUT,
             "Tabs built-in font",
             |world| world.resource::<Assets<Font>>().contains(&font),
         )
@@ -97,18 +99,13 @@ fn fixture_title(
                 .0
             })
             .collect();
-        advance_until(
-            &mut app,
-            std::time::Duration::from_secs(10),
-            "Tabs title layout",
-            |world| {
-                texts.iter().all(|entity| {
-                    world
-                        .get::<bevy::text::TextLayoutInfo>(*entity)
-                        .is_some_and(|info| info.size.x > 0.0)
-                })
-            },
-        )
+        advance_until(&mut app, ASYNC_WAIT_TIMEOUT, "Tabs title layout", |world| {
+            texts.iter().all(|entity| {
+                world
+                    .get::<bevy::text::TextLayoutInfo>(*entity)
+                    .is_some_and(|info| info.size.x > 0.0)
+            })
+        })
         .unwrap();
         app.update();
         app.update();
@@ -507,6 +504,8 @@ fn direct_and_nested_titles_clip_rendered_glyphs_with_transparent_colors_and_ref
 
 #[test]
 fn direct_horizontal_titles_keep_natural_width_with_absolute_header_children() {
+    let pixel_tolerance = 1.0;
+
     let (mut app, root) = fixture_title(TabsOrientation::Horizontal, 1.25, true, true);
     let first = WidgetryTabs::header(app.world(), root, 0).unwrap();
     let second = WidgetryTabs::header(app.world(), root, 1).unwrap();
@@ -515,7 +514,7 @@ fn direct_horizontal_titles_keep_natural_width_with_absolute_header_children() {
     for _ in 0..5 {
         app.update();
     }
-    assert!((bounds(app.world(), second).width() - before).abs() <= 1.0);
+    assert!((bounds(app.world(), second).width() - before).abs() <= pixel_tolerance);
     assert!(bounds(app.world(), first).width() < before);
     app.world_mut().get_mut::<Text>(second).unwrap().0 = "Longer header label".into();
     for _ in 0..5 {

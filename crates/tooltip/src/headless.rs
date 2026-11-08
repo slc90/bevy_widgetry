@@ -429,6 +429,19 @@ impl Plugin for WidgetryTooltipHeadlessPlugin {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const EXPECTED_COLD_DELAY: Duration = Duration::from_millis(200);
+    const EXPECTED_WARM_DELAY: Duration = Duration::from_millis(50);
+    const EXPECTED_COOLDOWN: Duration = Duration::from_millis(300);
+    const BOUNDARY_STEP: Duration = Duration::from_millis(1);
+    const PARTIAL_COLD_WAIT: Duration = Duration::from_millis(190);
+    const PRE_MOVEMENT_WAIT: Duration = Duration::from_millis(150);
+    const POST_MOVEMENT_WAIT: Duration = Duration::from_millis(50);
+    const UNOWNED_HOVER_WAIT: Duration = Duration::from_millis(500);
+    const COOLDOWN_LONG_STEP: Duration = Duration::from_millis(250);
+    const COOLDOWN_FINAL_STEP: Duration = Duration::from_millis(30);
+    const EARLY_WARM_STEP: Duration = Duration::from_millis(20);
+    const FINAL_WARM_STEP: Duration = Duration::from_millis(30);
+
     use super::*;
     use bevy::{
         camera::NormalizedRenderTarget,
@@ -512,9 +525,9 @@ mod tests {
                 };
                 hover(&mut app, Some(target));
                 advance(&mut app, Duration::ZERO);
-                advance(&mut app, Duration::from_millis(199));
+                advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
                 assert!(app.world().resource::<Events>().shown.is_empty());
-                advance(&mut app, Duration::from_millis(1));
+                advance(&mut app, BOUNDARY_STEP);
                 assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
             }
         }
@@ -533,13 +546,13 @@ mod tests {
                 .resource_mut::<Messages<RequestRedraw>>()
                 .clear();
 
-            advance(&mut app, Duration::from_millis(199));
+            advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
             assert!(!app.world().resource::<Messages<RequestRedraw>>().is_empty());
             app.world_mut()
                 .resource_mut::<Messages<RequestRedraw>>()
                 .clear();
 
-            advance(&mut app, Duration::from_millis(1));
+            advance(&mut app, BOUNDARY_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
             assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
         }
@@ -554,7 +567,7 @@ mod tests {
             hover(&mut app, Some(anchor));
 
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
 
             assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
             assert!(app.world().resource::<Time<Virtual>>().is_paused());
@@ -567,7 +580,7 @@ mod tests {
             let mut app = test_app(id);
             let plain = app.world_mut().spawn_empty().id();
             hover(&mut app, Some(plain));
-            advance(&mut app, Duration::from_millis(500));
+            advance(&mut app, UNOWNED_HOVER_WAIT);
             assert!(app.world().resource::<Events>().shown.is_empty());
 
             let disabled = app
@@ -576,7 +589,7 @@ mod tests {
                 .id();
             hover(&mut app, Some(disabled));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
             assert_eq!(app.world().resource::<Events>().shown, vec![disabled]);
         }
     }
@@ -588,7 +601,7 @@ mod tests {
             let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, Duration::from_millis(150));
+            advance(&mut app, PRE_MOVEMENT_WAIT);
             let target = NormalizedRenderTarget::None {
                 width: 100,
                 height: 100,
@@ -610,10 +623,10 @@ mod tests {
                 },
                 PointerAction::Move { delta: Vec2::NEG_X },
             ));
-            advance(&mut app, Duration::from_millis(50));
-            advance(&mut app, Duration::from_millis(199));
+            advance(&mut app, POST_MOVEMENT_WAIT);
+            advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
             assert!(app.world().resource::<Events>().shown.is_empty());
-            advance(&mut app, Duration::from_millis(1));
+            advance(&mut app, BOUNDARY_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
         }
     }
@@ -628,18 +641,18 @@ mod tests {
             let b = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(a));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
 
             hover(&mut app, Some(a_child));
-            advance(&mut app, Duration::from_millis(1));
+            advance(&mut app, BOUNDARY_STEP);
             assert!(app.world().resource::<Events>().hidden.is_empty());
 
             hover(&mut app, Some(b));
             advance(&mut app, Duration::ZERO);
             assert_eq!(app.world().resource::<Events>().hidden, vec![a]);
-            advance(&mut app, Duration::from_millis(49));
+            advance(&mut app, EXPECTED_WARM_DELAY - BOUNDARY_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![a]);
-            advance(&mut app, Duration::from_millis(1));
+            advance(&mut app, BOUNDARY_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![a, b]);
         }
     }
@@ -652,12 +665,12 @@ mod tests {
             let b = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(a));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
             hover(&mut app, None);
             advance(&mut app, Duration::ZERO);
             // A reactive App may spend the entire cooldown without an update.
             // Real time avoids the 250 ms clamp applied to Virtual time.
-            advance(&mut app, COOLDOWN);
+            advance(&mut app, EXPECTED_COOLDOWN);
             assert!(
                 app.world()
                     .resource::<TooltipState>()
@@ -666,9 +679,9 @@ mod tests {
             );
             hover(&mut app, Some(b));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, Duration::from_millis(199));
+            advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![a]);
-            advance(&mut app, Duration::from_millis(1));
+            advance(&mut app, BOUNDARY_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![a, b]);
         }
     }
@@ -681,17 +694,17 @@ mod tests {
             let b = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(a));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
             hover(&mut app, None);
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, Duration::from_millis(250));
-            advance(&mut app, Duration::from_millis(30));
+            advance(&mut app, COOLDOWN_LONG_STEP);
+            advance(&mut app, COOLDOWN_FINAL_STEP);
 
             hover(&mut app, Some(b));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, Duration::from_millis(20));
+            advance(&mut app, EARLY_WARM_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![a]);
-            advance(&mut app, Duration::from_millis(30));
+            advance(&mut app, FINAL_WARM_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![a, b]);
         }
     }
@@ -703,7 +716,7 @@ mod tests {
             let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
             app.world_mut()
                 .entity_mut(anchor)
                 .remove::<WidgetryTooltipHeadless>();
@@ -720,7 +733,7 @@ mod tests {
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
             app.world_mut().despawn(anchor);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
             assert!(app.world().resource::<TooltipState>().candidate.is_none());
             assert!(app.world().resource::<Events>().shown.is_empty());
             assert!(app.world().resource::<Events>().hidden.is_empty());
@@ -740,7 +753,7 @@ mod tests {
                 hits.insert(back, HitData::new(Entity::PLACEHOLDER, 2.0, None, None));
                 app.world_mut().resource_mut::<HoverMap>().insert(id, hits);
                 advance(&mut app, Duration::ZERO);
-                advance(&mut app, COLD_WARMUP);
+                advance(&mut app, EXPECTED_COLD_DELAY);
                 assert_eq!(
                     app.world().resource::<Events>().shown,
                     expected.into_iter().collect::<Vec<_>>()
@@ -756,7 +769,7 @@ mod tests {
             let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, Duration::from_millis(150));
+            advance(&mut app, PRE_MOVEMENT_WAIT);
             app.world_mut().write_message(PointerInput::new(
                 PointerId::Touch(7),
                 Location {
@@ -768,7 +781,7 @@ mod tests {
                 },
                 PointerAction::Move { delta: Vec2::ONE },
             ));
-            advance(&mut app, Duration::from_millis(50));
+            advance(&mut app, POST_MOVEMENT_WAIT);
             assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
         }
     }
@@ -779,7 +792,7 @@ mod tests {
             let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
             assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
             let pointer = app
                 .world_mut()
@@ -788,7 +801,7 @@ mod tests {
                 .unwrap();
             app.world_mut().despawn(pointer);
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
             assert_eq!(app.world().resource::<Events>().hidden, vec![anchor]);
             assert!(app.world().resource::<TooltipState>().candidate.is_none());
         }
@@ -837,7 +850,7 @@ mod tests {
                 let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
                 hover(&mut app, Some(anchor));
                 advance(&mut app, Duration::ZERO);
-                advance(&mut app, COLD_WARMUP);
+                advance(&mut app, EXPECTED_COLD_DELAY);
                 match failure {
                     "cancel" => activity(&mut app, id, PointerAction::Cancel),
                     "location" => {
@@ -855,7 +868,7 @@ mod tests {
                     app.world_mut()
                         .resource_mut::<Messages<RequestRedraw>>()
                         .clear();
-                    advance(&mut app, COLD_WARMUP);
+                    advance(&mut app, EXPECTED_COLD_DELAY);
                     assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
                 }
                 assert_eq!(app.world().resource::<Events>().hidden, vec![anchor]);
@@ -863,9 +876,9 @@ mod tests {
                 if failure == "cancel" {
                     activity(&mut app, id, PointerAction::Move { delta: Vec2::ZERO });
                     advance(&mut app, Duration::ZERO);
-                    advance(&mut app, Duration::from_millis(199));
+                    advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
                     assert_eq!(app.world().resource::<Events>().shown.len(), 1);
-                    advance(&mut app, Duration::from_millis(1));
+                    advance(&mut app, BOUNDARY_STEP);
                     assert_eq!(app.world().resource::<Events>().shown, vec![anchor, anchor]);
                 }
             }
@@ -888,14 +901,14 @@ mod tests {
             .resource_mut::<HoverMap>()
             .insert(custom, hits);
         advance(&mut app, Duration::ZERO);
-        advance(&mut app, COLD_WARMUP);
+        advance(&mut app, EXPECTED_COLD_DELAY);
         assert!(app.world().resource::<Events>().shown.is_empty());
         for (id, anchor) in [(mouse, a), (custom, b), (mouse, a)] {
             activity(&mut app, id, PointerAction::Move { delta: Vec2::ZERO });
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, Duration::from_millis(199));
+            advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
             assert_ne!(app.world().resource::<TooltipState>().visible, Some(anchor));
-            advance(&mut app, Duration::from_millis(1));
+            advance(&mut app, BOUNDARY_STEP);
             assert_eq!(app.world().resource::<TooltipState>().visible, Some(anchor));
         }
         assert_eq!(app.world().resource::<Events>().shown, vec![a, b, a]);
@@ -925,9 +938,9 @@ mod tests {
         app.world_mut()
             .write_message(PointerInput::new(mouse, old, PointerAction::Cancel));
         advance(&mut app, Duration::ZERO);
-        advance(&mut app, Duration::from_millis(199));
+        advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
         assert_eq!(app.world().resource::<Events>().shown.len(), 3);
-        advance(&mut app, Duration::from_millis(1));
+        advance(&mut app, BOUNDARY_STEP);
         assert_eq!(app.world().resource::<Events>().shown, vec![a, b, a, a]);
     }
     #[test]
@@ -951,7 +964,7 @@ mod tests {
             let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
             hover(&mut app, Some(anchor));
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, Duration::from_millis(190));
+            advance(&mut app, PARTIAL_COLD_WAIT);
             app.world_mut()
                 .get_mut::<PointerLocation>(pointer)
                 .unwrap()
@@ -961,9 +974,9 @@ mod tests {
                 .target = targets[1].clone();
             activity(&mut app, id, PointerAction::Move { delta: Vec2::ZERO });
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, Duration::from_millis(199));
+            advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
             assert!(app.world().resource::<Events>().shown.is_empty());
-            advance(&mut app, Duration::from_millis(1));
+            advance(&mut app, BOUNDARY_STEP);
             assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
         }
         let [mouse, custom] = bevy_widgetry_test_utils::pointer_ids();
@@ -974,16 +987,16 @@ mod tests {
         let anchor = app.world_mut().spawn(WidgetryTooltipHeadless).id();
         hover(&mut app, Some(anchor));
         advance(&mut app, Duration::ZERO);
-        advance(&mut app, Duration::from_millis(190));
+        advance(&mut app, PARTIAL_COLD_WAIT);
         let hits = app.world().resource::<HoverMap>()[&mouse].clone();
         app.world_mut()
             .resource_mut::<HoverMap>()
             .insert(custom, hits);
         activity(&mut app, custom, PointerAction::Move { delta: Vec2::ZERO });
         advance(&mut app, Duration::ZERO);
-        advance(&mut app, Duration::from_millis(199));
+        advance(&mut app, EXPECTED_COLD_DELAY - BOUNDARY_STEP);
         assert!(app.world().resource::<Events>().shown.is_empty());
-        advance(&mut app, Duration::from_millis(1));
+        advance(&mut app, BOUNDARY_STEP);
         assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
     }
     #[test]
@@ -994,7 +1007,7 @@ mod tests {
             hover(&mut app, Some(anchor));
             activity(&mut app, id, PointerAction::Cancel);
             advance(&mut app, Duration::ZERO);
-            advance(&mut app, COLD_WARMUP);
+            advance(&mut app, EXPECTED_COLD_DELAY);
             assert!(app.world().resource::<Events>().shown.is_empty());
             assert!(app.world().resource::<TooltipState>().candidate.is_none());
         }

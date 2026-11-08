@@ -1,3 +1,6 @@
+const ELLIPSE_ARC_COUNT: i32 = 8;
+const ROTATION_HANDLE_SEGMENTS: u32 = 12;
+
 use crate::error::CanvasResult as Result;
 use crate::{CanvasGeometry, CanvasPaint};
 use bevy::asset::RenderAssetUsages;
@@ -39,7 +42,7 @@ pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(M
                 use lyon::tessellation::*;
                 // Tessellate in a bounded coordinate range: lyon merges very small points and squares lengths.
                 // Keeping tolerance relative also makes uniform local/model scaling preserve the same geometry.
-                let tolerance = 1.0 / 4096.0;
+                let tolerance = crate::path::RELATIVE_TESSELLATION_TOLERANCE as f32;
                 let mut filled: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
                 FillTessellator::new()
                     .tessellate_path(
@@ -207,9 +210,9 @@ fn ellipse_path(radii: Vec2) -> lyon::path::Path {
     // Eight cubic arcs keep that error below the relative tessellation floor.
     let step = std::f32::consts::FRAC_PI_4;
     let k = (step * 0.25).tan() * (4.0 / 3.0);
-    for index in 0..8 {
+    for index in 0..ELLIPSE_ARC_COUNT {
         let from = Vec2::from_angle(index as f32 * step);
-        let to = if index == 7 {
+        let to = if index == ELLIPSE_ARC_COUNT - 1 {
             Vec2::X
         } else {
             Vec2::from_angle((index + 1) as f32 * step)
@@ -273,14 +276,18 @@ pub(crate) fn outline(
     indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
     let base = positions.len() as u32;
     positions.push(rotation.extend(0.0).to_array());
-    for i in 0..12 {
-        let angle = i as f32 * std::f32::consts::TAU / 12.0;
+    for i in 0..ROTATION_HANDLE_SEGMENTS {
+        let angle = i as f32 * std::f32::consts::TAU / ROTATION_HANDLE_SEGMENTS as f32;
         positions.push(
             (rotation + Vec2::new(angle.cos(), angle.sin()) * rotation_size * 0.5)
                 .extend(0.0)
                 .to_array(),
         );
-        indices.extend([base, base + 1 + i, base + 1 + (i + 1) % 12]);
+        indices.extend([
+            base,
+            base + 1 + i,
+            base + 1 + (i + 1) % ROTATION_HANDLE_SEGMENTS,
+        ]);
     }
     mesh(positions, indices)
 }

@@ -235,7 +235,8 @@ fn cycle(fixture: &mut Fixture, invalid: bool) -> Result {
 
 fn main() -> Result {
     let mut harness = Harness::new("ordinary-pointer-criterion")?;
-    for count in [10, 1000] {
+    let entity_counts = [10, 1000];
+    for count in entity_counts {
         for kind in ["button", "list", "table", "scroll"] {
             for action in ["idle", "cancel", "invalid"] {
                 run(

@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
@@ -497,7 +499,7 @@ fn real_ui_app() -> (App, Handle<Font>) {
     }).unwrap().id();
     advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         &format!("内建 Font {:?}", font.id()),
         |world| {
             world.resource::<Assets<Font>>().contains(&font)

@@ -1,3 +1,14 @@
+const LOADING_BUTTON_MIN_WIDTH: f32 = 160.0;
+const LOADING_BUTTON_HEIGHT: f32 = 40.0;
+const ICON_BUTTON_SIZE: f32 = 32.0;
+const ICON_BUTTON_PADDING: f32 = 6.0;
+
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 6.0;
+const CONTENT_GAP: f32 = 12.0;
+const PANEL_GAP: f32 = 16.0;
+
 mod custom;
 mod hold;
 mod hold_bar;
@@ -60,12 +71,12 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ButtonDemo
         template(|_| Ok(ButtonDemo))
-        Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Navigation(NavigationKey::Button)) bevy_widgetry::text::WidgetryText--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
                 Children [@localized(TextKey::Common(CommonKey::Normal)) bevy_widgetry::text::WidgetryText-- @button_row(false)]--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @button_row(true)]--
             @custom::scene()--
             @toggle::scene()--
@@ -75,25 +86,25 @@ pub(crate) fn scene() -> impl Scene {
             @link_examples()--
             @loading_example()--
             @localized(TextKey::Button(ButtonKey::RadioButton)) bevy_widgetry::text::WidgetryText--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
                 Children [@localized(TextKey::Button(ButtonKey::Horizontal)) bevy_widgetry::text::WidgetryText--
                     @WidgetryRadioGroup
-                    Node { flex_direction: FlexDirection::Row, column_gap: px(16) }
+                    Node { flex_direction: FlexDirection::Row, column_gap: px(PANEL_GAP) }
                     on(on_radio_changed)
                     Children [@radio_option(TextKey::Common(CommonKey::Apple))-- @radio_option(TextKey::Common(CommonKey::Banana))-- @radio_option(TextKey::Common(CommonKey::Orange))]
                 ]--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
                 Children [@localized(TextKey::Button(ButtonKey::Grid)) bevy_widgetry::text::WidgetryText--
                     @WidgetryRadioGroup
                     Node {
                         display: Display::Grid,
                         grid_template_columns: {vec![RepeatedGridTrack::auto(2)]},
-                        column_gap: px(16),
+                        column_gap: px(PANEL_GAP),
                     }
                     on(on_radio_changed)
                     Children [@radio_option(TextKey::Common(CommonKey::Apple))-- @radio_option(TextKey::Common(CommonKey::Banana))-- @radio_option(TextKey::Common(CommonKey::Orange))-- @radio_option(TextKey::Common(CommonKey::Grape))]
                 ]--
-            Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP) }
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText--
                     @WidgetryRadioGroup InteractionDisabled
                     Children [@radio_option(TextKey::Common(CommonKey::Apple))-- @radio_option(TextKey::Common(CommonKey::Banana))-- @radio_option(TextKey::Common(CommonKey::Orange))]
@@ -111,16 +122,16 @@ struct LoadingDemo {
 
 fn loading_example() -> impl Scene {
     bsn! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Button(ButtonKey::LoadingDescription)) bevy_widgetry::text::WidgetryText--
-            Node { column_gap: px(12), align_items: AlignItems::Center }
+            Node { column_gap: px(CONTENT_GAP), align_items: AlignItems::Center }
             Children [
                 @WidgetryButton {
                     @children: {Some(Box::new(bsn_list! { @localized(TextKey::Button(ButtonKey::StartLoading)) bevy_widgetry::text::WidgetryText }) as Box<dyn SceneList>)},
                 }
                 Name("ButtonLoadingDemo") template(|_| Ok(LoadingDemo::default())) on(start_loading)
-                Node { min_width: px(160), height: px(40) }--
+                Node { min_width: px(LOADING_BUTTON_MIN_WIDTH), height: px(LOADING_BUTTON_HEIGHT) }--
                 @WidgetryButton {
                     @children: {Some(Box::new(bsn_list! { @localized(TextKey::Button(ButtonKey::FinishLoading)) bevy_widgetry::text::WidgetryText }) as Box<dyn SceneList>)},
                 }
@@ -187,7 +198,7 @@ fn finish_loading_shortcut(
 
 fn link_examples() -> impl Scene {
     bsn! {
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Button(ButtonKey::LinkButton)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Button(ButtonKey::LinkDescription)) bevy_widgetry::text::WidgetryText--
@@ -261,27 +272,27 @@ fn button_row(disabled: bool) -> impl Scene {
             @{disabled.then_some(bsn! { InteractionDisabled })}
             Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
             --
-        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@star()-- @localized(TextKey::Common(CommonKey::IconText)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) } }) as Box<dyn bevy::prelude::Scene>)}, }
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@star()-- @localized(TextKey::Common(CommonKey::IconText)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(CONTROL_GAP) } }) as Box<dyn bevy::prelude::Scene>)}, }
             template(|_| Ok(ButtonDemoAction("Icon + Text")))
             on(on_demo_activated)
             @{disabled.then_some(bsn! { InteractionDisabled })}
-            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
+            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(CONTROL_GAP) }
             --
-        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Button(ButtonKey::TextIcon)) bevy_widgetry::text::WidgetryText-- @star()}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) } }) as Box<dyn bevy::prelude::Scene>)}, }
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Button(ButtonKey::TextIcon)) bevy_widgetry::text::WidgetryText-- @star()}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(CONTROL_GAP) } }) as Box<dyn bevy::prelude::Scene>)}, }
             template(|_| Ok(ButtonDemoAction("Text + Icon")))
             on(on_demo_activated)
             @{disabled.then_some(bsn! { InteractionDisabled })}
-            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
+            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(CONTROL_GAP) }
             --
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {@star()}) as Box<dyn bevy::prelude::SceneList>)}, }
             template(|_| Ok(ButtonDemoAction("Icon")))
             on(on_demo_activated)
             @{disabled.then_some(bsn! { InteractionDisabled })}
-            Node { width: px(32), height: px(32), padding: UiRect::all(px(6)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+            Node { width: px(ICON_BUTTON_SIZE), height: px(ICON_BUTTON_SIZE), padding: UiRect::all(px(ICON_BUTTON_PADDING)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
 
     };
     bsn! {
-        Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(12) }
+        Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(CONTENT_GAP) }
         Children [{buttons}]
     }
 }

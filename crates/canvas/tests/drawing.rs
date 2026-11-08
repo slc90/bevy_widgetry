@@ -80,6 +80,8 @@ fn ellipse_previews_hide_empty_strokes_and_keep_their_fill() {
 
 #[test]
 fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     for id in pointer_ids() {
         for delta in [
             Vec2::new(20.0, 15.0),
@@ -158,7 +160,7 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
                     .size
                     - delta.abs())
                 .length()
-                    < 0.001
+                    < COMPARISON_TOLERANCE
             );
             let center = app
                 .world()
@@ -166,7 +168,9 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
                 .unwrap()
                 .translation
                 .truncate();
-            assert!((center - (Vec2::new(30.0, 15.0) + delta * 0.5)).length() < 0.001);
+            assert!(
+                (center - (Vec2::new(30.0, 15.0) + delta * 0.5)).length() < COMPARISON_TOLERANCE
+            );
             assert_eq!(*app.world().get::<CanvasPaint>(selected).unwrap(), paint);
             let strokes = app
                 .world_mut()
@@ -197,7 +201,8 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
                     positions
                         .iter()
                         .zip(&preview_positions)
-                        .all(|(a, b)| Vec3::from_array(*a).distance(Vec3::from_array(*b)) < 0.001)
+                        .all(|(a, b)| Vec3::from_array(*a).distance(Vec3::from_array(*b))
+                            < COMPARISON_TOLERANCE)
                 );
             }
             assert_eq!(

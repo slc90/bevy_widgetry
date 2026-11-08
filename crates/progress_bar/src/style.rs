@@ -177,10 +177,12 @@ mod tests {
 
     #[test]
     fn clipped_canvas_is_finite_at_zero_and_subnormal_progress() {
+        let comparison_tolerance = 0.001;
+
         for fraction in [0.0, f32::from_bits(1), f32::EPSILON, 0.01, 0.65, 1.0] {
             assert!(canvas_width(fraction).is_finite());
             if fraction >= f32::EPSILON {
-                assert!((canvas_width(fraction) * fraction - 100.0).abs() < 0.001);
+                assert!((canvas_width(fraction) * fraction - 100.0).abs() < comparison_tolerance);
             }
         }
     }

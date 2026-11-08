@@ -1,3 +1,6 @@
+const ITEM_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 12.0;
+
 use crate::i18n::{ButtonKey, TextKey, localized};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
@@ -14,10 +17,10 @@ struct ToggleExample;
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Button(ButtonKey::ToggleDescription)) WidgetryText--
-            Node { column_gap: px(12), align_items: AlignItems::Center }
+            Node { column_gap: px(CONTROL_GAP), align_items: AlignItems::Center }
             Children [
                 @WidgetryToggleButton
                 Name("ToggleButtonDemo") template(|_| Ok(ToggleExample))

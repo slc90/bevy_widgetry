@@ -103,6 +103,8 @@ fn values(text: &str) -> Vec<f32> {
 
 #[test]
 fn svg_large_arc_rotation_keeps_the_same_axis_as_document_geometry() {
+    let comparison_tolerance = 1e-12;
+
     use CanvasPathCommand::*;
     for rotation in [1e20_f32, -1e30, f32::MAX] {
         let mut world = World::new();
@@ -136,7 +138,8 @@ fn svg_large_arc_rotation_keeps_the_same_axis_as_document_geometry() {
         let (sin, cos) = f64::from(rotation).sin_cos();
         let (exported_sin, exported_cos) = degrees.to_radians().sin_cos();
         assert!(
-            (exported_sin - sin).abs() < 1e-12 && (exported_cos - cos).abs() < 1e-12,
+            (exported_sin - sin).abs() < comparison_tolerance
+                && (exported_cos - cos).abs() < comparison_tolerance,
             "{rotation}: {degrees}"
         );
         usvg::Tree::from_str(&xml, &usvg::Options::default()).unwrap();
@@ -145,6 +148,8 @@ fn svg_large_arc_rotation_keeps_the_same_axis_as_document_geometry() {
 
 #[test]
 fn svg_preserves_original_commands_arc_flags_and_all_paint_styles() {
+    const COMPARISON_TOLERANCE: f32 = 0.00001;
+
     use CanvasPathCommand::*;
     for (cap, cap_name) in [
         (CanvasLineCap::Butt, "butt"),
@@ -234,7 +239,7 @@ fn svg_preserves_original_commands_arc_flags_and_all_paint_styles() {
             {
                 let args = values(arc);
                 assert_eq!(&args[..2], &[20.0, 10.0]);
-                assert!((args[2] - 90.0).abs() < 0.00001);
+                assert!((args[2] - 90.0).abs() < COMPARISON_TOLERANCE);
                 assert_eq!(&args[3..5], &flags);
             }
             usvg::Tree::from_str(&xml, &usvg::Options::default()).unwrap();
@@ -400,6 +405,9 @@ fn svg_rejects_missing_components_foreign_members_and_invalid_paths_without_repa
 
 #[test]
 fn svg_uses_document_bounds_centered_stroke_and_full_transform_without_a_view() {
+    const SERIALIZED_VALUE_TOLERANCE: f32 = 0.0001;
+    const DIMENSION_TOLERANCE: f32 = 0.001;
+
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();
     let size = Vec2::new(120.0, 80.0);
@@ -446,7 +454,7 @@ fn svg_uses_document_bounds_centered_stroke_and_full_transform_without_a_view() 
                 .iter()
                 .zip([bounds.min.x, bounds.min.y, bounds.width(), bounds.height()])
         {
-            assert!((*a - b).abs() < 0.0001);
+            assert!((*a - b).abs() < SERIALIZED_VALUE_TOLERANCE);
         }
         let rect = dom
             .descendants()
@@ -462,7 +470,7 @@ fn svg_uses_document_bounds_centered_stroke_and_full_transform_without_a_view() 
                 .unwrap()
                 - 0.5)
                 .abs()
-                < 0.0001
+                < SERIALIZED_VALUE_TOLERANCE
         );
         let matrix = values(
             rect.attribute("transform")
@@ -476,11 +484,12 @@ fn svg_uses_document_bounds_centered_stroke_and_full_transform_without_a_view() 
                 matrix[1] * local.x + matrix[3] * local.y + matrix[5],
             );
             assert!(
-                actual.distance(transform.transform_point(local.extend(0.0)).truncate()) < 0.0001
+                actual.distance(transform.transform_point(local.extend(0.0)).truncate())
+                    < SERIALIZED_VALUE_TOLERANCE
             );
         }
         let tree = usvg::Tree::from_str(&xml, &usvg::Options::default()).unwrap();
-        assert!((tree.size().width() - bounds.width()).abs() < 0.001);
+        assert!((tree.size().width() - bounds.width()).abs() < DIMENSION_TOLERANCE);
         CanvasDocument::remove_shape(&mut world, document, shape).unwrap();
     }
 }
@@ -672,6 +681,8 @@ fn svg_is_unchanged_by_view_navigation_selection_and_uncommitted_drawing() {
 
 #[test]
 fn svg_declares_linear_compositing_and_keeps_each_shapes_fill_and_stroke_together() {
+    const COMPARISON_TOLERANCE: f32 = 0.0001;
+
     for upper_z in [0.0, 0.005, -9000.0, 9000.0] {
         let mut world = World::new();
         let document = world.spawn(CanvasDocument).id();
@@ -755,9 +766,9 @@ fn svg_declares_linear_compositing_and_keeps_each_shapes_fill_and_stroke_togethe
                 + composite * (1.0 - opacity);
         }
         let encoded = Srgba::from(LinearRgba::rgb(composite.x, composite.y, composite.z));
-        assert!((encoded.red - 0.5370987).abs() < 0.0001);
-        assert!((encoded.green - 0.5370987).abs() < 0.0001);
-        assert!((encoded.blue - 0.735357).abs() < 0.0001);
+        assert!((encoded.red - 0.5370987).abs() < COMPARISON_TOLERANCE);
+        assert!((encoded.green - 0.5370987).abs() < COMPARISON_TOLERANCE);
+        assert!((encoded.blue - 0.735357).abs() < COMPARISON_TOLERANCE);
     }
 }
 

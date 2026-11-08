@@ -235,6 +235,8 @@ mod tests {
 
     #[test]
     fn normal_text_contrast_matches_reference_budget() {
+        const MIN_TEXT_CONTRAST: f32 = 4.5;
+
         for &mode in modes() {
             let theme = mode;
             let text = theme.text.normal.foreground;
@@ -256,7 +258,7 @@ mod tests {
             ] {
                 let ratio = contrast(text, background);
                 assert!(
-                    ratio >= 4.5,
+                    ratio >= MIN_TEXT_CONTRAST,
                     "{mode:?} 普通文字对比度 {ratio} 低于 4.5，background={background:?}"
                 );
             }
@@ -264,13 +266,16 @@ mod tests {
                 theme.tooltip.popup.normal.foreground,
                 theme.tooltip.popup.normal.background,
             );
-            assert!(ratio >= 4.5, "{mode:?} Tooltip 文字对比度 {ratio} 低于 4.5");
+            assert!(
+                ratio >= MIN_TEXT_CONTRAST,
+                "{mode:?} Tooltip 文字对比度 {ratio} 低于 4.5"
+            );
             let ratio = contrast(
                 theme.file_dialog.status.normal.foreground,
                 theme.file_dialog.body.normal.background,
             );
             assert!(
-                ratio >= 4.5,
+                ratio >= MIN_TEXT_CONTRAST,
                 "{mode:?} FileDialog status 文字对比度 {ratio} 低于 4.5"
             );
         }
@@ -279,6 +284,8 @@ mod tests {
     #[cfg(feature = "pink_dream")]
     #[test]
     fn new_theme_marks_focus_and_danger_icons_have_non_text_contrast() {
+        const MIN_GRAPHIC_CONTRAST: f32 = 3.0;
+
         let themes = [
             #[cfg(feature = "pink_dream")]
             &WIDGETRY_PINK_DREAM_THEME,
@@ -286,20 +293,22 @@ mod tests {
         for theme in themes {
             for state in [theme.check_box.checked, theme.check_box.indeterminate] {
                 for state in [state.normal, state.hovered, state.pressed] {
-                    assert!(contrast(state.mark, state.background) >= 3.0);
+                    assert!(contrast(state.mark, state.background) >= MIN_GRAPHIC_CONTRAST);
                 }
             }
             for state in [theme.window.close.hovered, theme.window.close.pressed] {
-                assert!(contrast(state.foreground, state.background) >= 3.0);
+                assert!(contrast(state.foreground, state.background) >= MIN_GRAPHIC_CONTRAST);
             }
             assert!(
                 contrast(
                     theme.text_field.editable.focused.border,
                     theme.text_field.editable.focused.background
-                ) >= 3.0
+                ) >= MIN_GRAPHIC_CONTRAST
             );
             for foreground in theme.waveform.normal.palette {
-                assert!(contrast(*foreground, theme.waveform.normal.background) >= 3.0);
+                assert!(
+                    contrast(*foreground, theme.waveform.normal.background) >= MIN_GRAPHIC_CONTRAST
+                );
             }
         }
     }
@@ -352,11 +361,18 @@ mod tests {
     fn contrast(foreground: Color, background: Color) -> f32 {
         let luminance = |color: Color| {
             let color = color.to_linear();
-            0.2126 * color.red + 0.7152 * color.green + 0.0722 * color.blue
+            {
+                let [red_weight, green_weight, blue_weight] = [0.2126, 0.7152, 0.0722];
+                red_weight * color.red + green_weight * color.green + blue_weight * color.blue
+            }
         };
         let foreground = luminance(foreground);
         let background = luminance(background);
-        (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05)
+        {
+            let luminance_offset = 0.05;
+            (foreground.max(background) + luminance_offset)
+                / (foreground.min(background) + luminance_offset)
+        }
     }
 
     #[test]

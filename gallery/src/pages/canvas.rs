@@ -1,3 +1,11 @@
+const VIEW_HEIGHT: f32 = 340.0;
+
+const ITEM_GAP: f32 = 4.0;
+const GROUP_GAP: f32 = 8.0;
+const SECTION_GAP: f32 = 12.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 12.0;
+
 use crate::{
     gallery::{GalleryPage, mount_page, unmount_page},
     i18n::{CanvasKey, LocalizedText, TextKey, localized, localized_args},
@@ -313,26 +321,26 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         Name("CanvasDemo")
         Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result,
             directory:directory, region:None, scale:1.0, segment:0 }
-        Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(12), flex_shrink:0.0 }
+        Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(SECTION_GAP), flex_shrink:0.0 }
         Children [
             @localized(TextKey::Canvas(CanvasKey::Description)) WidgetryText Node {max_width:percent(100)}--
-            Node {column_gap:px(8),row_gap:px(8),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
+            Node {column_gap:px(CONTROL_GAP),row_gap:px(GROUP_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
             #Readout Name("CanvasReadout") Text("") WidgetryText Node {max_width:percent(100)}--
             @localized(TextKey::Canvas(CanvasKey::Editing)) WidgetryText Node {max_width:percent(100)}--
-            Node {width:percent(100),column_gap:px(12)}
+            Node {width:percent(100),column_gap:px(CONTENT_GAP)}
             Children [
-                Node {flex_grow:2.0,flex_basis:px(0),min_width:px(0),row_gap:px(4),flex_direction:FlexDirection::Column}
+                Node {flex_grow:2.0,flex_basis:px(0),min_width:px(0),row_gap:px(ITEM_GAP),flex_direction:FlexDirection::Column}
                 Children [
                     @localized(TextKey::Canvas(CanvasKey::Main)) WidgetryText--
                     #Main Name("CanvasMain") @CanvasView {@document:{Some(document)}}
-                    Node {width:percent(100),height:px(340),flex_shrink:0.0}
+                    Node {width:percent(100),height:px(VIEW_HEIGHT),flex_shrink:0.0}
                     BackgroundColor(Color::srgb(0.09,0.11,0.16))
                 ]--
-                Node {flex_grow:1.0,flex_basis:px(0),min_width:px(0),row_gap:px(4),flex_direction:FlexDirection::Column}
+                Node {flex_grow:1.0,flex_basis:px(0),min_width:px(0),row_gap:px(ITEM_GAP),flex_direction:FlexDirection::Column}
                 Children [
                     @localized(TextKey::Canvas(CanvasKey::Secondary)) WidgetryText--
                     #Auxiliary Name("CanvasAuxiliary") @CanvasView {@document:{Some(document)},@zoom:0.5,@center:Vec2::new(20.0,-10.0)}
-                    Node {width:percent(100),height:px(340),flex_shrink:0.0}
+                    Node {width:percent(100),height:px(VIEW_HEIGHT),flex_shrink:0.0}
                     BackgroundColor(Color::srgb(0.13,0.1,0.16))
                 ]
             ]--

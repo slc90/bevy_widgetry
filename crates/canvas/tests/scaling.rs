@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const POSITION_TOLERANCE: f32 = 0.002;
+
 use bevy::{
     picking::{hover::PointerCaptureMap, pointer::*},
     prelude::*,
@@ -25,13 +27,15 @@ const AXES: [Vec2; 8] = [
 
 fn near(actual: Vec2, expected: Vec2) {
     assert!(
-        actual.distance(expected) < 0.002,
+        actual.distance(expected) < POSITION_TOLERANCE,
         "actual={actual:?}, expected={expected:?}"
     );
 }
 
 #[test]
 fn all_eight_handles_scale_in_local_axes_and_keep_the_opposite_edge_or_corner_fixed() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     for id in pointer_ids() {
         for (scale, ui_scale, zoom, shape_scale) in [
             (1.0, 1.0, 0.1, Vec3::ONE),
@@ -163,7 +167,7 @@ fn all_eight_handles_scale_in_local_axes_and_keep_the_opposite_edge_or_corner_fi
                             && t.translation
                                 .truncate()
                                 .distance(edited.translation.truncate())
-                                < 0.001
+                                < COMPARISON_TOLERANCE
                     })
                     .count();
                 assert_eq!(proxies, 2);

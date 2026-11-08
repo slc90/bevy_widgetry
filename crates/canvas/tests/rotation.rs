@@ -38,15 +38,19 @@ fn rotation_point(rectangle: CanvasRectangle, t: Transform, paint: CanvasPaint, 
 }
 
 fn angle(app: &App, shape: Entity, expected: f32) {
+    let minimum_alignment = 0.999999;
+
     let actual = app.world().get::<Transform>(shape).unwrap().rotation;
     assert!(
-        actual.dot(Quat::from_rotation_z(expected)).abs() > 0.999999,
+        actual.dot(Quat::from_rotation_z(expected)).abs() > minimum_alignment,
         "actual {actual:?} expected {expected}"
     );
 }
 
 #[test]
 fn rotation_handle_changes_only_rotation_and_shares_the_document_without_rebuilding_geometry() {
+    let minimum_alignment = 0.999999;
+
     for id in pointer_ids() {
         for (scale, ui_scale, zoom, shape_scale) in [
             (1.0, 1.0, 0.5, Vec3::ONE),
@@ -142,7 +146,7 @@ fn rotation_handle_changes_only_rotation_and_shares_the_document_without_rebuild
                 .iter(app.world())
                 .filter(|(name, t)| {
                     name.as_str() == "CanvasShapeProxy"
-                        && t.rotation.dot(edited.rotation).abs() > 0.999999
+                        && t.rotation.dot(edited.rotation).abs() > minimum_alignment
                 })
                 .count();
             assert_eq!(proxies, 2);

@@ -1,3 +1,8 @@
+const VOLTS_TO_MILLIVOLTS: f64 = 1e3;
+const VOLTS_TO_MICROVOLTS: f64 = 1e6;
+const SELECTION_FILL_ALPHA: f32 = 0.08;
+const LABEL_BACKGROUND_ALPHA: f32 = 0.9;
+
 use crate::view_error::ViewResult;
 use bevy_widgetry_job::JobFailure;
 use bevy_widgetry_toggle_button::WidgetryToggleButtonHeadless;
@@ -321,14 +326,16 @@ fn prepare_one(world: &mut World, root: Entity) -> ViewResult {
         .ok_or_else(|| {
             crate::view_error::missing(crate::WaveformPart::MeasurementBackground).at(outline)
         })?
-        .set_if_neq(BackgroundColor(border.with_alpha(0.08)));
+        .set_if_neq(BackgroundColor(border.with_alpha(SELECTION_FILL_ALPHA)));
     world
         .get_mut::<BackgroundColor>(readout)
         .ok_or_else(|| {
             crate::view_error::missing(crate::WaveformPart::MeasurementReadoutBackground)
                 .at(readout)
         })?
-        .set_if_neq(BackgroundColor(background.with_alpha(0.9)));
+        .set_if_neq(BackgroundColor(
+            background.with_alpha(LABEL_BACKGROUND_ALPHA),
+        ));
     let mut node = world.get_mut::<Node>(outline).ok_or_else(|| {
         crate::view_error::missing(crate::WaveformPart::MeasurementRectangleNode).at(outline)
     })?;
@@ -360,8 +367,8 @@ fn prepare_one(world: &mut World, root: Entity) -> ViewResult {
     if let Some(value) = measurement {
         let (scale, unit) = match value.display_unit {
             WaveformUnit::Volts => (1.0, "V"),
-            WaveformUnit::Millivolts => (1e3, "mV"),
-            WaveformUnit::Microvolts => (1e6, "µV"),
+            WaveformUnit::Millivolts => (VOLTS_TO_MILLIVOLTS, "mV"),
+            WaveformUnit::Microvolts => (VOLTS_TO_MICROVOLTS, "µV"),
         };
         let label = format!(
             "Δt = {:.3} s   ΔV = {:.3} {unit}",

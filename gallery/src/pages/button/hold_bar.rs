@@ -1,3 +1,11 @@
+const BAR_WIDTH: f32 = 300.0;
+const BAR_HEIGHT: f32 = 60.0;
+const BAR_BORDER_WIDTH: f32 = 2.0;
+
+const ITEM_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 8.0;
+const LABEL_FONT_SIZE: f32 = 20.0;
+
 use crate::i18n::{ButtonKey, Language, TextKey, localized, tr_args};
 use bevy::{
     input_focus::{FocusCause, InputFocus},
@@ -35,7 +43,7 @@ impl GalleryHoldBar {
             @WidgetryHoldButtonHeadless
             Name("GalleryHoldBar")
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Node { width: px(300), height: px(60), border: UiRect::all(px(2)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+            Node { width: px(BAR_WIDTH), height: px(BAR_HEIGHT), border: UiRect::all(px(BAR_BORDER_WIDTH)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
             BackgroundColor({Color::srgb_u8(21, 44, 64)})
             template(|_| Ok(BorderColor::all(Color::srgb_u8(100, 180, 210))))
             on(activated)
@@ -44,7 +52,7 @@ impl GalleryHoldBar {
                 Node { position_type: PositionType::Absolute, left: px(0), top: px(0), bottom: px(0), width: percent(0) }
                 BackgroundColor({Color::srgb_u8(30, 110, 125)})--
                 @localized(TextKey::Button(ButtonKey::HoldBarAction)) Pickable::IGNORE
-                TextFont { font_size: FontSize::Px(20.0) } TextColor({Color::WHITE})
+                TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) } TextColor({Color::WHITE})
             ]
         }
     }
@@ -53,12 +61,12 @@ impl GalleryHoldBar {
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("GalleryHoldBarDemo")
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::Button(ButtonKey::HoldBarDescription)) WidgetryText--
             @GalleryHoldBar--
             Name("GalleryHoldBarStatus") template(|_| Ok(Status)) Text("") WidgetryText--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap }
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP), flex_wrap: FlexWrap::Wrap }
             Children [
                 @control(Action::Focus, ButtonKey::HoldBarFocus, "GalleryHoldBarFocus")--
                 @control(Action::Disabled, ButtonKey::HoldBarDisable, "GalleryHoldBarDisable")

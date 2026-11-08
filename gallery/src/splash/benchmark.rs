@@ -1,3 +1,7 @@
+const MILLISECONDS_PER_SECOND: f64 = 1000.0;
+const NANOS_PER_MILLISECOND: f64 = 1_000_000.0;
+const BENCHMARK_DURATION_MS: f64 = 22000.0;
+
 mod render;
 
 use super::{SplashSession, SplashStatus, presentation::SplashPresentation};
@@ -114,18 +118,18 @@ fn finish(
         measurement.count = count;
     }
     let elapsed = measurement.started.map_or(-1.0, |start| {
-        now.duration_since(start).as_secs_f64() * 1000.0
+        now.duration_since(start).as_secs_f64() * MILLISECONDS_PER_SECOND
     });
-    let startup = now.duration_since(measurement.epoch).as_secs_f64() * 1000.0;
-    let update = now.duration_since(measurement.frame).as_secs_f64() * 1000.0;
+    let startup = now.duration_since(measurement.epoch).as_secs_f64() * MILLISECONDS_PER_SECOND;
+    let update = now.duration_since(measurement.frame).as_secs_f64() * MILLISECONDS_PER_SECOND;
     let interval = if first {
         0.0
     } else {
-        now.duration_since(measurement.previous).as_secs_f64() * 1000.0
+        now.duration_since(measurement.previous).as_secs_f64() * MILLISECONDS_PER_SECOND
     };
     measurement.previous = now;
     let present = if count != measurement.count {
-        channel.interval_ns.load(Ordering::Relaxed) as f64 / 1_000_000.0
+        channel.interval_ns.load(Ordering::Relaxed) as f64 / NANOS_PER_MILLISECOND
     } else {
         0.0
     };
@@ -173,7 +177,7 @@ fn finish(
         status.as_ref().map_or(0.0, |status| status.alpha),
     )
     .map_err(measurement_error)?;
-    let request_exit = measurement.drive && elapsed >= 22000.0;
+    let request_exit = measurement.drive && elapsed >= BENCHMARK_DURATION_MS;
     if request_exit {
         commands.queue(crate::close::request_exit);
     }

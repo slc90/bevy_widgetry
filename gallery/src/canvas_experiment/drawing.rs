@@ -1,3 +1,6 @@
+const MAX_BATCH_OPERATIONS: usize = 1024;
+const MAX_SHAPE_ID_BYTES: usize = 128;
+
 use super::*;
 use bevy::reflect::serde::{TypedReflectDeserializer, TypedReflectSerializer};
 use bevy_widgetry::canvas::{CanvasGeometry, CanvasOrder, CanvasPaint};
@@ -71,7 +74,7 @@ pub(super) fn batch(In(value): In<Option<Value>>, world: &mut World) -> BrpResul
             "绘图批次参数被拒绝"
         );
     })?;
-    if request.operations.len() > 1024 {
+    if request.operations.len() > MAX_BATCH_OPERATIONS {
         info!(
             session = request.session,
             operation = "batch",
@@ -274,7 +277,7 @@ pub(super) fn create_shape(
 
 pub(super) fn valid_id(id: &str) -> bool {
     !id.is_empty()
-        && id.len() <= 128
+        && id.len() <= MAX_SHAPE_ID_BYTES
         && id
             .bytes()
             .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))

@@ -1,3 +1,4 @@
+const THUMB_CORNER_RADIUS: f32 = 6.0;
 use crate::error::{Channel, PartIssue, collect, observe};
 use bevy_widgetry_diagnostics::bevy::{DiagnosticBatch, WidgetryEcsError};
 use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged};
@@ -100,14 +101,14 @@ impl WidgetryScrollArea {
             template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
             Scrollbar { target: Entity::PLACEHOLDER, orientation: ControlOrientation::Horizontal, min_thumb_length: DEFAULT_MIN_THUMB_LENGTH }
             Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(2), height: px(scrollbar_thickness) }
-            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false) template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Grab)))]
+            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(THUMB_CORNER_RADIUS)) } Hovered(false) template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Grab)))]
         });
         let vertical = matches!(axis, ScrollAxis::Vertical | ScrollAxis::Both).then(|| bsn! {
             VerticalScrollbar
             template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
             Scrollbar { target: Entity::PLACEHOLDER, orientation: ControlOrientation::Vertical, min_thumb_length: DEFAULT_MIN_THUMB_LENGTH }
             Node { grid_column: GridPlacement::start(2), grid_row: GridPlacement::start_span(1, 2), width: px(scrollbar_thickness) }
-            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false) template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Grab)))]
+            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(THUMB_CORNER_RADIUS)) } Hovered(false) template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Grab)))]
         });
         bsn! {
             template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))

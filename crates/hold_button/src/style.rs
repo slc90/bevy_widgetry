@@ -1,3 +1,13 @@
+const PHASE_WRAP_CYCLES: f32 = 100.0;
+const CONTENT_MAX_PERCENT: f32 = 76.0;
+const LUMINANCE_WEIGHTS: Vec3 = Vec3::new(0.2126, 0.7152, 0.0722);
+const DARK_SHADOW_LUMINANCE_THRESHOLD: f32 = 0.3;
+const SHADOW_ALPHA: f32 = 0.85;
+const CONTENT_SHADOW_OFFSET: Vec2 = Vec2::new(0.7, 1.0);
+const SUCCESS_FLASH_SECONDS: f32 = 0.18;
+const BORDER_PIXEL_WIDTH: f32 = 1.25;
+const WAVE_AMPLITUDE: f32 = 0.018;
+
 use crate::{
     colors::ColorState,
     headless::{
@@ -40,8 +50,8 @@ impl Default for WidgetryHoldButtonProps {
     fn default() -> Self {
         Self {
             diameter: 112.0,
-            charge_duration: Duration::from_secs(3),
-            decay_duration: Duration::from_millis(1200),
+            charge_duration: crate::headless::DEFAULT_CHARGE_DURATION,
+            decay_duration: crate::headless::DEFAULT_DECAY_DURATION,
             colors: default(),
             content: None,
             children: None,
@@ -72,7 +82,7 @@ impl WidgetryHoldButton {
             template(|_| Ok(ResolvedForeground::default()))
             Children [
                 Pickable::IGNORE
-                Node { max_width: percent(76), max_height: percent(76), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+                Node { max_width: percent(CONTENT_MAX_PERCENT), max_height: percent(CONTENT_MAX_PERCENT), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                 @{content}
                 Children [{children}]
             ]
@@ -163,8 +173,8 @@ fn prepare_content(
                         commands.entity(descendant).insert((
                             ContentShadow,
                             TextShadow {
-                                offset: Vec2::new(0.7, 1.0),
-                                color: Color::srgba(0.0, 0.0, 0.0, 0.85),
+                                offset: CONTENT_SHADOW_OFFSET,
+                                color: Color::srgba(0.0, 0.0, 0.0, SHADOW_ALPHA),
                             },
                         ));
                     }
@@ -181,9 +191,15 @@ fn prepare_content(
 fn update_shadows(mut texts: Query<(&TextColor, &mut TextShadow), With<ContentShadow>>) {
     for (foreground, mut shadow) in &mut texts {
         let rgb = foreground.0.to_linear();
-        let brightness = rgb.red * 0.2126 + rgb.green * 0.7152 + rgb.blue * 0.0722;
-        let level = if brightness > 0.3 { 0.0 } else { 1.0 };
-        let color = Color::srgba(level, level, level, 0.85);
+        let brightness = rgb.red * LUMINANCE_WEIGHTS.x
+            + rgb.green * LUMINANCE_WEIGHTS.y
+            + rgb.blue * LUMINANCE_WEIGHTS.z;
+        let level = if brightness > DARK_SHADOW_LUMINANCE_THRESHOLD {
+            0.0
+        } else {
+            1.0
+        };
+        let color = Color::srgba(level, level, level, SHADOW_ALPHA);
         if shadow.color != color {
             shadow.color = color;
         }
@@ -295,7 +311,7 @@ fn update_material(
         let started = state.successes != flash.seen_successes;
         flash.seen_successes = state.successes;
         if started {
-            flash.remaining = 0.18;
+            flash.remaining = SUCCESS_FLASH_SECONDS;
         } else {
             flash.remaining = (flash.remaining - time.delta_secs()).max(0.0);
         }
@@ -304,7 +320,7 @@ fn update_material(
         let visible = visibility.is_none_or(|v| v.get()) && node.size().min_element() > 0.0;
         let moving = visible && (progress.0 > 0.0 && progress.0 < 1.0 || flash.remaining > 0.0);
         let phase = if moving {
-            time.elapsed_secs() % (std::f32::consts::TAU * 100.0)
+            time.elapsed_secs() % (std::f32::consts::TAU * PHASE_WRAP_CYCLES)
         } else {
             0.0
         };
@@ -319,7 +335,12 @@ fn update_material(
             }
             .to_linear()
             .to_vec4(),
-            parameters: Vec4::new(progress.0, phase, 1.25 / diameter, 0.018),
+            parameters: Vec4::new(
+                progress.0,
+                phase,
+                BORDER_PIXEL_WIDTH / diameter,
+                WAVE_AMPLITUDE,
+            ),
         };
         if let Some(handle) = handle {
             if materials.get(&handle.0) != Some(&material) {

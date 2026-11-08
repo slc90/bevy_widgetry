@@ -1,4 +1,12 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+
+const EXPECTED_INITIAL_REPEAT_MS: u64 = 400;
+const BEFORE_INITIAL_REPEAT_MS: u64 = EXPECTED_INITIAL_REPEAT_MS - BOUNDARY_STEP_MS;
+const LONG_FRAME_MS: u64 = 1000;
+const POST_INPUT_WAIT_MS: u64 = 500;
+const BOUNDARY_STEP_MS: u64 = 1;
+
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 use bevy::{
     clipboard::ClipboardRead,
     input::{
@@ -46,7 +54,7 @@ fn configured(read_only: bool, value: f64, decimals: Option<u8>) -> Fixture {
         .load::<Font>(BuiltinFont::Default.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
-        Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "NumberInput font",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )
@@ -207,7 +215,7 @@ fn read_only_reuses_selection_but_rejects_text_arrows_buttons_and_hold() {
     key(&mut f, KeyCode::ArrowDown, Key::ArrowDown, None);
     key(&mut f, KeyCode::Enter, Key::Enter, None);
     pointer(&mut f, PointerAction::Press(PointerButton::Primary));
-    advance(&mut f, 500);
+    advance(&mut f, POST_INPUT_WAIT_MS);
     pointer(&mut f, PointerAction::Release(PointerButton::Primary));
     assert_eq!(value(&f), 10.0);
     assert_eq!(text(&f), "10.0");
@@ -305,7 +313,7 @@ fn mode_guards_do_not_limit_valid_same_or_invalid_programmatic_values() {
 fn disabling_mid_hold_drops_pressed_and_never_resumes_without_a_new_press() {
     let mut f = fixture(false);
     pointer(&mut f, PointerAction::Press(PointerButton::Primary));
-    advance(&mut f, 400);
+    advance(&mut f, EXPECTED_INITIAL_REPEAT_MS);
     assert_eq!(value(&f), 16.0);
     f.app
         .world_mut()
@@ -313,21 +321,21 @@ fn disabling_mid_hold_drops_pressed_and_never_resumes_without_a_new_press() {
         .insert(InteractionDisabled);
     f.app.world_mut().flush();
     assert!(f.app.world().get::<Pressed>(f.increase).is_none());
-    advance(&mut f, 500);
+    advance(&mut f, POST_INPUT_WAIT_MS);
     assert_eq!(value(&f), 16.0);
     f.app
         .world_mut()
         .entity_mut(f.parent)
         .remove::<InteractionDisabled>();
     f.app.world_mut().flush();
-    advance(&mut f, 1000);
+    advance(&mut f, LONG_FRAME_MS);
     assert_eq!(value(&f), 16.0);
     pointer(&mut f, PointerAction::Release(PointerButton::Primary));
     pointer(&mut f, PointerAction::Press(PointerButton::Primary));
     assert_eq!(value(&f), 19.0);
-    advance(&mut f, 399);
+    advance(&mut f, BEFORE_INITIAL_REPEAT_MS);
     assert_eq!(value(&f), 19.0);
-    advance(&mut f, 1);
+    advance(&mut f, BOUNDARY_STEP_MS);
     assert_eq!(value(&f), 22.0);
 }
 

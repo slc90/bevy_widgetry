@@ -1,3 +1,14 @@
+const CHECKER_TILE_COUNT: i32 = 8;
+const CHECKER_COLUMNS: i32 = 4;
+const GROUP_INDENT: f32 = 12.0;
+const CHECKER_CELL_SIZE: f32 = 8.0;
+const SWATCH_WIDTH: f32 = 32.0;
+const SWATCH_HEIGHT: f32 = 16.0;
+
+const ITEM_GAP: f32 = 4.0;
+const CONTROL_GAP: f32 = 10.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 mod fields;
 
 use super::Toggle;
@@ -110,7 +121,7 @@ fn entries(catalog: Catalog, prefix: &str, expanded: &BTreeSet<String>) -> Box<d
         let opened = expanded.contains(&path);
         let children = opened.then(|| entries(group, &path, expanded));
         bsn! {
-            Node { flex_direction: FlexDirection::Column, row_gap: px(4), padding: UiRect::left(px(12)) }
+            Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), padding: UiRect::left(px(GROUP_INDENT)) }
             Children [
                 @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text({format!("{} {path}", if opened { "−" } else { "+" })}) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } template(move |_| Ok(Toggle { path: path.clone() }))
                     Name({format!("ThemeGroup:{path}")})
@@ -127,17 +138,17 @@ fn entries(catalog: Catalog, prefix: &str, expanded: &BTreeSet<String>) -> Box<d
 fn swatch(label: String, color: Color) -> impl Scene {
     let [r, g, b, a] = color.to_srgba().to_u8_array();
     let hex = format!("#{r:02X}{g:02X}{b:02X}{a:02X}");
-    let tiles: Vec<_> = (0..8).map(|index| bsn! {
-        Node { width: px(8), height: px(8) }
-        BackgroundColor({if (index % 4 + index / 4) % 2 == 0 { Color::srgb_u8(220, 220, 220) } else { Color::srgb_u8(140, 140, 140) }})
+    let tiles: Vec<_> = (0..CHECKER_TILE_COUNT).map(|index| bsn! {
+        Node { width: px(CHECKER_CELL_SIZE), height: px(CHECKER_CELL_SIZE) }
+        BackgroundColor({if (index % CHECKER_COLUMNS + index / CHECKER_COLUMNS) % 2 == 0 { Color::srgb_u8(220, 220, 220) } else { Color::srgb_u8(140, 140, 140) }})
     }).collect();
     bsn! {
         Name({format!("ThemeColor:{label}")})
-        Node { column_gap: px(10), align_items: AlignItems::Center, flex_shrink: 0.0 }
+        Node { column_gap: px(CONTROL_GAP), align_items: AlignItems::Center, flex_shrink: 0.0 }
         Children [
-            Node { width: px(32), height: px(16), flex_shrink: 0.0, flex_wrap: FlexWrap::Wrap }
+            Node { width: px(SWATCH_WIDTH), height: px(SWATCH_HEIGHT), flex_shrink: 0.0, flex_wrap: FlexWrap::Wrap }
                 Children [{tiles}-- Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100) } BackgroundColor(color)]--
-            Text({format!("{label}  {hex}")}) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }
+            Text({format!("{label}  {hex}")}) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }
         ]
     }
 }

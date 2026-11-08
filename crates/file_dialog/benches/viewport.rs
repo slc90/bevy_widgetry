@@ -1,3 +1,15 @@
+const ASSET_TIMEOUT: Duration = Duration::from_secs(10);
+const APPEND_BATCH_SIZE: usize = 128;
+const MAX_VISIBLE_ROWS: usize = 32;
+const ITEM_COUNTS: [usize; 3] = [1_000, 10_000, 100_000];
+const SCROLL_POSITIONS: usize = 50;
+const SCROLL_STEP: usize = 280;
+const MAX_MEASURED_FRAMES: usize = 100_000;
+const MILLISECONDS_PER_SECOND: f64 = 1000.0;
+const P95_PERCENT: usize = 95;
+const PERCENT_SCALE: usize = 100;
+const UPDATE_BUDGET_MS: f64 = 2.0;
+const DIALOG_SIZE: Vec2 = Vec2::new(900.0, 700.0);
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_asset::BuiltinIcon;
@@ -77,20 +89,15 @@ fn fixture(items: usize, operation: &str) -> Result<Fixture> {
             .load_untyped(icon.path())
     })
     .collect();
-    bevy_widgetry_test_utils::advance_until(
-        &mut app,
-        Duration::from_secs(10),
-        "FileDialog SVG",
-        |world| {
-            assets.iter().all(|asset| {
-                world
-                    .resource::<Assets<bevy::asset::LoadedUntypedAsset>>()
-                    .contains(asset)
-            })
-        },
-    )
+    bevy_widgetry_test_utils::advance_until(&mut app, ASSET_TIMEOUT, "FileDialog SVG", |world| {
+        assets.iter().all(|asset| {
+            world
+                .resource::<Assets<bevy::asset::LoadedUntypedAsset>>()
+                .contains(asset)
+        })
+    })
     .map_err(BevyError::error)?;
-    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::PickFiles } Node {width: px(900), height: px(700)} })?.id();
+    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::PickFiles } Node {width: px(DIALOG_SIZE.x), height: px(DIALOG_SIZE.y)} })?.id();
     let mut fixture = Fixture {
         app,
         root,
@@ -110,7 +117,7 @@ fn fixture(items: usize, operation: &str) -> Result<Fixture> {
         .ok_or_else(|| missing("state"))?;
     let token = state.token();
     let initial = if operation == "batch" {
-        items - 128
+        items - APPEND_BATCH_SIZE
     } else {
         items
     };
@@ -238,7 +245,7 @@ fn observe(fixture: &mut Fixture) -> Result<u32> {
         .iter(world)
         .filter(|name| name.as_str() == "FileDialogEntryRow")
         .count();
-    if count > 32 {
+    if count > MAX_VISIBLE_ROWS {
         return Err(missing("bounded materialized rows"));
     }
     Ok(world.entities().count_spawned())
@@ -251,7 +258,7 @@ fn main() -> Result {
     )?;
     let mut stage_reports = Vec::new();
     let mut harness = Harness::new("file_dialog-viewport-criterion")?;
-    for items in [1_000, 10_000, 100_000] {
+    for items in ITEM_COUNTS {
         for operation in [
             "shell",
             "materialize",
@@ -309,7 +316,7 @@ fn main() -> Result {
                                 .get_mut::<ScrollPosition>(viewport)
                                 .ok_or_else(|| missing("scroll"))?
                                 .0
-                                .y = ((index % 50) * 280) as f32;
+                                .y = ((index % SCROLL_POSITIONS) * SCROLL_STEP) as f32;
                             fixture.app.update();
                         }
                         "close" => {
@@ -328,14 +335,14 @@ fn main() -> Result {
                 |fixture| {
                     let mut measurement =
                         fixture.app.world_mut().resource_mut::<BuildMeasurement>();
-                    if frames.len() + measurement.frames.len() > 100_000 {
+                    if frames.len() + measurement.frames.len() > MAX_MEASURED_FRAMES {
                         return Err(error("view-stage measurement capacity exceeded"));
                     }
                     frames.extend(
                         measurement
                             .frames
                             .drain(..)
-                            .map(|time| time.as_secs_f64() * 1000.0),
+                            .map(|time| time.as_secs_f64() * MILLISECONDS_PER_SECOND),
                     );
                     measurement.measuring = false;
                     observe(fixture)
@@ -347,8 +354,8 @@ fn main() -> Result {
                 let count = frames.len();
                 stage_reports.push(json!({"scenario":scenario,"frames_ms":raw,
                     "n":count,"median_ms":frames[count / 2],
-                    "p95_ms":frames[(count * 95).div_ceil(100) - 1],"max_ms":frames.last(),
-                    "over_2ms":frames.iter().filter(|time| **time > 2.0).count()}));
+                    "p95_ms":frames[(count * P95_PERCENT).div_ceil(PERCENT_SCALE) - 1],"max_ms":frames.last(),
+                    "over_2ms":frames.iter().filter(|time| **time > UPDATE_BUDGET_MS).count()}));
             }
         }
     }

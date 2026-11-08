@@ -1,3 +1,5 @@
+const MAX_CUSTOM_LOCATIONS: usize = 128;
+
 use crate::retention::cancel_if_requested;
 use crate::*;
 use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendStatus, SubmitFailure};
@@ -32,12 +34,12 @@ pub(crate) fn spawn(
                     .locations()
                     .map_err(|error| crate::error::request_io(details.clone(), error))
                     .and_then(|locations| {
-                        if locations.len() > 128 {
+                        if locations.len() > MAX_CUSTOM_LOCATIONS {
                             Err(crate::error::request_failure(
                                 details,
                                 FileDialogRequestFault::LocationCapacity {
                                     actual: locations.len(),
-                                    limit: 128,
+                                    limit: MAX_CUSTOM_LOCATIONS,
                                 },
                             )
                             .into())
@@ -63,12 +65,14 @@ pub(crate) fn spawn(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy_widgetry_job::{JobKind, JobOutcome, JobRead};
     use std::io;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex, mpsc};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     struct Backend {
         count: usize,
@@ -136,7 +140,7 @@ mod tests {
                     .token();
                 let manager = JobManager::default();
                 let (id, mut receiver) = spawn(&manager, backend, token).unwrap();
-                ready.recv_timeout(Duration::from_secs(5)).unwrap();
+                ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
                 assert!(!manager.status(id).unwrap().state.is_finished());
                 assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
@@ -146,12 +150,12 @@ mod tests {
                         sentinel.send(()).unwrap();
                     })
                     .detach();
-                received.recv_timeout(Duration::from_secs(5)).unwrap();
+                received.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 if cancel {
                     manager.cancel(id).unwrap();
                 }
                 release.send(()).unwrap();
-                let deadline = Instant::now() + Duration::from_secs(5);
+                let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
                 while !manager.status(id).unwrap().state.is_finished() {
                     assert!(Instant::now() < deadline);
                     std::thread::yield_now();

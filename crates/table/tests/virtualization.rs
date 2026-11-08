@@ -493,6 +493,8 @@ fn zero_viewport_and_invalid_scroll_do_not_leave_stale_cells() {
 
 #[test]
 fn fractional_geometry_matches_physical_scroll_quantization() {
+    let comparison_tolerance = 0.001;
+
     for scale in [1.0, 1.25, 2.0] {
         let (mut app, source, root, body) = fixture(100, 30);
         *app.world_mut().resource_mut::<bevy::ui::UiScale>() = bevy::ui::UiScale(scale);
@@ -511,7 +513,7 @@ fn fractional_geometry_matches_physical_scroll_quantization() {
             .get::<ComputedNode>(body)
             .unwrap()
             .inverse_scale_factor();
-        assert!((inverse - 1.0 / scale).abs() < 0.001);
+        assert!((inverse - 1.0 / scale).abs() < comparison_tolerance);
         let first_row = app
             .world()
             .get::<WidgetryTableModel<u32>>(source)
@@ -553,8 +555,8 @@ fn fractional_geometry_matches_physical_scroll_quantization() {
             assert!(rows.contains(&model.row_index(pair.0).unwrap()));
             assert!(columns.contains(&model.column_index(pair.1).unwrap()));
             let computed = app.world().get::<ComputedNode>(*entity).unwrap();
-            assert!((computed.size().y * inverse - 27.5).abs() < 0.001);
-            assert!((computed.size().x * inverse - 120.5).abs() < 0.001);
+            assert!((computed.size().y * inverse - 27.5).abs() < comparison_tolerance);
+            assert!((computed.size().x * inverse - 120.5).abs() < comparison_tolerance);
         }
     }
 }

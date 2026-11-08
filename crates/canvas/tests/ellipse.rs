@@ -162,6 +162,8 @@ fn typed_ellipse_crud_preserves_identity_and_rejects_partial_or_cross_kind_updat
 
 #[test]
 fn ellipse_bounds_include_rotation_mirroring_stroke_and_small_radii() {
+    const COMPARISON_TOLERANCE: f32 = 0.0001;
+
     let ellipse = CanvasEllipse {
         radii: Vec2::new(10.0, 20.0),
     };
@@ -180,8 +182,8 @@ fn ellipse_bounds_include_rotation_mirroring_stroke_and_small_radii() {
     assert_eq!(bounds.max, Vec2::new(-6.0, 21.0));
     let rotated = transform.with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
     let bounds = ellipse.bounds(&rotated, &paint).unwrap();
-    assert!((bounds.min - Vec2::new(-41.0, -14.0)).length() < 0.0001);
-    assert!((bounds.max - Vec2::new(-19.0, 34.0)).length() < 0.0001);
+    assert!((bounds.min - Vec2::new(-41.0, -14.0)).length() < COMPARISON_TOLERANCE);
+    assert!((bounds.max - Vec2::new(-19.0, 34.0)).length() < COMPARISON_TOLERANCE);
     for step in 0..128 {
         let direction = Vec2::from_angle(step as f32 * std::f32::consts::TAU / 128.0);
         let local = direction * ellipse.radii + (direction / ellipse.radii).normalize() * 2.0;

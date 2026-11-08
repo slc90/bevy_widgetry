@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::text::EditableText;
@@ -1007,6 +1009,8 @@ fn detail_rows_show_type_and_human_size_and_folders_have_no_size() {
 
 #[test]
 fn detail_columns_align_with_header_when_scrollbar_appears() {
+    let pixel_tolerance = 1.1;
+
     for count in [2, 100] {
         let mut app = fixture();
         let root = app
@@ -1043,7 +1047,7 @@ fn detail_columns_align_with_header_when_scrollbar_appears() {
             .translation
             .x;
         assert!(
-            (header_x - cell_x).abs() <= 1.1,
+            (header_x - cell_x).abs() <= pixel_tolerance,
             "count={count}, header={header_x}, cell={cell_x}"
         );
     }
@@ -1496,6 +1500,8 @@ fn sidebar_selection_matches_canonical_prefix_and_keeps_original_navigation_path
 
 #[test]
 fn sidebar_locations_follow_disabled_and_resolved_tab_state() {
+    let pixel_tolerance = 0.5;
+
     let mut app = fixture();
     let root = app
         .world_mut()
@@ -1566,7 +1572,7 @@ fn sidebar_locations_follow_disabled_and_resolved_tab_state() {
             .size
             .y;
         assert!(
-            (label_y - box_height / 2.0 + text_height / 2.0 - row_y).abs() < 0.5,
+            (label_y - box_height / 2.0 + text_height / 2.0 - row_y).abs() < pixel_tolerance,
             "navigation text must be centered within its row"
         );
     }
@@ -2041,7 +2047,7 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
         .load::<Font>(BuiltinFont::Default.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
-        std::time::Duration::from_secs(10),
+        ASYNC_WAIT_TIMEOUT,
         "FileDialog 编辑选择字体",
         |world| world.resource::<Assets<Font>>().contains(&font),
     )

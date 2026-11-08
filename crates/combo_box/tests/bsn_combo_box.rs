@@ -1,6 +1,8 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::camera::NormalizedRenderTarget;
 use bevy::picking::{
     backend::HitData,
@@ -192,7 +194,7 @@ fn clicking_another_combo_closes_previous_popup() {
 }
 
 fn wait_for_image(app: &mut App, icon: Entity, expected: Option<&Handle<Image>>) -> Handle<Image> {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     loop {
         app.update();
         let image = app.world().get::<Children>(icon).and_then(|children| {

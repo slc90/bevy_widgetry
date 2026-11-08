@@ -99,12 +99,14 @@ async fn publish(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use bevy_widgetry_job::{JobKind, JobOutcome, JobRead};
     use std::io;
     use std::path::Path;
     use std::sync::{Arc, Mutex, mpsc};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     fn context_of(failure: &bevy_widgetry_job::JobFailure) -> &FileDialogPreferenceContext {
         let mut cause = failure.diagnostics().next().unwrap().source();
@@ -294,7 +296,7 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        let context = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        let context = ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         assert!(matches!(
             receiver.recv_blocking().unwrap(),
             JobRead::Finished(JobOutcome::Completed)
@@ -410,7 +412,7 @@ mod tests {
                         Ok(())
                     })
                     .unwrap();
-                let closed = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+                let closed = ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 assert!(matches!(
                     receiver.recv_blocking().unwrap(),
                     JobRead::Finished(JobOutcome::Completed)
@@ -451,7 +453,7 @@ mod tests {
                     load(&manager, backend, path.clone())
                 }
                 .unwrap();
-                started.recv_timeout(Duration::from_secs(5)).unwrap();
+                started.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 release.send(()).unwrap();
                 let failure = failed_reply(&mut receiver);
                 assert!(Arc::ptr_eq(
@@ -528,7 +530,7 @@ mod tests {
                         )
                     }
                     .unwrap();
-                    ready.recv_timeout(Duration::from_secs(5)).unwrap();
+                    ready.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                     assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
                     assert!(!manager.status(id).unwrap().state.is_finished());
                     assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
@@ -536,7 +538,7 @@ mod tests {
                         manager.cancel(id).unwrap();
                     }
                     release.send(()).unwrap();
-                    let deadline = Instant::now() + Duration::from_secs(5);
+                    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
                     while !manager.status(id).unwrap().state.is_finished() {
                         assert!(Instant::now() < deadline);
                         std::thread::yield_now();

@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
+const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 use bevy::ecs::error::Severity;
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, scene_app};
@@ -48,12 +50,9 @@ fn long_title_stays_on_one_line_and_keeps_system_buttons_inside_the_window() {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
-    advance_until(
-        &mut app,
-        std::time::Duration::from_secs(10),
-        "title font",
-        |world| world.resource::<Assets<Font>>().contains(&font),
-    )
+    advance_until(&mut app, ASYNC_WAIT_TIMEOUT, "title font", |world| {
+        world.resource::<Assets<Font>>().contains(&font)
+    })
     .unwrap();
     app.set_default_font(bevy::text::FontSource::Handle(font));
     let (root, native) = window(

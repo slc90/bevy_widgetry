@@ -1,3 +1,10 @@
+const BUTTON_MIN_HEIGHT: f32 = 32.0;
+const BUTTON_PADDING_X: f32 = 12.0;
+const BUTTON_PADDING_Y: f32 = 6.0;
+const BUTTON_BORDER_WIDTH: f32 = 1.0;
+const BUTTON_CORNER_RADIUS: f32 = 4.0;
+const SPINNER_DIAMETER: f32 = 24.0;
+
 use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemePlugin};
 
 use bevy::{
@@ -192,10 +199,10 @@ impl WidgetryButton {
             @crate::WidgetryButtonHeadless
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             Node {
-                min_height: px(32),
-                padding: UiRect::axes(px(12), px(6)),
-                border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(4)),
+                min_height: px(BUTTON_MIN_HEIGHT),
+                padding: UiRect::axes(px(BUTTON_PADDING_X), px(BUTTON_PADDING_Y)),
+                border: UiRect::all(px(BUTTON_BORDER_WIDTH)),
+                border_radius: BorderRadius::all(px(BUTTON_CORNER_RADIUS)),
             }
             BackgroundColor
             BorderColor
@@ -209,9 +216,9 @@ impl WidgetryButton {
                 Node { position_type: PositionType::Absolute, left: px(0), right: px(0), top: px(0), bottom: px(0), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                 Children [
                     SpinnerTrack Pickable::IGNORE ImageNode
-                    Node { width: px(24), height: px(24), flex_shrink: 0.0 }--
+                    Node { width: px(SPINNER_DIAMETER), height: px(SPINNER_DIAMETER), flex_shrink: 0.0 }--
                     SpinnerArc Pickable::IGNORE ImageNode
-                    Node { position_type: PositionType::Absolute, width: px(24), height: px(24) }
+                    Node { position_type: PositionType::Absolute, width: px(SPINNER_DIAMETER), height: px(SPINNER_DIAMETER) }
                 ]
             ]
         }

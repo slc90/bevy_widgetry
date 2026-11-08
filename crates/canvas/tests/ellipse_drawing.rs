@@ -19,6 +19,8 @@ fn preview(app: &mut App) -> Option<Entity> {
 
 #[test]
 fn ellipse_preview_is_local_and_release_creates_one_typed_shape_on_top_in_four_directions() {
+    const COMPARISON_TOLERANCE: f32 = 0.001;
+
     for id in pointer_ids() {
         for delta in [
             Vec2::new(20.0, 15.0),
@@ -89,7 +91,7 @@ fn ellipse_preview_is_local_and_release_creates_one_typed_shape_on_top_in_four_d
             else {
                 panic!("must retain ellipse geometry")
             };
-            assert!(ellipse.radii.distance(delta.abs() * 0.5) < 0.001);
+            assert!(ellipse.radii.distance(delta.abs() * 0.5) < COMPARISON_TOLERANCE);
             assert!(
                 app.world()
                     .get::<Transform>(selected)
@@ -97,7 +99,7 @@ fn ellipse_preview_is_local_and_release_creates_one_typed_shape_on_top_in_four_d
                     .translation
                     .truncate()
                     .distance(Vec2::new(30.0, 15.0) + delta * 0.5)
-                    < 0.001
+                    < COMPARISON_TOLERANCE
             );
             assert_eq!(*app.world().get::<CanvasPaint>(selected).unwrap(), paint);
             assert_eq!(

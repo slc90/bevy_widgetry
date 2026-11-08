@@ -1,3 +1,18 @@
+const SELECTION_SUMMARY_LIMIT: usize = 20;
+const MODEL_SUMMARY_LIMIT: usize = 20;
+
+const TEXT_VIEW_HEIGHT: f32 = 160.0;
+const ITEM_ICON_SIZE: f32 = 16.0;
+const COMPACT_VIEW_HEIGHT: f32 = 162.0;
+const EXPANDED_VIEW_HEIGHT: f32 = 258.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 6.0;
+const CONTENT_GAP: f32 = 8.0;
+const PANEL_GAP: f32 = 24.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::ListViewKey;
@@ -26,7 +41,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
                 @source: source, @item_height: 32.0,
                 @renderer: {WidgetryListViewRenderer::new(|value: &DemoItem| bsn_list!{@item_label(value) bevy_widgetry::text::WidgetryText})},
             }
-            Node { width: percent(100), height: px(160) }
+            Node { width: percent(100), height: px(TEXT_VIEW_HEIGHT) }
         }
     };
     crate::color_showcase::pair(
@@ -115,7 +130,7 @@ pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
             width: percent(100), flex_shrink: 0.0, display: Display::Grid,
             grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)],
             grid_template_rows: vec![RepeatedGridTrack::auto(4)],
-            column_gap: px(24), row_gap: px(16),
+            column_gap: px(PANEL_GAP), row_gap: px(ITEM_GAP),
         }
         Children [
             @section(sources[4], 4,TextKey::ListView(ListViewKey::ListSharedText),TextKey::ListView(ListViewKey::ListSharedDescription))--
@@ -190,15 +205,15 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
     .collect();
     bsn! {
         template(move |_| Ok(DemoKind(kind)))
-        Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP) }
         Children [
             @localized(title) bevy_widgetry::text::WidgetryText--
-            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }--
 
                 template(move |_| Ok(DemoKind(kind)))
                 template(|_| Ok(DemoStatus::default()))
                 Name({format!("ListViewDemo{kind}Status")})
-                Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }
+                Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }
             --
 
                 @WidgetryListView::<DemoItem> {
@@ -217,24 +232,24 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
                         let label = item_label(value);
                         let icon = (kind == 5).then(|| bsn! {
                             @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::splat(16))} }
-                            Node { width: px(16), height: px(16), flex_shrink: 0.0 }
+                            Node { width: px(ITEM_ICON_SIZE), height: px(ITEM_ICON_SIZE), flex_shrink: 0.0 }
                         });
-                        bsn_list!{Node { width: percent(100), align_items: AlignItems::Center, column_gap: px(6) } Children [@icon-- @{label} bevy_widgetry::text::WidgetryText]}
+                        bsn_list!{Node { width: percent(100), align_items: AlignItems::Center, column_gap: px(CONTROL_GAP) } Children [@icon-- @{label} bevy_widgetry::text::WidgetryText]}
                     })},
                 }
                 template(move |_| Ok(DemoKind(kind)))
                 template(move |_| Ok(Name::new(format!("ListViewDemo{kind}"))))
-                Node { width: percent(100), height: px(162), flex_shrink: 0.0 }
+                Node { width: percent(100), height: px(COMPACT_VIEW_HEIGHT), flex_shrink: 0.0 }
                 on(record_change)
             --
-            Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]
+            Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(CONTENT_GAP), row_gap: px(DETAIL_GAP) } Children [{controls}]
         ]
     }
 }
 
 fn action_button(label: TextKey, action: Action, kind: usize) -> impl Scene {
     bsn! {
-        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }}) as Box<dyn bevy::prelude::SceneList>)}, }
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) }}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(DemoAction(action)))
         Name({format!("ListViewDemo{kind}{action:?}")})
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
@@ -406,10 +421,10 @@ fn operate(
             }
         }
         Action::Resize => {
-            node.height = if node.height == px(162) {
-                px(258)
+            node.height = if node.height == px(COMPACT_VIEW_HEIGHT) {
+                px(EXPANDED_VIEW_HEIGHT)
             } else {
-                px(162)
+                px(COMPACT_VIEW_HEIGHT)
             };
         }
     }
@@ -473,7 +488,7 @@ fn update_status(
                     ("end", end.to_string()),
                     (
                         "selected",
-                        if selection.selected_ids().len() > 20 {
+                        if selection.selected_ids().len() > SELECTION_SUMMARY_LIMIT {
                             selection.selected_ids().len().to_string()
                         } else {
                             format!("{}: {:?}", selection.selected_ids().len(), {
@@ -498,7 +513,7 @@ fn update_status(
                     ("changes", status.changes.to_string()),
                 ],
             );
-            if model.len() <= 20 {
+            if model.len() <= MODEL_SUMMARY_LIMIT {
                 let label = |id| {
                     model
                         .get_by_id(id)

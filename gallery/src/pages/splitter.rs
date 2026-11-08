@@ -1,3 +1,32 @@
+const BOUNDED_PANE_MAX_WIDTH: f32 = 300.0;
+const OVERFLOW_PRIMARY_MIN_WIDTH: f32 = 300.0;
+const OVERFLOW_SECONDARY_MIN_WIDTH: f32 = 400.0;
+
+const DEFAULT_PARENT_WIDTH: f32 = 1008.0;
+const PARENT_HEIGHT: f32 = 260.0;
+const PRIMARY_PANE_MIN_WIDTH: f32 = 300.0;
+const RELAXED_PRIMARY_PANE_MIN_WIDTH: f32 = 100.0;
+const PRIMARY_PANE_MAX_WIDTH: f32 = 800.0;
+const PANE_PADDING: f32 = 8.0;
+const SECONDARY_PANE_MIN_WIDTH: f32 = 200.0;
+const SECONDARY_PANE_MAX_WIDTH: f32 = 700.0;
+const NESTED_SPLITTER_HEIGHT: f32 = 140.0;
+const SCROLL_DEMO_HEIGHT: f32 = 280.0;
+const COMPACT_DEMO_WIDTH: f32 = 400.0;
+const COMPACT_DEMO_HEIGHT: f32 = 80.0;
+const BOUNDED_DEMO_WIDTH: f32 = 1000.0;
+const BOUNDED_DEMO_HEIGHT: f32 = 72.0;
+const OVERFLOW_DEMO_WIDTH: f32 = 100.0;
+const CHROME_DEMO_WIDTH: f32 = 360.0;
+const CHROME_DEMO_HEIGHT: f32 = 110.0;
+const RESIZED_PARENT_WIDTH: f32 = 865.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 12.0;
+const GROUP_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 24.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::{LocalizedText, NavigationKey, SplitterKey, TextKey, localized};
 use bevy::{
@@ -100,60 +129,60 @@ fn scene() -> impl Scene {
     .collect();
     bsn! {
         Name::new("SplitterDemo")
-        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(12),align_items:AlignItems::Start,flex_shrink:0.0}
+        Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(ITEM_GAP),align_items:AlignItems::Start,flex_shrink:0.0}
         Children [
             @localized(TextKey::Navigation(NavigationKey::Splitter)) WidgetryText--
             @label(SplitterKey::Description) Node {max_width:percent(100)}--
             Name::new("SplitterStatus") Status Text::new("") WidgetryText Node {max_width:percent(100)}--
-            Node {column_gap:px(8),row_gap:px(8),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
+            Node {column_gap:px(CONTROL_GAP),row_gap:px(DETAIL_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
             @WidgetryScrollArea {
                 @axis:ScrollAxis::Horizontal,
                 @children:bsn_list! {
-                    Name::new("SplitterParent") Node {width:px(1008),height:px(260)}
+                    Name::new("SplitterParent") Node {width:px(DEFAULT_PARENT_WIDTH),height:px(PARENT_HEIGHT)}
                     Children [
                         Name::new("SplitterMain") @WidgetrySplitter {
                             @split_ratio:0.3,
                             @pane_a:bsn! {
-                                Name::new("SplitterMainA") Node {min_width:px(300),max_width:px(800),padding:UiRect::all(px(8)),flex_direction:FlexDirection::Column,row_gap:px(12),overflow:Overflow::clip()}
+                                Name::new("SplitterMainA") Node {min_width:px(PRIMARY_PANE_MIN_WIDTH),max_width:px(PRIMARY_PANE_MAX_WIDTH),padding:UiRect::all(px(PANE_PADDING)),flex_direction:FlexDirection::Column,row_gap:px(ITEM_GAP),overflow:Overflow::clip()}
                                 Children [@label(SplitterKey::PaneA)-- @pane_button("SplitterMainPaneAction")]
                             },
                             @pane_b:bsn! {
-                                Node {min_width:px(200),max_width:px(700),padding:UiRect::all(px(8)),flex_direction:FlexDirection::Column,row_gap:px(8),overflow:Overflow::clip()}
+                                Node {min_width:px(SECONDARY_PANE_MIN_WIDTH),max_width:px(SECONDARY_PANE_MAX_WIDTH),padding:UiRect::all(px(PANE_PADDING)),flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP),overflow:Overflow::clip()}
                                 Children [
                                     @label(SplitterKey::PaneB)-- @label(SplitterKey::Nested)--
                                     Name::new("SplitterNested") @WidgetrySplitter {
                                         @orientation:WidgetrySplitterOrientation::Vertical,@handle_thickness:12.0,@line_thickness:4.0,
                                         @pane_a:bsn! {Children [@label(SplitterKey::Top)]},
                                         @pane_b:bsn! {Children [@label(SplitterKey::Bottom)]},
-                                    } Node {height:px(140)}
+                                    } Node {height:px(NESTED_SPLITTER_HEIGHT)}
                                 ]
                             },
                         } template(|_|Ok(SplitterDemoState::default())) on(changed)
                     ]
                 },
-            } Name::new("SplitterMainScroll") Node {width:percent(100),height:px(280),min_width:px(0)}--
-            Node {column_gap:px(24),row_gap:px(16),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [
-                Node {width:px(400),flex_direction:FlexDirection::Column,row_gap:px(8)} Children [
+            } Name::new("SplitterMainScroll") Node {width:percent(100),height:px(SCROLL_DEMO_HEIGHT),min_width:px(0)}--
+            Node {column_gap:px(CONTENT_GAP),row_gap:px(GROUP_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [
+                Node {width:px(COMPACT_DEMO_WIDTH),flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP)} Children [
                     @label(SplitterKey::Fixed)--
                     Name::new("SplitterFixed") @WidgetrySplitter {
                         @resizable:false,
                         @pane_a:bsn! {Children [@pane_button("SplitterFixedPaneAction")]},
                         @pane_b:bsn! {Children [@label(SplitterKey::Right)]},
-                    } Node {height:px(80)}
+                    } Node {height:px(COMPACT_DEMO_HEIGHT)}
                 ]--
-                Node {width:px(400),flex_direction:FlexDirection::Column,row_gap:px(8)} Children [
+                Node {width:px(COMPACT_DEMO_WIDTH),flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP)} Children [
                     @label(SplitterKey::DisabledExample)--
                     Name::new("SplitterDisabledExample") @WidgetrySplitter {
                         @pane_a:bsn! {Children [@pane_button("SplitterDisabledPaneAction")]},
                         @pane_b:bsn! {Children [@label(SplitterKey::Right)]},
-                    } InteractionDisabled Node {height:px(80)}
+                    } InteractionDisabled Node {height:px(COMPACT_DEMO_HEIGHT)}
                 ]
             ]--
             @label(SplitterKey::Maximum) Node {max_width:percent(100)}--
-            Node {width:px(1000),height:px(72)} Children [
+            Node {width:px(BOUNDED_DEMO_WIDTH),height:px(BOUNDED_DEMO_HEIGHT)} Children [
                 Name::new("SplitterFiniteMaximum") @WidgetrySplitter {
-                    @pane_a:bsn! {Node {max_width:px(300)} Children [@label(SplitterKey::Left)]},
-                    @pane_b:bsn! {Node {max_width:px(300)} Children [@label(SplitterKey::Right)]},
+                    @pane_a:bsn! {Node {max_width:px(BOUNDED_PANE_MAX_WIDTH)} Children [@label(SplitterKey::Left)]},
+                    @pane_b:bsn! {Node {max_width:px(BOUNDED_PANE_MAX_WIDTH)} Children [@label(SplitterKey::Right)]},
                 }
             ]--
             @label(SplitterKey::Minimum) Node {max_width:percent(100)}--
@@ -161,11 +190,11 @@ fn scene() -> impl Scene {
                 @axis:ScrollAxis::Horizontal,
                 @children:bsn_list! {
                     Name::new("SplitterOverflow") @WidgetrySplitter {
-                        @pane_a:bsn! {Node {min_width:px(300)} Children [@label(SplitterKey::Left)]},
-                        @pane_b:bsn! {Node {min_width:px(400)} Children [@label(SplitterKey::Right)]},
-                    } Node {width:px(100),height:px(80)}
+                        @pane_a:bsn! {Node {min_width:px(OVERFLOW_PRIMARY_MIN_WIDTH)} Children [@label(SplitterKey::Left)]},
+                        @pane_b:bsn! {Node {min_width:px(OVERFLOW_SECONDARY_MIN_WIDTH)} Children [@label(SplitterKey::Right)]},
+                    } Node {width:px(OVERFLOW_DEMO_WIDTH),height:px(COMPACT_DEMO_HEIGHT)}
                 },
-            } Node {width:px(360),height:px(110)}
+            } Node {width:px(CHROME_DEMO_WIDTH),height:px(CHROME_DEMO_HEIGHT)}
         ]
     }
 }
@@ -264,10 +293,10 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 let mut parent = world
                     .get_mut::<Node>(parts.parent)
                     .ok_or_else(|| invalid("parent node missing"))?;
-                parent.width = if parent.width == px(1008) {
-                    px(865)
+                parent.width = if parent.width == px(DEFAULT_PARENT_WIDTH) {
+                    px(RESIZED_PARENT_WIDTH)
                 } else {
-                    px(1008)
+                    px(DEFAULT_PARENT_WIDTH)
                 };
                 info!(width=?parent.width,"切换 Splitter 父级宽度");
             }
@@ -278,10 +307,10 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 let mut pane = world
                     .get_mut::<Node>(a)
                     .ok_or_else(|| invalid("pane A node missing"))?;
-                pane.min_width = if pane.min_width == px(300) {
-                    px(100)
+                pane.min_width = if pane.min_width == px(PRIMARY_PANE_MIN_WIDTH) {
+                    px(RELAXED_PRIMARY_PANE_MIN_WIDTH)
                 } else {
-                    px(300)
+                    px(PRIMARY_PANE_MIN_WIDTH)
                 };
                 info!(min_width=?pane.min_width,"切换 Splitter 面板最小宽度");
             }

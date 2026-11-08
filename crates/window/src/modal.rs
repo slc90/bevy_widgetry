@@ -1,3 +1,5 @@
+const MODAL_SCRIM_COLOR: Color = Color::srgba(0.0, 0.0, 0.0, 0.28);
+
 use crate::window_root::{WindowInitialized, WindowRoot};
 use bevy::prelude::*;
 use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
@@ -54,7 +56,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
                     template(|_| Ok(ModalBlocker))
                     Node { position_type: PositionType::Absolute, left: px(0), right: px(0), top: px(0), bottom: px(0) }
                     GlobalZIndex({z_index::MODAL})
-                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.28))
+                    BackgroundColor(MODAL_SCRIM_COLOR)
                     Pickable { should_block_lower: true, is_hoverable: false }
                     template(move |_| Ok(ChildOf(root)))
                 }).id();

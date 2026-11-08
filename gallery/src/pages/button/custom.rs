@@ -1,3 +1,33 @@
+const DOT_BASE_SCALE: f32 = 0.7;
+const DOT_SCALE_AMPLITUDE: f32 = 0.3;
+const DOT_ANGULAR_SPEED: f32 = 7.0;
+const DOT_PHASE_OFFSET: f32 = 1.2;
+
+const BUTTON_WIDTH: f32 = 248.0;
+const BUTTON_HEIGHT: f32 = 68.0;
+const BUTTON_BORDER_WIDTH: f32 = 2.0;
+const LARGE_CORNER_RADIUS: f32 = 24.0;
+const SMALL_CORNER_RADIUS: f32 = 6.0;
+const STRIPE_LEFT: f32 = 10.0;
+const STRIPE_VERTICAL_INSET: f32 = 16.0;
+const STRIPE_WIDTH: f32 = 4.0;
+const BUSY_HORIZONTAL_INSET: f32 = 24.0;
+const BUSY_VERTICAL_INSET: f32 = 8.0;
+const STAR_TOP: f32 = 2.0;
+const STAR_RIGHT: f32 = 8.0;
+const ORNAMENT_CORNER_RADIUS: f32 = 2.0;
+const DOT_SIZE: f32 = 8.0;
+
+const ITEM_GAP: f32 = 5.0;
+const GROUP_GAP: f32 = 8.0;
+const SECTION_GAP: f32 = 10.0;
+const CONTROL_GAP: f32 = 6.0;
+const CONTENT_GAP: f32 = 8.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+const CONTENT_FONT_SIZE: f32 = 16.0;
+const SUBHEADING_FONT_SIZE: f32 = 18.0;
+const TITLE_FONT_SIZE: f32 = 20.0;
+
 use crate::{
     gallery::GalleryPage,
     i18n::{ButtonKey, Language, TextKey, localized, tr, tr_args},
@@ -75,8 +105,8 @@ impl GalleryButton {
             template(|_| Ok(SecondaryGesture::default()))
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             Node {
-                width: px(248), height: px(68), border: UiRect::all(px(2)),
-                border_radius: BorderRadius { top_left: px(24), bottom_left: px(6), top_right: px(6), bottom_right: px(24) },
+                width: px(BUTTON_WIDTH), height: px(BUTTON_HEIGHT), border: UiRect::all(px(BUTTON_BORDER_WIDTH)),
+                border_radius: BorderRadius { top_left: px(LARGE_CORNER_RADIUS), bottom_left: px(SMALL_CORNER_RADIUS), top_right: px(SMALL_CORNER_RADIUS), bottom_right: px(LARGE_CORNER_RADIUS) },
                 align_items: AlignItems::Center, justify_content: JustifyContent::Center,
             }
             BackgroundColor({Color::srgb_u8(15, 58, 72)})
@@ -89,22 +119,22 @@ impl GalleryButton {
             on(disabled_gesture)
             on(marked_changed)
             Children [
-                Pickable::IGNORE Node { position_type: PositionType::Absolute, left: px(10), top: px(16), bottom: px(16), width: px(4), border_radius: BorderRadius::all(px(2)) }
+                Pickable::IGNORE Node { position_type: PositionType::Absolute, left: px(STRIPE_LEFT), top: px(STRIPE_VERTICAL_INSET), bottom: px(STRIPE_VERTICAL_INSET), width: px(STRIPE_WIDTH), border_radius: BorderRadius::all(px(ORNAMENT_CORNER_RADIUS)) }
                 BackgroundColor({Color::srgb_u8(62, 211, 190)})--
                 Name("GalleryButtonLabel") template(|_| Ok(Label)) Pickable::IGNORE
                 @localized(TextKey::Button(ButtonKey::CustomAction))
                 TextColor({Color::srgb_u8(225, 255, 249)})
-                TextFont { font_size: FontSize::Px(20.0) }--
+                TextFont { font_size: FontSize::Px(TITLE_FONT_SIZE) }--
                 Name("GalleryButtonBusy") template(|_| Ok(Busy)) Pickable::IGNORE Visibility::Hidden
-                Node { position_type: PositionType::Absolute, left: px(24), right: px(24), top: px(8), bottom: px(8), flex_direction: FlexDirection::Column, row_gap: px(5), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+                Node { position_type: PositionType::Absolute, left: px(BUSY_HORIZONTAL_INSET), right: px(BUSY_HORIZONTAL_INSET), top: px(BUSY_VERTICAL_INSET), bottom: px(BUSY_VERTICAL_INSET), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                 Children [
                     Pickable::IGNORE @localized(TextKey::Button(ButtonKey::CustomWorking))
-                    TextColor({Color::srgb_u8(225, 255, 249)}) TextFont { font_size: FontSize::Px(16.0) }--
-                    Pickable::IGNORE Node { column_gap: px(6) } Children [@dot(0)-- @dot(1)-- @dot(2)]
+                    TextColor({Color::srgb_u8(225, 255, 249)}) TextFont { font_size: FontSize::Px(CONTENT_FONT_SIZE) }--
+                    Pickable::IGNORE Node { column_gap: px(CONTROL_GAP) } Children [@dot(0)-- @dot(1)-- @dot(2)]
                 ]--
                 Name("GalleryButtonStar") template(|_| Ok(Star)) Pickable::IGNORE Visibility::Hidden
-                Text("★") TextFont { font_size: FontSize::Px(18.0) } TextColor({Color::srgb_u8(255, 218, 90)})
-                Node { position_type: PositionType::Absolute, top: px(2), right: px(8) }
+                Text("★") TextFont { font_size: FontSize::Px(SUBHEADING_FONT_SIZE) } TextColor({Color::srgb_u8(255, 218, 90)})
+                Node { position_type: PositionType::Absolute, top: px(STAR_TOP), right: px(STAR_RIGHT) }
             ]
         }
     }
@@ -113,7 +143,7 @@ impl GalleryButton {
 fn dot(index: usize) -> impl Scene {
     bsn! {
         template(move |_| Ok(Dot(index))) Pickable::IGNORE
-        Node { width: px(8), height: px(8), border_radius: BorderRadius::all(px(2)) }
+        Node { width: px(DOT_SIZE), height: px(DOT_SIZE), border_radius: BorderRadius::all(px(ORNAMENT_CORNER_RADIUS)) }
         BackgroundColor({Color::srgb_u8(62, 211, 190)})
     }
 }
@@ -128,15 +158,15 @@ fn control(action: Action, key: ButtonKey, name: &'static str) -> impl Scene {
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("GalleryButtonDemo")
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(10), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(SECTION_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::Button(ButtonKey::CustomTitle)) WidgetryText--
-            @localized(TextKey::Button(ButtonKey::CustomDescription)) WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
-            @localized(TextKey::Button(ButtonKey::CustomMarkDescription)) WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            @localized(TextKey::Button(ButtonKey::CustomDescription)) WidgetryText TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }--
+            @localized(TextKey::Button(ButtonKey::CustomMarkDescription)) WidgetryText TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }--
             Name("GalleryButtonParent") template(|_| Ok(DemoRequests::default())) Node
                 Children [ @GalleryButton Name("GalleryButton") ]--
-            Name("GalleryButtonStatus") template(|_| Ok(Status)) Text("") WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
-            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) }
+            Name("GalleryButtonStatus") template(|_| Ok(Status)) Text("") WidgetryText TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }--
+            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(CONTENT_GAP), row_gap: px(GROUP_GAP) }
             Children [
                 @control(Action::LocalDisabled, ButtonKey::CustomLocalDisabled, "GalleryButtonToggleLocalDisabled")--
                 @control(Action::AncestorDisabled, ButtonKey::CustomAncestorDisabled, "GalleryButtonToggleAncestorDisabled")--
@@ -434,7 +464,11 @@ fn update_visuals(
                 .is_ok_and(|parent| parent.parent() == root)
             {
                 let scale = if active {
-                    0.7 + 0.3 * (time.elapsed_secs() * 7.0 - dot.0 as f32 * 1.2).sin()
+                    DOT_BASE_SCALE
+                        + DOT_SCALE_AMPLITUDE
+                            * (time.elapsed_secs() * DOT_ANGULAR_SPEED
+                                - dot.0 as f32 * DOT_PHASE_OFFSET)
+                                .sin()
                 } else {
                     1.0
                 };

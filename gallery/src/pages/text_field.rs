@@ -1,3 +1,9 @@
+const COMPACT_EDITOR_WIDTH: f32 = 240.0;
+
+const EXPANDED_EDITOR_WIDTH: f32 = 480.0;
+const EXAMPLE_MARGIN: f32 = 16.0;
+const COUNT_EDITOR_WIDTH: f32 = 360.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
@@ -40,7 +46,11 @@ fn toggle_auto_width(
         .iter_mut()
         .find(|(name, _)| name.as_str() == "TextFieldAutoSize")
         .ok_or_else(|| crate::diagnostics::error("AutoSize 演示输入框缺失"))?;
-    let width = if node.width == px(480) { 240.0 } else { 480.0 };
+    let width = if node.width == px(EXPANDED_EDITOR_WIDTH) {
+        COMPACT_EDITOR_WIDTH
+    } else {
+        EXPANDED_EDITOR_WIDTH
+    };
     node.width = px(width);
     info!(width, "切换 AutoSize 输入框宽度");
     Ok(())
@@ -74,19 +84,19 @@ pub(crate) fn scene() -> impl SceneList {
         @custom::scene()--
         @auto_size::scene()--
         @WidgetryTextField { @value: {("Single line").to_owned()}, @show_count: true }
-            Node { margin: UiRect::bottom(px(16)) }
+            Node { margin: UiRect::bottom(px(EXAMPLE_MARGIN)) }
         --
         @WidgetryTextField { @value: {("First line\nSecond line\nThird line\nFourth line").to_owned()}, @visible_lines: {Some(4.0)}, @multiline: true }
-            Node { margin: UiRect::bottom(px(16)) }
+            Node { margin: UiRect::bottom(px(EXAMPLE_MARGIN)) }
         --
         @WidgetryReadOnlyTextField { @value: {("Read-only text: select and copy me").to_owned()}, @show_count: true, @hint_text: {Some("Read-only: selection and copy remain available.".to_owned())} }
-            Node { margin: UiRect::bottom(px(16)) }
+            Node { margin: UiRect::bottom(px(EXAMPLE_MARGIN)) }
         --
         @WidgetryTextField { @value: {("Disabled").to_owned()}, @hint_text: {Some("Disabled: this warning stays visible.".to_owned())} } InteractionDisabled
         --
         @WidgetryTextField { @value: {"甲e\u{301}👍🏽".to_owned()}, @max_length: {Some(5)}, @show_count: true }
             Name("TextFieldMaxLength")
-            Node { margin: UiRect::top(px(16)), width: px(360) }
+            Node { margin: UiRect::top(px(EXAMPLE_MARGIN)), width: px(COUNT_EDITOR_WIDTH) }
         --
         @WidgetryTextField {
             @value: {"editable".to_owned()}, @max_length: {Some(12)}, @show_count: true,
@@ -99,10 +109,10 @@ pub(crate) fn scene() -> impl SceneList {
             }) as Box<dyn SceneList>)},
         }
         Name("TextFieldSlots") bevy::input_focus::tab_navigation::TabIndex(0)
-        Node { margin: UiRect::top(px(16)), width: px(480) }
+        Node { margin: UiRect::top(px(EXAMPLE_MARGIN)), width: px(EXPANDED_EDITOR_WIDTH) }
         --
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("AutoSize: narrow / wide") bevy_widgetry::text::WidgetryText}) as Box<dyn SceneList>)} }
-        Node {margin:UiRect::top(px(16)),align_self:AlignSelf::Start}
+        Node {margin:UiRect::top(px(EXAMPLE_MARGIN)),align_self:AlignSelf::Start}
         on(toggle_auto_width)
         --
         @WidgetryTextField {
@@ -119,12 +129,12 @@ pub(crate) fn scene() -> impl SceneList {
             }) as Box<dyn SceneList>)},
         }
         Name("TextFieldAutoSize")
-        Node { margin: UiRect::top(px(16)), width: px(480) }
+        Node { margin: UiRect::top(px(EXAMPLE_MARGIN)), width: px(EXPANDED_EDITOR_WIDTH) }
         --
         @WidgetryReadOnlyTextField {
             @value: {"Read-only AutoSize\nSecond line\nThird line\nFourth line".to_owned()},
             @multiline: true, @auto_size: {Some(AutoSize {min_rows:1,max_rows:3})},
         }
-        Node { margin: UiRect::top(px(16)), width: px(480) }
+        Node { margin: UiRect::top(px(EXAMPLE_MARGIN)), width: px(EXPANDED_EDITOR_WIDTH) }
     }
 }

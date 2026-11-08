@@ -1,3 +1,8 @@
+const MAX_SNAPSHOT_BYTES: usize = 128 * 1024 * 1024;
+const ESTIMATED_PATH_BYTES_PER_UNIT: usize = 6;
+const ESTIMATED_NAME_BYTES_PER_UNIT: usize = 2;
+const ESTIMATED_ENTRY_OVERHEAD: usize = 512;
+
 use crate::error::directory_failure;
 use crate::{FileDialogDirectoryContext, FileDialogDirectoryFault, FileDialogFailure};
 use crate::{
@@ -122,26 +127,35 @@ impl WidgetryFileDialogSnapshot {
             if next.paths.contains_key(&item.path) {
                 continue;
             }
-            if next.entries.len() >= 100_000 {
+            if next.entries.len() >= crate::limits::MAX_DIRECTORY_ENTRIES {
                 return Err(directory_failure(
                     FileDialogDirectoryContext::snapshot(self.token, self.path.clone()),
                     FileDialogDirectoryFault::Capacity {
                         actual: next.entries.len() + 1,
-                        limit: 100_000,
+                        limit: crate::limits::MAX_DIRECTORY_ENTRIES,
                     },
                 ));
             }
             next.estimated_bytes = next
                 .estimated_bytes
-                .saturating_add(item.path.as_os_str().len().saturating_mul(6))
-                .saturating_add(item.name.len().saturating_mul(2))
-                .saturating_add(512);
-            if next.estimated_bytes > 128 * 1024 * 1024 {
+                .saturating_add(
+                    item.path
+                        .as_os_str()
+                        .len()
+                        .saturating_mul(ESTIMATED_PATH_BYTES_PER_UNIT),
+                )
+                .saturating_add(
+                    item.name
+                        .len()
+                        .saturating_mul(ESTIMATED_NAME_BYTES_PER_UNIT),
+                )
+                .saturating_add(ESTIMATED_ENTRY_OVERHEAD);
+            if next.estimated_bytes > MAX_SNAPSHOT_BYTES {
                 return Err(directory_failure(
                     FileDialogDirectoryContext::snapshot(self.token, self.path.clone()),
                     FileDialogDirectoryFault::ByteCapacity {
                         actual: next.estimated_bytes,
-                        limit: 128 * 1024 * 1024,
+                        limit: MAX_SNAPSHOT_BYTES,
                     },
                 ));
             }
@@ -197,12 +211,12 @@ impl WidgetryFileDialogSnapshot {
         query: &WidgetryFileDialogQuery,
         previous: Option<&Self>,
     ) -> Result<Self, FileDialogFailure> {
-        if data.len() > 100_000 {
+        if data.len() > crate::limits::MAX_DIRECTORY_ENTRIES {
             return Err(directory_failure(
                 FileDialogDirectoryContext::snapshot(token, path.clone()),
                 FileDialogDirectoryFault::Capacity {
                     actual: data.len(),
-                    limit: 100_000,
+                    limit: crate::limits::MAX_DIRECTORY_ENTRIES,
                 },
             ));
         }
@@ -216,15 +230,24 @@ impl WidgetryFileDialogSnapshot {
         let mut entries = im::Vector::new();
         for data in data {
             estimated_bytes = estimated_bytes
-                .saturating_add(data.path.as_os_str().len().saturating_mul(6))
-                .saturating_add(data.name.len().saturating_mul(2))
-                .saturating_add(512);
-            if estimated_bytes > 128 * 1024 * 1024 {
+                .saturating_add(
+                    data.path
+                        .as_os_str()
+                        .len()
+                        .saturating_mul(ESTIMATED_PATH_BYTES_PER_UNIT),
+                )
+                .saturating_add(
+                    data.name
+                        .len()
+                        .saturating_mul(ESTIMATED_NAME_BYTES_PER_UNIT),
+                )
+                .saturating_add(ESTIMATED_ENTRY_OVERHEAD);
+            if estimated_bytes > MAX_SNAPSHOT_BYTES {
                 return Err(directory_failure(
                     FileDialogDirectoryContext::snapshot(token, path.clone()),
                     FileDialogDirectoryFault::ByteCapacity {
                         actual: estimated_bytes,
-                        limit: 128 * 1024 * 1024,
+                        limit: MAX_SNAPSHOT_BYTES,
                     },
                 ));
             }

@@ -152,6 +152,10 @@ impl SvgAsset {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    const RGBA_CHANNELS: usize = 4;
+    const RGBA_CHANNEL_COUNT: u32 = 4;
+    const ALPHA_CHANNEL: usize = 3;
+
     use super::*;
 
     fn rectangle(width: f32, height: f32) -> SvgAsset {
@@ -173,17 +177,17 @@ mod tests {
         assert_eq!(image.texture_descriptor.format, TextureFormat::Rgba8Unorm);
         assert_eq!(
             image.data.as_ref().unwrap().len(),
-            (width * height * 4) as usize
+            (width * height * RGBA_CHANNEL_COUNT) as usize
         );
         assert!(
             image
                 .data
                 .as_ref()
                 .unwrap()
-                .as_chunks::<4>()
+                .as_chunks::<RGBA_CHANNELS>()
                 .0
                 .iter()
-                .any(|pixel| pixel[3] > 0)
+                .any(|pixel| pixel[ALPHA_CHANNEL] > 0)
         );
     }
 

@@ -701,6 +701,8 @@ fn own_list<T: Send + Sync + 'static>(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
+    const ASYNC_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
     use crate::WidgetryComboBoxAppExt;
     use bevy_widgetry_list_view::{WidgetryListModel, WidgetryListViewRenderer};
@@ -756,7 +758,7 @@ mod tests {
         // Icon materialization changes Children asynchronously; measure idle after those changes are consumed.
         bevy_widgetry_test_utils::advance_until(
             &mut app,
-            std::time::Duration::from_secs(5),
+            ASYNC_WAIT_TIMEOUT,
             "ComboBox indicator images",
             |world| {
                 icons.iter().all(|icon| {

@@ -1,3 +1,9 @@
+const PROGRESS_TICKS: u8 = 10;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 8.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::{
     LocalizedText, NavigationKey, ProgressBarKey, TextKey, localized, localized_args,
@@ -69,14 +75,14 @@ fn scene() -> impl Scene {
     bsn! {
         Name::new("ProgressBarDemo") Demo { bar: #Progress, status: #Status }
         template(|_| Ok(Simulation::default()))
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::Navigation(NavigationKey::ProgressBar)) WidgetryText--
             @localized(TextKey::ProgressBar(ProgressBarKey::Description)) WidgetryText Node { max_width: percent(100) }--
             #Status Name::new("ProgressBarStatus")
             @localized_args(TextKey::ProgressBar(ProgressBarKey::Percentage), vec![("percent", "0".to_owned())]) WidgetryText--
             #Progress Name::new("ProgressBarMain") @WidgetryProgressBar--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap, max_width: percent(100) } Children [{controls}]--
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP), flex_wrap: FlexWrap::Wrap, max_width: percent(100) } Children [{controls}]--
             @ring::scene()
         ]
     }
@@ -127,13 +133,13 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
         let current = WidgetryProgressBar::state(world, parts.bar)
             .map_err(|error| error.into_bevy_error())?;
         let next_ticks = match action {
-            Action::Increase => ticks.saturating_add(1).min(10),
+            Action::Increase => ticks.saturating_add(1).min(PROGRESS_TICKS),
             Action::Decrease => ticks.saturating_sub(1),
             Action::Reset => 0,
             _ => ticks,
         };
         let determinate = WidgetryProgressState::Determinate {
-            value: f32::from(next_ticks) / 10.0,
+            value: f32::from(next_ticks) / f32::from(PROGRESS_TICKS),
         };
         let next = match action {
             Action::Reset => determinate,

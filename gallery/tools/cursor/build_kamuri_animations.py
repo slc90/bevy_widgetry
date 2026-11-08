@@ -17,6 +17,20 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[3]
 CELL, SCALE, COLS = 80, 4, 8
+STATIC_ROWS = 6
+CONTACT_COLUMNS = 9
+CONTACT_ROWS = 5
+CONTACT_ROW_HEIGHT = 134
+THUMB_WIDTH = 160
+THUMB_HEIGHT = 100
+THUMB_IMAGE_SIZE = 96
+THUMB_IMAGE_LEFT = 32
+MOTION_SAMPLES = 8
+MOTION_CELL_SIZE = 100
+PREVIEW_PADDING = 10
+CAPTION_LEFT = 8
+NAME_CAPTION_TOP = 101
+TIMING_CAPTION_TOP = 116
 TAU = math.tau
 INK = "#343873"
 WHITE = "#FAF6FF"
@@ -435,6 +449,9 @@ use bevy::{{asset::{{AssetPath, embedded_path}}, prelude::*}};
 use std::time::Duration;
 use super::constants::EMBEDDED_SOURCE;
 
+pub(super) const FRAME_SIZE: u32 = {CELL};
+pub(super) const ATLAS_COLUMNS: u32 = {COLS};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum GalleryCursorAnimation {{
 {variants}
@@ -455,10 +472,10 @@ impl GalleryCursorAnimation {{
     pub(crate) fn frame_duration(self) -> Duration {{ Duration::from_millis(self.metadata().1) }}
     pub(crate) fn hotspot(self) -> (u16, u16) {{ self.metadata().2 }}
     pub(crate) fn size(self) -> UVec2 {{
-        UVec2::new(640, self.frame_count().div_ceil(8) as u32 * 80)
+        UVec2::new(ATLAS_COLUMNS * FRAME_SIZE, self.frame_count().div_ceil(ATLAS_COLUMNS as usize) as u32 * FRAME_SIZE)
     }}
     pub(crate) fn atlas_layout(self) -> TextureAtlasLayout {{
-        let mut layout = TextureAtlasLayout::from_grid(UVec2::splat(80), 8, self.frame_count().div_ceil(8) as u32, None, None);
+        let mut layout = TextureAtlasLayout::from_grid(UVec2::splat(FRAME_SIZE), ATLAS_COLUMNS, self.frame_count().div_ceil(ATLAS_COLUMNS as usize) as u32, None, None);
         layout.textures.truncate(self.frame_count());
         layout
     }}
@@ -485,29 +502,29 @@ def build(args):
     source=tuple(Image.open(Path(__file__).parent/"wait"/n).convert("RGBA") for n in ("body.png","arm.png","empty_spoon.png"))
     specs=[s for s in SPECS if not args.samples or s.name in ("Default","Text","ZoomIn","Wait")]
     report=[]
-    static=Image.new("RGBA",(640,480))
-    contact=Image.new("RGB",(9*160,5*134),"#252A40")
+    static=Image.new("RGBA",(CELL * COLS, STATIC_ROWS * CELL))
+    contact=Image.new("RGB",(CONTACT_COLUMNS * THUMB_WIDTH, CONTACT_ROWS * CONTACT_ROW_HEIGHT),"#252A40")
     draw=ImageDraw.Draw(contact)
     for spec in specs:
         frames=[render(spec,i,source) for i in range(spec.frames)]
-        atlas=Image.new("RGBA",(640,math.ceil(spec.frames/8)*80))
-        for i,f in enumerate(frames): atlas.paste(f,(i%8*80,i//8*80))
+        atlas=Image.new("RGBA",(CELL * COLS, math.ceil(spec.frames/COLS)*CELL))
+        for i,f in enumerate(frames): atlas.paste(f,(i%COLS*CELL,i//COLS*CELL))
         slug=snake(spec.name)
         atlas.save(out/f"{slug}_80.png",optimize=True)
         i=SPECS.index(spec)
-        static.paste(frames[0],(i%8*80,i//8*80))
+        static.paste(frames[0],(i%COLS*CELL,i//COLS*CELL))
         frames[0].save(out/f"{slug}.apng",save_all=True,append_images=frames[1:],duration=spec.millis,loop=0,disposal=0,blend=0)
-        motion=Image.new("RGBA",(800,100),"#252A40")
-        for k in range(8): motion.alpha_composite(frames[k*len(frames)//8],(k*100+10,10))
+        motion=Image.new("RGBA",(MOTION_SAMPLES * MOTION_CELL_SIZE, MOTION_CELL_SIZE),"#252A40")
+        for k in range(MOTION_SAMPLES): motion.alpha_composite(frames[k*len(frames)//MOTION_SAMPLES],(k*MOTION_CELL_SIZE+PREVIEW_PADDING,PREVIEW_PADDING))
         motion.convert("RGB").save(out/f"{slug}_motion.png")
-        thumb=Image.new("RGBA",(160,100),"#252A40")
-        thumb.alpha_composite(frames[0].resize((96,96)),(32,0))
-        contact.paste(thumb.convert("RGB"),(i%9*160,i//9*134))
-        draw.text((i%9*160+8,i//9*134+101),spec.name,fill="#ECE6FF")
-        draw.text((i%9*160+8,i//9*134+116),f"{spec.frames}f / {spec.millis}ms",fill="#A7BCEB")
+        thumb=Image.new("RGBA",(THUMB_WIDTH,THUMB_HEIGHT),"#252A40")
+        thumb.alpha_composite(frames[0].resize((THUMB_IMAGE_SIZE,THUMB_IMAGE_SIZE)),(THUMB_IMAGE_LEFT,0))
+        contact.paste(thumb.convert("RGB"),(i%CONTACT_COLUMNS*THUMB_WIDTH,i//CONTACT_COLUMNS*CONTACT_ROW_HEIGHT))
+        draw.text((i%CONTACT_COLUMNS*THUMB_WIDTH+CAPTION_LEFT,i//CONTACT_COLUMNS*CONTACT_ROW_HEIGHT+NAME_CAPTION_TOP),spec.name,fill="#ECE6FF")
+        draw.text((i%CONTACT_COLUMNS*THUMB_WIDTH+CAPTION_LEFT,i//CONTACT_COLUMNS*CONTACT_ROW_HEIGHT+TIMING_CAPTION_TOP),f"{spec.frames}f / {spec.millis}ms",fill="#A7BCEB")
         anchor=(spec.hotspot[0]-1,spec.hotspot[1]-1,spec.hotspot[0]+2,spec.hotspot[1]+2)
         anchors={f.crop(anchor).tobytes() for f in frames}
-        report.append({"name":spec.name,"atlas":f"{slug}_80.png","preview":f"{slug}.apng","frame_size":[80,80],"columns":8,"frames":spec.frames,"frame_duration_ms":spec.millis,"hotspot":spec.hotspot,"anchor_rect":anchor,"motion":spec.motion,"unique_frames":len({f.tobytes() for f in frames}),"anchor_variants":len(anchors),"sha256":hashlib.sha256((out/f"{slug}_80.png").read_bytes()).hexdigest()})
+        report.append({"name":spec.name,"atlas":f"{slug}_80.png","preview":f"{slug}.apng","frame_size":[CELL,CELL],"columns":COLS,"frames":spec.frames,"frame_duration_ms":spec.millis,"hotspot":spec.hotspot,"anchor_rect":anchor,"motion":spec.motion,"unique_frames":len({f.tobytes() for f in frames}),"anchor_variants":len(anchors),"sha256":hashlib.sha256((out/f"{slug}_80.png").read_bytes()).hexdigest()})
     static.save(out/"static_atlas_80.png",optimize=True)
     contact.save(out/"contact-sheet.png")
     (out/"manifest.json").write_text(json.dumps({"theme":"Kamuri","loop":True,"animations":report},indent=2),encoding="utf-8")

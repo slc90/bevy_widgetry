@@ -1,3 +1,9 @@
+const TEST_VIEWPORT: UVec2 = UVec2::new(1200, 800);
+const VIEW_MARGIN: f32 = 40.0;
+const PRIMARY_VIEW_SIZE: Vec2 = Vec2::new(200.0, 160.0);
+const SECONDARY_VIEW_LEFT: f32 = 300.0;
+const SECONDARY_VIEW_SIZE: Vec2 = Vec2::new(180.0, 150.0);
+
 use bevy::{picking::pointer::*, prelude::*, ui::UiGlobalTransform};
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::{ErrorCapture, picking_app, queue_pointer, spawn_picking_camera};
@@ -21,14 +27,14 @@ pub fn fixture(
         .world_mut()
         .spawn((
             Window {
-                resolution: bevy::window::WindowResolution::new(1200, 800)
+                resolution: bevy::window::WindowResolution::new(TEST_VIEWPORT.x, TEST_VIEWPORT.y)
                     .with_scale_factor_override(scale),
                 ..default()
             },
             bevy::window::PrimaryWindow,
         ))
         .id();
-    let camera = spawn_picking_camera(&mut app, window, UVec2::new(1200, 800), scale);
+    let camera = spawn_picking_camera(&mut app, window, TEST_VIEWPORT, scale);
     app.world_mut()
         .get_mut::<Camera>(camera)
         .unwrap()
@@ -50,12 +56,12 @@ pub fn fixture(
     .unwrap();
     let a = app.world_mut().spawn_scene(bsn! {
         @CanvasView { @document: {Some(document)} }
-        Node { position_type: PositionType::Absolute, left: px(40), top: px(40), width: px(200), height: px(160) }
+        Node { position_type: PositionType::Absolute, left: px(VIEW_MARGIN), top: px(VIEW_MARGIN), width: px(PRIMARY_VIEW_SIZE.x), height: px(PRIMARY_VIEW_SIZE.y) }
         template(move |_| Ok(UiTargetCamera(camera)))
     }).unwrap().id();
     let b = app.world_mut().spawn_scene(bsn! {
         @CanvasView { @document: {Some(document)} }
-        Node { position_type: PositionType::Absolute, left: px(300), top: px(40), width: px(180), height: px(150) }
+        Node { position_type: PositionType::Absolute, left: px(SECONDARY_VIEW_LEFT), top: px(VIEW_MARGIN), width: px(SECONDARY_VIEW_SIZE.x), height: px(SECONDARY_VIEW_SIZE.y) }
         template(move |_| Ok(UiTargetCamera(camera)))
     }).unwrap().id();
     if id != PointerId::Mouse {

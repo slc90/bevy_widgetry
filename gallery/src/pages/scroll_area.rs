@@ -1,3 +1,24 @@
+const VERTICAL_TILE_SIZE: Vec2 = Vec2::new(280.0, 64.0);
+const HORIZONTAL_TILE_SIZE: Vec2 = Vec2::new(130.0, 145.0);
+const REVEAL_LEADING_TILE_SIZE: Vec2 = Vec2::new(280.0, 72.0);
+const OUTER_VIEW_WIDTH: f32 = 310.0;
+const OUTER_VIEW_HEIGHT: f32 = 185.0;
+const VIEW_BORDER_WIDTH: f32 = 1.0;
+const OUTER_VIEW_PADDING: f32 = 4.0;
+const CONTENT_PADDING: f32 = 8.0;
+const VIEW_WIDTH: f32 = 300.0;
+const VIEW_HEIGHT: f32 = 175.0;
+const RESIZABLE_CONTENT_WIDTH: f32 = 280.0;
+const COMPACT_CONTENT_HEIGHT: f32 = 80.0;
+const EXPANDED_CONTENT_HEIGHT: f32 = 290.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 24.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 20.0;
+const LABEL_FONT_SIZE: f32 = 13.0;
+const TITLE_FONT_SIZE: f32 = 18.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::ScrollAreaKey;
 use crate::i18n::{TextKey, localized};
@@ -53,7 +74,7 @@ pub(crate) fn scene() -> impl Scene {
             width: percent(100), height: percent(100),
             display: Display::Grid,
             grid_template_columns: vec![RepeatedGridTrack::flex(4, 1.0)],
-            column_gap: px(20), row_gap: px(24),
+            column_gap: px(CONTENT_GAP), row_gap: px(ITEM_GAP),
         }
         Children [
             @section(TextKey::ScrollArea(ScrollAreaKey::VerticalAuto),TextKey::ScrollArea(ScrollAreaKey::WheelYPageupPagedownHomeEnd), bsn_list!{@vertical_auto()})--
@@ -69,10 +90,10 @@ pub(crate) fn scene() -> impl Scene {
 
 fn section(title: TextKey, description: TextKey, content: impl SceneList) -> impl Scene {
     bsn! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), align_items: AlignItems::Start }
         Children [
-            @localized(title) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(18.0) }--
-            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }--
+            @localized(title) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(TITLE_FONT_SIZE) }--
+            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }--
             {content}
         ]
     }
@@ -80,7 +101,7 @@ fn section(title: TextKey, description: TextKey, content: impl SceneList) -> imp
 
 fn frame(content: impl Scene) -> impl Scene {
     bsn! {
-        Node { width: px(310), height: px(185), border: UiRect::all(px(1)), padding: UiRect::all(px(4)) }
+        Node { width: px(OUTER_VIEW_WIDTH), height: px(OUTER_VIEW_HEIGHT), border: UiRect::all(px(VIEW_BORDER_WIDTH)), padding: UiRect::all(px(OUTER_VIEW_PADDING)) }
         template(|_| Ok(BorderColor::all(Color::srgb_u8(110, 117, 129))))
         Children [@{content}]
     }
@@ -90,7 +111,7 @@ fn tile(label: TextKey, width: f32, height: f32) -> impl Scene {
     bsn! {
         Node {
             width: px(width), height: px(height), flex_shrink: 0.0,
-            border: UiRect::all(px(1)), padding: UiRect::all(px(8)),
+            border: UiRect::all(px(VIEW_BORDER_WIDTH)), padding: UiRect::all(px(CONTENT_PADDING)),
         }
         template(|_| Ok(BorderColor::all(Color::srgb_u8(110, 117, 129))))
         Children [@localized(label) bevy_widgetry::text::WidgetryText]
@@ -101,14 +122,14 @@ fn vertical_auto() -> impl Scene {
     frame(bsn! {
         #VerticalAuto
         @WidgetryScrollArea {
-            @content: bsn! { Node { row_gap: px(8) } },
+            @content: bsn! { Node { row_gap: px(DETAIL_GAP) } },
             @children: bsn_list!{
-                @tile(TextKey::ScrollArea(ScrollAreaKey::V1), 280.0, 64.0)-- @tile(TextKey::ScrollArea(ScrollAreaKey::V2), 280.0, 64.0)--
-                @tile(TextKey::ScrollArea(ScrollAreaKey::V3), 280.0, 64.0)-- @tile(TextKey::ScrollArea(ScrollAreaKey::V4), 280.0, 64.0)--
-                @tile(TextKey::ScrollArea(ScrollAreaKey::V5), 280.0, 64.0)-- @tile(TextKey::ScrollArea(ScrollAreaKey::V6), 280.0, 64.0)
+                @tile(TextKey::ScrollArea(ScrollAreaKey::V1), VERTICAL_TILE_SIZE.x, VERTICAL_TILE_SIZE.y)-- @tile(TextKey::ScrollArea(ScrollAreaKey::V2), VERTICAL_TILE_SIZE.x, VERTICAL_TILE_SIZE.y)--
+                @tile(TextKey::ScrollArea(ScrollAreaKey::V3), VERTICAL_TILE_SIZE.x, VERTICAL_TILE_SIZE.y)-- @tile(TextKey::ScrollArea(ScrollAreaKey::V4), VERTICAL_TILE_SIZE.x, VERTICAL_TILE_SIZE.y)--
+                @tile(TextKey::ScrollArea(ScrollAreaKey::V5), VERTICAL_TILE_SIZE.x, VERTICAL_TILE_SIZE.y)-- @tile(TextKey::ScrollArea(ScrollAreaKey::V6), VERTICAL_TILE_SIZE.x, VERTICAL_TILE_SIZE.y)
             },
         }
-        Node { width: px(300), height: px(175) }
+        Node { width: px(VIEW_WIDTH), height: px(VIEW_HEIGHT) }
     })
 }
 
@@ -117,14 +138,14 @@ fn horizontal_auto() -> impl Scene {
         #HorizontalAuto
         @WidgetryScrollArea {
             @axis: ScrollAxis::Horizontal,
-            @content: bsn! { Node { column_gap: px(8) } },
+            @content: bsn! { Node { column_gap: px(CONTROL_GAP) } },
             @children: bsn_list!{
-                @tile(TextKey::ScrollArea(ScrollAreaKey::H1), 130.0, 145.0)-- @tile(TextKey::ScrollArea(ScrollAreaKey::H2), 130.0, 145.0)--
-                @tile(TextKey::ScrollArea(ScrollAreaKey::H3), 130.0, 145.0)-- @tile(TextKey::ScrollArea(ScrollAreaKey::H4), 130.0, 145.0)--
-                @tile(TextKey::ScrollArea(ScrollAreaKey::H5), 130.0, 145.0)
+                @tile(TextKey::ScrollArea(ScrollAreaKey::H1), HORIZONTAL_TILE_SIZE.x, HORIZONTAL_TILE_SIZE.y)-- @tile(TextKey::ScrollArea(ScrollAreaKey::H2), HORIZONTAL_TILE_SIZE.x, HORIZONTAL_TILE_SIZE.y)--
+                @tile(TextKey::ScrollArea(ScrollAreaKey::H3), HORIZONTAL_TILE_SIZE.x, HORIZONTAL_TILE_SIZE.y)-- @tile(TextKey::ScrollArea(ScrollAreaKey::H4), HORIZONTAL_TILE_SIZE.x, HORIZONTAL_TILE_SIZE.y)--
+                @tile(TextKey::ScrollArea(ScrollAreaKey::H5), HORIZONTAL_TILE_SIZE.x, HORIZONTAL_TILE_SIZE.y)
             },
         }
-        Node { width: px(300), height: px(175) }
+        Node { width: px(VIEW_WIDTH), height: px(VIEW_HEIGHT) }
     })
 }
 
@@ -135,7 +156,7 @@ fn both_auto() -> impl Scene {
             @axis: ScrollAxis::Both,
             @children: bsn_list!{@tile(TextKey::ScrollArea(ScrollAreaKey::Text300290Content), 300.0, 290.0)},
         }
-        Node { width: px(300), height: px(175) }
+        Node { width: px(VIEW_WIDTH), height: px(VIEW_HEIGHT) }
     })
 }
 
@@ -146,7 +167,7 @@ fn always() -> impl Scene {
             @scrollbar_visibility: {ScrollbarVisibility { vertical: ScrollbarPolicy::Always, ..default() }},
             @children: bsn_list!{@tile(TextKey::ScrollArea(ScrollAreaKey::FitsViewport), 220.0, 72.0)},
         }
-        Node { width: px(300), height: px(175) }
+        Node { width: px(VIEW_WIDTH), height: px(VIEW_HEIGHT) }
     })
 }
 
@@ -157,7 +178,7 @@ fn hidden() -> impl Scene {
             @scrollbar_visibility: {ScrollbarVisibility { vertical: ScrollbarPolicy::Hidden, ..default() }},
             @children: bsn_list!{@tile(TextKey::ScrollArea(ScrollAreaKey::ScrollMeWithoutABar), 280.0, 320.0)},
         }
-        Node { width: px(300), height: px(175) }
+        Node { width: px(VIEW_WIDTH), height: px(VIEW_HEIGHT) }
     })
 }
 
@@ -168,11 +189,11 @@ fn auto_transition() -> impl Scene {
             @children: bsn_list!{
                 template(|_| Ok(AutoTransitionContent))
                 template(|_| Ok(Name::new("AutoTransitionContent")))
-                Node { width: px(280), height: px(80), flex_shrink: 0.0, padding: UiRect::all(px(8)) }
+                Node { width: px(RESIZABLE_CONTENT_WIDTH), height: px(COMPACT_CONTENT_HEIGHT), flex_shrink: 0.0, padding: UiRect::all(px(CONTENT_PADDING)) }
                 Children [@localized(TextKey::ScrollArea(ScrollAreaKey::Height80290)) bevy_widgetry::text::WidgetryText]
             },
         }
-        Node { width: px(300), height: px(175) }
+        Node { width: px(VIEW_WIDTH), height: px(VIEW_HEIGHT) }
     })
 }
 
@@ -180,7 +201,7 @@ fn auto_transition_demo() -> impl Scene {
     let area = auto_transition();
     let trigger = toggle_button();
     bsn! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), align_items: AlignItems::Start }
         Children [@{area}-- @{trigger}]
     }
 }
@@ -189,20 +210,20 @@ fn scroll_into_view() -> impl Scene {
     frame(bsn! {
         #ScrollIntoView
         @WidgetryScrollArea {
-            @content: bsn! { Node { row_gap: px(8) } },
+            @content: bsn! { Node { row_gap: px(DETAIL_GAP) } },
             @children: bsn_list!{
-                @tile(TextKey::ScrollArea(ScrollAreaKey::Before1), 280.0, 72.0)--
-                @tile(TextKey::ScrollArea(ScrollAreaKey::Before2), 280.0, 72.0)--
-                @tile(TextKey::ScrollArea(ScrollAreaKey::Before3), 280.0, 72.0)--
-                @tile(TextKey::ScrollArea(ScrollAreaKey::Before4), 280.0, 72.0)--
+                @tile(TextKey::ScrollArea(ScrollAreaKey::Before1), REVEAL_LEADING_TILE_SIZE.x, REVEAL_LEADING_TILE_SIZE.y)--
+                @tile(TextKey::ScrollArea(ScrollAreaKey::Before2), REVEAL_LEADING_TILE_SIZE.x, REVEAL_LEADING_TILE_SIZE.y)--
+                @tile(TextKey::ScrollArea(ScrollAreaKey::Before3), REVEAL_LEADING_TILE_SIZE.x, REVEAL_LEADING_TILE_SIZE.y)--
+                @tile(TextKey::ScrollArea(ScrollAreaKey::Before4), REVEAL_LEADING_TILE_SIZE.x, REVEAL_LEADING_TILE_SIZE.y)--
 
                     template(|_| Ok(ScrollIntoViewDemoTarget))
                     template(|_| Ok(Name::new("ScrollIntoViewTarget")))
-                    @tile(TextKey::ScrollArea(ScrollAreaKey::Target), 280.0, 64.0)--
+                    @tile(TextKey::ScrollArea(ScrollAreaKey::Target), VERTICAL_TILE_SIZE.x, VERTICAL_TILE_SIZE.y)--
                 @tile(TextKey::ScrollArea(ScrollAreaKey::AfterTarget), 280.0, 190.0)
             },
         }
-        Node { width: px(300), height: px(175) }
+        Node { width: px(VIEW_WIDTH), height: px(VIEW_HEIGHT) }
     })
 }
 
@@ -210,7 +231,7 @@ fn scroll_into_view_demo() -> impl Scene {
     let area = scroll_into_view();
     let trigger = into_view_button();
     bsn! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), align_items: AlignItems::Start }
         Children [@{area}-- @{trigger}]
     }
 }
@@ -247,10 +268,10 @@ fn toggle_auto_content(
     }
     let mut changes = Vec::new();
     for (target, mut node) in &mut contents {
-        node.height = if node.height == px(80) {
-            px(290)
+        node.height = if node.height == px(COMPACT_CONTENT_HEIGHT) {
+            px(EXPANDED_CONTENT_HEIGHT)
         } else {
-            px(80)
+            px(COMPACT_CONTENT_HEIGHT)
         };
         changes.push((target, node.height));
     }

@@ -1,3 +1,15 @@
+const GROUP_BORDER_WIDTH: f32 = 1.0;
+const GROUP_PADDING: f32 = 6.0;
+const GROUP_CORNER_RADIUS: f32 = 8.0;
+const OPTION_WIDTH: f32 = 94.0;
+const OPTION_HEIGHT: f32 = 42.0;
+const OPTION_BORDER_WIDTH: f32 = 2.0;
+
+const DETAIL_GAP: f32 = 8.0;
+const ITEM_GAP: f32 = 20.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 24.0;
+
 use super::{ProgrammaticTarget, SegmentedKey, demo, option};
 use bevy::{
     input_focus::InputFocus,
@@ -23,11 +35,11 @@ struct CustomGroup;
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node { column_gap: px(24), row_gap: px(20), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Start }
+        Node { column_gap: px(CONTENT_GAP), row_gap: px(ITEM_GAP), flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Start }
         Children [
             @demo(SegmentedKey::CustomShapes, "SegmentedCustom", bsn! {
                 @WidgetrySegmentedHeadless template(|_|Ok(CustomGroup)) template(|_|Ok(ProgrammaticTarget))
-                Node { column_gap: px(8), border: UiRect::all(px(1)), padding: UiRect::all(px(6)), border_radius: BorderRadius::all(px(8)) }
+                Node { column_gap: px(CONTROL_GAP), border: UiRect::all(px(GROUP_BORDER_WIDTH)), padding: UiRect::all(px(GROUP_PADDING)), border_radius: BorderRadius::all(px(GROUP_CORNER_RADIUS)) }
                 BorderColor BackgroundColor({Color::srgb_u8(20,35,48)})
                 Children [
                     @shape_option("SegmentedCustom0", Shape::Pill)--
@@ -38,7 +50,7 @@ pub(super) fn scene() -> impl Scene {
             @demo(SegmentedKey::Mixed, "SegmentedMixed", bsn! {
                 @WidgetrySegmentedHeadless { @orientation: SegmentedOrientation::Vertical }
                 template(|_|Ok(CustomGroup)) template(|_|Ok(ProgrammaticTarget))
-                Node { flex_direction: FlexDirection::Column, row_gap: px(8), border: UiRect::all(px(1)), padding: UiRect::all(px(6)), border_radius: BorderRadius::all(px(8)), align_items: AlignItems::Stretch }
+                Node { flex_direction: FlexDirection::Column, row_gap: px(DETAIL_GAP), border: UiRect::all(px(GROUP_BORDER_WIDTH)), padding: UiRect::all(px(GROUP_PADDING)), border_radius: BorderRadius::all(px(GROUP_CORNER_RADIUS)), align_items: AlignItems::Stretch }
                 BorderColor BackgroundColor({Color::srgb_u8(20,35,48)})
                 Children [
                     @option("SegmentedMixed0", SegmentedKey::DefaultChoice)--
@@ -59,7 +71,7 @@ fn shape_option(name: &'static str, shape: Shape) -> impl Scene {
     bsn! {
         @WidgetrySegmentedOptionHeadless Name(name) template(|_|Ok(ShapeChoice))
         template(|_|Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-        Node { width: px(94), height: px(42), border: UiRect::all(px(2)), border_radius: BorderRadius::all(px(radius)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+        Node { width: px(OPTION_WIDTH), height: px(OPTION_HEIGHT), border: UiRect::all(px(OPTION_BORDER_WIDTH)), border_radius: BorderRadius::all(px(radius)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         BackgroundColor BorderColor
 
     }

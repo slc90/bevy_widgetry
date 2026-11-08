@@ -1,3 +1,10 @@
+const SIDEBAR_WIDTH: f32 = 176.0;
+const SIDEBAR_BORDER_WIDTH: f32 = 1.0;
+const PAGE_PADDING: f32 = 16.0;
+const NAV_BUTTON_HEIGHT: f32 = 40.0;
+
+const ITEM_GAP: f32 = 10.0;
+
 use crate::i18n::NavigationKey;
 use crate::i18n::{TextKey, localized};
 use crate::pages;
@@ -73,7 +80,7 @@ pub(crate) fn scene() -> impl Scene {
                 @WidgetryScrollArea {
                     @axis: ScrollAxis::Vertical,
                     @scrollbar_visibility: {ScrollbarVisibility { horizontal: ScrollbarPolicy::Auto, vertical: ScrollbarPolicy::Auto }},
-                    @content: bsn! { Node { row_gap: px(10), align_items: AlignItems::Center } },
+                    @content: bsn! { Node { row_gap: px(ITEM_GAP), align_items: AlignItems::Center } },
                     @children: bsn_list! {
                         Name("ButtonNav") @navigation_button(GalleryPage::Button,TextKey::Navigation(NavigationKey::Button))--
                         Name("SegmentedNav") @navigation_button(GalleryPage::Segmented,TextKey::Navigation(NavigationKey::Segmented))--
@@ -103,11 +110,11 @@ pub(crate) fn scene() -> impl Scene {
                 template(|_| Ok(GallerySidebar))
                 template(|context| Ok(BorderColor::all(context.resource::<WidgetryTheme>().window.frame.normal.border)))
                 Node {
-                    width: px(176),
+                    width: px(SIDEBAR_WIDTH),
                     height: percent(100),
                     min_height: px(0),
-                    border: UiRect::right(px(1)),
-                    padding: UiRect::all(px(16)),
+                    border: UiRect::right(px(SIDEBAR_BORDER_WIDTH)),
+                    padding: UiRect::all(px(PAGE_PADDING)),
                     flex_shrink: 0.0,
                 }
             --
@@ -126,7 +133,7 @@ fn navigation_button(target: GalleryPage, label: TextKey) -> impl Scene {
         template(move |_| Ok(GalleryNavButton(target)))
         Node {
             width: percent(100),
-            height: px(40),
+            height: px(NAV_BUTTON_HEIGHT),
             flex_shrink: 0.0,
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
@@ -165,7 +172,7 @@ fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
             width: percent(100),
             height: percent(100),
             flex_direction: FlexDirection::Column,
-            padding: UiRect::all(px(16)),
+            padding: UiRect::all(px(PAGE_PADDING)),
         }
         Children [{content}]
     }

@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use super::*;
 use bevy::{
     asset::{AssetLoader, LoadContext, io::Reader},
@@ -100,10 +102,7 @@ fn managed_loader_batch_keeps_all_original_diagnostics_and_external_source_is_re
         AssetSourceBuilder, AssetSourceId,
         memory::{Dir, MemoryAssetReader},
     };
-    use std::{
-        path::Path,
-        time::{Duration, Instant},
-    };
+    use std::{path::Path, time::Instant};
     let logs = LogCapture::default();
     logs.run(|| {
         let first = Arc::new(WidgetryFailure::new(
@@ -128,7 +127,7 @@ fn managed_loader_batch_keeps_all_original_diagnostics_and_external_source_is_re
             .init_asset::<Image>()
             .register_asset_loader(ManagedLoader(managed));
         let handle: Handle<Image> = app.world().resource::<AssetServer>().load("test.curdiag");
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         let source = loop {
             app.update();
             if let LoadState::Failed(error) = app

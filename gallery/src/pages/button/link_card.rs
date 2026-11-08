@@ -1,3 +1,12 @@
+const CARD_WIDTH: f32 = 300.0;
+const CARD_HEIGHT: f32 = 76.0;
+const CARD_PADDING: f32 = 16.0;
+const CARD_CORNER_RADIUS: f32 = 14.0;
+
+const ITEM_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 14.0;
+const LABEL_FONT_SIZE: f32 = 36.0;
+
 use crate::i18n::{ButtonKey, Language, TextKey, localized, tr, tr_args};
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
@@ -21,11 +30,11 @@ impl GalleryLinkCard {
             @WidgetryOpenUrl { @url: {LEARN.to_owned()} }
             Name("GalleryLinkCard")
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Node { width: px(300), height: px(76), padding: UiRect::all(px(16)), column_gap: px(14), align_items: AlignItems::Center, border_radius: BorderRadius::all(px(14)) }
+            Node { width: px(CARD_WIDTH), height: px(CARD_HEIGHT), padding: UiRect::all(px(CARD_PADDING)), column_gap: px(CONTROL_GAP), align_items: AlignItems::Center, border_radius: BorderRadius::all(px(CARD_CORNER_RADIUS)) }
             BackgroundColor({Color::srgb_u8(27, 49, 78)})
             on(activated)
             Children [
-                Text("↗") Pickable::IGNORE TextFont { font_size: FontSize::Px(36.0) } TextColor({Color::srgb_u8(103, 232, 249)})--
+                Text("↗") Pickable::IGNORE TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) } TextColor({Color::srgb_u8(103, 232, 249)})--
                 @localized(TextKey::Button(ButtonKey::LinkCardAction)) Pickable::IGNORE TextColor({Color::WHITE})
             ]
         }
@@ -35,7 +44,7 @@ impl GalleryLinkCard {
 pub(super) fn scene() -> impl Scene {
     bsn! {
         Name("GalleryLinkCardDemo")
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Button(ButtonKey::LinkCardDescription)) bevy_widgetry::text::WidgetryText--
             @GalleryLinkCard--

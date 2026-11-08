@@ -1,3 +1,5 @@
+const DEFAULT_COMBO_BOX_WIDTH: f32 = 200.0;
+
 use crate::{
     ComboError, ComboFailure, ComboPart,
     error::{ComboFault, failure, list},
@@ -297,7 +299,8 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
     }
 
     fn scene(props: WidgetryComboBoxProps<T>) -> impl Scene {
-        let height = props.item_height * props.max_visible_items as f32 + 2.0;
+        let height =
+            props.item_height * props.max_visible_items as f32 + crate::popup::POPUP_BORDER_HEIGHT;
         let max_visible_items = props.max_visible_items;
         let source = props.source;
         let item_height = props.item_height;
@@ -321,7 +324,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
                 }
                 Ok(ValidatedConfig)
             })
-            Node { width: px(200) }
+            Node { width: px(DEFAULT_COMBO_BOX_WIDTH) }
             Children [#Trigger @field::scene()-- #Popup @popup::scene::<T>(source,item_height,renderer,search_content,#List,#Search)]
         }
     }

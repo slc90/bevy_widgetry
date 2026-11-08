@@ -97,6 +97,8 @@ fn labels(app: &mut App) -> Vec<String> {
 
 #[test]
 fn grid_and_axis_follow_the_committed_absolute_window_including_pending_changes() {
+    let comparison_tolerance = 0.00001;
+
     let (mut app, root, source) = fixture();
     assert_eq!(labels(&mut app), ["26 s", "28 s", "30 s", "32 s", "34 s"]);
     let grid = named_mesh(&mut app, "WaveformTimeGrid");
@@ -132,7 +134,7 @@ fn grid_and_axis_follow_the_committed_absolute_window_including_pending_changes(
     let after = positions(&app, &grid);
     assert_eq!(before.len(), after.len());
     for (a, b) in before.iter().zip(&after) {
-        assert!((a[0] - b[0] - 0.01).abs() < 0.00001);
+        assert!((a[0] - b[0] - 0.01).abs() < comparison_tolerance);
     }
     source.pending.store(true, Ordering::Relaxed);
     Waveform::set_visible_duration_in_world(app.world_mut(), root, 30000).unwrap();
@@ -339,6 +341,8 @@ fn current_frame_glyph_growth_cannot_escape_the_label_guard() {
 
 #[test]
 fn actual_layout_places_major_marks_at_the_grid_positions_during_resize() {
+    let comparison_tolerance = 0.05;
+
     let (mut app, root, _) = fixture();
     let grid = named_mesh(&mut app, "WaveformTimeGrid");
     for width in [500.0, 350.0, 700.0] {
@@ -370,7 +374,9 @@ fn actual_layout_places_major_marks_at_the_grid_positions_during_resize() {
                 }
                 let x = plot_left + fraction * plot_width;
                 assert!(
-                    marks.iter().any(|mark| (mark - x).abs() < 0.05),
+                    marks
+                        .iter()
+                        .any(|mark| (mark - x).abs() < comparison_tolerance),
                     "grid {x} vs marks {marks:?}"
                 );
             }

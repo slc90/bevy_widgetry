@@ -1,3 +1,5 @@
+const FIRST_OFFSCREEN_LAYER: usize = 1024;
+
 use crate::diagnostics::FailureState;
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::{RenderTarget, visibility::VisibilitySystems};
@@ -70,7 +72,7 @@ pub struct WidgetryOffscreenPlugin;
 impl Default for Layers {
     fn default() -> Self {
         Self {
-            next: 1024,
+            next: FIRST_OFFSCREEN_LAYER,
             free: Vec::new(),
         }
     }

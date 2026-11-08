@@ -1,3 +1,6 @@
+const HIDDEN_ATTRIBUTE: u32 = 2;
+const SYSTEM_ATTRIBUTE: u32 = 4;
+
 use crate::FileDialogRequestOperation;
 use crate::error::{native_directory_io, native_request_io};
 use crate::{FileDialogDirectoryContext, FileDialogDirectoryOperation};
@@ -206,8 +209,8 @@ impl WidgetryFileDialogFileSystem for WidgetryFileDialogNativeFileSystem {
                     WidgetryFileDialogEntryKind::Unknown
                 };
                 let (hidden, system) = (
-                    Some(metadata.file_attributes() & 2 != 0),
-                    Some(metadata.file_attributes() & 4 != 0),
+                    Some(metadata.file_attributes() & HIDDEN_ATTRIBUTE != 0),
+                    Some(metadata.file_attributes() & SYSTEM_ATTRIBUTE != 0),
                 );
                 let modified = metadata.modified().map_err(|error| {
                     native_directory_io(

@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool, block_on},
@@ -28,7 +30,7 @@ fn gate() -> (Arc<Event>, impl std::future::Future<Output = ()> + Send) {
 }
 
 fn wait_finished(handle: &ShutdownHandle) {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     while handle.status().phase != ShutdownPhase::Finished {
         assert!(Instant::now() < deadline);
         std::thread::yield_now();
@@ -107,12 +109,12 @@ fn mixed_jobs_cancel_together_timeout_once_then_complete_without_draining_result
             started.send(()).unwrap();
             block_on(context.cancelled());
             assert!(context.acknowledge_cancel());
-            cleanup_thread.recv_timeout(Duration::from_secs(5)).unwrap();
+            cleanup_thread.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             Err(std::io::Error::other("device cleanup failed").into())
         })
         .unwrap();
     for _ in 0..3 {
-        running.recv_timeout(Duration::from_secs(5)).unwrap();
+        running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     }
     let handle = manager.begin_shutdown(Duration::ZERO).unwrap();
     let status = handle.status();
@@ -185,10 +187,10 @@ fn repeated_shutdown_does_not_extend_the_original_global_deadline() {
             Ok(())
         })
         .unwrap();
-    running.recv_timeout(Duration::from_secs(5)).unwrap();
+    running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     let handle = manager.begin_shutdown(Duration::from_millis(30)).unwrap();
     manager.begin_shutdown(Duration::MAX).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     while handle.status().phase != ShutdownPhase::TimedOut {
         assert!(Instant::now() < deadline);
         std::thread::yield_now();
@@ -225,7 +227,7 @@ fn shutdown_unblocks_full_sends_and_retained_terminal_records_do_not_delay_compl
             },
         )
         .unwrap();
-    waiting.recv_timeout(Duration::from_secs(5)).unwrap();
+    waiting.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     let handle = manager.begin_shutdown(Duration::from_secs(5)).unwrap();
     wait_finished(&handle);
     assert_eq!(handle.try_recv(), Some(ShutdownMessage::Completed));

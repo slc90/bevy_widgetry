@@ -1,3 +1,15 @@
+const TAG_HEIGHT: f32 = 52.0;
+const TAG_MIN_WIDTH: f32 = 220.0;
+const TAG_PADDING_X: f32 = 12.0;
+const TAG_PADDING_Y: f32 = 6.0;
+const TAG_UNDERLINE_WIDTH: f32 = 3.0;
+
+const ITEM_GAP: f32 = 8.0;
+const CONTROL_GAP: f32 = 8.0;
+const CONTENT_GAP: f32 = 10.0;
+const LABEL_FONT_SIZE: f32 = 20.0;
+const TITLE_FONT_SIZE: f32 = 28.0;
+
 use crate::i18n::{ButtonKey, Language, TextKey, localized, tr, tr_args};
 use bevy::{
     input_focus::{FocusCause, InputFocus},
@@ -41,12 +53,12 @@ impl GalleryToggleTag {
             @WidgetryToggleButtonHeadless
             Name("GalleryToggleTag")
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Node { height: px(52), min_width: px(220), padding: UiRect::axes(px(12), px(6)), border: UiRect::bottom(px(3)), column_gap: px(10), align_items: AlignItems::Center }
+            Node { height: px(TAG_HEIGHT), min_width: px(TAG_MIN_WIDTH), padding: UiRect::axes(px(TAG_PADDING_X), px(TAG_PADDING_Y)), border: UiRect::bottom(px(TAG_UNDERLINE_WIDTH)), column_gap: px(CONTENT_GAP), align_items: AlignItems::Center }
             template(|_| Ok(BorderColor::all(Color::srgb_u8(90, 130, 160))))
             on(changed)
             Children [
-                template(|_| Ok(Icon)) Pickable::IGNORE Text("☆") TextFont { font_size: FontSize::Px(28.0) }--
-                template(|_| Ok(Label)) Pickable::IGNORE Text("") TextFont { font_size: FontSize::Px(20.0) }
+                template(|_| Ok(Icon)) Pickable::IGNORE Text("☆") TextFont { font_size: FontSize::Px(TITLE_FONT_SIZE) }--
+                template(|_| Ok(Label)) Pickable::IGNORE Text("") TextFont { font_size: FontSize::Px(LABEL_FONT_SIZE) }
             ]
         }
     }
@@ -54,12 +66,12 @@ impl GalleryToggleTag {
 
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::Button(ButtonKey::ToggleTagDescription)) WidgetryText--
             Name("GalleryToggleTagParent") template(|_| Ok(Parent)) Node Children [@GalleryToggleTag]--
             Name("GalleryToggleTagStatus") template(|_| Ok(Status)) Text("") WidgetryText--
-            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap }
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(ITEM_GAP), flex_wrap: FlexWrap::Wrap }
             Children [
                 @control(Action::Set, ButtonKey::ToggleProgrammatic, "GalleryToggleTagSet")--
                 @control(Action::Focus, ButtonKey::ToggleTagFocus, "GalleryToggleTagFocus")--

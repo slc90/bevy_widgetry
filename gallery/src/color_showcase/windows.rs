@@ -1,3 +1,8 @@
+const ITEM_GAP: f32 = 6.0;
+const GROUP_GAP: f32 = 8.0;
+const SECTION_GAP: f32 = 16.0;
+const CONTROL_GAP: f32 = 8.0;
+
 use super::overrides::{PURPLE, TEAL};
 use crate::assets::GalleryImage;
 use crate::i18n::ColorShowcaseKey;
@@ -55,7 +60,7 @@ enum Operation {
 }
 
 pub(super) fn scene() -> impl Scene {
-    bsn! { Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
+    bsn! { Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(SECTION_GAP) } Children [
         @example(Kind::Window,TextKey::Window(WindowKey::WindowOnlyFrameNormalBorder7C3AedClear))--
         @example(Kind::Image,TextKey::Window(WindowKey::WindowImageSameBorderOverrideCover50))--
         @example(Kind::MessageBox,TextKey::Window(WindowKey::MessageboxOnlyBodyNormalBackground0F766EApply))--
@@ -68,10 +73,10 @@ fn example(kind: Kind, label: TextKey) -> impl Scene {
         template(move |_| Ok(Examples { kind, pure: None, sample: None, applied: false }))
         Name({format!("ColorWindow:{kind:?}")})
         on(cleanup)
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP) }
         Children [
             @localized(label) WidgetryText--
-            Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
+            Node { column_gap: px(CONTROL_GAP), flex_wrap: FlexWrap::Wrap, row_gap: px(ITEM_GAP) } Children [
                 @action(None, Operation::OpenPure,TextKey::Window(WindowKey::OpenPureTheme))--
                 @action(None, Operation::OpenSample,TextKey::Window(WindowKey::OpenOverrideInstance))--
                 @action(None, Operation::Apply,TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides))--
@@ -183,7 +188,7 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
     let title = binding.render(*world.resource::<Language>());
     let content: Box<dyn SceneList> = Box::new(bsn_list! {
         @localized(TextKey::ColorShowcase(ColorShowcaseKey::OtherColorsFollowThemeClearOnlyAffects)) WidgetryText--
-        Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
+        Node { column_gap: px(CONTROL_GAP), flex_wrap: FlexWrap::Wrap, row_gap: px(ITEM_GAP) } Children [
             @action(Some(owner), Operation::Apply,TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides))--
             @action(Some(owner), Operation::Clear,TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides))--
             @action(Some(owner), Operation::Theme,TextKey::Window(WindowKey::CycleTheme))

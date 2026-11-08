@@ -114,9 +114,11 @@ pub(super) fn usable(
         format: image.texture_descriptor.format,
         bytes: image.data.as_ref().map(Vec::len),
     };
+    let rgba8_bytes_per_pixel = 4;
+    let rgba32_float_bytes_per_pixel = 16;
     let bytes_per_pixel = match pixels.format {
-        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => Some(4),
-        TextureFormat::Rgba32Float => Some(16),
+        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => Some(rgba8_bytes_per_pixel),
+        TextureFormat::Rgba32Float => Some(rgba32_float_bytes_per_pixel),
         _ => None,
     };
     let expected_bytes = bytes_per_pixel.and_then(|bytes| {

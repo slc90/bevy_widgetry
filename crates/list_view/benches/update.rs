@@ -1,3 +1,5 @@
+const CONTROL_GAP: f32 = 8.0;
+
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
@@ -247,7 +249,7 @@ fn spawn_view(fixture: &mut Fixture, height: u32, rich: bool) -> Result {
         @WidgetryListView::<String> {
             @source: source,
             @draggable: draggable,
-            @renderer: {WidgetryListViewRenderer::new(move |value: &String| bsn_list!{Node { column_gap: px(8) } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("status: active") bevy_widgetry_core::text::WidgetryText })}]})},
+            @renderer: {WidgetryListViewRenderer::new(move |value: &String| bsn_list!{Node { column_gap: px(CONTROL_GAP) } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("status: active") bevy_widgetry_core::text::WidgetryText })}]})},
         }
         Node { width: px(640), height: px(height as f32) }
     })?.id();

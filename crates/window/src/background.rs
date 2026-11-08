@@ -114,6 +114,8 @@ mod tests {
 
     #[test]
     fn cover_rect_crops_from_center_and_preserves_target_aspect() {
+        let comparison_tolerance = 0.001;
+
         for (image, node, expected) in [
             (
                 UVec2::new(1000, 800),
@@ -149,7 +151,7 @@ mod tests {
                 let size = rect.size();
                 assert!(rect.min.cmpge(Vec2::ZERO).all());
                 assert!(rect.max.cmple(image.as_vec2()).all());
-                assert!((size.x / size.y - node.x / node.y).abs() < 0.001);
+                assert!((size.x / size.y - node.x / node.y).abs() < comparison_tolerance);
                 assert!(
                     (rect.center() - image.as_vec2() * 0.5).length()
                         <= image.max_element() as f32 * 1e-6

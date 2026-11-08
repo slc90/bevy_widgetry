@@ -16,8 +16,21 @@ from types import SimpleNamespace
 from file_dialog import analyze, click_named, collect, named_geometry, point, read_report, rpc
 
 
+STARTUP_TIMEOUT_SECONDS = 30
+STATE_POLL_SECONDS = 0.1
+POINTER_POLL_SECONDS = 0.05
+DEFAULT_BRP_PORT = 15881
+SCENARIO_SETTLE_SECONDS = 0.3
+COLLECTION_TIMEOUT_SECONDS = 30
+CLEANUP_TIMEOUT_SECONDS = 10
+MAX_IDLE_WORKERS = 3
+PROCESS_EXIT_TIMEOUT_SECONDS = 15
+FAILED_INCOMPLETE_EXIT_CODE = 5
+FAILED_EXIT_CODE = 3
+INCOMPLETE_EXIT_CODE = 4
+
 def wait_app(port, process):
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError(f"Gallery exited with {process.returncode}")
@@ -30,12 +43,12 @@ def wait_app(port, process):
                 return primary[0]["entity"]
         except (ConnectionError, OSError):
             pass
-        time.sleep(0.1)
+        time.sleep(STATE_POLL_SECONDS)
     raise TimeoutError("Gallery did not become interactive")
 
 
 def wait_launcher(port, name):
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
     while True:
         try:
             rows = named_geometry(port, name)
@@ -45,7 +58,7 @@ def wait_launcher(port, name):
         except ValueError as error:
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"Launcher did not become ready: {name}") from error
-            time.sleep(0.05)
+            time.sleep(POINTER_POLL_SECONDS)
 
 
 def threads(pid):
@@ -61,7 +74,7 @@ def parse_args(argv=None):
     parser.add_argument("--runs", type=int, default=1, help="Independent Gallery processes")
     parser.add_argument("--samples", type=int, default=1, help="New dialogs per process")
     parser.add_argument("--operation", default="OpenFile", choices=["OpenFile", "OpenFiles", "SelectFolder", "SelectFolders", "OpenImage", "SaveFile"])
-    parser.add_argument("--port", type=int, default=15881)
+    parser.add_argument("--port", type=int, default=DEFAULT_BRP_PORT)
     parser.add_argument("--modal", action="store_true")
     parser.add_argument("--io-delay-ms", type=int)
     parser.add_argument("--io-gate", action="store_true")
@@ -130,14 +143,14 @@ def run_processes(args, reports):
                 pm = subprocess.Popen([str(args.presentmon.resolve()), "--process_id", str(process.pid),
                     "--session_name", session, "--no_console_stats", "--no_track_input", "--v1_metrics", "--qpc_time",
                     "--output_file", str(output / "present.csv")], stdout=pm_log, stderr=pm_log, creationflags=flags)
-                time.sleep(0.3)
+                time.sleep(SCENARIO_SETTLE_SECONDS)
                 click_named(args.port, "WindowNav", primary)
                 launcher = wait_launcher(args.port, f"GalleryFileDialog{args.operation}Launcher")
                 if args.modal:
                     click_named(args.port, "GalleryFileDialogModality", primary)
                 baseline = threads(process.pid)
                 baseline_world = rpc(args.port, "benchmark/file_dialog_trace", {"from": 0})["resources"]
-                collection = SimpleNamespace(port=args.port, samples=args.samples, timeout=30, operation=args.operation,
+                collection = SimpleNamespace(port=args.port, samples=args.samples, timeout=COLLECTION_TIMEOUT_SECONDS, operation=args.operation,
                     launcher_position=launcher, launcher_name=f"GalleryFileDialog{args.operation}Launcher",
                     cancel_position=None, events=output / "events.jsonl",
                     navigate=args.navigate, scrolls=args.scrolls, quiet_wait_ms=args.quiet_wait_ms,
@@ -148,12 +161,12 @@ def run_processes(args, reports):
                 if args.io_gate:
                     rpc(args.port, "benchmark/file_dialog_release_io", {})
                     time.sleep(0.5)
-                cleanup_deadline = time.monotonic() + 10
+                cleanup_deadline = time.monotonic() + CLEANUP_TIMEOUT_SECONDS
                 while True:
                     cleanup = rpc(args.port, "benchmark/file_dialog_trace", {"from": 0})["resources"]
                     settled = not any(cleanup[key] for key in ["active_sessions", "queued", "retained_snapshots", "rows"])
                     settled = settled and all(cleanup[key] == baseline_world[key] for key in ["windows", "cameras"])
-                    if cleanup["error"] is not None or cleanup["workers"] > 3:
+                    if cleanup["error"] is not None or cleanup["workers"] > MAX_IDLE_WORKERS:
                         record["resources_passed"] = False
                         raise RuntimeError(f"Runtime resource contract failed: {cleanup}")
                     if settled:
@@ -161,7 +174,7 @@ def run_processes(args, reports):
                     if time.monotonic() > cleanup_deadline:
                         record["resources_passed"] = False
                         raise TimeoutError(f"Resources did not settle: {cleanup}")
-                    time.sleep(0.1)
+                    time.sleep(STATE_POLL_SECONDS)
                 record["resources_passed"] = True
                 (output / "process-resources.json").write_text(json.dumps({"baseline":baseline,"baseline_world":baseline_world,
                     "final":threads(process.pid),"cleanup":cleanup}, indent=2), encoding="utf-8")
@@ -174,18 +187,18 @@ def run_processes(args, reports):
                                     rpc(args.port, "benchmark/file_dialog_release_io", {})
                                 rpc(args.port, "benchmark/file_dialog_export", {})
                                 rpc(args.port, "brp_extras/shutdown", {})
-                                process.wait(timeout=15)
+                                process.wait(timeout=PROCESS_EXIT_TIMEOUT_SECONDS)
                             else:
                                 process.terminate()
                         finally:
                             if process.poll() is None:
                                 process.terminate()
-                            process.wait(timeout=15)
+                            process.wait(timeout=PROCESS_EXIT_TIMEOUT_SECONDS)
                 finally:
                     if pm is not None:
                         subprocess.run([str(args.presentmon.resolve()), "--session_name", session, "--terminate_existing_session"],
                                        stdout=pm_log, stderr=pm_log, creationflags=flags, check=True)
-                        pm.wait(timeout=15)
+                        pm.wait(timeout=PROCESS_EXIT_TIMEOUT_SECONDS)
         adapter = workspace / "gallery/benches/file_dialog_presentmon.py"
         if not args.control:
             subprocess.run([os.sys.executable, str(adapter), "--events", str(output / "events.jsonl"),
@@ -222,11 +235,11 @@ def summarize(runs, expected_runs, expected_samples, strict, errors=None):
     elif not strict and collection_completed and resources_passed:
         status, code = "collection_only", 0
     elif failures and not evidence_complete:
-        status, code = "failed_and_incomplete", 5
+        status, code = "failed_and_incomplete", FAILED_INCOMPLETE_EXIT_CODE
     elif failures:
-        status, code = "failed", 3
+        status, code = "failed", FAILED_EXIT_CODE
     elif not evidence_complete or not resources_passed:
-        status, code = "incomplete", 4
+        status, code = "incomplete", INCOMPLETE_EXIT_CODE
     else:
         status, code = "passed", 0
     return {"status": status, "exit_code": code, "strict_display_budget": strict,

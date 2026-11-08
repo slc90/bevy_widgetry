@@ -39,6 +39,8 @@ fn source(channels: usize, rate: u32, kind: WaveformSessionKind) -> Arc<dyn Wave
 
 #[test]
 fn replacing_sessions_keeps_root_and_display_settings_but_resets_data() {
+    let comparison_tolerance = 1e-9;
+
     let mut app = scene_app();
     app.add_plugins(WaveformPlugin);
     let root = app.world_mut().spawn_scene(bsn! {
@@ -79,7 +81,9 @@ fn replacing_sessions_keeps_root_and_display_settings_but_resets_data() {
             .0 = 100;
         app.update();
         let runtime = app.world().get::<WaveformRuntime>(root).unwrap();
-        assert!((runtime.channel(0).unwrap().get(0).unwrap() - 0.0005).abs() < 1e-9);
+        assert!(
+            (runtime.channel(0).unwrap().get(0).unwrap() - 0.0005).abs() < comparison_tolerance
+        );
         assert_eq!(runtime.reduced_channels().len(), count);
     }
 }

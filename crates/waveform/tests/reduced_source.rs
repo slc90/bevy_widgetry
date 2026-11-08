@@ -57,6 +57,8 @@ impl WaveformSource for Source {
 
 #[test]
 fn reduced_source_commits_complete_snapshot_without_allocating_raw_window() {
+    let comparison_tolerance = 1e-9;
+
     let source = Arc::new(Source(Mutex::new((1, None))));
     let mut runtime = WaveformRuntime::new(
         WaveformConfig {
@@ -75,7 +77,7 @@ fn reduced_source_commits_complete_snapshot_without_allocating_raw_window() {
     let ReducedChannel::Envelope(spans) = &runtime.reduced_channels()[0] else {
         panic!("expected envelope")
     };
-    assert!((spans[0].max - 0.0008).abs() < 1e-9);
+    assert!((spans[0].max - 0.0008).abs() < comparison_tolerance);
     let previous = runtime.reduced_channels().to_vec();
     source.0.lock().unwrap().0 = 0;
     assert_eq!(

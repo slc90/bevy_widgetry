@@ -1,3 +1,7 @@
+pub(crate) const CANDIDATE_COLUMN_COUNT: usize = 3;
+pub(crate) const CANDIDATE_ROW_COUNT: usize = 4;
+pub(crate) const CANDIDATE_COUNT: usize = CANDIDATE_COLUMN_COUNT * CANDIDATE_ROW_COUNT;
+
 use crate::{
     Date, DatePickerFailure, DatePickerMonth, Month, WidgetryDatePickerHeadless as Picker,
 };
@@ -47,10 +51,11 @@ pub(crate) fn navigation(world: &World, root: Entity) -> Result<DatePickerView, 
 }
 
 fn shifted_month(month: DatePickerMonth, delta: i32) -> Option<DatePickerMonth> {
-    let total = i64::from(month.year) * 12 + month.month as i64 - 1 + i64::from(delta);
+    let total = i64::from(month.year) * crate::model::MONTHS_PER_YEAR + month.month as i64 - 1
+        + i64::from(delta);
     Some(DatePickerMonth {
-        year: i32::try_from(total.div_euclid(12)).ok()?,
-        month: Month::January.nth_next(total.rem_euclid(12) as u8),
+        year: i32::try_from(total.div_euclid(crate::model::MONTHS_PER_YEAR)).ok()?,
+        month: Month::January.nth_next(total.rem_euclid(crate::model::MONTHS_PER_YEAR) as u8),
     })
 }
 
@@ -63,8 +68,10 @@ fn shifted_view(view: DatePickerView, delta: i32) -> Option<DatePickerView> {
             false,
         ),
         DatePickerView::Years(start) => (
-            i64::from(start) + i64::from(delta) * 12,
-            i64::from(start) + i64::from(delta) * 12 + 11,
+            i64::from(start) + i64::from(delta) * CANDIDATE_COUNT as i64,
+            i64::from(start)
+                + i64::from(delta) * CANDIDATE_COUNT as i64
+                + (CANDIDATE_COUNT as i64 - 1),
             true,
         ),
     };
@@ -95,7 +102,7 @@ impl WidgetryDatePickerNavigation {
         let state = crate::model::state(world, root)?;
         Ok(match navigation(world, root)? {
             DatePickerView::Days => Vec::new(),
-            DatePickerView::Months(year) => (0..12)
+            DatePickerView::Months(year) => (0..crate::model::MONTHS_PER_YEAR as u8)
                 .map(|index| {
                     let month = DatePickerMonth {
                         year,
@@ -108,7 +115,7 @@ impl WidgetryDatePickerNavigation {
                     }
                 })
                 .collect(),
-            DatePickerView::Years(start) => (start..start + 12)
+            DatePickerView::Years(start) => (start..start + CANDIDATE_COUNT as i32)
                 .map(|year| DatePickerCandidate {
                     value: DatePickerCandidateValue::Year(year),
                     is_selectable: (Date::MIN.year()..=Date::MAX.year()).contains(&year),
@@ -157,7 +164,9 @@ impl WidgetryDatePickerNavigation {
             DatePickerView::Days => {
                 DatePickerView::Months(Picker::displayed_month(world, root)?.year)
             }
-            DatePickerView::Months(year) => DatePickerView::Years(year.div_euclid(12) * 12),
+            DatePickerView::Months(year) => DatePickerView::Years(
+                year.div_euclid(CANDIDATE_COUNT as i32) * CANDIDATE_COUNT as i32,
+            ),
             DatePickerView::Years(_) => return Ok(false),
         };
         Self::commit(world, root, next)
@@ -222,7 +231,7 @@ impl WidgetryDatePickerNavigation {
         let DatePickerView::Years(start) = view else {
             return Ok(false);
         };
-        if !(start..start + 12).contains(&year)
+        if !(start..start + CANDIDATE_COUNT as i32).contains(&year)
             || !(Date::MIN.year()..=Date::MAX.year()).contains(&year)
         {
             return Ok(false);

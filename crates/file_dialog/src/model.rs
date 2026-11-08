@@ -1,3 +1,5 @@
+const MAX_FILTERS: usize = 128;
+
 use crate::{
     FileDialogError, FileDialogFailure, WidgetryFileDialogFilter, WidgetryFileDialogFilterId,
     WidgetryFileDialogStorageSnapshot, WidgetryFileDialogStorageState,
@@ -325,7 +327,7 @@ impl WidgetryFileDialogState {
         if props
             .storage_scope
             .as_ref()
-            .is_some_and(|scope| scope.is_empty() || scope.len() > 128)
+            .is_some_and(|scope| scope.is_empty() || scope.len() > crate::limits::MAX_SCOPE_LEN)
         {
             let scope = props.storage_scope.clone().unwrap_or_default();
             return Err(crate::error::failure(
@@ -336,12 +338,12 @@ impl WidgetryFileDialogState {
                 "file_dialog.new",
             ));
         }
-        if props.filters.len() > 128 {
+        if props.filters.len() > MAX_FILTERS {
             return Err(crate::error::failure(
                 FileDialogError::Capacity {
                     resource: "filters",
                     actual: props.filters.len(),
-                    limit: 128,
+                    limit: MAX_FILTERS,
                 },
                 "file_dialog.new",
             ));

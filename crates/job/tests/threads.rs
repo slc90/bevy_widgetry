@@ -1,10 +1,12 @@
 #![allow(clippy::disallowed_macros)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::tasks::{IoTaskPool, TaskPool, block_on};
 use bevy_widgetry_job::*;
 use std::{
     sync::{Arc, Mutex, mpsc},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 fn manager() -> JobManager {
@@ -26,13 +28,13 @@ fn named_thread_shares_results_and_is_joined_before_finished() {
             move |context| {
                 assert_eq!(std::thread::current().name(), Some("device-reader"));
                 start.send(()).unwrap();
-                released.recv_timeout(Duration::from_secs(5)).unwrap();
+                released.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 assert_eq!(context.send_blocking(42)?, SendStatus::Sent);
                 Ok(())
             },
         )
         .unwrap();
-    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    started.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
     let mut second = manager.subscribe::<usize>(id).unwrap();
     release.send(()).unwrap();
@@ -64,7 +66,7 @@ fn cooperative_thread_cancellation_preserves_unacknowledged_success_and_failures
                     assert!(context.acknowledge_cancel());
                 }
                 cleanup.send(()).unwrap();
-                released.recv_timeout(Duration::from_secs(5)).unwrap();
+                released.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                 match mode {
                     2 => Err(std::io::Error::other("thread cleanup failed").into()),
                     3 => panic!("thread panic"),
@@ -72,9 +74,9 @@ fn cooperative_thread_cancellation_preserves_unacknowledged_success_and_failures
                 }
             })
             .unwrap();
-        started.recv_timeout(Duration::from_secs(5)).unwrap();
+        started.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         manager.cancel(id).unwrap();
-        cleaned.recv_timeout(Duration::from_secs(5)).unwrap();
+        cleaned.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyStopping);
         assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
@@ -118,9 +120,9 @@ fn blocking_send_is_cancelable_without_consuming_buffer() {
             },
         )
         .unwrap();
-    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    started.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     manager.cancel(id).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     while !manager.status(id).unwrap().state.is_finished() {
         assert!(Instant::now() < deadline);
         std::thread::yield_now();
@@ -142,7 +144,7 @@ impl Drop for ThreadCleanup {
     #[allow(clippy::unwrap_used)]
     fn drop(&mut self) {
         self.entered.send(()).unwrap();
-        self.release.recv_timeout(Duration::from_secs(5)).unwrap();
+        self.release.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         self.exited.send(()).unwrap();
     }
 }
@@ -167,7 +169,7 @@ fn tls_destructors_must_finish_before_outcome_is_published() {
             Ok(())
         })
         .unwrap();
-    cleaning.recv_timeout(Duration::from_secs(5)).unwrap();
+    cleaning.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     assert_eq!(manager.status(id).unwrap().state, JobState::Running);
     manager.cancel(id).unwrap();
     assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
@@ -177,7 +179,7 @@ fn tls_destructors_must_finish_before_outcome_is_published() {
         receiver.recv_blocking(),
         Ok(JobRead::Finished(JobOutcome::Completed))
     ));
-    done.recv_timeout(Duration::from_secs(5)).unwrap();
+    done.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
 }
 
 #[test]
@@ -189,7 +191,7 @@ fn dropping_all_external_handles_does_not_abandon_thread_collection() {
     let (id, receiver) = manager
         .spawn_thread::<usize, _>(JobOptions::default(), move |context| {
             entered.send(()).unwrap();
-            released.recv_timeout(Duration::from_secs(5)).unwrap();
+            released.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             for value in 0..100 {
                 assert_eq!(context.send_blocking(value)?, SendStatus::Sent);
             }
@@ -197,12 +199,12 @@ fn dropping_all_external_handles_does_not_abandon_thread_collection() {
             Ok(())
         })
         .unwrap();
-    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    started.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     assert_eq!(manager.status(id).unwrap().state, JobState::Running);
     drop(receiver);
     drop(manager);
     release.send(()).unwrap();
-    finished.recv_timeout(Duration::from_secs(5)).unwrap();
+    finished.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
 }
 
 #[test]

@@ -1,3 +1,4 @@
+const SIDEBAR_DIVIDER_ALPHA: f32 = 0.15;
 use super::owners::Binding;
 use super::*;
 use crate::controls::LocationControl;
@@ -434,9 +435,9 @@ fn apply_part(
             } else {
                 colors.body.normal
             };
-            world
-                .entity_mut(entity)
-                .insert(BackgroundColor(body.foreground.with_alpha(0.15)));
+            world.entity_mut(entity).insert(BackgroundColor(
+                body.foreground.with_alpha(SIDEBAR_DIVIDER_ALPHA),
+            ));
         }
     }
     crate::controls::apply_color(world, entity, root, colors)?;

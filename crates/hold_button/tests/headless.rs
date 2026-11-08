@@ -1,5 +1,9 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const EXPECTED_CHARGE_DURATION: Duration = Duration::from_secs(3);
+const EXPECTED_DECAY_DURATION: Duration = Duration::from_millis(1200);
+const FIXTURE_FRAME_DURATION: Duration = Duration::from_millis(100);
+
 use bevy::{
     picking::pointer::*, prelude::*, ui::Pressed, ui_widgets::Activate, window::RequestRedraw,
 };
@@ -16,7 +20,7 @@ use std::time::Duration;
 struct Activations(usize);
 
 fn fixture(id: PointerId) -> (App, Entity, Entity, Location) {
-    fixture_with_timing(id, Duration::from_secs(3), Duration::from_millis(1200))
+    fixture_with_timing(id, EXPECTED_CHARGE_DURATION, EXPECTED_DECAY_DURATION)
 }
 
 fn fixture_with_timing(
@@ -29,7 +33,7 @@ fn fixture_with_timing(
     app.add_plugins(WidgetryHoldButtonHeadlessPlugin)
         .init_resource::<Activations>();
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
-        Duration::from_millis(100),
+        FIXTURE_FRAME_DURATION,
     ));
     app.add_observer(
         |event: On<Activate>,
@@ -82,6 +86,8 @@ fn fixture_with_timing(
 
 #[test]
 fn public_duration_props_initialize_each_instance_and_preserve_zero_semantics() {
+    let comparison_tolerance = 0.001;
+
     for (charge, decay) in [
         (Duration::ZERO, Duration::ZERO),
         (Duration::from_secs(1), Duration::ZERO),
@@ -101,7 +107,7 @@ fn public_duration_props_initialize_each_instance_and_preserve_zero_semantics() 
             assert_eq!(app.world().resource::<Activations>().0, 1);
         } else {
             frames(&mut app, 4);
-            assert!((value(&app, root) - 0.4).abs() < 0.001);
+            assert!((value(&app, root) - 0.4).abs() < comparison_tolerance);
         }
         input(
             &mut app,
@@ -112,9 +118,9 @@ fn public_duration_props_initialize_each_instance_and_preserve_zero_semantics() 
         if decay.is_zero() || charge.is_zero() {
             assert_eq!(value(&app, root), 0.0);
         } else {
-            assert!((value(&app, root) - 0.5).abs() < 0.001);
+            assert!((value(&app, root) - 0.5).abs() < comparison_tolerance);
             app.update();
-            assert!((value(&app, root) - 0.3).abs() < 0.001);
+            assert!((value(&app, root) - 0.3).abs() < comparison_tolerance);
             frames(&mut app, 2);
             assert_eq!(value(&app, root), 0.0);
         }
@@ -138,6 +144,8 @@ fn value(app: &App, root: Entity) -> f32 {
 
 #[test]
 fn rectangular_corners_charge_without_style_and_reactive_wakes_stop_at_rest() {
+    let comparison_tolerance = 0.001;
+
     for id in pointer_ids() {
         let (mut app, root, _, at) = fixture(id);
         input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ZERO });
@@ -148,7 +156,7 @@ fn rectangular_corners_charge_without_style_and_reactive_wakes_stop_at_rest() {
             PointerAction::Press(PointerButton::Primary),
         );
         frames(&mut app, 10);
-        assert!((value(&app, root) - 1.0 / 3.0).abs() < 0.001);
+        assert!((value(&app, root) - 1.0 / 3.0).abs() < comparison_tolerance);
         assert!(
             app.world()
                 .get::<WidgetryHoldButtonState>(root)

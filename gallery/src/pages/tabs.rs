@@ -1,3 +1,17 @@
+const COMPACT_WIDTH: f32 = 580.0;
+const COMPACT_HEIGHT: f32 = 220.0;
+const CONTENT_PADDING: f32 = 16.0;
+const FIELD_WIDTH: f32 = 250.0;
+const NESTED_DEMO_HEIGHT: f32 = 420.0;
+const VERTICAL_EXPANDED_HEIGHT: f32 = 430.0;
+
+const DETAIL_GAP: f32 = 6.0;
+const ITEM_GAP: f32 = 8.0;
+const GROUP_GAP: f32 = 12.0;
+const SECTION_GAP: f32 = 18.0;
+const CONTROL_GAP: f32 = 8.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::{
     LocalizedText, NavigationKey, TabsKey, TextKey, localized, localized_args, localized_binding,
@@ -74,7 +88,7 @@ fn scene() -> impl Scene {
         Box::new(demo(TabsOrientation::Vertical, "TabsVertical")),
     ];
     bsn! {
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(18), align_items: AlignItems::Start }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(SECTION_GAP), align_items: AlignItems::Start }
         Children [
             @localized(TextKey::Navigation(NavigationKey::Tabs)) WidgetryText--
             @localized(TextKey::Tabs(TabsKey::Description)) WidgetryText Node { max_width: percent(100) }--
@@ -106,19 +120,19 @@ fn demo(orientation: TabsOrientation, prefix: &'static str) -> impl Scene {
         template(|_| Ok(TabsDemoState::default()))
         template(|_| Ok(DisabledRequest(false)))
         Name({format!("{prefix}Root")})
-        Node { width: px(580), max_width: percent(100), height: px(220), flex_shrink: 0.0 }
+        Node { width: px(COMPACT_WIDTH), max_width: percent(100), height: px(COMPACT_HEIGHT), flex_shrink: 0.0 }
         on(selection_changed)
     });
     bsn! {
         DemoParts { tabs: #Tabs, status: #Status }
         Name({format!("{prefix}Demo")})
-        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start, flex_shrink: 0.0 }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(ITEM_GAP), align_items: AlignItems::Start, flex_shrink: 0.0 }
         Children [
             @localized(TextKey::Tabs(title)) WidgetryText--
-            Node { column_gap: px(8), row_gap: px(6), flex_wrap: FlexWrap::Wrap, max_width: percent(100) } Children [{controls}]--
+            Node { column_gap: px(CONTROL_GAP), row_gap: px(DETAIL_GAP), flex_wrap: FlexWrap::Wrap, max_width: percent(100) } Children [{controls}]--
             #Status Name({format!("{prefix}Status")})
             @localized_args(TextKey::Tabs(TabsKey::Status), status_args(0, 0, None, false, false))
-            WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) } Node { max_width: percent(100) }--
+            WidgetryText TextFont { font_size: bevy::text::FontSize::Px(LABEL_FONT_SIZE) } Node { max_width: percent(100) }--
             #Tabs @{tabs}
         ]
     }
@@ -142,12 +156,12 @@ fn items(orientation: TabsOrientation, prefix: &'static str) -> impl SceneList {
         });
         let content: Box<dyn Scene> = Box::new(bsn! {
             @WidgetryScrollArea {
-                @content: bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(12), padding: UiRect::all(px(16)) } },
+                @content: bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(GROUP_GAP), padding: UiRect::all(px(CONTENT_PADDING)) } },
                 @children: bsn_list! {
                     @localized_args(TextKey::Tabs(TabsKey::Page), vec![("index", index.to_string())]) WidgetryText--
                     Name({format!("{prefix}Field{index}")}) @WidgetryTextField
-                    bevy::input_focus::tab_navigation::TabIndex(0) Node { width: px(250), max_width: percent(100) }--
-                    Node { height: px(420), width: percent(100), flex_shrink: 0.0 }
+                    bevy::input_focus::tab_navigation::TabIndex(0) Node { width: px(FIELD_WIDTH), max_width: percent(100) }--
+                    Node { height: px(NESTED_DEMO_HEIGHT), width: percent(100), flex_shrink: 0.0 }
                     Children [@localized(TextKey::Tabs(TabsKey::Retained)) WidgetryText]
                 },
             }
@@ -293,9 +307,17 @@ fn perform(world: &mut World, root: Entity, action: Action) -> Result {
             let mut node = world
                 .get_mut::<Node>(root)
                 .ok_or_else(|| demo_error("Tabs 布局缺失"))?;
-            let roomy = node.width == px(580);
-            node.width = if roomy { percent(100) } else { px(580) };
-            node.height = if roomy && vertical { px(430) } else { px(220) };
+            let roomy = node.width == px(COMPACT_WIDTH);
+            node.width = if roomy {
+                percent(100)
+            } else {
+                px(COMPACT_WIDTH)
+            };
+            node.height = if roomy && vertical {
+                px(VERTICAL_EXPANDED_HEIGHT)
+            } else {
+                px(COMPACT_HEIGHT)
+            };
             info!(?root, roomy, "切换 Tabs 演示可用空间");
         }
     }

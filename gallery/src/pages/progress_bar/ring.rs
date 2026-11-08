@@ -1,3 +1,17 @@
+const PROGRESS_STEP: f32 = 0.1;
+const INDETERMINATE_ACTIVE_DOTS: usize = 18;
+
+const DOT_COUNT: usize = 60;
+const DOT_ORIGIN: f32 = 67.0;
+const RING_RADIUS: f32 = 54.0;
+const DOT_DIAMETER: f32 = 6.0;
+const CONTROL_SIZE: f32 = 140.0;
+const LABEL_FONT_SIZE: f32 = 14.0;
+const LABEL_MAX_WIDTH: f32 = 100.0;
+
+const DETAIL_GAP: f32 = 12.0;
+const CONTROL_GAP: f32 = 8.0;
+
 use crate::i18n::{Language, ProgressBarKey, TextKey, localized, tr, tr_args};
 use bevy::{prelude::*, ui_widgets::Activate, window::RequestRedraw};
 use bevy_widgetry::{
@@ -27,21 +41,21 @@ enum Action {
 }
 
 pub(super) fn scene() -> impl Scene {
-    let dots=(0usize..60).map(|index| {
-        let angle=index as f32 / 60.0 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+    let dots=(0usize..DOT_COUNT).map(|index| {
+        let angle=index as f32 / DOT_COUNT as f32 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
         bsn! {template(move |_|Ok(Dot(index))) Pickable::IGNORE BackgroundColor
-            Node {position_type:PositionType::Absolute,width:px(6),height:px(6),left:{px(67.0+angle.cos()*54.0)},top:{px(67.0+angle.sin()*54.0)},border_radius:BorderRadius::MAX}}
+            Node {position_type:PositionType::Absolute,width:px(DOT_DIAMETER),height:px(DOT_DIAMETER),left:{px(DOT_ORIGIN+angle.cos()*RING_RADIUS)},top:{px(DOT_ORIGIN+angle.sin()*RING_RADIUS)},border_radius:BorderRadius::MAX}}
     }).collect::<Vec<_>>();
     bsn! {
-        Node {flex_direction:FlexDirection::Column,row_gap:px(12),align_items:AlignItems::Start}
+        Node {flex_direction:FlexDirection::Column,row_gap:px(DETAIL_GAP),align_items:AlignItems::Start}
         Children [
             @localized(TextKey::ProgressBar(ProgressBarKey::Ring)) WidgetryText--
             #Root @Progress {@state:WidgetryProgressState::Determinate {value:0.65}} Ring Name::new("ProgressRing")
-            Pickable::IGNORE Node {width:px(140),height:px(140),align_items:AlignItems::Center,justify_content:JustifyContent::Center}
+            Pickable::IGNORE Node {width:px(CONTROL_SIZE),height:px(CONTROL_SIZE),align_items:AlignItems::Center,justify_content:JustifyContent::Center}
             Children [{dots}--Label Text("") WidgetryText Name::new("ProgressRingStatus")
-                TextFont {font_size:px(14)} TextLayout::justify(Justify::Center)
-                Node {max_width:px(100)} Pickable::IGNORE]--
-            Node {column_gap:px(8)} Children [
+                TextFont {font_size:px(LABEL_FONT_SIZE)} TextLayout::justify(Justify::Center)
+                Node {max_width:px(LABEL_MAX_WIDTH)} Pickable::IGNORE]--
+            Node {column_gap:px(CONTROL_GAP)} Children [
                 @WidgetryButton {@children:{Some(Box::new(bsn_list!{@localized(TextKey::ProgressBar(ProgressBarKey::Increase)) WidgetryText}) as Box<dyn SceneList>)}}
                 Control {root:#Root,action:Action::Increase} Name::new("ProgressRingIncrease") on(operate)--
                 @WidgetryButton {@children:{Some(Box::new(bsn_list!{@localized(TextKey::ProgressBar(ProgressBarKey::Reset)) WidgetryText}) as Box<dyn SceneList>)}}
@@ -69,7 +83,7 @@ fn operate(event: On<Activate>, controls: Query<&Control>, mut commands: Command
             (Action::Mode, _) => WidgetryProgressState::Indeterminate,
             (Action::Increase, WidgetryProgressState::Determinate { value }) => {
                 WidgetryProgressState::Determinate {
-                    value: (value + 0.1).min(1.0),
+                    value: (value + PROGRESS_STEP).min(1.0),
                 }
             }
             _ => current,
@@ -97,7 +111,7 @@ fn update(world: &mut World) -> Result {
         .resource::<Time<Real>>()
         .elapsed_secs_f64()
         .rem_euclid(1.0)
-        * 60.0) as usize;
+        * DOT_COUNT as f64) as usize;
     let roots = world
         .query_filtered::<(Entity, &Children), With<Ring>>()
         .iter(world)
@@ -121,8 +135,12 @@ fn update(world: &mut World) -> Result {
         for child in children {
             if let Some(dot) = world.get::<Dot>(child) {
                 let active = match state {
-                    WidgetryProgressState::Determinate { value } => (dot.0 as f32) < value * 60.0,
-                    WidgetryProgressState::Indeterminate => (dot.0 + 60 - phase) % 60 < 18,
+                    WidgetryProgressState::Determinate { value } => {
+                        (dot.0 as f32) < value * DOT_COUNT as f32
+                    }
+                    WidgetryProgressState::Indeterminate => {
+                        (dot.0 + DOT_COUNT - phase) % DOT_COUNT < INDETERMINATE_ACTIVE_DOTS
+                    }
                 };
                 if let Some(mut background) = world.get_mut::<BackgroundColor>(child) {
                     background.set_if_neq(BackgroundColor(if active {

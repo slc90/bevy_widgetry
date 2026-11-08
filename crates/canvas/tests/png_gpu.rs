@@ -1,6 +1,14 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(feature = "png_export")]
 
+const REFERENCE_PIXEL_TOLERANCE: u8 = 2;
+const ELLIPSE_ALPHA_TOLERANCE: u8 = 2;
+const ALPHA_COMPARISON_TOLERANCE: u8 = 3;
+
+const GPU_READY_TIMEOUT: Duration = Duration::from_secs(30);
+const EXPORT_WAIT_TIMEOUT: Duration = Duration::from_secs(35);
+const POLL_INTERVAL: Duration = Duration::from_millis(1);
+
 use bevy::{
     prelude::*,
     render::{
@@ -50,11 +58,11 @@ fn frame(app: &mut App) {
 }
 
 fn finish(app: &mut App, count: usize) {
-    let deadline = Instant::now() + Duration::from_secs(35);
+    let deadline = Instant::now() + EXPORT_WAIT_TIMEOUT;
     while app.world().resource::<Completed>().0.len() < count {
         assert!(Instant::now() < deadline, "PNG export timed out");
         frame(app);
-        std::thread::sleep(Duration::from_millis(1));
+        std::thread::sleep(POLL_INTERVAL);
     }
     frame(app);
 }
@@ -486,10 +494,13 @@ fn gpu_mixed_exports_match_views_and_svg_keep_holes_and_own_their_snapshots() {
                     actual
                         .into_iter()
                         .zip(expected)
-                        .all(|(a, b)| a.abs_diff(b) <= 2),
+                        .all(|(a, b)| a.abs_diff(b) <= REFERENCE_PIXEL_TOLERANCE),
                     "{case} {scale} ({x},{y}): {actual:?} != {expected:?}"
                 );
-                assert!(actual[3].abs_diff(raster.pixel(x, y).unwrap().alpha()) <= 2);
+                assert!(
+                    actual[3].abs_diff(raster.pixel(x, y).unwrap().alpha())
+                        <= REFERENCE_PIXEL_TOLERANCE
+                );
             }
             if rule == CanvasFillRule::EvenOdd {
                 assert_eq!(
@@ -588,6 +599,8 @@ fn gpu_mixed_exports_match_views_and_svg_keep_holes_and_own_their_snapshots() {
 #[test]
 #[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
 fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
+    let pixel_tolerance = 3;
+
     let mut app = gpu_app();
     let document = app.world_mut().spawn(CanvasDocument).id();
     let rectangle = CanvasRectangle {
@@ -668,7 +681,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
             let actual = image.get_pixel(point.0 * scale, point.1 * scale).0;
             for (a, e) in actual.into_iter().zip(expected) {
                 assert!(
-                    (i16::from(a) - i16::from(e)).abs() <= 3,
+                    (i16::from(a) - i16::from(e)).abs() <= pixel_tolerance,
                     "pixel {point:?}: {actual:?} expected {expected:?}"
                 );
             }
@@ -1041,11 +1054,11 @@ fn gpu_app() -> GpuApp {
             ));
         },
     );
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + GPU_READY_TIMEOUT;
     while app.plugins_state() != bevy::app::PluginsState::Ready {
         assert!(Instant::now() < deadline, "GPU initialization timed out");
         bevy::tasks::tick_global_task_pools_on_main_thread();
-        std::thread::sleep(Duration::from_millis(1));
+        std::thread::sleep(POLL_INTERVAL);
     }
     app.finish();
     app.cleanup();
@@ -1108,7 +1121,7 @@ fn view_camera(app: &mut App, document: Entity) -> Entity {
     for _ in 0..20 {
         frame(app);
     }
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + GPU_READY_TIMEOUT;
     while app
         .sub_app(bevy::render::RenderApp)
         .world()
@@ -1122,7 +1135,7 @@ fn view_camera(app: &mut App, document: Entity) -> Entity {
             "Canvas View pipeline compilation timed out"
         );
         frame(app);
-        std::thread::sleep(Duration::from_millis(1));
+        std::thread::sleep(POLL_INTERVAL);
     }
     frame(app);
     app.world()
@@ -1139,7 +1152,7 @@ fn capture(app: &mut App, camera: Entity) -> image::RgbaImage {
     };
     // A formerly empty scene may create its first mesh pipeline only after an update.
     frame(app);
-    let pipeline_deadline = Instant::now() + Duration::from_secs(30);
+    let pipeline_deadline = Instant::now() + GPU_READY_TIMEOUT;
     while app
         .sub_app(bevy::render::RenderApp)
         .world()
@@ -1153,7 +1166,7 @@ fn capture(app: &mut App, camera: Entity) -> image::RgbaImage {
             "Canvas capture pipeline compilation timed out"
         );
         frame(app);
-        std::thread::sleep(Duration::from_millis(1));
+        std::thread::sleep(POLL_INTERVAL);
     }
     app.init_resource::<Captured>();
     let target = app
@@ -1168,11 +1181,11 @@ fn capture(app: &mut App, camera: Entity) -> image::RgbaImage {
             images.0.push(event.image.clone())
         },
     );
-    let deadline = Instant::now() + Duration::from_secs(35);
+    let deadline = Instant::now() + EXPORT_WAIT_TIMEOUT;
     while app.world().resource::<Captured>().0.is_empty() {
         assert!(Instant::now() < deadline, "Canvas View readback timed out");
         frame(app);
-        std::thread::sleep(Duration::from_millis(1));
+        std::thread::sleep(POLL_INTERVAL);
     }
     app.world_mut()
         .resource_mut::<Captured>()
@@ -1578,7 +1591,7 @@ fn gpu_path_caps_and_joins_change_coverage_without_double_blending() {
                 image.get_pixel(point.0, point.1).0
             );
             assert!(
-                alpha.abs_diff(if inside { 128 } else { 0 }) <= 3,
+                alpha.abs_diff(if inside { 128 } else { 0 }) <= ALPHA_COMPARISON_TOLERANCE,
                 "{cap:?} {point:?}: {alpha}"
             );
         }
@@ -1621,7 +1634,7 @@ fn gpu_path_caps_and_joins_change_coverage_without_double_blending() {
                 image.get_pixel(point.0, point.1).0
             );
             assert!(
-                alpha.abs_diff(if inside { 128 } else { 0 }) <= 3,
+                alpha.abs_diff(if inside { 128 } else { 0 }) <= ALPHA_COMPARISON_TOLERANCE,
                 "{join:?} {point:?}: {alpha}"
             );
         }
@@ -1652,12 +1665,14 @@ fn gpu_path_caps_and_joins_change_coverage_without_double_blending() {
         0,
         "round cusp must not add the inward half-circle beyond both short segments"
     );
-    assert!(image.get_pixel(136, 128).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(136, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
 }
 
 #[test]
 #[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
 fn gpu_ellipse_uniform_scale_preserves_fill_and_stroke_at_tiny_and_huge_local_radii() {
+    let pixel_tolerance = 3;
+
     let mut app = gpu_app();
     let camera = ellipse_view(
         &mut app,
@@ -1667,7 +1682,7 @@ fn gpu_ellipse_uniform_scale_preserves_fill_and_stroke_at_tiny_and_huge_local_ra
         Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
     );
     let expected = capture(&mut app, camera);
-    assert!(expected.get_pixel(128, 128).0[3].abs_diff(128) <= 2);
+    assert!(expected.get_pixel(128, 128).0[3].abs_diff(128) <= ELLIPSE_ALPHA_TOLERANCE);
     for radius in [1e-5_f32, 1e20] {
         let camera = ellipse_view(
             &mut app,
@@ -1683,7 +1698,7 @@ fn gpu_ellipse_uniform_scale_preserves_fill_and_stroke_at_tiny_and_huge_local_ra
             assert!(
                 a.into_iter()
                     .zip(e)
-                    .all(|(a, e)| (i16::from(a) - i16::from(e)).abs() <= 3),
+                    .all(|(a, e)| (i16::from(a) - i16::from(e)).abs() <= pixel_tolerance),
                 "radius {radius} at {point:?}: {a:?} vs {e:?}"
             );
         }
@@ -1718,7 +1733,7 @@ fn gpu_wide_transparent_ellipse_stroke_covers_each_pixel_once() {
         for point in [(128, 128), (127, 128), (128, 127), (140, 128)] {
             let alpha = image.get_pixel(point.0, point.1).0[3];
             assert!(
-                alpha.abs_diff(128) <= 2,
+                alpha.abs_diff(128) <= ELLIPSE_ALPHA_TOLERANCE,
                 "stroke alpha at {point:?} is {alpha}, expected one coverage at 128"
             );
         }
@@ -1737,9 +1752,9 @@ fn gpu_ellipse_fill_survives_a_much_wider_translucent_stroke() {
         Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
     );
     let image = capture(&mut app, camera);
-    assert!(image.get_pixel(128, 128).0[3].abs_diff(191) <= 3);
-    assert!(image.get_pixel(220, 160).0[3].abs_diff(191) <= 3);
-    assert!(image.get_pixel(245, 128).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(128, 128).0[3].abs_diff(191) <= ALPHA_COMPARISON_TOLERANCE);
+    assert!(image.get_pixel(220, 160).0[3].abs_diff(191) <= ALPHA_COMPARISON_TOLERANCE);
+    assert!(image.get_pixel(245, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
 }
 
 #[test]
@@ -1773,7 +1788,7 @@ fn gpu_eccentric_ellipse_wide_stroke_preserves_the_rounded_end() {
         for point in points {
             let alpha = image.get_pixel(point.0, point.1).0[3];
             assert!(
-                alpha.abs_diff(128) <= 2,
+                alpha.abs_diff(128) <= ELLIPSE_ALPHA_TOLERANCE,
                 "eccentric {radii:?} stroke alpha at {point:?} is {alpha}, expected 128"
             );
         }
@@ -1803,7 +1818,7 @@ fn gpu_eccentric_ellipse_thin_stroke_survives_nonuniform_scale() {
         for point in sides {
             let alpha = image.get_pixel(point.0, point.1).0[3];
             assert!(
-                alpha.abs_diff(128) <= 2,
+                alpha.abs_diff(128) <= ELLIPSE_ALPHA_TOLERANCE,
                 "nonuniform {radii:?} stroke alpha at {point:?} is {alpha}, expected 128"
             );
         }
@@ -1869,11 +1884,11 @@ fn gpu_path_subpaths_curves_and_default_stroke_render_as_one_shape() {
     let image = capture(&mut app, camera);
     for point in [(78, 108), (188, 108), (170, 188)] {
         assert!(
-            image.get_pixel(point.0, point.1).0[3].abs_diff(128) <= 3,
+            image.get_pixel(point.0, point.1).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
             "interior/open stroke {point:?}"
         );
     }
-    assert!(image.get_pixel(38, 68).0[3].abs_diff(191) <= 3);
+    assert!(image.get_pixel(38, 68).0[3].abs_diff(191) <= ALPHA_COMPARISON_TOLERANCE);
     assert!(image.get_pixel(78, 168).0[3] > 100);
     for point in [(128, 128), (132, 188), (215, 188)] {
         assert_eq!(
@@ -1925,7 +1940,7 @@ fn gpu_path_miter_join_extends_only_the_outer_side() {
         "the inner bevel must not fill outside both short segments"
     );
     assert!(
-        image.get_pixel(140, 120).0[3].abs_diff(128) <= 3,
+        image.get_pixel(140, 120).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
         "outer miter remains visible exactly once"
     );
 }
@@ -1973,7 +1988,7 @@ fn gpu_path_distant_subpath_preserves_small_contour_precision() {
         let camera = view_camera(&mut app, document);
         let image = capture(&mut app, camera);
         assert!(
-            image.get_pixel(128, 128).0[3].abs_diff(128) <= 3,
+            image.get_pixel(128, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
             "distant={distant} must preserve local fill"
         );
         if let Some(expected) = &expected {
@@ -2028,8 +2043,8 @@ fn gpu_path_overlapping_subpaths_keep_nonzero_winding_and_single_stroke_coverage
         let camera = view_camera(&mut app, document);
         let image = capture(&mut app, camera);
         let alpha = image.get_pixel(128, 128).0[3];
-        assert!(alpha.abs_diff(if same_winding { 128 } else { 0 }) <= 3);
-        assert!(image.get_pixel(165, 128).0[3].abs_diff(128) <= 3);
+        assert!(alpha.abs_diff(if same_winding { 128 } else { 0 }) <= ALPHA_COMPARISON_TOLERANCE);
+        assert!(image.get_pixel(165, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
     }
     let document = app.world_mut().spawn(CanvasDocument).id();
     CanvasDocument::create_path(
@@ -2058,7 +2073,7 @@ fn gpu_path_overlapping_subpaths_keep_nonzero_winding_and_single_stroke_coverage
     let camera = view_camera(&mut app, document);
     let image = capture(&mut app, camera);
     assert!(
-        image.get_pixel(128, 128).0[3].abs_diff(128) <= 3,
+        image.get_pixel(128, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
         "crossing strokes in one Path are painted once"
     );
 }
@@ -2099,7 +2114,7 @@ fn gpu_path_crossing_remote_subpath_does_not_erase_small_fill() {
         let camera = view_camera(&mut app, document);
         let image = capture(&mut app, camera);
         assert!(
-            image.get_pixel(130, 125).0[3].abs_diff(128) <= 3,
+            image.get_pixel(130, 125).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
             "remote {distance} line must not erase fill: {:?}",
             image.get_pixel(130, 125).0
         );
@@ -2141,7 +2156,7 @@ fn gpu_path_crossing_remote_subpath_does_not_erase_small_fill() {
         0,
         "small reverse contour must preserve its hole inside a remote outline"
     );
-    assert!(image.get_pixel(138, 128).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(138, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
 }
 
 #[test]
@@ -2176,7 +2191,7 @@ fn gpu_path_remote_retraced_segment_preserves_local_fill() {
         let camera = view_camera(&mut app, document);
         let image = capture(&mut app, camera);
         assert!(
-            image.get_pixel(130, 125).0[3].abs_diff(128) <= 3,
+            image.get_pixel(130, 125).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
             "retraced remote {distance} segment must not erase the local fill: {:?}",
             image.get_pixel(130, 125).0
         );
@@ -2214,7 +2229,7 @@ fn gpu_path_nearby_nonadjacent_vertices_preserve_self_intersection_fill() {
         let camera = view_camera(&mut app, document);
         let image = capture(&mut app, camera);
         assert!(
-            image.get_pixel(138, 143).0[3].abs_diff(128) <= 3,
+            image.get_pixel(138, 143).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
             "remote {distance} crossing must keep its local lobe: {:?}",
             image.get_pixel(138, 143).0
         );
@@ -2257,7 +2272,7 @@ fn gpu_path_narrow_axis_aligned_notch_survives_remote_vertices() {
             0,
             "remote {distance} contour must preserve the narrow notch"
         );
-        assert!(image.get_pixel(143, 128).0[3].abs_diff(128) <= 3);
+        assert!(image.get_pixel(143, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
     }
 }
 
@@ -2292,7 +2307,7 @@ fn gpu_path_overlapping_slender_contours_keep_bounded_geometry() {
     .unwrap();
     let camera = view_camera(&mut app, document);
     let image = capture(&mut app, camera);
-    assert!(image.get_pixel(153, 153).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(153, 153).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
     assert_eq!(image.get_pixel(118, 128).0[3], 0);
     let meshes = app.world().resource::<Assets<Mesh>>();
     assert!(meshes.iter().all(|(_, mesh)| mesh.count_vertices() < 1000));
@@ -2332,8 +2347,8 @@ fn gpu_path_wide_strokes_keep_a_local_gap_beside_remote_geometry() {
     let camera = view_camera(&mut app, document);
     let image = capture(&mut app, camera);
     assert_eq!(image.get_pixel(128, 128).0[3], 0);
-    assert!(image.get_pixel(138, 128).0[3].abs_diff(128) <= 3);
-    assert!(image.get_pixel(118, 128).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(138, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
+    assert!(image.get_pixel(118, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
 }
 
 #[test]
@@ -2386,8 +2401,8 @@ fn gpu_path_staggered_diagonal_strokes_preserve_the_gap_after_one_axis_rebases()
             "the diagonal gap must stay transparent at {i}"
         );
     }
-    assert!(image.get_pixel(118, 130).0[3].abs_diff(128) <= 3);
-    assert!(image.get_pixel(148, 130).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(118, 130).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
+    assert!(image.get_pixel(148, 130).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
 }
 
 #[test]
@@ -2438,8 +2453,8 @@ fn gpu_path_diagonal_gap_survives_without_coordinate_collisions() {
         for i in 1..9 {
             assert_eq!(image.get_pixel(128 + i, 128 + i).0[3], 0);
         }
-        assert!(image.get_pixel(110, 130).0[3].abs_diff(128) <= 3);
-        assert!(image.get_pixel(148, 136).0[3].abs_diff(128) <= 3);
+        assert!(image.get_pixel(110, 130).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
+        assert!(image.get_pixel(148, 136).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
     }
 }
 
@@ -2478,8 +2493,8 @@ fn gpu_path_shared_stroke_corner_keeps_the_other_endpoint_gap() {
         let image = capture(&mut app, camera);
         assert_eq!(image.get_pixel(138, 98).0[3], 0);
         assert_eq!(image.get_pixel(132, 108).0[3], 0);
-        assert!(image.get_pixel(118, 108).0[3].abs_diff(128) <= 3);
-        assert!(image.get_pixel(158, 108).0[3].abs_diff(128) <= 3);
+        assert!(image.get_pixel(118, 108).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
+        assert!(image.get_pixel(158, 108).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
     }
 }
 
@@ -2518,13 +2533,13 @@ fn gpu_path_shared_corner_between_slanted_strokes_preserves_gap() {
     assert_eq!(image.get_pixel(98, 108).0[3], 0);
     assert_eq!(image.get_pixel(113, 118).0[3], 0);
     assert!(
-        image.get_pixel(128, 108).0[3].abs_diff(128) <= 3,
+        image.get_pixel(128, 108).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
         "first side {:?}, further {:?}, inner {:?}",
         image.get_pixel(128, 108).0,
         image.get_pixel(138, 108).0,
         image.get_pixel(138, 118).0
     );
-    assert!(image.get_pixel(68, 108).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(68, 108).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
 }
 
 #[test]
@@ -2561,16 +2576,16 @@ fn gpu_path_single_very_wide_diagonal_stroke_preserves_butt_faces() {
             let camera = view_camera(&mut app, document);
             let image = capture(&mut app, camera);
             assert!(
-                image.get_pixel(128, 128).0[3].abs_diff(128) <= 3,
+                image.get_pixel(128, 128).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE,
                 "width={width}, crossing={crossing}"
             );
-            assert!(image.get_pixel(65, 190).0[3].abs_diff(128) <= 3);
-            assert!(image.get_pixel(170, 170).0[3].abs_diff(128) <= 3);
-            assert!(image.get_pixel(86, 86).0[3].abs_diff(128) <= 3);
+            assert!(image.get_pixel(65, 190).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
+            assert!(image.get_pixel(170, 170).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
+            assert!(image.get_pixel(86, 86).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
             assert_eq!(image.get_pixel(250, 128).0[3], 0);
             assert_eq!(image.get_pixel(5, 128).0[3], 0);
             if crossing {
-                assert!(image.get_pixel(190, 190).0[3].abs_diff(128) <= 3);
+                assert!(image.get_pixel(190, 190).0[3].abs_diff(128) <= ALPHA_COMPARISON_TOLERANCE);
             } else {
                 assert_eq!(image.get_pixel(190, 190).0[3], 0);
             }
@@ -2613,7 +2628,7 @@ fn gpu_path_fill_curves_are_independent_of_a_huge_stroke_width() {
     let camera = view_camera(&mut app, document);
     let image = capture(&mut app, camera);
     assert!(
-        image.get_pixel(128, 108).0[3].abs_diff(191) <= 3,
+        image.get_pixel(128, 108).0[3].abs_diff(191) <= ALPHA_COMPARISON_TOLERANCE,
         "wide stroke must not flatten the fill curve"
     );
 }

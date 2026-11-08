@@ -1,3 +1,6 @@
+const PARALLEL_CHANNEL_THRESHOLD: usize = 8;
+const CHANNELS_PER_TASK: usize = 4;
+
 use crate::{
     ChannelView, ReducedChannel, ReductionInput, ReductionStats, WaveformPoint, WaveformReducer,
 };
@@ -152,7 +155,7 @@ impl WaveformReducer for LttbReducer {
             input.channels.len(),
             || ReducedChannel::Polyline(Vec::new()),
         );
-        if input.channels.len() < 8 {
+        if input.channels.len() < PARALLEL_CHANNEL_THRESHOLD {
             for ((cached, &view), channel) in self
                 .channels
                 .iter_mut()
@@ -169,9 +172,9 @@ impl WaveformReducer for LttbReducer {
                 .scope(|scope| {
                     for ((cached, views), channels) in self
                         .channels
-                        .chunks_mut(4)
-                        .zip(input.channels.chunks(4))
-                        .zip(output.chunks_mut(4))
+                        .chunks_mut(CHANNELS_PER_TASK)
+                        .zip(input.channels.chunks(CHANNELS_PER_TASK))
+                        .zip(output.chunks_mut(CHANNELS_PER_TASK))
                     {
                         let input = &input;
                         scope.spawn(async move {

@@ -1,11 +1,13 @@
 #![allow(clippy::disallowed_macros)]
 
+const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 use bevy::tasks::{IoTaskPool, TaskPool, block_on};
 use bevy_widgetry_job::*;
 use event_listener::Event;
 use std::{
     sync::{Arc, mpsc},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 fn manager() -> JobManager {
@@ -40,9 +42,9 @@ fn observing_cancellation_does_not_acknowledge_it_and_cleanup_keeps_stopping() {
                 Ok(())
             })
             .unwrap();
-        running.recv_timeout(Duration::from_secs(5)).unwrap();
+        running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::CancelRequested);
-        stopped.recv_timeout(Duration::from_secs(5)).unwrap();
+        stopped.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyStopping);
         assert!(
@@ -89,7 +91,7 @@ fn acknowledged_cancellation_cannot_mask_error_or_panic() {
                 Err(std::io::Error::other("cleanup failed").into())
             })
             .unwrap();
-        running.recv_timeout(Duration::from_secs(5)).unwrap();
+        running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         manager.cancel(id).unwrap();
         let outcome = block_on(receiver.recv()).unwrap();
         if panic {
@@ -130,9 +132,9 @@ fn cancellation_wakes_full_buffer_send_without_discarding_prior_items_or_auto_ac
                 },
             )
             .unwrap();
-        waiting.recv_timeout(Duration::from_secs(5)).unwrap();
+        waiting.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         manager.cancel(id).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !manager.status(id).unwrap().state.is_finished() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -185,7 +187,7 @@ fn completion_races_with_cancellation_preserve_the_actual_unacknowledged_result(
                     }
                 })
                 .unwrap();
-            running.recv_timeout(Duration::from_secs(5)).unwrap();
+            running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
             let sync = Arc::new(std::sync::Barrier::new(2));
             let other = sync.clone();
             let cancel = manager.clone();
@@ -236,9 +238,9 @@ fn send_cancellation_is_normal_and_does_not_acknowledge_the_job() {
             },
         )
         .unwrap();
-    waiting.recv_timeout(Duration::from_secs(5)).unwrap();
+    waiting.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
     manager.cancel(id).unwrap();
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
     while !manager.status(id).unwrap().state.is_finished() {
         assert!(Instant::now() < deadline);
         std::thread::yield_now();

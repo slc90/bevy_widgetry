@@ -210,6 +210,8 @@ fn background_rebuilds_commit_a_complete_snapshot_and_discard_obsolete_algorithm
 
 #[test]
 fn algorithm_switch_preserves_session_and_snapshot_until_new_data_is_ready() {
+    let comparison_tolerance = 0.0001;
+
     for kind in [
         WaveformSessionKind::Live,
         WaveformSessionKind::Replay { total_frames: 5000 },
@@ -280,7 +282,7 @@ fn algorithm_switch_preserves_session_and_snapshot_until_new_data_is_ready() {
                 .iter()
                 .all(|channel| matches!(channel, ReducedChannel::Polyline(_)))
         );
-        assert!(runtime.channel(0).unwrap().get(0).unwrap().abs() <= 0.0001);
+        assert!(runtime.channel(0).unwrap().get(0).unwrap().abs() <= comparison_tolerance);
         assert_eq!(
             app.world().resource::<Changes>().0,
             [WaveformAlgorithm::Lttb]

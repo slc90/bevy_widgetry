@@ -159,6 +159,8 @@ pub(crate) fn install(app: &mut App) {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
+    const BEFORE_EXPECTED_RECHECK: Duration = Duration::from_secs(59);
+
     use super::*;
     use bevy_widgetry_test_utils::LogCapture;
     use time::macros::date;
@@ -419,7 +421,7 @@ mod tests {
             app.world().resource::<Today>().0,
             Some(date!(2026 - 10 - 26))
         );
-        check(app.world_mut(), start + Duration::from_secs(59), || {
+        check(app.world_mut(), start + BEFORE_EXPECTED_RECHECK, || {
             panic!("clock read too early")
         });
         let next = start + CHECK_INTERVAL;

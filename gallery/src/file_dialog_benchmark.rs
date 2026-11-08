@@ -1,3 +1,6 @@
+const MAX_CAPTURED_EVENTS: usize = 100_000;
+const INITIAL_EVENT_CAPACITY: usize = 4096;
+
 mod slow_io;
 
 use bevy::camera::{NormalizedRenderTarget, RenderTarget};
@@ -44,7 +47,7 @@ impl Sink {
         let mut events = self.events.lock().map_err(|error| {
             crate::diagnostics::error(format!("FileDialog benchmark trace poisoned: {error}"))
         })?;
-        if events.len() >= 100_000 {
+        if events.len() >= MAX_CAPTURED_EVENTS {
             return Err(crate::diagnostics::error(
                 "FileDialog benchmark trace capacity exceeded",
             ));
@@ -228,7 +231,7 @@ pub(crate) fn install(app: &mut App) -> Result {
     let sink = Sink {
         epoch: Instant::now(),
         output,
-        events: Arc::new(Mutex::new(Vec::with_capacity(4096))),
+        events: Arc::new(Mutex::new(Vec::with_capacity(INITIAL_EVENT_CAPACITY))),
         frames: std::env::var_os("GALLERY_FILE_DIALOG_BENCH_FRAMES").is_some(),
         content: std::env::var("GALLERY_FILE_DIALOG_BENCH_CONTENT").as_deref() != Ok("off"),
     };

@@ -22,6 +22,9 @@ fn extent(world: &World, entity: Entity, orientation: Orientation) -> f32 {
 
 #[test]
 fn fractional_minimum_initialization_uses_unrounded_geometry() {
+    const RATIO_TOLERANCE: f32 = 0.0001;
+    const GEOMETRY_TOLERANCE: f32 = 0.001;
+
     for scale in [1.0, 1.25, 1.5] {
         let mut app = picking_app();
         app.add_plugins(WidgetrySplitterPlugin);
@@ -37,13 +40,20 @@ fn fractional_minimum_initialization_uses_unrounded_geometry() {
         )
         .unwrap();
         settle(&mut app);
-        assert!((extent(app.world(), root, Orientation::Horizontal) - 208.2).abs() < 0.001);
-        assert!((WidgetrySplitter::split_ratio(app.world(), root).unwrap() - 0.5).abs() < 0.0001);
+        assert!(
+            (extent(app.world(), root, Orientation::Horizontal) - 208.2).abs() < GEOMETRY_TOLERANCE
+        );
+        assert!(
+            (WidgetrySplitter::split_ratio(app.world(), root).unwrap() - 0.5).abs()
+                < RATIO_TOLERANCE
+        );
     }
 }
 
 #[test]
 fn content_box_panes_and_root_count_insets_once() {
+    const COMPARISON_TOLERANCE: f32 = 0.01;
+
     for orientation in [Orientation::Horizontal, Orientation::Vertical] {
         let mut app = picking_app();
         app.add_plugins(WidgetrySplitterPlugin);
@@ -57,13 +67,15 @@ fn content_box_panes_and_root_count_insets_once() {
         settle(&mut app);
         let children = app.world().get::<Children>(root).unwrap();
         assert!(
-            (extent(app.world(), children[0], orientation) - 300.0).abs() < 0.01,
+            (extent(app.world(), children[0], orientation) - 300.0).abs() < COMPARISON_TOLERANCE,
             "{orientation:?}: root={:?} pane={:?}, ratio={:?}",
             app.world().get::<ComputedNode>(root),
             app.world().get::<ComputedNode>(children[0]),
             WidgetrySplitter::split_ratio(app.world(), root)
         );
-        assert!((extent(app.world(), children[2], orientation) - 700.0).abs() < 0.01);
+        assert!(
+            (extent(app.world(), children[2], orientation) - 700.0).abs() < COMPARISON_TOLERANCE
+        );
         let [a, b] = [children[0], children[2]];
         for e in [a, b] {
             let mut n = app.world_mut().get_mut::<Node>(e).unwrap();
@@ -71,15 +83,18 @@ fn content_box_panes_and_root_count_insets_once() {
             n.max_height = px(300);
         }
         settle(&mut app);
-        assert!((extent(app.world(), root, orientation) - 664.4).abs() < 0.01);
+        assert!((extent(app.world(), root, orientation) - 664.4).abs() < COMPARISON_TOLERANCE);
         for e in [a, b] {
-            assert!((extent(app.world(), e, orientation) - 323.2).abs() < 0.01);
+            assert!((extent(app.world(), e, orientation) - 323.2).abs() < COMPARISON_TOLERANCE);
         }
     }
 }
 
 #[test]
 fn percentage_content_box_insets_do_not_initialize_against_transient_root_bounds() {
+    const RATIO_TOLERANCE: f32 = 0.0001;
+    const GEOMETRY_TOLERANCE: f32 = 0.01;
+
     for orientation in [Orientation::Horizontal, Orientation::Vertical] {
         let mut app = picking_app();
         app.add_plugins(WidgetrySplitterPlugin);
@@ -91,9 +106,10 @@ fn percentage_content_box_insets_do_not_initialize_against_transient_root_bounds
             } Node { width: px(1008), height: px(1008) }
         }).unwrap();
         settle(&mut app);
-        assert!((extent(app.world(), root, orientation) - 1008.0).abs() < 0.01);
+        assert!((extent(app.world(), root, orientation) - 1008.0).abs() < GEOMETRY_TOLERANCE);
         assert!(
-            (WidgetrySplitter::split_ratio(app.world(), root).unwrap() - 0.4984).abs() < 0.0001,
+            (WidgetrySplitter::split_ratio(app.world(), root).unwrap() - 0.4984).abs()
+                < RATIO_TOLERANCE,
             "{orientation:?}"
         );
     }

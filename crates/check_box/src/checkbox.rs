@@ -1,3 +1,6 @@
+pub(crate) const LABEL_GAP: f32 = 6.0;
+pub(crate) const ROW_MIN_HEIGHT: f32 = 24.0;
+
 use crate::indicator::checkbox_indicator_scene;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::picking::hover::Hovered;
@@ -56,7 +59,7 @@ impl WidgetryCheckBox {
             template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             @WidgetryCheckBoxHeadless
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6), min_height: px(24) }
+            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(LABEL_GAP), min_height: px(ROW_MIN_HEIGHT) }
             BackgroundColor
             BorderColor
             template(|_| Ok(ResolvedForeground::default()))

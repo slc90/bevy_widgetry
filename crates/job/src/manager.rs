@@ -1,3 +1,5 @@
+const SHUTDOWN_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1);
+
 use std::{
     collections::BTreeMap,
     future::Future,
@@ -160,7 +162,7 @@ impl JobManager {
                     if lock(&state).status.phase == ShutdownPhase::Finished {
                         break;
                     }
-                    futures_timer::Delay::new(std::time::Duration::from_millis(1)).await;
+                    futures_timer::Delay::new(SHUTDOWN_POLL_INTERVAL).await;
                 }
             });
             lock(&shared).task = Some(task);
@@ -737,6 +739,9 @@ fn job_outcome(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    use std::time::Duration;
+    const TEST_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
     use super::*;
 
     #[test]
@@ -755,9 +760,7 @@ mod tests {
                 JobOutcome::Failed(business.into())
             })
         });
-        let origin = original
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .unwrap();
+        let origin = original.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let mut first = true;
         let outcome = logs.run(|| {
             bevy::tasks::block_on(collect_thread_with_wait(thread, JobId(1), |thread| {
@@ -850,10 +853,7 @@ mod tests {
 
     #[test]
     fn tls_cleanup_does_not_block_a_single_worker_io_pool() {
-        use std::{
-            sync::mpsc,
-            time::{Duration, Instant},
-        };
+        use std::{sync::mpsc, time::Instant};
         let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
         let (entered, cleaning) = mpsc::channel();
         let (release, released) = mpsc::channel();
@@ -866,8 +866,8 @@ mod tests {
             });
             JobOutcome::Completed
         });
-        cleaning.recv_timeout(Duration::from_secs(5)).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        cleaning.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !thread.is_finished() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
@@ -877,7 +877,7 @@ mod tests {
             polling.send(()).unwrap();
             collect_thread(thread, JobId(1)).await
         });
-        polled.recv_timeout(Duration::from_secs(5)).unwrap();
+        polled.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let (progress, progressed) = mpsc::channel();
         let unblock = release.clone();
         let other_io = pool.spawn(async move {
@@ -959,7 +959,7 @@ mod tests {
         lock(&shared.lifecycle).cancel();
         lock(&shutdown).track(shared.clone());
         release.notify(usize::MAX);
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while !lock(&registry.records[&id].task)
             .as_ref()
             .is_some_and(|task| task.is_finished())
@@ -999,16 +999,15 @@ mod tests {
         use std::{
             sync::atomic::{AtomicBool, Ordering},
             sync::mpsc,
-            time::Duration,
         };
         let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
         let (occupied, waiting) = mpsc::channel();
         let (release, blocked) = mpsc::channel();
         let blocker = pool.spawn(async move {
             occupied.send(()).unwrap();
-            blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+            blocked.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         });
-        waiting.recv_timeout(Duration::from_secs(5)).unwrap();
+        waiting.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         let manager = JobManager::default();
         let invoked = Arc::new(AtomicBool::new(false));
         let observed = invoked.clone();
@@ -1102,10 +1101,7 @@ mod tests {
 
     #[test]
     fn thread_reaper_retains_core_after_last_external_handle_drop() {
-        use std::{
-            sync::mpsc,
-            time::{Duration, Instant},
-        };
+        use std::{sync::mpsc, time::Instant};
         let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
         let manager = JobManager::default();
         let weak = Arc::downgrade(&manager.inner);
@@ -1118,17 +1114,17 @@ mod tests {
                 JobOptions::default(),
                 move |_| {
                     started.send(()).unwrap();
-                    blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+                    blocked.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
                     Ok(())
                 },
             )
             .unwrap();
-        running.recv_timeout(Duration::from_secs(5)).unwrap();
+        running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         drop(receiver);
         drop(manager);
         assert!(weak.upgrade().is_some());
         release.send(()).unwrap();
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + TEST_WAIT_TIMEOUT;
         while weak.upgrade().is_some() {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();

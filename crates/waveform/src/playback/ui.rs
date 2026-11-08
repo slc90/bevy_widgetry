@@ -1,3 +1,13 @@
+const SECONDS_PER_HOUR: u64 = 3600;
+const SECONDS_PER_MINUTE: u64 = 60;
+
+const TOOLBAR_HEIGHT: f32 = 40.0;
+const TOOLBAR_GAP: f32 = 8.0;
+const CONTROL_PADDING: f32 = 4.0;
+const PLAY_BUTTON_SIZE: f32 = 32.0;
+const PLAY_ICON_SIZE: f32 = 24.0;
+const CHOICE_WIDTH: f32 = 88.0;
+
 use super::{Playback, WaveformPlaybackAction, WaveformPlaybackRequested};
 use crate::view_error::ViewResult;
 use crate::view_error::{ViewErrors, ViewFailureState};
@@ -136,11 +146,11 @@ fn initialize_one(world: &mut World, root: Entity) -> ViewResult {
     let bar = spawn_scene(world, bsn! {
         Parts { model: #SpeedModel, combo: #SpeedCombo, icon: #PlayIcon, time: #Time, slider: #Progress }
         ChildOf(root) Name::new("WaveformReplayBar")
-        Node { width: percent(100), height: px(40), flex_shrink: 0.0, align_items: AlignItems::Center, column_gap: px(8), padding: UiRect::all(px(4)) }
+        Node { width: percent(100), height: px(TOOLBAR_HEIGHT), flex_shrink: 0.0, align_items: AlignItems::Center, column_gap: px(TOOLBAR_GAP), padding: UiRect::all(px(CONTROL_PADDING)) }
         Children [
             @WidgetryButton Name::new("WaveformReplayPlay") template(move |_| Ok(Owner { root, generation }))
-            Node { width: px(32), height: px(32), padding: UiRect::all(px(4)), flex_shrink: 0.0 }
-            Children [#PlayIcon @WidgetryIcon { @path: {BuiltinIcon::PlaybackPlay.path()}, @max_size: {Some(UVec2::splat(24))} } Node { width: px(24), height: px(24) }]
+            Node { width: px(PLAY_BUTTON_SIZE), height: px(PLAY_BUTTON_SIZE), padding: UiRect::all(px(CONTROL_PADDING)), flex_shrink: 0.0 }
+            Children [#PlayIcon @WidgetryIcon { @path: {BuiltinIcon::PlaybackPlay.path()}, @max_size: {Some(UVec2::splat(PLAY_ICON_SIZE as u32))} } Node { width: px(PLAY_ICON_SIZE), height: px(PLAY_ICON_SIZE) }]
         --
             #Progress @bevy_widgetry_slider::WidgetrySlider { @max: 1.0 }
             Name::new("WaveformReplayProgress") template(move |_| Ok(super::seek::ProgressOwner::new(root, generation)))
@@ -154,7 +164,7 @@ fn initialize_one(world: &mut World, root: Entity) -> ViewResult {
                 Ok(model)
             })
         --
-            #SpeedCombo Name::new("WaveformReplaySpeed") Node { width: px(88), flex_shrink: 0.0 }
+            #SpeedCombo Name::new("WaveformReplaySpeed") Node { width: px(CHOICE_WIDTH), flex_shrink: 0.0 }
         ]
     }).map_err(|error| error.into_bevy_error())?;
     let parts = world
@@ -164,7 +174,7 @@ fn initialize_one(world: &mut World, root: Entity) -> ViewResult {
     let result = apply_scene(&mut world.entity_mut(combo), bsn! {
         @WidgetryComboBox::<Speed> { @source: model, @renderer: {WidgetryListViewRenderer::new(|speed: &Speed| { let label = format!("{}×", speed.0); bsn_list! { Text(label) WidgetryText } })} }
         template(move |_| Ok(SpeedOwner { root, generation, projected: None }))
-        Node { width: px(88), flex_shrink: 0.0 }
+        Node { width: px(CHOICE_WIDTH), flex_shrink: 0.0 }
     }).map_err(|error| error.into_bevy_error().into());
     if let Err(error) = result {
         world.despawn(bar);
@@ -275,14 +285,18 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> ViewResult {
 
 fn format_time(value: std::time::Duration) -> String {
     let seconds = value.as_secs();
-    if seconds < 3600 {
-        format!("{:02}:{:02}", seconds / 60, seconds % 60)
+    if seconds < SECONDS_PER_HOUR {
+        format!(
+            "{:02}:{:02}",
+            seconds / SECONDS_PER_MINUTE,
+            seconds % SECONDS_PER_MINUTE
+        )
     } else {
         format!(
             "{:02}:{:02}:{:02}",
-            seconds / 3600,
-            seconds / 60 % 60,
-            seconds % 60
+            seconds / SECONDS_PER_HOUR,
+            seconds / SECONDS_PER_MINUTE % SECONDS_PER_MINUTE,
+            seconds % SECONDS_PER_MINUTE
         )
     }
 }

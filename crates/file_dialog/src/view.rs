@@ -1,3 +1,17 @@
+const LOCATION_PADDING_X: f32 = 8.0;
+
+const TYPE_COLUMN_WIDTH: f32 = 90.0;
+const MODIFIED_COLUMN_WIDTH: f32 = 132.0;
+const SIZE_COLUMN_WIDTH: f32 = 75.0;
+const BYTES_PER_SIZE_UNIT: u64 = 1024;
+const NAME_MIN_WIDTH_PERCENT: f32 = 40.0;
+const HEADER_HEIGHT: f32 = 30.0;
+const ROW_GAP: f32 = 8.0;
+const HEADER_PADDING_X: f32 = 9.0;
+const HEADER_ICON_SPACER: f32 = 16.0;
+const MAX_VISIBLE_ROWS: usize = 256;
+const VIEW_BORDER_WIDTH: f32 = 1.0;
+
 use crate::*;
 use bevy::a11y::AccessibilityNode;
 use bevy::prelude::*;
@@ -137,23 +151,23 @@ fn row_content(entry: &WidgetryFileDialogEntry, font: f32) -> impl SceneList {
     bsn_list! {
         @crate::icons::scene(entry)--
         @detail_cell(entry.name().to_string_lossy().into_owned(),font,None,false)--
-        @detail_cell(entry_type(entry),font,Some(90.0),false)--
-        @detail_cell(modified_text(entry.modified()),font,Some(132.0),false)--
-        @detail_cell(size,font,Some(75.0),true)
+        @detail_cell(entry_type(entry),font,Some(TYPE_COLUMN_WIDTH),false)--
+        @detail_cell(modified_text(entry.modified()),font,Some(MODIFIED_COLUMN_WIDTH),false)--
+        @detail_cell(size,font,Some(SIZE_COLUMN_WIDTH),true)
     }
 }
 
 fn readable_size(bytes: u64) -> String {
-    if bytes < 1024 {
+    if bytes < BYTES_PER_SIZE_UNIT {
         return format!("{bytes} B");
     }
     let mut value = bytes as f64;
     let mut unit = "B";
     for next in ["KB", "MB", "GB", "TB", "PB", "EB"] {
-        if value < 1024.0 {
+        if value < BYTES_PER_SIZE_UNIT as f64 {
             break;
         }
-        value /= 1024.0;
+        value /= BYTES_PER_SIZE_UNIT as f64;
         unit = next;
     }
     format!("{value:.1} {unit}")
@@ -198,7 +212,11 @@ fn modified_text(timestamp: Option<std::time::SystemTime>) -> String {
 fn detail_cell(label: String, font: f32, width: Option<f32>, right: bool) -> impl Scene {
     let justify = if right { Justify::Right } else { Justify::Left };
     let flex_grow: f32 = if width.is_none() { 1.0 } else { 0.0 };
-    let min_width = if width.is_none() { percent(40) } else { px(0) };
+    let min_width = if width.is_none() {
+        percent(NAME_MIN_WIDTH_PERCENT)
+    } else {
+        px(0)
+    };
     let width = width.map(px).unwrap_or(Val::Auto);
     bsn! { @crate::style::text_scene(label,font) TextLayout {linebreak:bevy::text::LineBreak::NoWrap,justify}
         Node {width,flex_grow,flex_shrink:1.0,min_width,overflow:Overflow::clip()}
@@ -206,13 +224,13 @@ fn detail_cell(label: String, font: f32, width: Option<f32>, right: bool) -> imp
 }
 
 pub(crate) fn column_header(font: f32) -> impl Scene {
-    bsn! { Node {width:percent(100),height:px(30),flex_shrink:0.0,column_gap:px(8),align_items:AlignItems::Center,padding:UiRect::axes(px(9),px(0)),overflow:Overflow::clip()}
+    bsn! { Node {width:percent(100),height:px(HEADER_HEIGHT),flex_shrink:0.0,column_gap:px(ROW_GAP),align_items:AlignItems::Center,padding:UiRect::axes(px(HEADER_PADDING_X),px(0)),overflow:Overflow::clip()}
         template(|_|Ok(Pickable::IGNORE)) Children [
-            Node {width:px(16),flex_shrink:0.0}--
+            Node {width:px(HEADER_ICON_SPACER),flex_shrink:0.0}--
             Name("FileDialogNameColumn") @detail_cell("Name".into(),font,None,false)--
-            @detail_cell("Type".into(),font,Some(90.0),false)--
-            Name("FileDialogModifiedColumn") @detail_cell("Modified".into(),font,Some(132.0),false)--
-            Name("FileDialogSizeColumn") @detail_cell("Size".into(),font,Some(75.0),true)
+            @detail_cell("Type".into(),font,Some(TYPE_COLUMN_WIDTH),false)--
+            Name("FileDialogModifiedColumn") @detail_cell("Modified".into(),font,Some(MODIFIED_COLUMN_WIDTH),false)--
+            Name("FileDialogSizeColumn") @detail_cell("Size".into(),font,Some(SIZE_COLUMN_WIDTH),true)
         ]
     }
 }
@@ -272,12 +290,12 @@ pub(crate) fn reconcile(
         }
     }
     let (offset, visible) = range(len, style.row_height, height, offset, style.overscan);
-    if visible.len() > 256 {
+    if visible.len() > MAX_VISIBLE_ROWS {
         return Err(crate::error::failure(
             FileDialogError::Capacity {
                 resource: "visible rows",
                 actual: visible.len(),
-                limit: 256,
+                limit: MAX_VISIBLE_ROWS,
             },
             "file_dialog.view",
         )
@@ -338,7 +356,7 @@ pub(crate) fn reconcile(
                 spawn_scene(world, bsn! {
                     Name("FileDialogEntryRow") BackgroundColor::default() BorderColor::default()
                     template(|_| Ok(ResolvedForeground::default()))
-                    Node { width: percent(100), align_items: AlignItems::Center, flex_shrink: 0.0, column_gap: px(8), padding: UiRect::horizontal(px(8)), border: UiRect::all(px(1)) }
+                    Node { width: percent(100), align_items: AlignItems::Center, flex_shrink: 0.0, column_gap: px(ROW_GAP), padding: UiRect::horizontal(px(LOCATION_PADDING_X)), border: UiRect::all(px(VIEW_BORDER_WIDTH)) }
                     Children [{row_content(entry, style.font_size)}]
                 }).map_err(|error| error.with_context(crate::error::owner_frame(world, root, root, "file_dialog.view.scene")).into_bevy_error())?
             }

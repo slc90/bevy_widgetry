@@ -1,3 +1,6 @@
+const PLUGIN_READY_TIMEOUT: Duration = Duration::from_secs(30);
+const EXPORT_TIMEOUT: Duration = Duration::from_secs(35);
+const POLL_INTERVAL: Duration = Duration::from_millis(1);
 use bevy::{
     prelude::*,
     render::{
@@ -68,13 +71,13 @@ fn fixture() -> Result<Fixture> {
         },
     );
     app.set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler());
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + PLUGIN_READY_TIMEOUT;
     while app.plugins_state() != bevy::app::PluginsState::Ready {
         if Instant::now() >= deadline {
             return Err(error("PNG benchmark DX12 initialization timed out"));
         }
         bevy::tasks::tick_global_task_pools_on_main_thread();
-        std::thread::sleep(Duration::from_millis(1));
+        std::thread::sleep(POLL_INTERVAL);
     }
     app.finish();
     app.cleanup();
@@ -182,7 +185,7 @@ fn export(fixture: &mut Fixture, size: UVec2) -> Result {
         },
     )
     .map_err(|failure| failure.into_bevy_error())?;
-    let deadline = Instant::now() + Duration::from_secs(35);
+    let deadline = Instant::now() + EXPORT_TIMEOUT;
     loop {
         frame(&mut fixture.app)?;
         if let Some(result) = fixture
@@ -204,7 +207,7 @@ fn export(fixture: &mut Fixture, size: UVec2) -> Result {
         if Instant::now() >= deadline {
             return Err(error("PNG benchmark export timed out"));
         }
-        std::thread::sleep(Duration::from_millis(1));
+        std::thread::sleep(POLL_INTERVAL);
     }
     if assets(fixture.app.world()) != fixture.assets {
         return Err(error("PNG export did not reclaim its render assets"));

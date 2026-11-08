@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros)]
 
+const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
 use bevy::prelude::*;
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_job::JobManager;
@@ -120,7 +122,7 @@ fn dialog(app: &mut App, name: &str) -> Result<Entity> {
 fn pump(app: &mut App, mut done: impl FnMut(&World) -> bool) -> Result {
     let start = Instant::now();
     while !done(app.world()) {
-        if start.elapsed() > Duration::from_secs(10) {
+        if start.elapsed() > ASYNC_WAIT_TIMEOUT {
             return Err(BevyError::error("controlled runtime did not complete"));
         }
         app.update();
@@ -306,7 +308,7 @@ fn observer_flush_survives_multiple_replies_in_one_update() -> Result {
     let mut started = 0;
     while started < 2 {
         let (operation, _, _) = calls
-            .recv_timeout(Duration::from_secs(10))
+            .recv_timeout(ASYNC_WAIT_TIMEOUT)
             .map_err(BevyError::error)?;
         if operation == "iterate" {
             started += 1;

@@ -356,6 +356,8 @@ fn axis(vertical: bool, value: f32) -> Vec2 {
 
 #[test]
 fn thumb_grab_preserves_offset_and_dragging_outside_clamps_without_release_event() {
+    let comparison_tolerance = 0.0001;
+
     for id in pointer_ids() {
         for vertical in [false, true] {
             let (mut app, root, _, mut at) = fixture(id, vertical, false);
@@ -375,7 +377,7 @@ fn thumb_grab_preserves_offset_and_dragging_outside_clamps_without_release_event
             assert_eq!(value(&app, root), 5.0);
             assert!(app.world().resource::<Changes>().0.is_empty());
             moved(&mut app, id, &mut at, axis(vertical, 7.0) + offset);
-            assert!((value(&app, root) - 7.0).abs() < 0.0001);
+            assert!((value(&app, root) - 7.0).abs() < comparison_tolerance);
             moved(&mut app, id, &mut at, axis(vertical, 15.0) + offset);
             assert_eq!(value(&app, root), 10.0);
             let count = app.world().resource::<Changes>().0.len();
@@ -428,6 +430,8 @@ fn thumb_grab_preserves_offset_and_dragging_outside_clamps_without_release_event
 
 #[test]
 fn track_click_moves_immediately_and_can_continue_dragging_in_both_orientations() {
+    let comparison_tolerance = 0.0001;
+
     for vertical in [false, true] {
         let id = pointer_ids()[1];
         let (mut app, root, _, mut at) = fixture(id, vertical, false);
@@ -438,17 +442,19 @@ fn track_click_moves_immediately_and_can_continue_dragging_in_both_orientations(
             &at,
             PointerAction::Press(PointerButton::Primary),
         );
-        assert!((value(&app, root) - 8.0).abs() < 0.0001);
+        assert!((value(&app, root) - 8.0).abs() < comparison_tolerance);
         moved(&mut app, id, &mut at, axis(vertical, 2.0));
-        assert!((value(&app, root) - 2.0).abs() < 0.0001);
+        assert!((value(&app, root) - 2.0).abs() < comparison_tolerance);
         input(&mut app, id, &at, PointerAction::Cancel);
         assert!(app.world().get::<Pressed>(root).is_none());
         let notices = &app.world().resource::<Lifecycle>().0;
         assert_eq!(notices.len(), 4);
         assert_eq!(notices[0], Notice::Start(5.0));
-        assert!(matches!(notices[1], Notice::Value(value, false) if (value - 8.0).abs() < 0.0001));
         assert!(
-            matches!(notices[3], Notice::End(value, SliderDragOutcome::Cancelled) if (value - 2.0).abs() < 0.0001)
+            matches!(notices[1], Notice::Value(value, false) if (value - 8.0).abs() < comparison_tolerance)
+        );
+        assert!(
+            matches!(notices[3], Notice::End(value, SliderDragOutcome::Cancelled) if (value - 2.0).abs() < comparison_tolerance)
         );
     }
 }
@@ -555,6 +561,8 @@ fn key(app: &mut App, window: Entity, code: KeyCode, repeat: bool) {
 
 #[test]
 fn keyboard_requires_enabled_focus_and_supports_repeat_steps_and_one_percent() {
+    let comparison_tolerance = 0.00001;
+
     for vertical in [false, true] {
         let (mut app, root, window, _) = fixture(PointerId::Mouse, vertical, true);
         let plus = if vertical {
@@ -597,9 +605,9 @@ fn keyboard_requires_enabled_focus_and_supports_repeat_steps_and_one_percent() {
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
     key(&mut app, window, KeyCode::ArrowRight, false);
-    assert!((value(&app, root) - 5.1).abs() < 0.00001);
+    assert!((value(&app, root) - 5.1).abs() < comparison_tolerance);
     key(&mut app, window, KeyCode::ArrowRight, true);
-    assert!((value(&app, root) - 5.2).abs() < 0.00001);
+    assert!((value(&app, root) - 5.2).abs() < comparison_tolerance);
     key(&mut app, window, KeyCode::ArrowUp, true);
     key(&mut app, window, KeyCode::Home, false);
     key(&mut app, window, KeyCode::End, false);
@@ -667,6 +675,8 @@ fn inherited_disabled_blocks_new_pointer_and_keyboard_input_and_interrupts_drag(
 
 #[test]
 fn camera_viewport_offset_preserves_thumb_grab_and_track_coordinates() {
+    let comparison_tolerance = 0.0001;
+
     let id = pointer_ids()[1];
     let (mut app, root, _, mut at) = fixture(id, false, false);
     let camera = app
@@ -693,7 +703,7 @@ fn camera_viewport_offset_preserves_thumb_grab_and_track_coordinates() {
     );
     assert_eq!(value(&app, root), 5.0);
     moved(&mut app, id, &mut at, axis(false, 7.0) + offset);
-    assert!((value(&app, root) - 7.0).abs() < 0.0001);
+    assert!((value(&app, root) - 7.0).abs() < comparison_tolerance);
     input(
         &mut app,
         id,
@@ -707,7 +717,7 @@ fn camera_viewport_offset_preserves_thumb_grab_and_track_coordinates() {
         &at,
         PointerAction::Press(PointerButton::Primary),
     );
-    assert!((value(&app, root) - 2.0).abs() < 0.0001);
+    assert!((value(&app, root) - 2.0).abs() < comparison_tolerance);
 }
 
 #[derive(Resource, Default)]
@@ -751,6 +761,8 @@ fn perpendicular_and_disabled_keys_keep_bubbling_to_the_parent() {
 
 #[test]
 fn explicit_visible_overrides_hidden_ancestors_without_overriding_disabled_or_display() {
+    let comparison_tolerance = 0.0001;
+
     for visible_on_root in [false, true] {
         let id = pointer_ids()[1];
         let (mut app, root, window, mut at) = fixture(id, false, false);
@@ -778,7 +790,7 @@ fn explicit_visible_overrides_hidden_ancestors_without_overriding_disabled_or_di
         );
         assert!(app.world().get::<Pressed>(root).is_some());
         moved(&mut app, id, &mut at, axis(false, 7.0));
-        assert!((value(&app, root) - 7.0).abs() < 0.0001);
+        assert!((value(&app, root) - 7.0).abs() < comparison_tolerance);
         input(
             &mut app,
             id,
@@ -786,18 +798,18 @@ fn explicit_visible_overrides_hidden_ancestors_without_overriding_disabled_or_di
             PointerAction::Release(PointerButton::Primary),
         );
         key(&mut app, window, KeyCode::ArrowRight, false);
-        assert!((value(&app, root) - 7.1).abs() < 0.0001);
+        assert!((value(&app, root) - 7.1).abs() < comparison_tolerance);
         app.world_mut()
             .entity_mut(hidden)
             .insert(InteractionDisabled);
         key(&mut app, window, KeyCode::ArrowRight, false);
-        assert!((value(&app, root) - 7.1).abs() < 0.0001);
+        assert!((value(&app, root) - 7.1).abs() < comparison_tolerance);
         app.world_mut()
             .entity_mut(hidden)
             .remove::<InteractionDisabled>();
         app.world_mut().get_mut::<Node>(hidden).unwrap().display = Display::None;
         key(&mut app, window, KeyCode::ArrowRight, false);
-        assert!((value(&app, root) - 7.1).abs() < 0.0001);
+        assert!((value(&app, root) - 7.1).abs() < comparison_tolerance);
     }
 }
 

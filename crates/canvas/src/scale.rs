@@ -1,3 +1,6 @@
+const HANDLE_HIT_MARGIN: f32 = 2.0;
+const MIN_POSITIVE_SUBNORMAL: f32 = f32::from_bits(1);
+
 use crate::CanvasDocument;
 use crate::error::CanvasResult as Result;
 use bevy::{math::DVec2, prelude::*};
@@ -56,7 +59,8 @@ pub(crate) fn hit(
             .into_iter()
             .filter_map(|(handle, center)| {
                 let distance = (center - point).length_squared() * zoom * zoom;
-                (distance <= (HANDLE_SIZE * 0.5 + 2.0).powi(2)).then_some((handle, distance))
+                (distance <= (HANDLE_SIZE * 0.5 + HANDLE_HIT_MARGIN).powi(2))
+                    .then_some((handle, distance))
             })
             .min_by(|(_, a), (_, b)| a.total_cmp(b)))
     })()
@@ -119,7 +123,7 @@ impl Scale {
         for i in 0..2 {
             scaled[i] = scaled[i]
                 .abs()
-                .max(f64::from(f32::from_bits(1)))
+                .max(f64::from(MIN_POSITIVE_SUBNORMAL))
                 .copysign(scaled[i]);
         }
         let mut transform = self.transform;

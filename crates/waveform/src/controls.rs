@@ -1,3 +1,7 @@
+const CONTROLS_PADDING: f32 = 4.0;
+const CONTROLS_GAP: f32 = 8.0;
+const CHOICE_WIDTH: f32 = 112.0;
+
 use crate::view_error::ViewResult;
 use crate::view_error::{ViewErrors, ViewFailureState};
 use crate::{Waveform, WaveformRuntime};
@@ -31,7 +35,10 @@ enum RangeChoice {
 impl RangeChoice {
     fn label(self) -> String {
         match self {
-            Self::Duration(ms) => format!("{} s", ms as f64 / 1000.0),
+            Self::Duration(ms) => format!(
+                "{} s",
+                ms as f64 / crate::config::MILLISECONDS_PER_SECOND as f64
+            ),
             Self::Amplitude(value) => value.label(),
             Self::Channels(value) => value.label(),
         }
@@ -189,7 +196,7 @@ fn initialize_control(
             ControlParts { root: root, model: #TimeModel, combo: #TimeCombo }
             template(move |_| Ok(ChildOf(bar)))
             Node { display: Display::Flex, flex_shrink: 0.0,
-                padding: UiRect::all(px(4)), column_gap: px(8), align_items: AlignItems::Center }
+                padding: UiRect::all(px(CONTROLS_PADDING)), column_gap: px(CONTROLS_GAP), align_items: AlignItems::Center }
             Children [
                 #TimeModel
                 template(move |_| {
@@ -200,7 +207,7 @@ fn initialize_control(
             --
                 #TimeCombo
                 Name::new(match kind { ControlKind::Duration => "WaveformTimeRange", ControlKind::Amplitude => "WaveformAmplitudeRange", ControlKind::Channels => "WaveformChannelCount" })
-                Node { width: px(112), flex_shrink: 0.0 }
+                Node { width: px(CHOICE_WIDTH), flex_shrink: 0.0 }
             ]
         },
     )
@@ -220,7 +227,7 @@ fn initialize_control(
                     })}
                 }
                 template(move |_| Ok(ControlOwner { root, projected: None, kind, failure: default() }))
-                Node { width: px(112), flex_shrink: 0.0 }
+                Node { width: px(CHOICE_WIDTH), flex_shrink: 0.0 }
         },
     );
     if let Err(error) = result {

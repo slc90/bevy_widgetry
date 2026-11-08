@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+RESOURCE_NOT_FOUND_CODE = -23502
 
 
 PAGES = ["Button", "CheckBox", "ComboBox", "ScrollArea", "ListView", "Tree", "Table", "TextField", "Tooltip", "Window", "Waveform"]
@@ -24,6 +25,19 @@ PARENT = "bevy_ecs::hierarchy::ChildOf"
 SCROLL_AREA = "bevy_ui_widgets::scrollarea::ScrollArea"
 
 
+RPC_TIMEOUT_SECONDS = 15
+POINTER_TIMEOUT_SECONDS = 15
+NAVIGATION_TIMEOUT_SECONDS = 15
+PAGE_READY_TIMEOUT_SECONDS = 15
+STATE_POLL_SECONDS = 0.02
+NAVIGATION_SCROLL_FRACTION = 0.8
+LAYOUT_SETTLE_SECONDS = 0.05
+DEFAULT_BRP_PORT = 15702
+DEFAULT_WARMUP_CYCLES = 3
+DEFAULT_MEASURED_CYCLES = 20
+DEFAULT_SWITCH_BUDGET_MS = 250.0
+WINDOW_SIZE = [1920, 1080]
+
 class RpcError(RuntimeError):
     def __init__(self, error):
         self.code = error["code"]
@@ -36,7 +50,7 @@ def rpc(port, method, params):
         data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(request, timeout=RPC_TIMEOUT_SECONDS) as response:
         value = json.load(response)
     if "error" in value:
         raise RpcError(value["error"])
@@ -44,7 +58,7 @@ def rpc(port, method, params):
 
 
 def wait_pointer(port, inactive=False):
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + POINTER_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         state = rpc(port, "brp_extras/pointer_control", {"action": "status"})
         if state["last_error"] is not None:
@@ -52,7 +66,7 @@ def wait_pointer(port, inactive=False):
         complete = state["phase"] == "inactive" if inactive else not state["busy"]
         if complete:
             return
-        time.sleep(0.02)
+        time.sleep(STATE_POLL_SECONDS)
     raise TimeoutError("Pointer 未完成")
 
 
@@ -78,7 +92,7 @@ def bounds(row):
 
 
 def navigation_point(port, page):
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + NAVIGATION_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         rows = rpc(port, "world.query", {"data": {"components": [NAME, NODE, TRANSFORM]}})
         target = named(rows, page + "Nav")
@@ -97,11 +111,11 @@ def navigation_point(port, page):
         center = [(left + right) / 2, (top + bottom) / 2]
         rpc(port, "brp_extras/move_mouse", {"position": center})
         wait_pointer(port)
-        step = (bottom - top) * 0.8
+        step = (bottom - top) * NAVIGATION_SCROLL_FRACTION
         rpc(port, "brp_extras/scroll_mouse", {"x": 0, "y": max(-step, min(step, center[1] - y)), "unit": "Pixel"})
         wait_pointer(port)
         # Pointer completion can precede PostUpdate layout propagation.
-        time.sleep(0.05)
+        time.sleep(LAYOUT_SETTLE_SECONDS)
     raise TimeoutError(f"{page}Nav 滚动后仍不可见")
 
 
@@ -110,12 +124,12 @@ def click_page(port, page):
     wait_pointer(port)
     rpc(port, "brp_extras/click_mouse", {"button": "Left"})
     wait_pointer(port)
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + PAGE_READY_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         rows = names(port)
         if any(row["components"][NAME] == page + "Page" for row in rows):
             return named(rows, page + "Page")
-        time.sleep(0.02)
+        time.sleep(STATE_POLL_SECONDS)
     raise TimeoutError(f"点击 {page}Nav 后未找到 {page}Page")
 
 
@@ -136,11 +150,11 @@ def samples(output):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--port", type=int, default=15702)
+    parser.add_argument("--port", type=int, default=DEFAULT_BRP_PORT)
     parser.add_argument("--pages", nargs="+", choices=PAGES[1:], default=["ListView"])
-    parser.add_argument("--warmup", type=int, default=3)
-    parser.add_argument("--cycles", type=int, default=20)
-    parser.add_argument("--budget-ms", type=float, default=250.0)
+    parser.add_argument("--warmup", type=int, default=DEFAULT_WARMUP_CYCLES)
+    parser.add_argument("--cycles", type=int, default=DEFAULT_MEASURED_CYCLES)
+    parser.add_argument("--budget-ms", type=float, default=DEFAULT_SWITCH_BUDGET_MS)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--profile", required=True)
     args = parser.parse_args()
@@ -158,7 +172,7 @@ def main():
                   rustc=subprocess.check_output(["rustc", "--version"], text=True).strip(),
                   head=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=workspace, text=True).strip(),
                   working_tree=subprocess.check_output(["git", "status", "--porcelain"], cwd=workspace, text=True).strip(),
-                  window=[1920, 1080], update_mode="desktop_app", rendering="DX12",
+                  window=WINDOW_SIZE, update_mode="desktop_app", rendering="DX12",
                   boundary="First to Last after Waveform Status; excludes CSV I/O, render thread/GPU, BRP RTT and idle",
                   cache="OS/filesystem/asset caches not flushed; first visit recorded separately from warmed switches")
     with (output / "scenario.json").open("x", encoding="utf-8") as target:
@@ -182,7 +196,7 @@ def main():
                     try:
                         rpc(args.port, "world.get_resources", {"resource": SOURCES[page]})
                     except RpcError as error:
-                        if error.code != -23502:
+                        if error.code != RESOURCE_NOT_FOUND_CODE:
                             raise
                     else:
                         raise RuntimeError(f"{page} Resource 残留")

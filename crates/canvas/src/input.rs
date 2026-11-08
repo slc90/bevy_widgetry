@@ -666,12 +666,14 @@ fn zoom_by_scroll(
         let Some(local) = inside_position(world, entity, target, point) else {
             return Ok(());
         };
+        let pixels_per_scroll_line = 100.0;
+        let log_zoom_per_scroll_line = 0.1;
         let lines = match unit {
             bevy::input::mouse::MouseScrollUnit::Line => y,
-            bevy::input::mouse::MouseScrollUnit::Pixel => y / 100.0,
+            bevy::input::mouse::MouseScrollUnit::Pixel => y / pixels_per_scroll_line,
         };
         let old = CanvasView::_zoom(world, entity)?;
-        let zoom = (old.ln() + lines * 0.1)
+        let zoom = (old.ln() + lines * log_zoom_per_scroll_line)
             .clamp(crate::view::MIN_ZOOM.ln(), crate::view::MAX_ZOOM.ln())
             .exp()
             .clamp(crate::view::MIN_ZOOM, crate::view::MAX_ZOOM);

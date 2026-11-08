@@ -1,5 +1,7 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+const EXPECTED_DAY_CELLS: usize = 42;
+
 use bevy::prelude::*;
 use bevy_widgetry_date_picker::*;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, scene_app};
@@ -135,7 +137,7 @@ fn grids_are_continuous_and_respect_week_start_bounds_selection_and_today() {
                 );
                 let grid = WidgetryDatePicker::days(app.world(), root, Some(date!(2024 - 02 - 29)))
                     .unwrap();
-                assert_eq!(grid.len(), 42);
+                assert_eq!(grid.len(), EXPECTED_DAY_CELLS);
                 assert_eq!(grid[0].date.weekday(), start);
                 assert!(
                     grid.windows(2).all(

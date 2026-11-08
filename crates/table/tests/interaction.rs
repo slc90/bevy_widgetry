@@ -1930,6 +1930,8 @@ fn tab_navigation_enters_table_through_caller_group() {
 
 #[test]
 fn resize_window_logical_distance_ignores_native_dpi() {
+    let comparison_tolerance = 0.0001;
+
     for scale in [1.0, 1.5, 2.0] {
         let (mut app, source, root, _) = interaction_fixture();
         *app.world_mut().resource_mut::<bevy::ui::UiScale>() = bevy::ui::UiScale(scale);
@@ -1974,7 +1976,7 @@ fn resize_window_logical_distance_ignores_native_dpi() {
         else {
             panic!("resize 必须建立 Fixed width");
         };
-        assert!((width - (120.0 + 100.0 / scale)).abs() < 0.0001);
+        assert!((width - (120.0 + 100.0 / scale)).abs() < comparison_tolerance);
     }
 }
 

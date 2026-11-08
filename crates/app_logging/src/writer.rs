@@ -1,3 +1,5 @@
+const FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
+
 use crate::error::{self, LoggingError, LoggingFailure, LoggingSource, LoggingStage};
 use bevy_widgetry_diagnostics::WidgetryFailure;
 use std::{
@@ -126,7 +128,7 @@ pub struct LoggingGuard {
 }
 impl LoggingGuard {
     pub fn finish(mut self) -> Result<(), Arc<LoggingFailure>> {
-        self.finish_inner(Duration::from_secs(5))
+        self.finish_inner(FLUSH_TIMEOUT)
     }
     fn finish_inner(&mut self, timeout: Duration) -> Result<(), Arc<LoggingFailure>> {
         if self.worker.is_some() {
@@ -164,7 +166,7 @@ impl LoggingGuard {
 impl Drop for LoggingGuard {
     fn drop(&mut self) {
         if self.worker.is_some()
-            && let Err(failure) = self.finish_inner(Duration::from_secs(5))
+            && let Err(failure) = self.finish_inner(FLUSH_TIMEOUT)
         {
             eprintln!(
                 "ERROR phase=unhandled error_id={} origin={} backtrace={} 日志输出未能完整保存",
@@ -208,12 +210,15 @@ pub(crate) fn prepare<W: Write + Send + 'static>(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
+    const SLOW_WRITE_DELAY: Duration = Duration::from_millis(1);
+    const FLUSH_TEST_TIMEOUT: Duration = Duration::from_millis(10);
+
     use super::*;
 
     struct Slow(Arc<Mutex<Vec<u8>>>);
     impl Write for Slow {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            std::thread::sleep(Duration::from_millis(1));
+            std::thread::sleep(SLOW_WRITE_DELAY);
             self.0.lock().unwrap().extend_from_slice(bytes);
             Ok(bytes.len())
         }
@@ -338,7 +343,7 @@ mod tests {
         let gate = Arc::new((Mutex::new(false), Condvar::new()));
         let (mut writer, mut guard) = prepare(Blocked(gate.clone()), Path::new("blocked.log"), 1);
         writer.write_all(b"diagnostic").unwrap();
-        let result = guard.finish_inner(Duration::from_millis(10));
+        let result = guard.finish_inner(FLUSH_TEST_TIMEOUT);
         *gate.0.lock().unwrap() = true;
         gate.1.notify_all();
         let failure = result.unwrap_err();

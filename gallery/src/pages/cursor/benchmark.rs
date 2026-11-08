@@ -1,3 +1,6 @@
+const MILLISECONDS_PER_SECOND: f64 = 1000.0;
+const FLUSH_INTERVAL_MS: u128 = 500;
+
 use super::{CursorPreview, CursorPreviewAssets};
 use crate::gallery::GalleryPage;
 use bevy::prelude::*;
@@ -57,9 +60,9 @@ fn record(
     exit: Res<Messages<AppExit>>,
 ) -> Result {
     let now = Instant::now();
-    let elapsed = now.duration_since(measurement.epoch).as_secs_f64() * 1000.0;
-    let update = now.duration_since(measurement.frame).as_secs_f64() * 1000.0;
-    let interval = now.duration_since(measurement.previous).as_secs_f64() * 1000.0;
+    let elapsed = now.duration_since(measurement.epoch).as_secs_f64() * MILLISECONDS_PER_SECOND;
+    let update = now.duration_since(measurement.frame).as_secs_f64() * MILLISECONDS_PER_SECOND;
+    let interval = now.duration_since(measurement.previous).as_secs_f64() * MILLISECONDS_PER_SECOND;
     measurement.previous = now;
     let mut ready = 0;
     let mut indices = Vec::new();
@@ -83,7 +86,7 @@ fn record(
         indices.join(";")
     )
     .map_err(failure)?;
-    if now.duration_since(measurement.flush).as_millis() >= 500 || !exit.is_empty() {
+    if now.duration_since(measurement.flush).as_millis() >= FLUSH_INTERVAL_MS || !exit.is_empty() {
         measurement.writer.flush().map_err(failure)?;
         measurement.flush = now;
     }

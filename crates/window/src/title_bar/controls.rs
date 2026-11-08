@@ -1,3 +1,6 @@
+const CONTROL_WIDTH: f32 = 46.0;
+const CONTROL_CORNER_RADIUS: f32 = 4.0;
+
 use crate::{
     title_bar::{close::CloseButton, maximize::MaximizeButton, minimize::MinimizeButton},
     window_root::{WindowRoot, find_window_root},
@@ -15,10 +18,10 @@ use bevy_widgetry_core::disabled::queue_intrinsic_disabled;
 
 pub(super) fn window_control_button_node() -> Node {
     Node {
-        width: px(46),
+        width: px(CONTROL_WIDTH),
         flex_shrink: 0.0,
         height: percent(100),
-        border_radius: BorderRadius::all(px(4)),
+        border_radius: BorderRadius::all(px(CONTROL_CORNER_RADIUS)),
         align_items: AlignItems::Center,
         justify_content: JustifyContent::Center,
         ..default()

@@ -228,6 +228,8 @@ fn measurement_toolbar_keeps_range_popup_visible_and_pickable() {
 
 #[test]
 fn actual_picking_draws_moves_resizes_and_retains_one_rectangle_without_source_reads() {
+    let comparison_tolerance = 1e-6;
+
     for id in pointer_ids() {
         let mut f = fixture(WaveformSessionKind::Live, id);
         Waveform::set_measurement_enabled_in_world(f.app.world_mut(), f.root, true).unwrap();
@@ -239,7 +241,7 @@ fn actual_picking_draws_moves_resizes_and_retains_one_rectangle_without_source_r
             first.rectangle,
             Rect::from_corners(Vec2::new(40.0, 30.0), Vec2::new(240.0, 180.0))
         );
-        assert!((first.delta_seconds - 200.0 / 468.0).abs() < 1e-6);
+        assert!((first.delta_seconds - 200.0 / 468.0).abs() < comparison_tolerance);
         assert_eq!(first.delta_volts, 4.0);
         assert!(
             !f.app
@@ -284,6 +286,8 @@ fn actual_picking_draws_moves_resizes_and_retains_one_rectangle_without_source_r
 
 #[test]
 fn committed_scales_density_resize_live_and_replay_clock_do_not_bind_the_rectangle_to_samples() {
+    let comparison_tolerance = 1e-6;
+
     for kind in [
         WaveformSessionKind::Live,
         WaveformSessionKind::Replay {
@@ -312,7 +316,10 @@ fn committed_scales_density_resize_live_and_replay_clock_do_not_bind_the_rectang
         assert_eq!(f.measurement().delta_seconds, original.delta_seconds);
         f.source.2.store(false, Ordering::Relaxed);
         update(&mut f.app);
-        assert!((f.measurement().delta_seconds - original.delta_seconds * 2.0).abs() < 1e-6);
+        assert!(
+            (f.measurement().delta_seconds - original.delta_seconds * 2.0).abs()
+                < comparison_tolerance
+        );
         Waveform::set_amplitude_in_world(
             f.app.world_mut(),
             f.root,
