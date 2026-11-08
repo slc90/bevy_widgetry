@@ -5,7 +5,7 @@ use bevy::ui_widgets::{Checkbox, CheckboxPlugin, ValueChange};
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryToggleButtonHeadlessProps)]
-#[require(Node, Checkbox, bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::Button)), bevy::picking::hover::Hovered, bevy_widgetry_core::pointer::WidgetryPointerPressed, bevy::input_focus::tab_navigation::TabIndex(-1))]
+#[require(Node, Checkbox, bevy::picking::hover::Hovered, bevy_widgetry_core::pointer::WidgetryPointerPressed, bevy::input_focus::tab_navigation::TabIndex(-1))]
 pub struct WidgetryToggleButtonHeadless;
 
 #[derive(Default, Clone)]
@@ -16,11 +16,6 @@ pub struct WidgetryToggleButtonHeadlessProps {
 impl WidgetryToggleButtonHeadless {
     fn scene(props: WidgetryToggleButtonHeadlessProps) -> impl Scene {
         bsn! {
-            template(move |_| {
-                let mut node = accesskit::Node::new(accesskit::Role::Button);
-                node.set_toggled(if props.selected { accesskit::Toggled::True } else { accesskit::Toggled::False });
-                Ok(bevy::a11y::AccessibilityNode(node))
-            })
             @{props.selected.then_some(bsn! { Checked })}
         }
     }

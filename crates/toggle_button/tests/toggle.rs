@@ -32,8 +32,6 @@ fn setter_commits_before_notification_and_same_value_is_silent() {
     );
 }
 
-use accesskit::{Role, Toggled};
-use bevy::a11y::AccessibilityNode;
 use bevy::picking::hover::Hovered;
 use bevy::ui::{Checked, InteractionDisabled, Pressed};
 use bevy_widgetry_test_utils::{
@@ -57,17 +55,6 @@ fn toggle_app(selected: bool) -> (App, Entity) {
 #[test]
 fn native_input_toggles_persistently_and_disabled_inherits() {
     let (mut app, root) = toggle_app(false);
-    assert_eq!(
-        app.world().get::<AccessibilityNode>(root).unwrap().role(),
-        Role::Button
-    );
-    assert_eq!(
-        app.world()
-            .get::<AccessibilityNode>(root)
-            .unwrap()
-            .toggled(),
-        Some(Toggled::False)
-    );
     app.world_mut().trigger(primary_press(root));
     app.world_mut().flush();
     assert!(!WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
@@ -77,13 +64,6 @@ fn native_input_toggles_persistently_and_disabled_inherits() {
     app.world_mut().flush();
     app.update();
     assert!(WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
-    assert_eq!(
-        app.world()
-            .get::<AccessibilityNode>(root)
-            .unwrap()
-            .toggled(),
-        Some(Toggled::True)
-    );
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
         bevy_widgetry_theme::WIDGETRY_DARK_THEME
@@ -103,12 +83,6 @@ fn native_input_toggles_persistently_and_disabled_inherits() {
     app.world_mut().flush();
     assert!(WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
-    assert!(
-        app.world()
-            .get::<AccessibilityNode>(root)
-            .unwrap()
-            .is_disabled()
-    );
     // Explicit programmatic updates remain available while user input is disabled.
     WidgetryToggleButtonHeadless::set_selected_in_world(app.world_mut(), root, false).unwrap();
     app.world_mut()
@@ -252,13 +226,6 @@ fn selected_theme_overrides_and_native_checked_removal_refresh_content() {
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
         mode.button.hovered.background
-    );
-    assert_eq!(
-        app.world()
-            .get::<AccessibilityNode>(root)
-            .unwrap()
-            .toggled(),
-        Some(Toggled::False)
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
     colors.normal.background = Some(Color::srgba(f32::NAN, 0.0, 0.0, 1.0));

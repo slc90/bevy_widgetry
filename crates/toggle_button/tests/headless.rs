@@ -1,7 +1,5 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
-use accesskit::{Role, Toggled};
 use bevy::{
-    a11y::AccessibilityNode,
     prelude::*,
     ui::{Checked, InteractionDisabled},
 };
@@ -55,17 +53,6 @@ fn headless_input_and_api_commit_once_without_default_style() {
     app.update();
     assert!(WidgetryToggleButtonHeadless::selected(app.world(), root).unwrap());
     assert_eq!(app.world().resource::<Changes>().0, [true]);
-    assert_eq!(
-        app.world().get::<AccessibilityNode>(root).unwrap().role(),
-        Role::Button
-    );
-    assert_eq!(
-        app.world()
-            .get::<AccessibilityNode>(root)
-            .unwrap()
-            .toggled(),
-        Some(Toggled::True)
-    );
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
         Color::srgb_u8(12, 34, 56)
