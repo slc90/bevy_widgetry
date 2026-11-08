@@ -26,7 +26,7 @@
 
 ## 实现边界
 
-Segmented 与 RadioGroup 共用 Core 的结构历史和互斥 Checked 提交。RadioGroup 保留原生 RadioGroup / RadioButton 输入；Segmented 使用原生 Checked / Checkable、标准 Accessibility Role 及共享 Focus / Pointer 基础设施，自行处理点击和键盘，避免原生循环导航及 RadioButton 向最近 RadioGroup 祖先发事件时干扰外层组。两个 Widget 无相互生产依赖。
+Segmented 与 RadioGroup 共用 Core 的结构历史和互斥 Checked 提交。RadioGroup 保留原生 RadioGroup / RadioButton 输入；Segmented 使用原生 Checked / Checkable 及共享 Focus / Pointer 基础设施，自行处理点击和键盘，避免原生循环导航及 RadioButton 向最近 RadioGroup 祖先发事件时干扰外层组。两个 Widget 无相互生产依赖。
 
 ## 样式与主题
 

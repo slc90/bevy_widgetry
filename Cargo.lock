@@ -2191,7 +2191,6 @@ dependencies = [
 name = "bevy_widgetry_segmented"
 version = "0.1.0"
 dependencies = [
- "accesskit",
  "bevy",
  "bevy_widgetry_core",
  "bevy_widgetry_diagnostics",

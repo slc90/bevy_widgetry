@@ -16,7 +16,7 @@ use bevy::prelude::*;
 pub struct WidgetrySegmentedOptionHeadless;
 impl WidgetrySegmentedOptionHeadless {
     fn scene() -> impl Scene {
-        bsn! { template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioButton)))) }
+        bsn! {}
     }
 }
 

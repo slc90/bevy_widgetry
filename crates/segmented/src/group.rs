@@ -27,7 +27,6 @@ impl WidgetrySegmentedHeadless {
     fn scene(props: crate::WidgetrySegmentedHeadlessProps) -> impl Scene {
         bsn! {
             template(move |_| Ok(crate::OrientationState(props.orientation)))
-            template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioGroup))))
         }
     }
 }
