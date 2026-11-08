@@ -61,6 +61,24 @@ Widgetry 不实现或自动安装 Tab / Shift+Tab 焦点遍历及跨控件方向
 
 不为通用键盘导航、焦点遍历顺序或仅通过键盘操作完整界面的需求增加实现复杂度。
 
+## Accessibility 约束
+
+项目不以操作系统无障碍辅助技术支持为目标。Agent 对 UI 的自动化操作通过 BRP / MCP 实现，不依赖 Accessibility。
+
+Widgetry 库及 Gallery 禁止主动新增或扩展 Accessibility / AccessKit 功能，包括：
+
+- 为控件额外添加无障碍节点、角色、标签、状态或操作语义。
+- 实现无障碍状态同步、事件处理及专用适配逻辑。
+- 为无障碍功能引入额外的 Plugin、直接依赖、公共 API 或抽象层。
+
+**Bevy 底层必要依赖除外。**
+
+当使用 Bevy 官方 Component、Widget 或内部机制时，如果其正常构造、编译或运行确实需要 Accessibility 相关组件、类型或依赖，允许保留满足该要求的最小实现。
+
+这类例外仅用于保持 Bevy 原生功能正常工作，不得借此扩展额外的无障碍功能。Bevy 自动提供的 Required Component 和传递依赖不需要主动移除。
+
+本规则不限制正常的 Pointer、Keyboard、Focus、Picking、Widget 状态管理及 BRP 自动化能力。上述功能应通过各自的原生机制实现，不以 Accessibility 作为替代。
+
 ## 项目定位与兼容性原则
 
 本项目主要供作者个人学习和使用，不以对外提供稳定的公共 API 为目标。
