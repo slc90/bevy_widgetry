@@ -6,6 +6,16 @@ pub type SplashFailure = WidgetryFailure<SplashError>;
 
 #[derive(Debug)]
 pub enum SplashError {
+    UnknownSplash {
+        splash: Entity,
+    },
+    WindowMissing {
+        window: Entity,
+    },
+    Presentation {
+        window: Entity,
+        source: winsafe::co::HRESULT,
+    },
     PluginMissing,
     MainWindowMissing {
         main: Entity,
@@ -30,6 +40,11 @@ pub enum SplashError {
 impl fmt::Display for SplashError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnknownSplash { splash } => write!(f, "Splash 会话 {splash:?} 不存在"),
+            Self::WindowMissing { window } => write!(f, "Splash 呈现窗口 {window:?} 已不存在"),
+            Self::Presentation { window, source } => {
+                write!(f, "等待窗口 {window:?} 的桌面呈现失败：{source}")
+            }
             Self::PluginMissing => write!(f, "启动 Splash 前需要安装 SplashPlugin"),
             Self::MainWindowMissing { main } => write!(f, "Splash 关联的主窗口 {main:?} 不存在"),
             Self::InvalidMainWindow { main } => {
@@ -54,6 +69,7 @@ impl fmt::Display for SplashError {
 impl Error for SplashError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Presentation { source, .. } => Some(source),
             Self::NativePosition { source, .. } => Some(source),
             _ => None,
         }

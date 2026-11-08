@@ -7,9 +7,7 @@ pub(crate) mod maximize;
 pub(crate) mod minimize;
 pub(crate) mod resize;
 
-use bevy::core_pipeline::{Core2d, upscaling::upscaling};
 use bevy::prelude::*;
-use bevy::render::{Render, RenderApp, RenderSystems, view::window::prepare_windows};
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_core::{WidgetryFontPlugin, icon::WidgetryIconPlugin};
@@ -73,24 +71,12 @@ impl Plugin for WidgetryWindowPlugin {
             .add_observer(close::on_close)
             .add_observer(drag::on_title_bar_press)
             .add_observer(resize::on_window_resize_press);
-        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app
-                .add_systems(
-                    Core2d,
-                    // Core2d does not insert ApplyDeferred automatically.
-                    // DX12 limits swap chains per submission, so apply deferred commands before flushing per camera to avoid exceeding that limit across windows.
-                    (ApplyDeferred, crate::render::submit_window_commands)
-                        .chain()
-                        .after(upscaling),
-                )
-                .add_systems(
-                    Render,
-                    crate::render::defer_initial_present_without_camera
-                        .in_set(RenderSystems::PrepareViews)
-                        .before(prepare_windows),
-                );
-        }
+        bevy_widgetry_core::window_presentation::install(app);
         widgetry_debug!("WidgetryWindowPlugin 注册完成");
+    }
+
+    fn finish(&self, app: &mut App) {
+        bevy_widgetry_core::window_presentation::install(app);
     }
 }
 

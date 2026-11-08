@@ -10,6 +10,7 @@ bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 bevy_widgetry_internal_log = { path = "../internal_log" }
 winit.workspace = true
+winsafe = { workspace = true, features = ["dwm"] }
 
 [dev-dependencies]
 bevy_widgetry_ui_scale = { path = "../ui_scale" }

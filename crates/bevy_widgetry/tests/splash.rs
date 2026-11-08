@@ -4,7 +4,7 @@
 use bevy::prelude::*;
 use bevy_widgetry::{
     WindowScaleExcluded,
-    splash::{Splash, SplashPlugin, SplashWindow},
+    splash::{Splash, SplashPhase, SplashPlugin, SplashReady, SplashWindow},
 };
 
 #[test]
@@ -22,4 +22,11 @@ fn facade_can_explicitly_start_an_excluded_splash_without_scaling_or_window_feat
         main
     );
     assert!(app.world().get::<Window>(main).unwrap().visible);
+    app.world_mut().trigger(SplashReady { splash });
+    app.update();
+    assert_eq!(
+        Splash::phase(app.world(), splash),
+        Some(SplashPhase::WaitingForFrame)
+    );
+    assert!(!app.world().get::<Window>(splash).unwrap().visible);
 }

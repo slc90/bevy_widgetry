@@ -1,16 +1,9 @@
 use crate::{WindowError, WindowFailure};
 use bevy::{
-    camera::{CameraOutputMode, NormalizedRenderTarget},
     prelude::*,
     render::{
-        camera::SortedCameras,
-        renderer::{
-            FlushCommands, RenderAdapter, RenderAdapterInfo, RenderDevice, RenderInstance,
-            RenderQueue,
-        },
+        renderer::{RenderAdapter, RenderAdapterInfo, RenderDevice, RenderInstance, RenderQueue},
         settings::{RenderCreation, WgpuSettings},
-        sync_world::MainEntity,
-        view::window::ExtractedWindow,
     },
 };
 use bevy_widgetry_diagnostics::ErrorFrame;
@@ -18,27 +11,6 @@ use wgpu::{
     BackendOptions, Backends, DeviceDescriptor, DeviceType, Dx12BackendOptions, Dx12SwapchainKind,
     Features, Instance, InstanceDescriptor, RequestAdapterOptions,
 };
-
-pub(crate) fn submit_window_commands(mut commands: FlushCommands) {
-    commands.flush();
-}
-
-// For new windows without cameras, no_camera_clear_pass would write multiple swap chains in one command list.
-// Delay initial presentation and acquire back buffers only after each camera is ready.
-pub(crate) fn defer_initial_present_without_camera(
-    mut windows: Query<(MainEntity, &mut ExtractedWindow)>,
-    cameras: Res<SortedCameras>,
-) {
-    for (main, mut window) in &mut windows {
-        let has_camera = cameras.0.iter().any(|camera| {
-            matches!(camera.target, Some(NormalizedRenderTarget::Window(target)) if target.entity() == main)
-                && matches!(camera.output_mode, CameraOutputMode::Write { .. })
-        });
-        if !has_camera {
-            window.needs_initial_present = false;
-        }
-    }
-}
 
 // Bevy automatic initialization does not expose the DX12 presentation system parameter.
 // Create the DxgiFromVisual resource explicitly so directly launched Apps do not need an external environment variable for transparent windows.

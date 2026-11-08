@@ -30,21 +30,30 @@ struct Installed;
 
 impl Plugin for SplashPlugin {
     fn build(&self, app: &mut App) {
+        crate::presentation::install(app);
         app.init_resource::<Installed>()
             .add_message::<WindowResized>()
             .add_message::<WindowScaleFactorChanged>()
             .configure_sets(
                 PostUpdate,
-                SplashSystems::Geometry.before(CameraUpdateSystems),
+                (SplashSystems::Geometry, SplashSystems::Presentation)
+                    .chain()
+                    .before(CameraUpdateSystems),
             )
             .add_systems(PostUpdate, sync.in_set(SplashSystems::Geometry));
         widgetry_debug!("SplashPlugin 注册完成");
+    }
+
+    fn finish(&self, app: &mut App) {
+        bevy_widgetry_core::window_presentation::install(app);
+        crate::presentation::finish(app);
     }
 }
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SplashSystems {
     Geometry,
+    Presentation,
 }
 
 #[derive(Component, Default)]
@@ -118,7 +127,7 @@ impl Splash {
         window.visible = false;
         window.position = WindowPosition::Automatic;
         apply(&mut window, &state, placement);
-        Ok(world
+        let splash = world
             .spawn((
                 state,
                 WindowScaleExcluded,
@@ -128,7 +137,9 @@ impl Splash {
                 },
                 window,
             ))
-            .id())
+            .id();
+        crate::presentation::register(world, splash, main);
+        Ok(splash)
     }
 }
 

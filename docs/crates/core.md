@@ -118,6 +118,8 @@ Core 的 `diagnostics::FailureState<K>` 重导出独立 diagnostics crate 的 Be
 
 作为分项迁移边界，现有控件对旧辅助类型的引用已明确改为隐藏的 `UnmigratedFailureState`，它仍保留旧首行文本比较和报告节奏。它不属于新键式状态契约，也不是 `FailureState` 的兼容别名；各控件在所属领域迁移增量中替换该类型，定义具体业务键和等待/恢复策略。本公共能力增量不为所有尚未分类的原生错误猜测身份。
 
+`window_presentation::install` 是 Window 与 Splash 共用的内部 DX12 呈现装配入口，不经 Facade 导出。它在 RenderApp 中幂等注册每个 Core2d Camera 后的命令提交，以及无可写 Camera 时的初始 Present 保护；缺少 RenderApp 时不装配。各调用插件在 finish 阶段确保装配完成，宿主不需要另行调用该入口。
+
 ## 已知限制
 
 - Font、Icon 和 Scene 各能力有各自的装配前提；Core 不是全局业务 Model。

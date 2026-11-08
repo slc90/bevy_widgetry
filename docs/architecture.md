@@ -145,7 +145,7 @@ Cursor 通过 Bevy Asset / Image 提供通用静态与图集动画主题，不�
 | [tree](crates/tree.md) | 提供层级 Tree Model、逐 View 展开与选择，以及经校验的真实 ECS 节点拖放移动。 |
 | [table](crates/table.md) | 提供 Table Model、表格布局、虚拟化单元格展示与交互。 |
 | [window](crates/window.md) | 提供自定义 Window、Native Window 生命周期及多窗口支持。 |
-| [splash](crates/splash.md) | 可选的独立 Splash 原生窗口及固定物理几何，以主窗口中心所在显示器定位；内容由宿主提供。依赖 Core 的排除标记、Diagnostics、内部日志和 Bevy/Winit，不依赖 ui_scale 或 Window 控件；Gallery 仅启用编译 Feature，独立窗口接入尚未完成。 |
+| [splash](crates/splash.md) | 可选的独立 Splash 原生窗口、固定物理几何与首帧安全显示，以主窗口中心所在显示器定位；内容及其就绪信号由宿主提供。依赖 Core 的排除标记和共享 DX12 呈现设施、Diagnostics、内部日志、Bevy/Winit 与 winsafe DWM 同步，不依赖 ui_scale 或 Window 控件；Gallery 仅启用编译 Feature，独立窗口接入尚未完成。 |
 | [ui_scale](crates/ui_scale.md) | 应用级统一窗口缩放，保存普通窗口逻辑尺寸基准，协调 Windows DPI、真实工作区和原生暂停状态，跳过 Core `WindowScaleExcluded` 标记窗口；依赖 Core、Diagnostics、内部日志、Bevy/Winit 与 winsafe，不依赖 Gallery 或 Window 控件。Gallery 显式启用 Facade 的 ui_scale Feature，以此统一管理主窗口和动态创建的普通窗口。 |
 | [message_box](crates/message_box.md) | 提供 MessageBox 的展示、操作结果与关闭行为。 |
 | [file_dialog](crates/file_dialog.md) | 提供 FileDialog 的文件浏览、选择、验证及后台文件系统处理；直接依赖 job 纳管全部文件系统/偏好操作、CPU投影/选择计算和大快照生命周期，自动确保共享 JobManagerPlugin；不再持有专有三线程 Worker。 |

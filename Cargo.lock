@@ -2224,6 +2224,7 @@ dependencies = [
  "bevy_widgetry_ui_scale",
  "bevy_widgetry_window",
  "winit",
+ "winsafe",
 ]
 
 [[package]]

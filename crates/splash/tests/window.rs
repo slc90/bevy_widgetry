@@ -4,7 +4,9 @@ use bevy::{
     prelude::*,
     window::{Monitor, PrimaryMonitor, WindowPosition},
 };
-use bevy_widgetry_splash::{Splash, SplashError, SplashPlugin, SplashWindow};
+use bevy_widgetry_splash::{
+    Splash, SplashError, SplashPhase, SplashPlugin, SplashReady, SplashShown, SplashWindow,
+};
 use bevy_widgetry_ui_scale::{WidgetryUiScale, WidgetryUiScalePlugin, WindowScaleExcluded};
 
 const SPLASH_SIZE: UVec2 = UVec2::new(480, 270);
@@ -61,6 +63,94 @@ fn installing_the_plugin_does_not_start_or_hide_a_window() {
             .count(),
         0
     );
+}
+
+#[derive(Resource, Default)]
+struct ShownCount(usize);
+
+#[test]
+fn readiness_is_idempotent_and_never_substitutes_for_a_rendered_frame() {
+    let mut app = app();
+    app.init_resource::<ShownCount>()
+        .add_observer(|_: On<SplashShown>, mut count: ResMut<ShownCount>| count.0 += 1);
+    monitor(&mut app, IVec2::new(-1920, 0), UVec2::new(1920, 1080));
+    let main = main_window(&mut app);
+    let first = Splash::start(app.world_mut(), main, splash_config()).unwrap();
+    let second = Splash::start(app.world_mut(), main, splash_config()).unwrap();
+    assert_eq!(
+        Splash::phase(app.world(), first),
+        Some(SplashPhase::WaitingForContent)
+    );
+    app.update();
+    assert!(Splash::ready(app.world_mut(), first).unwrap());
+    assert!(!Splash::ready(app.world_mut(), first).unwrap());
+    app.world_mut().trigger(SplashReady { splash: first });
+    app.update();
+    assert_eq!(
+        Splash::phase(app.world(), first),
+        Some(SplashPhase::WaitingForFrame)
+    );
+    assert_eq!(
+        Splash::phase(app.world(), second),
+        Some(SplashPhase::WaitingForContent)
+    );
+    assert!(!app.world().get::<Window>(first).unwrap().visible);
+    assert!(!app.world().get::<Window>(second).unwrap().visible);
+    assert!(app.world().get::<Window>(main).unwrap().visible);
+    assert_eq!(app.world().resource::<ShownCount>().0, 0);
+    app.world_mut().trigger(SplashReady { splash: second });
+    app.update();
+    assert_eq!(
+        Splash::phase(app.world(), second),
+        Some(SplashPhase::WaitingForFrame)
+    );
+    assert!(!app.world().get::<Window>(second).unwrap().visible);
+    app.world_mut().despawn(first);
+    assert_eq!(Splash::phase(app.world(), first), None);
+    assert!(
+        matches!(Splash::ready(app.world_mut(), first).unwrap_err().kind(), SplashError::UnknownSplash { splash } if *splash == first)
+    );
+    assert!(app.world().get::<Window>(second).is_some());
+}
+
+#[test]
+fn readiness_waits_for_metadata_and_rejects_invalid_direct_requests() {
+    let mut world = World::new();
+    assert!(matches!(
+        Splash::ready(&mut world, Entity::PLACEHOLDER)
+            .unwrap_err()
+            .kind(),
+        SplashError::PluginMissing
+    ));
+    let mut app = app();
+    let main = main_window(&mut app);
+    let splash = Splash::start(app.world_mut(), main, splash_config()).unwrap();
+    app.world_mut().trigger(SplashReady { splash });
+    app.world_mut().trigger(SplashReady {
+        splash: Entity::PLACEHOLDER,
+    });
+    app.update();
+    assert_eq!(
+        Splash::phase(app.world(), splash),
+        Some(SplashPhase::WaitingForFrame)
+    );
+    assert!(
+        !app.world()
+            .get::<SplashWindow>(splash)
+            .unwrap()
+            .is_positioned()
+    );
+    assert!(!app.world().get::<Window>(splash).unwrap().visible);
+    monitor(&mut app, IVec2::new(-1920, 0), UVec2::new(1920, 1080));
+    app.update();
+    assert!(
+        app.world()
+            .get::<SplashWindow>(splash)
+            .unwrap()
+            .is_positioned()
+    );
+    assert!(!app.world().get::<Window>(splash).unwrap().visible);
+    assert!(app.world().get::<Window>(main).unwrap().visible);
 }
 
 #[test]
