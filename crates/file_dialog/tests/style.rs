@@ -1352,10 +1352,14 @@ fn invalid_folder_enter_does_not_discard_following_escape_in_the_same_update() {
 }
 
 #[test]
-fn tab_focus_opens_filter_popup_and_disabled_fields_are_skipped() {
+fn pointer_focus_opens_filter_popup_and_disabled_fields_reject_activation() {
     let label = "FileDialogFilter";
     let mut app = fixture();
-    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog Node {width: px(800), height: px(600)} bevy::input_focus::tab_navigation::TabGroup::new(0) }).unwrap().id();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog Node {width: px(800), height: px(600)} })
+        .unwrap()
+        .id();
     for _ in 0..4 {
         app.update();
     }
@@ -1367,31 +1371,16 @@ fn tab_focus_opens_filter_popup_and_disabled_fields_are_skipped() {
         .iter()
         .next()
         .unwrap();
-    let path = named(&mut app, root, "FileDialogPath");
-    app.world_mut()
-        .resource_mut::<InputFocus>()
-        .set(path, FocusCause::Navigated);
-    let mut reached = false;
-    let mut diagnostic_focus = Vec::new();
-    for _ in 0..40 {
-        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Tab);
-        diagnostic_focus.push(app.world().resource::<InputFocus>().get().map(|focus| {
-            (
-                focus,
-                app.world()
-                    .get::<Name>(focus)
-                    .map(|n| n.as_str().to_owned()),
-            )
-        }));
-        if app.world().resource::<InputFocus>().get() == Some(field) {
-            reached = true;
-            break;
-        }
-    }
-    assert!(
-        reached,
-        "Tab must reach the activatable ComboBox field: {diagnostic_focus:?}"
+    assert_eq!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(field)
+            .unwrap()
+            .0,
+        -1
     );
+    press(&mut app, field);
+    release(&mut app, field);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(field));
     press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
     for _ in 0..3 {
         app.update();
@@ -1523,7 +1512,7 @@ fn sidebar_selection_matches_canonical_prefix_and_keeps_original_navigation_path
 }
 
 #[test]
-fn sidebar_locations_follow_disabled_and_resolved_tab_state() {
+fn sidebar_locations_keep_pointer_focus_markers_across_availability_changes() {
     let pixel_tolerance = 0.5;
 
     let mut app = fixture();
@@ -1617,7 +1606,7 @@ fn sidebar_locations_follow_disabled_and_resolved_tab_state() {
                         .get::<bevy::input_focus::tab_navigation::TabIndex>(*entity)
                         .unwrap()
                         .0,
-                    0
+                    -1
                 );
             }
             WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)
@@ -1776,38 +1765,59 @@ fn deferred_entry_input_is_discarded_on_focus_query_change_and_escape_cancels_im
 }
 
 #[test]
-fn tab_skips_hidden_panels_and_disabled_controls() {
+fn pointer_targets_keep_editor_mapping_and_disabled_confirmation_guards() {
     let mut app = fixture();
-    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog Node {width: px(800), height: px(600)} bevy::input_focus::tab_navigation::TabGroup::new(0) }).unwrap().id();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog Node {width: px(800), height: px(600)} })
+        .unwrap()
+        .id();
     for _ in 0..3 {
         app.update();
     }
-    let path = named(&mut app, root, "FileDialogPath");
-    app.world_mut()
-        .resource_mut::<InputFocus>()
-        .set(path, FocusCause::Navigated);
-    for _ in 0..40 {
-        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Tab);
-        let focused = app.world().resource::<InputFocus>().get().unwrap();
+    let entries = named(&mut app, root, "FileDialogEntries");
+    assert_eq!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(entries)
+            .unwrap()
+            .0,
+        -1
+    );
+    for label in ["FileDialogPath", "FileDialogSearch", "FileDialogFilename"] {
+        let field = named(&mut app, root, label);
         assert!(
             app.world()
-                .get::<bevy::ui::InteractionDisabled>(focused)
+                .get::<bevy::input_focus::tab_navigation::TabIndex>(field)
                 .is_none()
         );
-        let mut ancestor = focused;
-        loop {
-            assert!(
-                app.world()
-                    .get::<Node>(ancestor)
-                    .is_none_or(|node| node.display != Display::None),
-                "Tab must not enter a hidden panel"
-            );
-            let Some(parent) = app.world().get::<ChildOf>(ancestor) else {
-                break;
-            };
-            ancestor = parent.parent();
-        }
+        let editor = input_entity(app.world(), field);
+        press(&mut app, editor);
+        release(&mut app, editor);
+        app.update();
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
     }
+    for label in ["FileDialogFolderPanel", "FileDialogOverwritePanel"] {
+        let panel = named(&mut app, root, label);
+        assert_eq!(
+            app.world().get::<Node>(panel).unwrap().display,
+            Display::None
+        );
+    }
+    let confirm = named(&mut app, root, "FileDialogConfirm");
+    assert!(app.world().get::<InteractionDisabled>(confirm).is_some());
+    press(&mut app, confirm);
+    app.world_mut().trigger(primary_click(confirm));
+    release(&mut app, confirm);
+    app.update();
+    assert!(app.world().get::<bevy::ui::Pressed>(confirm).is_none());
+    press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
+    assert!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .result()
+            .is_none()
+    );
 }
 
 #[test]

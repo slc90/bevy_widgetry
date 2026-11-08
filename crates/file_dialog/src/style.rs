@@ -157,28 +157,6 @@ pub(crate) fn queue_input(commands: &mut Commands, root: Entity, action: Widgetr
     commands.queue(move |world: &mut World| apply_input(world, root, action));
 }
 
-// Bevy TabNavigation collects targets by TabIndex without filtering Display or InteractionDisabled.
-// Maintain Tab stops only for FileDialog-owned controls without changing their enabled authority.
-pub(crate) fn sync_tab_stop(world: &mut World, entity: Entity) {
-    let mut ancestor = entity;
-    let enabled = loop {
-        if world.get::<InteractionDisabled>(ancestor).is_some()
-            || world
-                .get::<Node>(ancestor)
-                .is_some_and(|node| node.display == Display::None)
-        {
-            break false;
-        }
-        let Some(parent) = world.get::<ChildOf>(ancestor) else {
-            break true;
-        };
-        ancestor = parent.parent();
-    };
-    if let Some(mut index) = world.get_mut::<TabIndex>(entity) {
-        index.set_if_neq(TabIndex(if enabled { 0 } else { -1 }));
-    }
-}
-
 pub(crate) fn install(app: &mut App) {
     if !app.is_plugin_added::<WidgetryButtonPlugin>() {
         app.add_plugins(WidgetryButtonPlugin);
@@ -245,7 +223,7 @@ fn control_scene(
     } });
     (
         bsn! {
-            @WidgetryButton { @children: {Some(Box::new(bsn_list! {{icon}-- {text}}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name) TabIndex::default()
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {{icon}-- {text}}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name)
             template(move |_| {
                 let mut node = accesskit::Node::new(accesskit::Role::Button);
                 node.set_label(label);
@@ -273,7 +251,7 @@ pub(crate) fn editor_scene(
         template(|_| Ok(Pickable::IGNORE))
     });
     bsn! {
-        @WidgetryTextField { @value: value, @children: {suffix.map(|scene| Box::new(scene) as Box<dyn SceneList>)} } Name(name) TabIndex::default()
+        @WidgetryTextField { @value: value, @children: {suffix.map(|scene| Box::new(scene) as Box<dyn SceneList>)} } Name(name)
         template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryTextField>::new(root)))
         template(move |_| Ok(Part {root, kind}))
         template(move |_| Ok(bevy_widgetry_window::WidgetryWindowInitialFocus(if kind == PartKind::Filename {0} else {i32::MAX})))
@@ -351,7 +329,7 @@ fn shell_scene(
                 Node {width:px(SIDEBAR_DIVIDER_WIDTH),height:percent(100),flex_shrink:0.0} BackgroundColor(Color::NONE) template(|_| Ok(Pickable::IGNORE))--
                 Node {flex_direction:FlexDirection::Column,flex_grow:1.0,min_width:px(0),min_height:px(0),height:percent(100)} Children [
                     Name("FileDialogColumnHeader") template(move |_| Ok(Part {root,kind:PartKind::ColumnHeader})) @crate::view::column_header(style.font_size)--
-                    @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0,width:percent(100), min_width: px(0), min_height: px(0) }
+                    @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex(-1) bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0,width:percent(100), min_width: px(0), min_height: px(0) }
                 ]
             ]--
             {crate::controls::panels(root)}--
@@ -623,7 +601,6 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
                 )
                 .into_bevy_error()
         })?;
-        sync_tab_stop(world, entity);
     }
     Ok(())
 }

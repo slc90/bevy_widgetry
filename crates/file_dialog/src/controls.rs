@@ -103,7 +103,7 @@ pub(crate) fn models(world: &mut World, root: Entity, state: &WidgetryFileDialog
 }
 
 fn button(root: Entity, action: UiAction, name: &'static str, label: &'static str) -> impl Scene {
-    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label.into(), CONTROL_FONT_SIZE)}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))  }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label.into(), CONTROL_FONT_SIZE)}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name) template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))  }
 }
 
 pub(crate) fn file_type(root: Entity, style: &WidgetryFileDialogStyle) -> impl Scene {
@@ -174,7 +174,6 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
                 )
                 .into_bevy_error()
         })?;
-        crate::style::sync_tab_stop(world, entity);
     }
     let controls: Vec<_> = world
         .query::<(Entity, &UiControl)>()
@@ -203,7 +202,6 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
                 )
                 .into_bevy_error()
         })?;
-        crate::style::sync_tab_stop(world, entity);
         if matches!(action, UiAction::Overwrite(_))
             && let WidgetryFileDialogConfirmation::AwaitingOverwrite { token, .. } =
                 state.confirmation()
@@ -244,26 +242,6 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
                 )
                 .into_bevy_error()
         })?;
-        if kind == PartKind::Filter {
-            if let Some(mut index) = world.get_mut::<TabIndex>(entity) {
-                index.set_if_neq(TabIndex(-1));
-            } else {
-                world.entity_mut(entity).insert(TabIndex(-1));
-            }
-            let field = world.get::<Children>(entity).and_then(|children| {
-                children
-                    .iter()
-                    .find(|child| world.get::<WidgetryButton>(*child).is_some())
-            });
-            if let Some(field) = field {
-                if world.get::<TabIndex>(field).is_none() {
-                    world.entity_mut(field).insert(TabIndex::default());
-                }
-                crate::style::sync_tab_stop(world, field);
-            }
-        } else {
-            crate::style::sync_tab_stop(world, entity);
-        }
     }
     if let Some(entity) = part(world, root, PartKind::OverwritePanel) {
         let display = if matches!(
@@ -283,7 +261,6 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         if node.display != display {
             node.display = display;
         }
-        sync_panel_tabs(world, entity);
     }
     let filename = (state.mode() == WidgetryFileDialogMode::SaveFile).then(|| {
         (
@@ -439,7 +416,7 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
             let label = place.name.clone();
             let path = place.path.clone();
             let accessible_label = label.clone();
-            let scene = bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label, font) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()}}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, justify_content: JustifyContent::FlexStart } }) as Box<dyn bevy::prelude::Scene>)}, } Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
+            let scene = bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label, font) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()}}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, justify_content: JustifyContent::FlexStart } }) as Box<dyn bevy::prelude::Scene>)}, } Name("FileDialogLocation") template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
             template(move |_| {let mut node=accesskit::Node::new(accesskit::Role::Button);node.set_label(accessible_label.clone());Ok(bevy::a11y::AccessibilityNode(node))})
             template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(LOCATION_MIN_HEIGHT), flex_shrink: 0.0,border:UiRect::ZERO,padding:UiRect::axes(px(LOCATION_PADDING_X),px(LOCATION_PADDING_Y)),justify_content:JustifyContent::FlexStart,align_items:AlignItems::Center,overflow:Overflow::clip()}
              };
@@ -552,7 +529,6 @@ fn close_folder(world: &mut World, root: Entity) -> Result {
                 })
             })?
             .display = Display::None;
-        sync_panel_tabs(world, entity);
     }
     if let Some(area) = part(world, root, PartKind::Entries) {
         world
@@ -560,16 +536,6 @@ fn close_folder(world: &mut World, root: Entity) -> Result {
             .set(area, FocusCause::Navigated);
     }
     crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)
-}
-
-fn sync_panel_tabs(world: &mut World, panel: Entity) {
-    let mut pending = vec![panel];
-    while let Some(entity) = pending.pop() {
-        if let Some(children) = world.get::<Children>(entity) {
-            pending.extend(children.iter());
-        }
-        crate::style::sync_tab_stop(world, entity);
-    }
 }
 
 fn on_filter(

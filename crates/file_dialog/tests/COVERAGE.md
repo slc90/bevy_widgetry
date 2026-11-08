@@ -65,8 +65,8 @@
 - `window.rs` 同时保护独立 Dialog 的默认标题绑定、原生 / 可见标题同步和更新时内容身份保持。
 - `window.rs` 的覆盖确认配色回归验证最终 FileDialog Owner 的 Hover 覆盖色、Hover 移除及 Theme / Override 清除，不由中间 MessageBox 自行覆盖。
 - `style.rs` 的配置回归保护 Style 更新时保留编辑内容及 Session；源码 Unit Test 保护稳定帧无字体遍历 / Shell 重写，以及延后字体与容器重挂后的配置补偿。
-- TextField 复合结构的断言分别检查根 Part、内部编辑状态及 Frame / Editor 配色；Tab → Filter、IME、Enter 与文本投影回归保护真实业务路由。Search Suffix 保护仅在搜索框出现、框内右侧布局、长文本输入、非 Picking / Tab stop 及原焦点归属。
-- 精简布局回归保护常驻工具栏消失、四种排序状态下表头均无箭头 / UTC 标签、样式更新不重置排序 / Hidden / System / Pin 偏好，以及静态分隔线的尺寸与输入排除。侧栏保护后端自定义路径、固定顺序、缺失项不伪造、磁盘 / 固定目录不显示及真实激活导航；原位置 Disabled、颜色、键盘与 Tab 回归继续适用。
+- TextField 复合结构的断言分别检查根 Part、内部编辑状态及 Frame / Editor 配色；Pointer → Filter、Disabled 拦截、IME、Enter 与文本投影回归保护真实业务路由。Search Suffix 保护仅在搜索框出现、框内右侧布局、长文本输入、非 Picking / 独立焦点 及原焦点归属。
+- 精简布局回归保护常驻工具栏消失、四种排序状态下表头均无箭头 / UTC 标签、样式更新不重置排序 / Hidden / System / Pin 偏好，以及静态分隔线的尺寸与输入排除。侧栏保护后端自定义路径、固定顺序、缺失项不伪造、磁盘 / 固定目录不显示及真实激活导航；原位置 Disabled、颜色、内部键盘与 Pointer 焦点回归继续适用。
 - 新建目录内部面板保留 Enter 错误后处理同帧 Escape、先关闭面板再取消 Dialog 的覆盖；不再断言已移除的可见入口存在。独立窗口的 Popup 焦点恢复改由仍可见的 Filter 验证。
 
 - 源码 Owner 生命周期测试保护稳定帧零归属处理、延后 Control、Owner 丢失 / 替换修复、跨 Root 重绑、Marker 移除与 Root 恢复；既有 Style / Window 回归保护嵌套控件、复用行与覆盖确认。
@@ -128,3 +128,5 @@ Manager shutdown 拒收偏好加载 / 保存时，Runtime 回归检查原 Submit
 Runtime 源码回归保护启动拒收与两会话递送失败同时保留三份诊断、完成降级前无 handled、修复 Storage 后正确降级且同源处理一次，以及错误返回时 Runtime 仍在 World。另一回归固定两会话各两个 Job 访问失败，验证服务源头与四个清理失败同时保留；PreparedJob 回归保护终态业务失败与移除失败同时传播，并保留原 origin / 请求 frame。满目录缓冲故障回归继续确认实际取消与回收，并检查安全降级后的处理 DEBUG。
 
 `diagnostics.rs` 保护颜色 API 的 CoreColor 类型与源头身份、失败配置不写入、无效 Entity 的结构化故障，以及真实排队 Command 的 Error Severity 与按 ID 关联的源头记录。`style.rs` 的无效样式回归检查领域故障与 Root 上下文，继续保护一次报告、不阻塞另一 Dialog 及配置恢复。
+
+FileDialog 不投影动态 Tab Stop：style 回归检查 Entries/按钮的 -1 Pointer 标记、文本 Root 不附加顺序标记且点击真实 editor 保持映射；Filter Field 的 Pointer 聚焦、Enter 打开 Popup 与 Disabled 传播仍生效。隐藏 Folder/Overwrite Panel 与不可确认按钮的业务守卫继续保留。

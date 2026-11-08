@@ -26,7 +26,7 @@
 
 ### 输入与候选身份
 
-可见界面保留顶部后退、前进、上一级、刷新、路径和搜索输入；导航与搜索装饰使用 Fluent Regular 图标。搜索图标位于 TextField 内部右侧 Suffix，不接受 Picking 或 Tab 焦点。侧栏仅按 Home、Desktop、Documents、Downloads 的顺序投影 Backend 提供的同名位置；缺失位置不显示，不自行推导路径。侧栏与文件列表之间使用随主题变化的 1 逻辑像素静态分隔线，不提供拖动调宽。
+可见界面保留顶部后退、前进、上一级、刷新、路径和搜索输入；导航与搜索装饰使用 Fluent Regular 图标。搜索图标位于 TextField 内部右侧 Suffix，不接受 Picking 或独立输入焦点。侧栏仅按 Home、Desktop、Documents、Downloads 的顺序投影 Backend 提供的同名位置；缺失位置不显示，不自行推导路径。侧栏与文件列表之间使用随主题变化的 1 逻辑像素静态分隔线，不提供拖动调宽。
 
 界面不提供固定目录、新建目录、排序、隐藏文件和系统文件选项的操作入口，也不显示分组、磁盘或固定目录列表；对应 Action、偏好、后台处理及新建目录内部面板继续保留，UI 构造与样式同步不重置这些状态。文件详情表头保持 Name、Type、Modified、Size，不显示排序箭头或 UTC 标签；实际排序和 UTC 时间计算保持原有语义。底部状态、文件名或选择摘要、类型过滤、确认和取消按模式提供。
 
@@ -34,11 +34,11 @@ PickFile 与 SaveFile 提供 Filename Editor，多选与目录模式提供选择
 
 方向键、Home / End、Page Navigation 改变 Active。多选模式 Space 切换 Selection，Ctrl+A 冻结当时已到达条目的范围；单选模式 Space 使用 Replace，SaveFile 或不匹配的 Kind 不执行 Selection，Enter 按模式 Activate。Selection Job 保留 Ctrl+A、Ctrl 点击和 Shift Range 的输入顺序，Filter / Search / Sort 可基于缓存重新投影而不改变原始路径与 Stable ID。Pending Selection / Projection 阻止 Confirm，Cancel 继续可用。
 
-Path Enter 导航，Filename Enter 进入对应模式的确认校验；IME Composition 不触发业务提交或 Escape。待处理的非空预编辑与 IME Commit 仍受该守卫保护，空预编辑清理操作不视为正在合成，焦点恢复后可正常按 Escape 取消。隐藏 Panel 与 Disabled Control 不进入 Tab 顺序，单个输入失败不丢弃同帧后续输入。Style 更新不重置 Session、编辑器 Cursor 或 Selection。
+Path Enter 导航，Filename Enter 进入对应模式的确认校验；IME Composition 不触发业务提交或 Escape。待处理的非空预编辑与 IME Commit 仍受该守卫保护，空预编辑清理操作不视为正在合成，焦点恢复后可正常按 Escape 取消。不提供跨控件 Tab / Shift+Tab 遍历；Pointer 与显式 WindowInitialFocus 选择实际 editor 或 Entries（Pointer 标记 -1），隐藏 Panel 与 Disabled Control 保留各自的可操作性守卫，单个输入失败不丢弃同帧后续输入。Style 更新不重置 Session、编辑器 Cursor 或 Selection。
 
 Path、Filename、Search 等 TextField 的业务 Part 保留在控件根，真正编辑及 Focus 位于其内部输入实体。正文通过 TextField 根 API 读写，输入事件和编辑变化按实际输入目标映射到相应 Part；主题与 Style 分别更新输入 Frame 和编辑实体。
 
-字体、间距、Padding 和 Sidebar 宽度按首次构造及有效 Style 变化应用；动态生成或重挂的内容补齐当前配置。稳定 Dialog 不为外观配置递归全部字体，也不重复写回同值 Shell。地址栏仅在实际路径变化时同步，滚动、可见行、Header 几何、控件可用性、Tab 与后台回复继续按当前状态推进。无效 Style 在写入外观前拒绝，不部分应用配置。
+字体、间距、Padding 和 Sidebar 宽度按首次构造及有效 Style 变化应用；动态生成或重挂的内容补齐当前配置。稳定 Dialog 不为外观配置递归全部字体，也不重复写回同值 Shell。地址栏仅在实际路径变化时同步，滚动、可见行、Header 几何、控件可用性与后台回复继续按当前状态推进。无效 Style 在写入外观前拒绝，不部分应用配置。
 
 样式归属由 Control、Part、文件行绑定和独立窗口 / 覆盖确认的构造与移除维护。归属更新直接使用部件保存的 Root；稳定帧不扫描全部部件确认 Owner。延后构造和复用绑定会进入有界补偿，实体回收后旧关系不能影响新 Dialog。
 
@@ -133,7 +133,7 @@ Runtime 的 Job 访问与接收失败保留原 Job 诊断，补充请求 Owner�
 - 过期 Session、EntryId、Generation、Validation Candidate 或失效 Root 不得修改当前 Session。
 - 文件系统的 Partial / Failed 状态、超时及单项错误通过状态与诊断呈现；已到达条目可先显示，完成后统一排序。
 - 扩展长度 Windows Path 在实际操作中保留原始 `PathBuf`；地址显示可以隐藏前缀，显示文本不能反向构造文件选择路径。
-- Modal、IME、隐藏/禁用控件的 Tab 与 Escape 处理按当前输入归属执行；旧 Press 不能在滚动复用的新 Row 上提交选择。
+- Modal、IME、隐藏/禁用控件的输入与 Escape 处理按当前输入归属执行；旧 Press 不能在滚动复用的新 Row 上提交选择。
 - Owned Window 结束后清理其窗口和 Camera；外部销毁不冒充用户 Cancelled。Storage 写入失败不回滚已成立的结果。
 
 ## 已知限制
