@@ -13,7 +13,6 @@ const MAX_VISIBLE_ROWS: usize = 256;
 const VIEW_BORDER_WIDTH: f32 = 1.0;
 
 use crate::*;
-use bevy::a11y::AccessibilityNode;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_core::foreground::ResolvedForeground;
@@ -92,12 +91,7 @@ pub(crate) fn snapshot_identity(state: &WidgetryFileDialogState) -> Option<usize
         .map(|snapshot| Arc::as_ptr(snapshot) as usize)
 }
 
-fn bootstrap(
-    world: &mut World,
-    root: Entity,
-    area: Entity,
-    multiple: bool,
-) -> Result<FileDialogEntryViewport> {
+fn bootstrap(world: &mut World, root: Entity, area: Entity) -> Result<FileDialogEntryViewport> {
     let viewport = required(world.get::<Children>(area).and_then(|children| {
         children
             .iter()
@@ -117,13 +111,6 @@ fn bootstrap(
     let children = required(world.get::<Children>(content))?;
     let top = required(children.iter().next())?;
     let bottom = required(children.iter().nth(1))?;
-    let mut accessibility = accesskit::Node::new(accesskit::Role::ListBox);
-    if multiple {
-        accessibility.set_multiselectable();
-    }
-    world
-        .entity_mut(area)
-        .insert(AccessibilityNode(accessibility));
     world.write_message(bevy::window::RequestRedraw);
     Ok(FileDialogEntryViewport {
         viewport,
@@ -262,7 +249,7 @@ pub(crate) fn reconcile(
         .get::<FileDialogEntryViewport>(area)
         .cloned()
         .map(Ok)
-        .unwrap_or_else(|| bootstrap(world, root, area, state.mode().is_multiple()))?;
+        .unwrap_or_else(|| bootstrap(world, root, area))?;
     let computed = required(world.get::<ComputedNode>(view.viewport))?;
     let height = computed.size().y * computed.inverse_scale_factor();
     let mut offset = required(world.get::<ScrollPosition>(view.viewport))?.0.y;
@@ -361,10 +348,6 @@ pub(crate) fn reconcile(
                 }).map_err(|error| error.with_context(crate::error::owner_frame(world, root, root, "file_dialog.view.scene")).into_bevy_error())?
             }
         };
-        let selected = state.selected().contains(&id);
-        let mut accessibility = accesskit::Node::new(accesskit::Role::ListBoxOption);
-        accessibility.set_label(entry.name().to_string_lossy().into_owned());
-        accessibility.set_selected(selected);
         if world.get::<EntryRow>(entity) != Some(&row) {
             world.entity_mut(entity).insert(row);
         }
@@ -376,15 +359,6 @@ pub(crate) fn reconcile(
                 font: style.font_size,
                 entry: entry.clone(),
             });
-        }
-        if let Some(mut value) = world.get_mut::<AccessibilityNode>(entity) {
-            if value.0 != accessibility {
-                value.0 = accessibility;
-            }
-        } else {
-            world
-                .entity_mut(entity)
-                .insert(AccessibilityNode(accessibility));
         }
         let mut node = required(world.get_mut::<Node>(entity))?;
         if node.height != px(style.row_height) {

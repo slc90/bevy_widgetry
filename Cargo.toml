@@ -59,7 +59,6 @@ win-custody = "=0.1.1"
 async-broadcast = "=0.7.2"
 tracing = "0.1.44"
 unicode-segmentation = "1.13.3"
-accesskit = { version = "0.24", default-features = false }
 url = "2.5.8"
 bevy_brp_runtime = { git = "https://github.com/slc90/bevy_brp", tag = "0.4.2" }
 wgpu = { version = "30", default-features = false, features = ["dx12"] }
