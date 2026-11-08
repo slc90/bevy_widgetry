@@ -23,7 +23,6 @@ mod startup_cursor;
 mod theme;
 mod waveform_benchmark;
 mod waveform_data;
-mod window_scale;
 
 use crate::assets::GalleryAssetPlugin;
 use crate::gallery::{GalleryPage, GalleryPlugin};
@@ -41,6 +40,7 @@ use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
 use bevy_widgetry::tooltip::WidgetryTooltipPlugin;
+use bevy_widgetry::ui_scale::{WidgetryUiScale, WidgetryUiScalePlugin};
 use bevy_widgetry::window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
     prepare_native_window, transparent_render_creation, widgetry_window,
@@ -93,6 +93,11 @@ fn run(
     app.insert_resource(loaded.config.language);
     app.insert_resource(loaded.config.theme.colors());
     i18n::install(&mut app);
+    app.insert_resource(
+        WidgetryUiScale::new(loaded.config.scale_factor)
+            .map_err(|failure| failure.into_bevy_error())?,
+    )
+    .add_plugins(WidgetryUiScalePlugin);
     app.insert_resource(WinitSettings::desktop_app());
     WidgetryCursorTheme::set_in_world(app.world_mut(), WidgetryCursorTheme::system());
     app.add_plugins(
@@ -100,7 +105,7 @@ fn run(
             .build()
             .disable::<LogPlugin>()
             .set(WindowPlugin {
-                primary_window: Some(gallery_window(&loaded.config)),
+                primary_window: Some(gallery_window()),
                 close_when_requested: false,
                 exit_condition: bevy::window::ExitCondition::DontExit,
                 ..default()
@@ -170,13 +175,12 @@ fn window_startup_failure(failure: bevy_widgetry::window::WindowFailure) -> Bevy
     failure.into_bevy_error()
 }
 
-const STARTUP_PHYSICAL_SIZE: UVec2 = UVec2::new(1920, 1080);
+const STARTUP_LOGICAL_SIZE: UVec2 = UVec2::new(1920, 1080);
 
-fn gallery_window(config: &config::AppConfig) -> Window {
+fn gallery_window() -> Window {
     prepare_native_window(Window {
         title: "Widget Gallery".into(),
-        resolution: WindowResolution::new(STARTUP_PHYSICAL_SIZE.x, STARTUP_PHYSICAL_SIZE.y)
-            .with_scale_factor_override(config.scale_factor),
+        resolution: WindowResolution::new(STARTUP_LOGICAL_SIZE.x, STARTUP_LOGICAL_SIZE.y),
         position: WindowPosition::Centered(MonitorSelection::Primary),
         ..default()
     })
@@ -184,24 +188,19 @@ fn gallery_window(config: &config::AppConfig) -> Window {
 
 fn setup(
     mut commands: Commands,
-    mut primary_window: Query<(Entity, &mut Window), With<PrimaryWindow>>,
+    primary_window: Query<Entity, With<PrimaryWindow>>,
     mut next_page: ResMut<NextState<GalleryPage>>,
     splash_enabled: Option<Res<splash::SplashEnabled>>,
     asset_server: Res<AssetServer>,
 ) -> Result {
-    let (target, mut window) = primary_window.single_mut().map_err(|error| {
+    let target = primary_window.single().map_err(|error| {
         crate::diagnostics::at(
             error,
             bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 初始化需要唯一主窗口"),
         )
     })?;
-    // winit sets size before positioning the window, so initialization across displays with different DPI can scale its physical size.
-    // Restore the fixed startup size in Startup after native creation and positioning so the first frame does not use the scaled size.
-    window
-        .resolution
-        .set_physical_resolution(STARTUP_PHYSICAL_SIZE.x, STARTUP_PHYSICAL_SIZE.y);
     let camera = commands.spawn(Camera2d).id();
-    let title = header::scene(&mut commands, target)?;
+    let title = header::scene(&mut commands)?;
     let root = commands.spawn_scene_with_error_handler(bsn! {
         @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{@{title}}, bsn_list!{@gallery::scene()})
         template(|_| Ok(i18n::LocalizedWindowTitle(i18n::LocalizedText::new(i18n::TextKey::GalleryHeader(HeaderKey::WidgetGallery)))))

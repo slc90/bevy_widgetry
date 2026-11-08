@@ -19,3 +19,5 @@ Windows 协调在主线程读取真实原生显示器、最大化/最小化状�
 `cargo run -p bevy_widgetry_ui_scale --example ui_scale_windows` 运行主窗口、普通 Popup、排除窗口。按 1 / 2 / 3 设置 1.0 / 1.25 / 2.0，观察前两个窗口内容逻辑范围保持不变而物理尺寸变化，排除窗口保持原配置；M / I / R 对主窗口发出原生最大化 / 最小化 / 恢复请求。示例启用 BRP。
 
 当前 Bevy 0.20 / DX12 实机验证中，示例最小化时会触发 `ResizeBuffers failed / window is in use` 并退出；不安装缩放插件也复现。最小化的暂停/恢复几何契约由 Headless 测试保护，原生最小化恢复的端到端验收尚受该渲染故障阻碍。
+
+Gallery 显式启用 `ui_scale`，启动时从 `AppConfig.scale_factor` 初始化资源（默认1.25）。Header 的四档选择器读取和修改此资源，再保存用户选择；系统DPI和工作区夹紧不改写配置。Gallery 主窗口采用1920×1080逻辑设计尺寸，空间足够时1.25对应2400×1350物理尺寸；主窗和动态普通窗口由同一插件协调，Gallery 不另行维护几何基准。

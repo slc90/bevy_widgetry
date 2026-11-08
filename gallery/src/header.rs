@@ -18,6 +18,7 @@ use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::style::z_index;
 use bevy_widgetry::theme::{WidgetryTheme, WidgetryThemeChanged};
+use bevy_widgetry::ui_scale::WidgetryUiScale;
 
 #[derive(Component)]
 struct GalleryTitle;
@@ -29,12 +30,9 @@ struct ThemeComboBox;
 struct LanguageComboBox;
 
 #[derive(Component)]
-struct ScaleFactorComboBox {
-    target_window: Entity,
-}
+struct ScaleFactorComboBox;
 
 pub(crate) fn install(app: &mut App) -> Result {
-    crate::window_scale::install(app);
     app.register_widgetry_combo_box::<GalleryTheme>()
         .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
         .register_widgetry_combo_box::<f32>()
@@ -79,15 +77,12 @@ fn sync_external_settings(world: &mut World) -> Result {
         }
     }
     let scale_combos = world
-        .query::<(Entity, &WidgetryComboBoxHeadless<f32>, &ScaleFactorComboBox)>()
+        .query_filtered::<(Entity, &WidgetryComboBoxHeadless<f32>), With<ScaleFactorComboBox>>()
         .iter(world)
-        .map(|(root, combo, scale)| (root, combo.source(), scale.target_window))
+        .map(|(root, combo)| (root, combo.source()))
         .collect::<Vec<_>>();
-    for (root, source, window) in scale_combos {
-        let scale = world
-            .get::<Window>(window)
-            .ok_or_else(|| header_sync_error("scale_factor 目标窗口缺失"))?
-            .scale_factor();
+    for (root, source) in scale_combos {
+        let scale = world.resource::<WidgetryUiScale>().get();
         let model = world
             .get::<WidgetryListModel<f32>>(source)
             .ok_or_else(|| header_sync_error("scale_factor Model 缺失"))?;
@@ -111,12 +106,9 @@ fn header_sync_error(reason: &str) -> BevyError {
     )
 }
 
-pub(crate) fn scene(
-    commands: &mut Commands,
-    target_window: Entity,
-) -> Result<impl Scene, BevyError> {
+pub(crate) fn scene(commands: &mut Commands) -> Result<impl Scene, BevyError> {
     let theme = theme_selector(commands)?;
-    let scale = scale_factor_selector(commands, target_window)?;
+    let scale = scale_factor_selector(commands)?;
     let language = language_selector(commands)?;
     Ok(bsn! {
         template(|_| Ok(Pickable::IGNORE))
@@ -175,10 +167,7 @@ fn theme_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
     })
 }
 
-fn scale_factor_selector(
-    commands: &mut Commands,
-    target_window: Entity,
-) -> Result<impl Scene, BevyError> {
+fn scale_factor_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
     let mut model = WidgetryListModel::default();
     for scale in [1.0_f32, 1.25, 1.5, 2.0] {
         model
@@ -192,25 +181,18 @@ fn scale_factor_selector(
             @source: source,
             @renderer: {WidgetryListViewRenderer::new(|scale: &f32| bsn_list!{Text({format!("{scale:?}")}) bevy_widgetry::text::WidgetryText})},
         }
-        template(move |_| Ok(ScaleFactorComboBox { target_window }))
+        template(|_| Ok(ScaleFactorComboBox))
         Node { width: px(100) }
     })
 }
 
 fn initialize_scale_factor_selection(
-    combos: Query<(Entity, &WidgetryComboBoxHeadless<f32>, &ScaleFactorComboBox)>,
+    combos: Query<(Entity, &WidgetryComboBoxHeadless<f32>), With<ScaleFactorComboBox>>,
     models: Query<&WidgetryListModel<f32>>,
-    windows: Query<&Window>,
+    scale: Res<WidgetryUiScale>,
     mut commands: Commands,
 ) -> Result {
-    for (entity, combo, scale_combo) in &combos {
-        let window = windows.get(scale_combo.target_window).map_err(|error| {
-            crate::diagnostics::at(
-                error,
-                bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor 目标窗口缺失")
-                    .field("window", format_args!("{:?}", scale_combo.target_window)),
-            )
-        })?;
+    for (entity, combo) in &combos {
         let model = models.get(combo.source()).map_err(|error| {
             crate::diagnostics::at(
                 error,
@@ -218,7 +200,7 @@ fn initialize_scale_factor_selection(
                     .field("source", format_args!("{:?}", combo.source())),
             )
         })?;
-        let scale = window.scale_factor();
+        let scale = scale.get();
         let id = (0..model.len())
             .find(|index| model.get(*index) == Some(&scale))
             .and_then(|index| model.id(index))
@@ -238,23 +220,13 @@ fn initialize_scale_factor_selection(
 
 fn on_scale_factor_combo_box_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
-    _main_thread: bevy::ecs::system::NonSendMarker,
-    combos: Query<(&WidgetryComboBoxHeadless<f32>, &ScaleFactorComboBox)>,
+    combos: Query<&WidgetryComboBoxHeadless<f32>, With<ScaleFactorComboBox>>,
     models: Query<&WidgetryListModel<f32>>,
-    mut windows: Query<(
-        Entity,
-        &mut Window,
-        Option<&mut crate::window_scale::PopupSize>,
-    )>,
-    monitors: Query<(
-        Entity,
-        &bevy::window::Monitor,
-        Has<bevy::window::PrimaryMonitor>,
-    )>,
+    mut current: ResMut<WidgetryUiScale>,
     mut config: ResMut<AppConfig>,
     config_file: Res<ConfigFile>,
 ) -> Result {
-    let Ok((combo, scale_combo)) = combos.get(event.source) else {
+    let Ok(combo) = combos.get(event.source) else {
         return Ok(());
     };
     let Some(selected) = event.value else {
@@ -274,29 +246,21 @@ fn on_scale_factor_combo_box_changed(
                 .field("selected", format_args!("{:?}", selected)),
         )
     })?;
-    windows.get(scale_combo.target_window).map_err(|error| {
-        crate::diagnostics::at(
-            error,
-            bevy_widgetry::diagnostics::ErrorFrame::new("scale_factor 目标窗口缺失")
-                .field("window", format_args!("{:?}", scale_combo.target_window)),
-        )
-    })?;
-    for (entity, mut window, mut size) in &mut windows {
-        if window.resolution.scale_factor_override() != Some(scale) {
-            crate::window_scale::apply(entity, &mut window, size.as_deref_mut(), scale, &monitors)?;
-        }
-    }
-    if config.scale_factor != scale {
+    let previous = current.get();
+    if current
+        .set(scale)
+        .map_err(|failure| failure.into_bevy_error())?
+    {
         info!(
             setting = "scale_factor",
             requested = scale,
-            previous = config.scale_factor,
+            previous,
             "用户选择 Gallery 设置"
         );
         debug!(
             setting = "scale_factor",
             applied = scale,
-            "Gallery 全部窗口设置已生效"
+            "Gallery 全局缩放设置已更新"
         );
         config.scale_factor = scale;
         config.save(&config_file);
@@ -483,29 +447,18 @@ mod tests {
     use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
 
     #[test]
-    fn new_windows_inherit_the_gallery_scale_before_the_first_update() {
+    fn configured_scale_applies_to_the_gallery_logical_design_before_the_first_update() {
         let mut app = App::new();
-        app.insert_resource(AppConfig::default());
-        crate::window_scale::install(&mut app);
-        for override_scale in [None, Some(2.0)] {
-            let mut resolution = bevy::window::WindowResolution::new(640, 400);
-            resolution.set_scale_factor_override(override_scale);
-            let window = app
-                .world_mut()
-                .spawn(Window {
-                    resolution,
-                    ..default()
-                })
-                .id();
-            assert_eq!(
-                app.world()
-                    .get::<Window>(window)
-                    .unwrap()
-                    .resolution
-                    .scale_factor_override(),
-                Some(1.25)
-            );
-        }
+        let config = AppConfig::default();
+        app.insert_resource(WidgetryUiScale::new(config.scale_factor).unwrap())
+            .add_plugins(bevy_widgetry::ui_scale::WidgetryUiScalePlugin);
+        let window = app.world_mut().spawn(crate::gallery_window()).id();
+        let window = app.world().get::<Window>(window).unwrap();
+        assert_eq!(
+            window.resolution.size(),
+            crate::STARTUP_LOGICAL_SIZE.as_vec2()
+        );
+        assert_eq!(window.physical_size(), UVec2::new(2400, 1350));
     }
 
     #[test]
@@ -514,13 +467,15 @@ mod tests {
         let config_path = directory.path().join("config.ron");
         let loaded = crate::config::load(config_path.clone());
         let mut app = scene_app();
-        app.insert_resource(loaded.config.language)
+        app.insert_resource(WidgetryUiScale::new(loaded.config.scale_factor).unwrap())
+            .add_plugins(bevy_widgetry::ui_scale::WidgetryUiScalePlugin)
+            .insert_resource(loaded.config.language)
             .insert_resource(loaded.config)
             .insert_resource(loaded.file);
         install(&mut app).unwrap();
         let primary = app.world_mut().spawn(Window::default()).id();
         let independent = app.world_mut().spawn(Window::default()).id();
-        let selector = scale_factor_selector(&mut app.world_mut().commands(), primary).unwrap();
+        let selector = scale_factor_selector(&mut app.world_mut().commands()).unwrap();
         app.world_mut().flush();
         let root = bevy_widgetry::scene::spawn_scene(app.world_mut(), selector).unwrap();
         let source = app
@@ -541,6 +496,7 @@ mod tests {
                 is_final: true,
             });
             let popup = app.world_mut().spawn(Window::default()).id();
+            app.update();
             for entity in [primary, independent, popup] {
                 assert_eq!(
                     app.world()
