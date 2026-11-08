@@ -7,6 +7,11 @@ pub mod diagnostics {
 
 pub use bevy_widgetry_core::window_scale::WindowScaleExcluded;
 
+#[cfg(feature = "splash")]
+pub mod splash {
+    pub use bevy_widgetry_splash::*;
+}
+
 #[cfg(feature = "ui_scale")]
 pub mod ui_scale {
     pub use bevy_widgetry_ui_scale::*;

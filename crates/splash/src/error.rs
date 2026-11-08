@@ -1,0 +1,66 @@
+use bevy::prelude::*;
+use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
+use std::{error::Error, fmt};
+
+pub type SplashFailure = WidgetryFailure<SplashError>;
+
+#[derive(Debug)]
+pub enum SplashError {
+    PluginMissing,
+    MainWindowMissing {
+        main: Entity,
+    },
+    InvalidMainWindow {
+        main: Entity,
+    },
+    InvalidSize {
+        size: UVec2,
+    },
+    TooLarge {
+        main: Entity,
+        size: UVec2,
+        monitor: IRect,
+    },
+    NativePosition {
+        main: Entity,
+        source: winit::error::NotSupportedError,
+    },
+}
+
+impl fmt::Display for SplashError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PluginMissing => write!(f, "启动 Splash 前需要安装 SplashPlugin"),
+            Self::MainWindowMissing { main } => write!(f, "Splash 关联的主窗口 {main:?} 不存在"),
+            Self::InvalidMainWindow { main } => {
+                write!(f, "Splash 不能将另一个 Splash 窗口 {main:?} 用作主窗口")
+            }
+            Self::InvalidSize { size } => write!(f, "Splash 物理尺寸必须非零：{size:?}"),
+            Self::TooLarge {
+                main,
+                size,
+                monitor,
+            } => write!(
+                f,
+                "主窗口 {main:?} 所在显示器 {monitor:?} 无法容纳 Splash 物理尺寸 {size:?}"
+            ),
+            Self::NativePosition { main, source } => {
+                write!(f, "读取 Splash 主窗口 {main:?} 的原生位置失败：{source}")
+            }
+        }
+    }
+}
+
+impl Error for SplashError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::NativePosition { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+#[track_caller]
+pub(crate) fn failure(kind: SplashError, operation: &'static str) -> SplashFailure {
+    SplashFailure::new(kind, ErrorFrame::new(operation))
+}

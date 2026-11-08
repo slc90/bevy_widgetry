@@ -17,6 +17,7 @@ bevy_widgetry = { path = "../crates/bevy_widgetry", features = [
   "job",
   "power_inhibit",
   "ui_scale",
+  "splash",
 ] }
 bevy_widgetry_asset = { path = "../crates/asset" }
 bevy_widgetry_core = { path = "../crates/core" }

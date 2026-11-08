@@ -11,6 +11,7 @@ members = [
   "crates/bevy_widgetry",
   "crates/core",
   "crates/ui_scale",
+  "crates/splash",
   "crates/canvas",
   "crates/cursor",
   "crates/button",

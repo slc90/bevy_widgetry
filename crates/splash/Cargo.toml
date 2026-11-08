@@ -1,0 +1,21 @@
+[package]
+publish = false
+name = "bevy_widgetry_splash"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
+bevy_widgetry_internal_log = { path = "../internal_log" }
+winit.workspace = true
+
+[dev-dependencies]
+bevy_widgetry_ui_scale = { path = "../ui_scale" }
+bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_window = { path = "../window" }
+bevy_brp_runtime.workspace = true
+
+[lints]
+workspace = true
