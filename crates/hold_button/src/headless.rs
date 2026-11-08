@@ -20,7 +20,7 @@ const SUCCESS_ROUNDING_EPSILON_FACTOR: f32 = 8.0;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryHoldButtonHeadlessProps)]
-#[require(Node, bevy::picking::hover::Hovered, bevy::input_focus::tab_navigation::TabIndex(-1), bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::Button)), WidgetryHoldButtonState, WidgetryHoldButtonProgress, Timing)]
+#[require(Node, bevy::picking::hover::Hovered, bevy::input_focus::tab_navigation::TabIndex(-1), WidgetryHoldButtonState, WidgetryHoldButtonProgress, Timing)]
 pub struct WidgetryHoldButtonHeadless;
 
 #[derive(Clone)]

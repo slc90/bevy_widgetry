@@ -11,7 +11,6 @@ bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_theme = { path = "../theme" }
 bevy_widgetry_internal_log = { path = "../internal_log" }
-accesskit.workspace = true
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils", features = ["all_themes"] }
