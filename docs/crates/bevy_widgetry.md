@@ -28,6 +28,8 @@ Widget 使用 BSN Scene 与一次性 Props 构造。运行时 State、通知与�
 
 ## 按需编译
 
+`ui_scale` Feature 默认关闭，通过 `ui_scale` 模块提供普通窗口的全局应用比例及插件，详见 [Ui Scale](ui_scale.md)。共享排除标记 `WindowScaleExcluded` 始终从 Facade 根导出，不安装额外策略。
+
 `canvas` 默认保留 Canvas 绘制、Document 与 SVG。默认关闭的 `canvas_png_export` 同时启用 `canvas` 并转发 Canvas 的 `png_export`，提供异步 PNG API 和导出系统。Gallery 显式开启；该开关与颜色主题及 Cursor 外观独立。
 
 颜色主题默认只编译 Dark。默认关闭的 `light`、`pink_dream` 分别转发到 Theme 的对应开关；关闭时对应公开预设常量不可用；当前 Theme 由完整配色 Resource 保存，支持外部数据设置，不使用固定模式枚举。二者可以独立组合，不启用 Kamuri Cursor。Gallery 使用这三套内置预设和自身定义的 Kamuri Violet，保持四个选择项。

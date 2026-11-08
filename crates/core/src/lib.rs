@@ -14,6 +14,7 @@ pub mod pointer;
 pub mod scene;
 pub mod text;
 pub mod ui;
+pub mod window_scale;
 pub mod z_index;
 
 pub use font::{WidgetryAppExt, WidgetryFontPlugin};

@@ -1850,6 +1850,7 @@ dependencies = [
  "bevy_widgetry_tooltip",
  "bevy_widgetry_tray",
  "bevy_widgetry_tree",
+ "bevy_widgetry_ui_scale",
  "bevy_widgetry_waveform",
  "bevy_widgetry_window",
 ]
@@ -2350,6 +2351,19 @@ dependencies = [
  "bevy_widgetry_scroll_area",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_theme",
+]
+
+[[package]]
+name = "bevy_widgetry_ui_scale"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_brp_runtime",
+ "bevy_widgetry_core",
+ "bevy_widgetry_diagnostics",
+ "bevy_widgetry_internal_log",
+ "bevy_widgetry_test_utils",
+ "rstest",
 ]
 
 [[package]]

@@ -5,6 +5,13 @@ pub mod diagnostics {
     pub use bevy_widgetry_diagnostics::*;
 }
 
+pub use bevy_widgetry_core::window_scale::WindowScaleExcluded;
+
+#[cfg(feature = "ui_scale")]
+pub mod ui_scale {
+    pub use bevy_widgetry_ui_scale::*;
+}
+
 #[cfg(feature = "job")]
 pub mod job {
     pub use bevy_widgetry_job::*;

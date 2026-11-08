@@ -51,6 +51,8 @@
 
 ## Coverage Map
 
+- `ui_scale.rs`：可选 ui_scale Feature 可通过 Facade 安装普通窗口缩放，并通过共享根导出的排除标记跳过特殊窗口。
+
 - `power_inhibit.rs`：默认关闭的 power_inhibit Feature 可通过 Facade 安装插件并在真实 ResMut System 中调用同步电源请求 API。
 
 - `number_input.rs`：独立 number_input Feature 的泛型 BSN 构造、原类型大整数读取与 Commands 延迟数值 API。

@@ -64,8 +64,10 @@ app_logging = ["dep:bevy_widgetry_app_logging"]
 tray = ["dep:bevy_widgetry_tray"]
 power_inhibit = ["dep:bevy_widgetry_power_inhibit"]
 job = ["dep:bevy_widgetry_job"]
+ui_scale = ["dep:bevy_widgetry_ui_scale"]
 
 [dependencies]
+bevy_widgetry_ui_scale = { path = "../ui_scale", optional = true }
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 bevy_widgetry_job = { workspace = true, optional = true }
 bevy_widgetry_tray = { path = "../tray", optional = true }

@@ -28,6 +28,7 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 - Pointer：把有效 Mouse、Custom、Touch 的 Hover 命中投影到官方 Hovered / DirectlyHovered；管理所标记控件的 Pressed Ownership 清理。
 - Scene：同步返回 `SceneFailure`，Deferred 将保留原 origin/source 的诊断交给宿主；只清理本次失败预约 Entity。
 - 提供动态 UI 同帧准备与共享 Z-index 标识等能力。
+- `window_scale::WindowScaleExcluded` 是共享窗口归属标记，表示不接受应用窗口缩放管理；自身不改变 DPI 或原生窗口策略，也不安装窗口管理 Plugin。
 - `exclusive_selection` 是 RadioGroup / Segmented 共用的内部选择能力，维护结构回退历史、首次选择策略及互斥 Checked 提交；不建立第二份 Selection，不通过 Facade 公开。
 - `WidgetryInputTarget` 提供 Workspace 内组合控件根到实际输入实体的路由元数据；Window 初始焦点解析与复合控件的程序化聚焦使用该目标，不承载控件的编辑或业务状态。
 

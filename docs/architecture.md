@@ -12,6 +12,7 @@ gallery/
 crates/
 ├── bevy_widgetry/
 ├── core/
+├── ui_scale/
 ├── canvas/
 ├── internal_log/
 ├── diagnostics/
@@ -143,6 +144,7 @@ Cursor 通过 Bevy Asset / Image 提供通用静态与图集动画主题，不�
 | [tree](crates/tree.md) | 提供层级 Tree Model、逐 View 展开与选择，以及经校验的真实 ECS 节点拖放移动。 |
 | [table](crates/table.md) | 提供 Table Model、表格布局、虚拟化单元格展示与交互。 |
 | [window](crates/window.md) | 提供自定义 Window、Native Window 生命周期及多窗口支持。 |
+| [ui_scale](crates/ui_scale.md) | 应用级统一窗口缩放，保存普通窗口的逻辑尺寸基准并排除带 Core `WindowScaleExcluded` 标记的窗口；依赖 Core、Diagnostics、内部日志和 Bevy，不依赖 Gallery 或 Window 控件。 |
 | [message_box](crates/message_box.md) | 提供 MessageBox 的展示、操作结果与关闭行为。 |
 | [file_dialog](crates/file_dialog.md) | 提供 FileDialog 的文件浏览、选择、验证及后台文件系统处理；直接依赖 job 纳管全部文件系统/偏好操作、CPU投影/选择计算和大快照生命周期，自动确保共享 JobManagerPlugin；不再持有专有三线程 Worker。 |
 | [waveform](crates/waveform.md) | 提供 Waveform 数据处理与可视化展示；依赖 job 纳管完整后台降采样重建，WaveformPlugin 自动复用共享 JobManagerPlugin。 |
