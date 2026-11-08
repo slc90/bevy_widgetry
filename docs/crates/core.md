@@ -29,7 +29,7 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 - Scene：同步返回 `SceneFailure`，Deferred 将保留原 origin/source 的诊断交给宿主；只清理本次失败预约 Entity。
 - 提供动态 UI 同帧准备与共享 Z-index 标识等能力。
 - `exclusive_selection` 是 RadioGroup / Segmented 共用的内部选择能力，维护结构回退历史、首次选择策略及互斥 Checked 提交；不建立第二份 Selection，不通过 Facade 公开。
-- `WidgetryInputTarget` 提供 Workspace 内组合控件根到实际输入实体的路由元数据；Window 的 Tab 与初始焦点解析使用同一目标，不承载控件的编辑或业务状态。
+- `WidgetryInputTarget` 提供 Workspace 内组合控件根到实际输入实体的路由元数据；Window 初始焦点解析与复合控件的程序化聚焦使用该目标，不承载控件的编辑或业务状态。
 
 ## 行为与状态契约
 

@@ -47,8 +47,8 @@
 - `window.rs`：Native 属性、绑定、Camera / Scene Slot、Controls 与 Theme。
 - `title.rs`：长标题单行裁剪、窄窗口下关闭按钮保留尺寸并位于窗口范围内，标题栏保持 36 逻辑像素高；标题栏 Popout 向下超出标题栏仍不被裁剪。
 - `owned_window.rs`：Owned Lifecycle、Modal 资源隔离、Focus / IME。
-- `owned_window.rs` 同时保护复合 Root 的 InitialFocus Priority 与实际输入目标之间的路由，以及映射后的 Tab 来回导航。
-- 显式清空 Focus（含隐藏旧页面）后，普通键与快捷键 Release 不恢复旧 Editor，也不选择新 Editor；Tab 仍显式进入可见 Tab Stop。
+- `owned_window.rs` 同时保护不依赖 TabIndex 的复合 Root 初始优先级与真实输入目标路由、隐藏/Disabled/失效/跨作用域映射候选的排除、销毁后的候选回退与无显式候选时 Window Root 兜底。
+- 显式清空 Focus（含隐藏旧页面）后，普通键与快捷键 Release 不恢复旧 Editor，也不选择新 Editor；Tab / Shift+Tab 同样不会进入其他控件。
 - `background.rs`：Theme / Image、Opacity、Cover 与实际 Layout 时序。
 - `title.rs`：显式标题标记、额外文本 / 正文隔离、多窗口和嵌套窗口、无绑定、延后构造与 Native 更新、重复同值、无效 / 歧义绑定的原子拒绝、排队执行期验证及持续错误 / 恢复；正常 WindowClosing→延迟 WindowClosed 不报故障，不带关闭信号的 Native 丢失仍传播 Error，其他窗口继续同步。
 - 源码 Module Unit Test 负责更细的 Resize Mapping、Modal 关系和 Native Request。

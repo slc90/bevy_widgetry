@@ -40,8 +40,8 @@ fn ime_fixture() -> (App, Entity, Entity) {
 }
 
 #[test]
-fn composite_initial_priority_and_tab_use_the_declared_input_target() {
-    use bevy::input_focus::{InputFocus, tab_navigation::TabIndex};
+fn composite_initial_priority_without_tab_markers_uses_the_declared_input_target() {
+    use bevy::input_focus::InputFocus;
     use bevy_widgetry_core::input_target::WidgetryInputTarget;
     use bevy_widgetry_window::WidgetryWindowInitialFocus;
     let mut app = scene_app();
@@ -49,10 +49,10 @@ fn composite_initial_priority_and_tab_use_the_declared_input_target() {
     app.add_plugins((WidgetryWindowPlugin, bevy::ui_widgets::TextInputPlugin));
     let root = app.world_mut().spawn_scene(bsn! {
         @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{}, bsn_list!{
-            #Composite Name("CompositeStop") Node TabIndex(10) WidgetryWindowInitialFocus(-1)
+            #Composite Name("CompositeStop") Node WidgetryWindowInitialFocus(-1)
             WidgetryInputTarget { target: #ActualInput }
             Children [ #ActualInput Name("ActualCompositeEditor") EditableText bevy::ui_widgets::TextInput ]--
-            Name("OtherStop") Node TabIndex(20) WidgetryWindowInitialFocus(0)
+            Name("OtherStop") Node WidgetryWindowInitialFocus(0)
         })
     }).unwrap().id();
     for _ in 0..3 {
@@ -70,12 +70,62 @@ fn composite_initial_priority_and_tab_use_the_declared_input_target() {
         .map(|(entity, name)| (name.as_str().to_owned(), entity))
         .collect();
     let input = named["ActualCompositeEditor"];
-    let other = named["OtherStop"];
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(input));
     bevy_widgetry_test_utils::press_key(&mut app, native, KeyCode::Tab);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(other));
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(input));
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ShiftLeft);
     bevy_widgetry_test_utils::press_key(&mut app, native, KeyCode::Tab);
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(input));
+}
+
+#[test]
+fn initial_focus_skips_unavailable_or_foreign_targets_and_falls_back_to_the_window_root() {
+    use bevy::input_focus::{FocusCause, InputFocus, tab_navigation::TabIndex};
+    use bevy::ui::InteractionDisabled;
+    use bevy_widgetry_core::input_target::WidgetryInputTarget;
+    use bevy_widgetry_window::WidgetryWindowInitialFocus;
+    let mut app = scene_app();
+    add_ui_plugins(&mut app);
+    app.add_plugins(WidgetryWindowPlugin);
+    let outside = app.world_mut().spawn_empty().id();
+    let destroyed = app.world_mut().spawn_empty().id();
+    app.world_mut().despawn(destroyed);
+    let root = app.world_mut().spawn_scene(bsn! {
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{}, bsn_list!{
+            Node { display: Display::None } Children [Node WidgetryWindowInitialFocus(-5)]--
+            Node Visibility::Hidden Children [Node WidgetryWindowInitialFocus(-4)]--
+            Node InteractionDisabled Children [Node WidgetryWindowInitialFocus(-3)]--
+            Node WidgetryWindowInitialFocus(-2) WidgetryInputTarget { target: outside }--
+            Node WidgetryWindowInitialFocus(-1) WidgetryInputTarget { target: destroyed }--
+            Node WidgetryWindowInitialFocus(-1) WidgetryInputTarget { target: #HiddenTarget }
+            Children [#HiddenTarget Node { display: Display::None }]--
+            Node WidgetryWindowInitialFocus(-1) WidgetryInputTarget { target: #DisabledTarget }
+            Children [#DisabledTarget Node InteractionDisabled]--
+            Name("Preferred") Node WidgetryWindowInitialFocus(0)--
+            Name("Backup") Node WidgetryWindowInitialFocus(1)--
+            Name("Unmarked") Node TabIndex(0)
+        })
+    }).unwrap().id();
+    app.update();
+    let native = native(app.world(), root);
+    let named: std::collections::HashMap<_, _> = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .map(|(entity, name)| (name.as_str().to_owned(), entity))
+        .collect();
+    for expected in [named["Preferred"], named["Backup"], root] {
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(native, FocusCause::Pressed);
+        app.update();
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(expected));
+        if expected != root {
+            app.world_mut().despawn(expected);
+        }
+    }
 }
 
 #[test]
@@ -146,10 +196,8 @@ fn cleared_focus_does_not_route_following_key_releases_or_text_to_an_editor() {
             "next"
         );
         bevy_widgetry_test_utils::press_key(&mut app, native, KeyCode::Tab);
-        assert_eq!(
-            app.world().resource::<InputFocus>().get(),
-            Some(if hide_old { next } else { editor })
-        );
+        assert_ne!(app.world().resource::<InputFocus>().get(), Some(editor));
+        assert_ne!(app.world().resource::<InputFocus>().get(), Some(next));
     }
 }
 

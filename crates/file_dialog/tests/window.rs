@@ -195,11 +195,11 @@ fn text_key(app: &mut App, native: Entity, text: &str) {
 }
 
 #[test]
-fn window_tab_keeps_caller_group_order_and_nested_modal_scope() {
+fn window_tab_ignores_legacy_groups_and_retains_the_current_focus() {
     use bevy::input_focus::tab_navigation::{TabGroup, TabIndex};
     let mut app = fixture();
     let root = app.world_mut().spawn_scene(bsn! {
-        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{}, bsn_list!{
             TabGroup::new(10) Children [Name("Later") TabIndex(0)]--
             TabGroup::new(-1) Children [Name("Earlier") TabIndex(8)]--
             TabGroup::modal() Children [Name("ModalFirst") TabIndex(0)-- Name("ModalLast") TabIndex(1)]
@@ -207,34 +207,39 @@ fn window_tab_keeps_caller_group_order_and_nested_modal_scope() {
     }).unwrap().id();
     app.update();
     let native = widgetry_window_target(app.world(), root).unwrap();
-    let later = named(&mut app, "Later", root);
-    let earlier = named(&mut app, "Earlier", root);
-    let first = named(&mut app, "ModalFirst", root);
-    let last = named(&mut app, "ModalLast", root);
-    app.world_mut()
-        .resource_mut::<InputFocus>()
-        .set(later, FocusCause::Pressed);
-    press_key(&mut app, native, KeyCode::Tab);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(earlier));
-    press_key(&mut app, native, KeyCode::Tab);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(later));
-    app.world_mut()
-        .resource_mut::<InputFocus>()
-        .set(first, FocusCause::Pressed);
-    for expected in [last, first, last] {
+    for name in ["Later", "Earlier", "ModalFirst", "ModalLast"] {
+        let target = named(&mut app, name, root);
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(target, FocusCause::Pressed);
         press_key(&mut app, native, KeyCode::Tab);
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(expected));
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(target));
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ShiftLeft);
+        press_key(&mut app, native, KeyCode::Tab);
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(target));
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::ShiftLeft);
     }
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .press(KeyCode::ShiftLeft);
-    press_key(&mut app, native, KeyCode::Tab);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(first));
 }
 
 #[test]
-fn window_tab_restores_visible_focus_after_pointer_focus() {
+fn window_tab_keeps_pointer_focus_visibility_and_dispatches_to_the_editor() {
+    #[derive(Resource, Default)]
+    struct Received(Vec<KeyCode>);
     let mut app = fixture();
+    app.init_resource::<Received>().add_observer(
+        |event: On<bevy::input_focus::FocusedInput<KeyboardInput>>,
+         mut received: ResMut<Received>| {
+            if event.focused_entity == event.original_event_target()
+                && event.input.state == ButtonState::Pressed
+            {
+                received.0.push(event.input.key_code);
+            }
+        },
+    );
     let (root, native, editor) = parent(&mut app);
     app.world_mut()
         .resource_mut::<InputFocus>()
@@ -244,10 +249,12 @@ fn window_tab_restores_visible_focus_after_pointer_focus() {
         .0 = false;
     press_key(&mut app, native, KeyCode::Tab);
     assert!(
-        app.world()
+        !app.world()
             .resource::<bevy::input_focus::InputFocusVisible>()
             .0
     );
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
+    assert_eq!(app.world().resource::<Received>().0, vec![KeyCode::Tab]);
     assert!(descendant(
         app.world(),
         app.world().resource::<InputFocus>().get().unwrap(),
@@ -323,7 +330,7 @@ fn closed_filter_popup_is_not_restored_as_remembered_window_focus() {
 }
 
 #[test]
-fn modal_blocks_parent_keyboard_ime_and_cycles_tab_then_restores_valid_focus() {
+fn modal_blocks_parent_keyboard_ime_and_retains_focus_on_tab_then_restores_parent() {
     let mut app = fixture();
     let (parent_root, native, editor) = parent(&mut app);
     app.world_mut()
@@ -350,14 +357,24 @@ fn modal_blocks_parent_keyboard_ime_and_cycles_tab_then_restores_valid_focus() {
             .to_string(),
         ""
     );
-    for _ in 0..40 {
+    let initial = app.world().resource::<InputFocus>().get();
+    for shift in [false, true] {
+        if shift {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::ShiftLeft);
+        }
         press_key(&mut app, child_native, KeyCode::Tab);
+        assert_eq!(app.world().resource::<InputFocus>().get(), initial);
         assert!(descendant(
             app.world(),
             app.world().resource::<InputFocus>().get().unwrap(),
             root
         ));
     }
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .release(KeyCode::ShiftLeft);
     press_key(&mut app, child_native, KeyCode::Escape);
     app.update();
     assert!(app.world().get_entity(root).is_err());

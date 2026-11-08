@@ -61,7 +61,7 @@
 - `contract.rs`：Headless API、Session / Scope、Navigation / Selection、确认与通知。
 - `runtime.rs`：受管快照生命周期与偏好 Job、JobManager 安装与宿主实例复用、手工模式、固定容量、流式更新、取消、存储与 Session 释放；目录读取失败、100,000条目边界与每帧消息预算。
 - `style.rs`：真实 BSN / Input / Layout、编辑器、可见 Row、Theme 与 Color Owner，以及排队空 IME 清理后的真实键盘取消；窄视口中文件名列保留宽度、导航换行、编辑器与底部操作保持在界内。
-- `window.rs`：Owned Window、Modal / NonModal、Focus、IME、Overwrite MessageBox 和资源回收，包含嵌套 MessageBox 关闭后焦点恢复与 Escape 取消。
+- `window.rs`：Owned Window、Modal / NonModal、Focus、IME、Overwrite MessageBox 和资源回收，包含嵌套 MessageBox 关闭后焦点恢复与 Escape 取消；Tab / Shift+Tab 保持当前目标、忽略旧 TabGroup 顺序，保留 Pointer 焦点可见性且仍作为 FocusedInput 送到编辑器。
 - `window.rs` 同时保护独立 Dialog 的默认标题绑定、原生 / 可见标题同步和更新时内容身份保持。
 - `window.rs` 的覆盖确认配色回归验证最终 FileDialog Owner 的 Hover 覆盖色、Hover 移除及 Theme / Override 清除，不由中间 MessageBox 自行覆盖。
 - `style.rs` 的配置回归保护 Style 更新时保留编辑内容及 Session；源码 Unit Test 保护稳定帧无字体遍历 / Shell 重写，以及延后字体与容器重挂后的配置补偿。

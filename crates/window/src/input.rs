@@ -1,8 +1,7 @@
 use crate::WidgetryModalWindow;
 use crate::window_root::{WindowInitialized, WindowRoot};
 use bevy::ecs::schedule::{ScheduleCleanupPolicy, ScheduleError};
-use bevy::input::{ButtonState, keyboard::KeyboardInput};
-use bevy::input_focus::tab_navigation::{TabGroup, TabIndex};
+use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::{
     FocusCause, FocusedInput, InputFocus, InputFocusSystems, InputFocusVisible,
     dispatch_focused_input,
@@ -35,7 +34,6 @@ pub(crate) fn install(app: &mut App) {
     app.init_resource::<FocusScopes>()
         .init_resource::<InputFocus>()
         .init_resource::<InputFocusVisible>()
-        .init_resource::<ButtonInput<KeyCode>>()
         .add_message::<KeyboardInput>()
         .add_message::<Ime>()
         .add_observer(order_modal)
@@ -213,108 +211,36 @@ pub(crate) fn active_root(world: &mut World, native: Entity) -> Option<Entity> {
     Some(active)
 }
 
-fn tab_stops(world: &World, root: Entity, focus: Option<Entity>) -> Vec<Entity> {
-    // Window is the default scope.
-    // Explicit TabGroups retain their own order and nearest modal group contract.
-    let mut ancestor = focus;
-    let mut nearest_group = None;
-    while let Some(entity) = ancestor {
-        if let Some(group) = world.get::<TabGroup>(entity) {
-            nearest_group = Some((entity, *group));
-            break;
-        }
-        if entity == root {
-            break;
-        }
-        ancestor = world.get::<ChildOf>(entity).map(ChildOf::parent);
-    }
-    let mut groups = Vec::new();
-    if let Some((entity, group)) = nearest_group.filter(|(_, group)| group.modal) {
-        groups.push((entity, group.order));
-    } else {
-        let mut pending = vec![root];
-        while let Some(entity) = pending.pop() {
-            if !available(world, entity, true) {
-                continue;
-            }
-            if let Some(group) = world.get::<TabGroup>(entity) {
-                if !group.modal {
-                    groups.push((entity, group.order));
-                }
-            } else if entity == root {
-                groups.push((root, 0));
-            }
-            if let Some(children) = world.get::<Children>(entity) {
-                pending.extend(children.iter().rev());
-            }
-        }
-        groups.sort_by_key(|(_, order)| *order);
-    }
-    let mut stops = Vec::new();
-    for (group, _) in groups {
-        let mut group_stops = Vec::new();
-        let mut pending: Vec<_> = if world.get::<TabGroup>(group).is_none() {
-            vec![group]
-        } else {
-            world
-                .get::<Children>(group)
-                .map(|children| children.iter().rev().collect())
-                .unwrap_or_default()
-        };
-        while let Some(entity) = pending.pop() {
-            if !available(world, entity, true)
-                || entity != group && world.get::<TabGroup>(entity).is_some()
-            {
-                continue;
-            }
-            if let Some(index) = world.get::<TabIndex>(entity)
-                && index.0 >= 0
-            {
-                let target = world
-                    .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(entity)
-                    .map(|target| target.target)
-                    .unwrap_or(entity);
-                if available(world, target, true) {
-                    group_stops.push((target, index.0));
-                }
-            }
-            if let Some(children) = world.get::<Children>(entity) {
-                pending.extend(children.iter().rev());
-            }
-        }
-        group_stops.sort_by_key(|(_, index)| *index);
-        stops.extend(group_stops.into_iter().map(|(entity, _)| entity));
-    }
-    stops
-}
-
 fn initial(world: &World, root: Entity) -> Entity {
-    let stops = tab_stops(world, root, Some(root));
-    stops
-        .iter()
-        .copied()
-        .filter_map(|entity| {
-            world
-                .get::<crate::WidgetryWindowInitialFocus>(entity)
-                .or_else(|| {
-                    let mut parent = world.get::<ChildOf>(entity).map(ChildOf::parent);
-                    while let Some(ancestor) = parent {
-                        if let Some(priority) = world
-                            .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(ancestor)
-                            .filter(|mapping| mapping.target == entity)
-                            .and_then(|_| world.get::<crate::WidgetryWindowInitialFocus>(ancestor))
-                        {
-                            return Some(priority);
-                        }
-                        parent = world.get::<ChildOf>(ancestor).map(ChildOf::parent);
-                    }
-                    None
-                })
-                .map(|priority| (entity, priority.0))
-        })
+    let mut candidates = Vec::new();
+    let mut pending = vec![root];
+    while let Some(entity) = pending.pop() {
+        if !available(world, entity, true)
+            || entity != root && world.get::<WindowRoot>(entity).is_some()
+        {
+            continue;
+        }
+        if let Some(priority) = world.get::<crate::WidgetryWindowInitialFocus>(entity) {
+            let target = world
+                .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(entity)
+                .map(|mapping| mapping.target)
+                .unwrap_or(entity);
+            let owner = std::iter::successors(Some(target), |entity| {
+                world.get::<ChildOf>(*entity).map(ChildOf::parent)
+            })
+            .find(|entity| world.get::<WindowRoot>(*entity).is_some());
+            if owner == Some(root) && available(world, target, true) {
+                candidates.push((target, priority.0));
+            }
+        }
+        if let Some(children) = world.get::<Children>(entity) {
+            pending.extend(children.iter().rev());
+        }
+    }
+    candidates
+        .into_iter()
         .min_by_key(|(_, priority)| *priority)
-        .map(|(entity, _)| entity)
-        .or_else(|| stops.first().copied())
+        .map(|(target, _)| target)
         .unwrap_or(root)
 }
 
@@ -455,40 +381,7 @@ fn keyboard(mut events: MessageReader<KeyboardInput>, mut commands: Commands) {
                     .resource_mut::<InputFocus>()
                     .set(target, FocusCause::Navigated);
             }
-            let composing = world.get::<EditableText>(target).is_some_and(|edit| {
-                edit.is_composing()
-                    || edit.pending_edits.iter().any(|edit| {
-                        matches!(
-                            edit,
-                            TextEdit::ImeSetCompose { .. } | TextEdit::ImeCommit { .. }
-                        )
-                    })
-            });
-            if scope.is_some()
-                && input.key_code == KeyCode::Tab
-                && input.state == ButtonState::Pressed
-                && !input.repeat
-                && !composing
-            {
-                let stops = tab_stops(world, scope.unwrap_or(target), Some(target));
-                let backward = world
-                    .resource::<ButtonInput<KeyCode>>()
-                    .any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
-                if !stops.is_empty() {
-                    let next = match stops.iter().position(|entity| *entity == target) {
-                        Some(index) if backward => (index + stops.len() - 1) % stops.len(),
-                        Some(index) => (index + 1) % stops.len(),
-                        None if backward => stops.len() - 1,
-                        None => 0,
-                    };
-                    world
-                        .resource_mut::<InputFocus>()
-                        .set(stops[next], FocusCause::Navigated);
-                    world.resource_mut::<InputFocusVisible>().0 = true;
-                }
-            } else {
-                world.trigger(FocusedInput::new(target, input, native));
-            }
+            world.trigger(FocusedInput::new(target, input, native));
             world.flush();
             Ok(())
         });
