@@ -770,7 +770,7 @@ fn accessibility_and_descendant_control_propagation_are_independent() {
         app.world().get::<AccessibilityNode>(root).unwrap().role(),
         accesskit::Role::ListBox
     );
-    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, 0);
+    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, -1);
     let target = row(&mut app, 0);
     assert!(app.world().get::<ListItem>(target).is_some());
     assert!(app.world().get::<Selectable>(target).is_some());

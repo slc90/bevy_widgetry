@@ -96,7 +96,6 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             BackgroundColor bevy_widgetry_core::foreground::ResolvedForeground
             Children [Text::new("−") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]--
             #NumberInputField @{field_scene}
-            bevy::input_focus::tab_navigation::TabIndex(0)
             TextLayout {justify:Justify::Center}
             Node {flex_grow:1.0,flex_basis:px(0),min_width:px(FIELD_MIN_WIDTH)}--
             #NumberInputIncrease WidgetryNumberInputStep {root:#NumberInputRoot,increase:true}

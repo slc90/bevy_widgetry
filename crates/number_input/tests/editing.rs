@@ -35,6 +35,11 @@ fn fixture() -> (App, Entity, Entity, Entity) {
         .iter()
         .find(|entity| app.world().get::<WidgetryTextField>(*entity).is_some())
         .unwrap();
+    assert!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(field)
+            .is_none()
+    );
     let editor = app
         .world()
         .get::<WidgetryInputTarget>(field)

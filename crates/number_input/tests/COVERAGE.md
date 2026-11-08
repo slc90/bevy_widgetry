@@ -46,3 +46,5 @@
 有效禁用期间收到字符键而在同帧 Update 重新启用时，清除原生 TextInput 排入的旧请求；覆盖根与祖先两种恢复路径，并验证之后新键入仍可用。
 
 `style.rs` also checks an external complete Theme against the shared shell and owned TextField/Button outputs while retaining draft text, formal value, and notification count.
+
+默认内嵌 TextField 不额外配置 TabIndex；Pointer 与程序化聚焦复用 TextField 的真实 Editor 映射，内部数值按键与步进触发器焦点契约保持。

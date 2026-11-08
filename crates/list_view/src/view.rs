@@ -345,7 +345,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
                     BottomSpacer Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))
                 },
             }
-            TabIndex::default()
+            TabIndex(-1)
             ActiveDescendant::default()
             template(|_| Ok(AccessibilityNode(accesskit::Node::new(accesskit::Role::ListBox))))
             BorderColor::default()

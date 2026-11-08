@@ -1876,6 +1876,11 @@ fn hover_style_priority_and_theme_follow_public_state() {
 #[test]
 fn pointer_focus_initializes_the_focused_cell_without_selecting() {
     let (mut app, source, root, _) = common::uninitialized_fixture(20, 10);
+    assert_eq!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(root),
+        Some(&bevy::input_focus::tab_navigation::TabIndex(-1))
+    );
     add_keyboard_dispatch(&mut app);
     app.init_resource::<Events>().add_observer(
         |event: On<WidgetryTableEvent>, mut events: ResMut<Events>| events.0.push(event.kind),

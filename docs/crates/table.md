@@ -1,5 +1,7 @@
 # Table
 
+默认根保留 `TabIndex(-1)` 作为 Bevy Pointer Focus 兼容标记；点击取得输入焦点后处理本控件内部按键，不声明跨控件顺序。
+
 插件保留 Pointer 焦点与当前控件内部键盘操作，不自动安装 `TabNavigationPlugin`。
 
 ## 功能概述

@@ -207,3 +207,5 @@ Document 绑定拒绝分别从同步和 Commands 两种入口检查请求目标�
 SVG 诊断：`svg.rs` 覆盖 I/O 原因链、统一 origin 穿过 ECS 转换、源头一次 ERROR，以及无效 document/region/geometry/color 拒绝时的文件保护；已有混合图形输出、颜色边界保持。
 
 PNG 诊断迁移：`png.rs` 验证请求 origin 与 owner/path/scale，`export::png` 生命周期测试逐项检查完成事件与 JobOutcome 的所有 origin 指针一致，清理完成不伪处理；已有取消、晚取消真实失败、读回超时、移除请求、分块和颜色回归保持。`png_gpu.rs` 通过原因链匹配设备/尺寸/提交分类。
+
+CanvasView 使用 TabIndex(-1) 保留 Pointer 聚焦及本画布内部快捷键，不声明跨控件遍历顺序。

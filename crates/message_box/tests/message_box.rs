@@ -104,6 +104,35 @@ fn resources(app: &App, root: Entity) -> Vec<Entity> {
 }
 
 #[test]
+fn pointer_focus_and_keyboard_activation_work_without_tab_stops() {
+    use bevy::input_focus::InputFocus;
+    use bevy_widgetry_test_utils::{press_key, primary_release};
+    for key in [KeyCode::Enter, KeyCode::Space] {
+        let mut app = observed_app();
+        let (_, parent) = parent(&mut app);
+        app.world_mut()
+            .entity_mut(parent)
+            .insert(bevy::window::PrimaryWindow);
+        let root = app.world_mut().spawn_scene(bsn! {
+            @widgetry_message_box(parent, "Keyboard", WidgetryMessageBoxButtons::Ok, Default::default(), bsn_list!{})
+        }).unwrap().id();
+        app.update();
+        let window = native(app.world(), root);
+        let button = action(&app, root, "OK");
+        press(&mut app, button);
+        app.world_mut().trigger(primary_release(button));
+        app.world_mut().flush();
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
+        press_key(&mut app, window, key);
+        assert_eq!(
+            app.world().resource::<Results>().0,
+            vec![(root, WidgetryMessageBoxResult::Ok)]
+        );
+        assert!(app.world().get_entity(root).is_err());
+    }
+}
+
+#[test]
 fn default_title_has_an_explicit_window_binding_without_changing_body_text() {
     use bevy_widgetry_window::{WidgetryWindowTitle, widgetry_window_target};
     let mut app = observed_app();
@@ -113,6 +142,12 @@ fn default_title_has_an_explicit_window_binding_without_changing_body_text() {
             bsn_list!{Text("Question") Name("QuestionBody")})
     }).unwrap().id();
     app.update();
+    let button = action(&app, root, "OK");
+    assert_eq!(
+        app.world()
+            .get::<bevy::input_focus::tab_navigation::TabIndex>(button),
+        Some(&bevy::input_focus::tab_navigation::TabIndex(-1))
+    );
     let titles = app
         .world_mut()
         .query_filtered::<Entity, With<WidgetryWindowTitle>>()

@@ -135,3 +135,5 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 `interaction.rs` 验证 Pointer 聚焦 Table 后初始化 Focused Cell，不额外选择或发出业务事件。
 
 `editing.rs` 保护无非负 TabIndex 的非文本复合 Editor 通过既有 WidgetryInputTarget 获得真实按钮焦点，Space 产生草稿修改、提交读取当前草稿、Accepted 后回收输入并恢复 Table Focus，且 Focused Cell/Selection 不因解析输入目标改变。焦点 helper Unit Test 覆盖显式映射优先、缺失/跨 Editor/隐藏/Disabled 目标与祖先过滤和容器兜底；既有 TextField、Popup、禁用和虚拟化生命周期回归继续保护编辑行为。
+
+Root 的 TabIndex(-1) 仍支持 Pointer 焦点及 Focused Cell 初始化；编辑器输入目标另按真实映射解析。

@@ -565,6 +565,11 @@ fn keyboard_requires_enabled_focus_and_supports_repeat_steps_and_one_percent() {
 
     for vertical in [false, true] {
         let (mut app, root, window, _) = fixture(PointerId::Mouse, vertical, true);
+        assert_eq!(
+            app.world()
+                .get::<bevy::input_focus::tab_navigation::TabIndex>(root),
+            Some(&bevy::input_focus::tab_navigation::TabIndex(-1))
+        );
         let plus = if vertical {
             KeyCode::ArrowUp
         } else {

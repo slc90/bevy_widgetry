@@ -43,3 +43,5 @@ Cancel 按钮、Escape 和 Native Close Request 都提交 Cancel 结果。结果
 - 不阻塞调用线程等待用户决议。
 - 依赖桌面 Window / Modal 组合能力，Headless 测试不能证明所有 OS Window 行为。
 
+
+结果按钮继承基础 Button 的 TabIndex(-1) Pointer 焦点能力；点击或获得焦点后的 Enter/Space 激活仍产生原有结果，不额外声明 Tab 顺序。

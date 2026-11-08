@@ -85,7 +85,7 @@ pub(crate) fn scene(props: WidgetrySliderProps) -> impl Scene {
         crate::WidgetrySliderLinear {track:#SliderTrack,thumb:#SliderThumb,orientation:orientation}
         template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
         Parts { track: #SliderTrack, fill: #SliderFill, thumb: #SliderThumb }
-        bevy::input_focus::tab_navigation::TabIndex(0) Hovered(false)
+        bevy::input_focus::tab_navigation::TabIndex(-1) Hovered(false)
         Node {
             width: px(if vertical {cross} else {DEFAULT_LENGTH}), height: px(if vertical {DEFAULT_LENGTH} else {cross}),
             min_width: px(if vertical {cross} else {0.0}), min_height: px(if vertical {0.0} else {cross}),

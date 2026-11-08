@@ -49,10 +49,7 @@ pub(crate) fn activate(event: On<Activate>, mut commands: Commands) {
 }
 
 fn can_focus(world: &World, button: Entity) -> bool {
-    if world
-        .get::<TabIndex>(button)
-        .is_none_or(|index| index.0 < 0)
-    {
+    if world.get::<TabIndex>(button).is_none() {
         return false;
     }
     let mut current = Some(button);

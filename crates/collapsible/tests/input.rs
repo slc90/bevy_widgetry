@@ -88,6 +88,7 @@ fn only_the_fixed_button_toggles_and_disabled_user_activation_is_ignored() {
 #[test]
 fn pointer_focus_and_native_enter_space_activate_the_same_state() {
     let (mut app, window, root, button, _, _) = fixture();
+    assert_eq!(app.world().get::<TabIndex>(button), Some(&TabIndex(-1)));
     app.world_mut().trigger(primary_press(button));
     app.world_mut().flush();
     app.world_mut().trigger(primary_release(button));

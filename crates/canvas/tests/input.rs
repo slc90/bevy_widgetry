@@ -19,6 +19,11 @@ fn space_primary_pan_locks_until_release_and_only_moves_its_view() {
     for id in pointer_ids() {
         for (scale, ui_scale) in [(1.0, 1.0), (1.5, 1.0), (2.0, 1.5)] {
             let (mut app, a, b, shape, _, mut at) = fixture(id, scale, ui_scale);
+            assert_eq!(
+                app.world()
+                    .get::<bevy::input_focus::tab_navigation::TabIndex>(a),
+                Some(&bevy::input_focus::tab_navigation::TabIndex(-1))
+            );
             moved(&mut app, id, &mut at, Vec2::ZERO);
             app.world_mut()
                 .resource_mut::<ButtonInput<KeyCode>>()

@@ -101,7 +101,7 @@ impl CanvasView {
                 Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom, selection: Vec::new(), mode: CanvasMode::Select })
             })
             Node { min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
-            bevy::input_focus::tab_navigation::TabIndex(0)
+            bevy::input_focus::tab_navigation::TabIndex(-1)
             Visibility::default()
         }
     }

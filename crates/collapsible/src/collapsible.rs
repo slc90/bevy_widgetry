@@ -68,7 +68,6 @@ impl WidgetryCollapsible {
                             Node { width: px(crate::style::ICON_SIZE as f32), height: px(crate::style::ICON_SIZE as f32), flex_shrink: 0.0 }
                         }) as Box<dyn SceneList>)}
                     }
-                    bevy::input_focus::tab_navigation::TabIndex(0)
                     Node {
                         width: px(crate::style::BUTTON_SIZE), height: px(crate::style::BUTTON_SIZE),
                         min_width: px(crate::style::BUTTON_SIZE), min_height: px(crate::style::BUTTON_SIZE),

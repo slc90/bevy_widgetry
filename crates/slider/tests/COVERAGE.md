@@ -48,3 +48,5 @@
 `interaction.rs` 从库外实现策略及每次手势 session，不安装默认 Style、不创建 Track/Thumb。覆盖真实 Picking 抓取偏移与非 final 提交、实例隔离、同值手势、开始拒绝、Wait 后续接、显式 Cancel、方向步进反转、W/S 键位替换与键盘中断、Disabled 程序设置、错误后先清理再发送真实 Cancelled、原始外部错误类型/source及单次源头ERROR。默认 `input.rs` / `style.rs` 继续保护线性 Scale/viewport/抓取/生命周期/配色尺寸契约。
 
 `input.rs` 还验证容差内合法步进初值的 Thumb Press、零位移 Move 和 Release 保留原始 f32 位且不发 ValueChange。
+
+默认 Slider 两个方向的 Root 使用 -1 Pointer 焦点标记，失焦/聚焦/Disabled 的内部按键保护保持。

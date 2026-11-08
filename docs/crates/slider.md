@@ -1,5 +1,7 @@
 # Slider
 
+默认根保留 `TabIndex(-1)` 作为 Bevy Pointer Focus 兼容标记；点击取得输入焦点后处理本控件内部按键，不声明跨控件顺序。
+
 插件保留 Pointer 焦点与当前控件内部键盘操作，不自动安装 `TabNavigationPlugin`。
 
 `bevy_widgetry_slider` 提供单值 `f32` 数值模型，经 Facade 默认启用的 `slider` Feature 和模块导出。安装 `WidgetrySliderPlugin`；使用 `@WidgetrySlider` 和一次性 Props 构造。
@@ -29,7 +31,7 @@
 
 ## 可替换交互策略
 
-独立 `WidgetrySliderInteractionPlugin` 安装数值、Core UI 和输入生命周期，不安装默认样式。以 BSN 在 `@WidgetrySliderHeadless` 同根插入 `WidgetrySliderInteraction::new(strategy)` 即可使用库外策略；该组件确保 Node、Hovered 和内部手势状态，键盘导航可按需设置原生 TabIndex。应用可同时组合不同策略实例，不需要默认 Slider 身份或 Track / Thumb。
+独立 `WidgetrySliderInteractionPlugin` 安装数值、Core UI 和输入生命周期，不安装默认样式。以 BSN 在 `@WidgetrySliderHeadless` 同根插入 `WidgetrySliderInteraction::new(strategy)` 即可使用库外策略；该组件确保 Node、Hovered 和内部手势状态，需要 Pointer 聚焦时可设置原生 TabIndex(-1)，有焦点后处理当前控件内部按键，不声明跨控件顺序。应用可同时组合不同策略实例，不需要默认 Slider 身份或 Track / Thumb。
 
 `SliderInteractionStrategy::begin(&World, SliderPointerInput)` 读取布局、实例配置及当前只读数值，返回 `None` 拒绝/等待开始，或 `SliderInteractionStart { position, drag }`。`position` 为连续数值坐标，库负责 Clamp、方向锚点、步进和真实提交。每次手势的 `Box<dyn SliderDragStrategy>` 独立保存抓取偏移和轨迹历史；其 `project` 返回 `SliderProjection::Position`、`Wait`（保留捕获且不改值）或 `Cancel`（正常取消）。策略不可写 World，不直接提交 value 或控制 Capture。
 

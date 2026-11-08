@@ -15,3 +15,5 @@
 `style.rs` 验证默认卡片尺寸与分隔线、两种初始展开状态及重复切换的 SVG 方向和实体保留；三套内置主题、局部覆盖及清除、应用 Children 样式保留；Header 禁用时箭头继承 Button 前景且方向不变；颜色 API 同值、无效颜色不提交、错误目标及 Commands 执行时错误传播。实际卡片渲染、SVG 像素与用户输入由 Gallery BRP 验收。
 
 `diagnostics.rs` 负责组合失败现场与生命周期：同一轮初始化中多个 Root 的失败全部到宿主；结构请求保留部件、实际 / 预期父级，箭头失败保留 Icon source 和原 origin；真实 Command 与 Scene 错误边界不重复源头 ERROR。持续样式失败在 Theme 重刷时复用诊断，实际修复后恢复。
+
+固定按钮复用基础 -1 标记，Pointer 和 Enter/Space 激活及深层 Content 折叠后的焦点回收继续有效。

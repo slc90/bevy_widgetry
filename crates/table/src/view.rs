@@ -161,7 +161,7 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             template(move |_| Ok(style.clone()))
             template(move |_| Ok(header_actions.clone()))
             WidgetryTable::<T> { source: {source}, marker: PhantomData }
-            TabIndex::default()
+            TabIndex(-1)
             BackgroundColor::default() BorderColor::default()
             Node {
                 display: Display::Grid, min_width: px(0), min_height: px(0), overflow: Overflow::clip(),

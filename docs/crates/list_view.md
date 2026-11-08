@@ -1,5 +1,7 @@
 # List View
 
+默认根保留 `TabIndex(-1)` 作为 Bevy Pointer Focus 兼容标记；点击取得输入焦点后处理本控件内部按键，不声明跨控件顺序。
+
 ## 功能概述
 
 提供 `WidgetryListModel<T>` 与泛型 `WidgetryListView<T, K = WidgetryListItemId>`，用于多选、键盘浏览和可虚拟化的纵向条目列表。

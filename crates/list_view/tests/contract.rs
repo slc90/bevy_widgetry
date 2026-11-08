@@ -286,7 +286,7 @@ fn shell_shares_scroll_root_and_exposes_public_content() {
     }).unwrap().id();
     assert!(app.world().get::<WidgetryScrollArea>(root).is_some());
     assert!(app.world().get::<ListBox>(root).is_none());
-    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, 0);
+    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, -1);
     let viewport = app
         .world_mut()
         .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()

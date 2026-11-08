@@ -224,3 +224,5 @@ Renderer 按 View 阶段与 shape 分别持有持续故障，同一业务输入�
 SVG 同步导出返回统一 `JobFailure`，原因链保留 `CanvasExportError` 分类或原始 `CanvasError`。导出上下文保存 document、目标 path 和 region；不支持颜色另存 shape 与实际 Color。I/O 保留 `io::Error`，模型诊断只追加语境，不重新生成 origin。生成与校验成功后才写文件，失败交由调用方实际提示/放弃或继续传播。
 
 PNG 请求返回 `JobFailure`，完成事件为 `Result<UVec2, CanvasPngStop>`：`Canceled` 是不实现 Error 的正常控制结果，`Failed(JobFailure)` 保留真实诊断。Finished 是宿主的失败消费通道，JobOutcome 仅观察同一失败且共享 origin；观察事件或释放 GPU 资源不产生处理 DEBUG。宿主必须实际终止/提示后调用 `record_handled`，或把同一 failure 转入 ECS。Render 结构失败按 `CanvasRenderIssue` 匹配，图像转换、资源插入、Scene、编码与 I/O 原因保留，诊断增加 document/path/export/job/tile/尺寸或限制。主失败与清理失败合并完整保留。
+
+CanvasView 使用 TabIndex(-1) 保留 Pointer 聚焦及本画布内部快捷键，不声明跨控件遍历顺序。
