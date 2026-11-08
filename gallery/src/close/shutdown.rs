@@ -98,6 +98,7 @@ pub(super) fn begin(world: &mut World, intent: AppExit) -> Result {
     if world.resource::<ExitFlow>().handle.is_some() {
         return Ok(());
     }
+    crate::splash::begin_shutdown(world)?;
     crate::canvas_experiment::cancel_stage_exports(world)?;
     let timeout = world.resource::<ExitFlow>().timeout;
     let handle = world
@@ -151,15 +152,22 @@ fn prepare_windows(world: &mut World) {
         world.flush();
     }
     for entity in hidden {
+        if crate::splash::shutdown_main(world) == Some(entity) {
+            continue;
+        }
         if let Some(mut window) = world.get_mut::<Window>(entity) {
             window.visible = true;
             debug!(?entity, "Gallery 退出前已提交托盘窗口恢复变更");
         }
     }
-    for mut window in world
-        .query_filtered::<&mut Window, With<bevy::window::PrimaryWindow>>()
+    let startup_main = crate::splash::shutdown_main(world);
+    for (entity, mut window) in world
+        .query_filtered::<(Entity, &mut Window), With<bevy::window::PrimaryWindow>>()
         .iter_mut(world)
     {
+        if startup_main == Some(entity) {
+            continue;
+        }
         window.visible = true;
         window.set_minimized(false);
     }
@@ -229,6 +237,7 @@ fn drive(world: &mut World) -> Result {
         world.resource::<GalleryShutdownState>().stage,
         Stage::Completed | Stage::Forced
     ) {
+        crate::splash::cleanup_shutdown(world)?;
         let intent = world.resource::<ExitFlow>().intent.clone();
         world.resource_mut::<GalleryShutdownState>().exit_sent = true;
         world.write_message(intent);
@@ -300,6 +309,9 @@ fn show(world: &mut World) -> Result {
         return Ok(());
     }
     let (stage, remaining, timeout) = (state.stage, state.remaining, state.timeout_ms);
+    if stage == Stage::Waiting && remaining == 0 && crate::splash::shutdown_main(world).is_some() {
+        return Ok(());
+    }
     let parts = world.query::<&Panel>().iter(world).next().copied();
     if parts.is_some()
         && !world.is_resource_changed::<GalleryShutdownState>()
@@ -310,11 +322,14 @@ fn show(world: &mut World) -> Result {
     let parts = if let Some(parts) = parts {
         parts
     } else {
-        let Some(host) = world
-            .query_filtered::<Entity, With<GalleryPageHost>>()
-            .iter(world)
-            .next()
-        else {
+        let host = match crate::splash::shutdown_host(world)? {
+            Some(host) => Some(host),
+            None => world
+                .query_filtered::<Entity, With<GalleryPageHost>>()
+                .iter(world)
+                .next(),
+        };
+        let Some(host) = host else {
             return Ok(());
         };
         let root = spawn_scene(world, bsn! { ChildOf(host) @panel() })
@@ -368,7 +383,16 @@ fn show(world: &mut World) -> Result {
         .next()
         .map(|(entity, _)| entity);
     if let Some(root) = root {
-        world.entity_mut(root).insert(BackgroundColor(color));
+        let foreground = world
+            .resource::<WidgetryTheme>()
+            .window
+            .frame
+            .normal
+            .foreground;
+        world.entity_mut(root).insert((
+            BackgroundColor(color),
+            bevy_widgetry_core::foreground::ResolvedForeground(foreground),
+        ));
     }
     Ok(())
 }
@@ -394,6 +418,38 @@ mod tests {
         app
     }
 
+    #[test]
+    fn startup_exit_preserves_the_hidden_primary_and_keeps_the_failure_intent() {
+        let mut app = app();
+        let main = app
+            .world_mut()
+            .spawn((
+                bevy::window::PrimaryWindow,
+                Window {
+                    visible: false,
+                    ..default()
+                },
+            ))
+            .id();
+        app.world_mut()
+            .insert_resource(crate::splash::SplashEnabled);
+        crate::close::request_failed_startup_exit(app.world_mut()).unwrap();
+        prepare_windows(app.world_mut());
+        assert!(!app.world().get::<Window>(main).unwrap().visible);
+        assert_eq!(crate::splash::shutdown_main(app.world()), Some(main));
+        assert!(
+            !app.world()
+                .contains_resource::<crate::splash::SplashEnabled>()
+        );
+        assert!(matches!(
+            app.world().resource::<ExitFlow>().intent,
+            AppExit::Error(_)
+        ));
+        assert!(app.world().resource::<ExitFlow>().handle.is_some());
+        assert!(!app.world().resource::<GalleryShutdownState>().exit_sent);
+        crate::splash::cleanup_shutdown(app.world_mut()).unwrap();
+    }
+
     fn controlled(app: &App, acknowledge: bool) -> (JobId, JobReceiver<()>, mpsc::Sender<()>) {
         let (release, wait) = mpsc::channel();
         let (started, running) = mpsc::channel();
@@ -411,6 +467,58 @@ mod tests {
             .unwrap();
         running.recv_timeout(TEST_WAIT_TIMEOUT).unwrap();
         (result.0, result.1, release)
+    }
+
+    #[test]
+    fn startup_shutdown_uses_a_separate_view_until_the_job_is_reaped() {
+        use bevy_widgetry::splash::{SplashPlugin, SplashWindow};
+
+        let mut app = window_app();
+        app.add_plugins(SplashPlugin);
+        let (_, main) = owned(&mut app);
+        app.world_mut()
+            .entity_mut(main)
+            .insert(bevy::window::PrimaryWindow);
+        app.world_mut().get_mut::<Window>(main).unwrap().visible = false;
+        app.world_mut()
+            .insert_resource(crate::splash::SplashEnabled);
+        let (_, _receiver, release) = controlled(&app, true);
+
+        crate::close::request_failed_startup_exit(app.world_mut()).unwrap();
+        prepare_windows(app.world_mut());
+        show(app.world_mut()).unwrap();
+        let window = app
+            .world_mut()
+            .query_filtered::<Entity, With<SplashWindow>>()
+            .single(app.world())
+            .unwrap();
+        let host = crate::splash::shutdown_host(app.world_mut())
+            .unwrap()
+            .unwrap();
+        let camera = app.world().get::<UiTargetCamera>(host).unwrap().0;
+        assert!(matches!(
+            app.world().get::<bevy::camera::RenderTarget>(camera),
+            Some(bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(target)))
+                if *target == window && *target != main
+        ));
+        assert_eq!(app.world().resource::<GalleryShutdownState>().remaining, 1);
+        assert!(!app.world().get::<Window>(main).unwrap().visible);
+        show(app.world_mut()).unwrap();
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<SplashWindow>>()
+                .iter(app.world())
+                .count(),
+            1
+        );
+
+        release.send(()).unwrap();
+        await_exit(&mut app);
+        assert_eq!(app.should_exit(), Some(AppExit::error()));
+        assert!(!app.world().get::<Window>(main).unwrap().visible);
+        for entity in [window, camera, host] {
+            assert!(app.world().get_entity(entity).is_err());
+        }
     }
 
     fn await_exit(app: &mut App) {

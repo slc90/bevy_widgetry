@@ -1,51 +1,90 @@
-const FALLBACK_Z_INDEX: i32 = 1000000;
-const ANIMATION_Z_INDEX: i32 = 1000001;
-
 use super::{SplashSession, presentation::SplashPresentation};
-use bevy::prelude::*;
-use bevy_widgetry::scene::WidgetrySceneCommandsExt;
+use bevy::{camera::RenderTarget, prelude::*, window::WindowRef};
+use bevy_widgetry::{scene::spawn_scene, splash::Splash};
 
-pub(crate) fn setup(
-    commands: &mut Commands,
-    server: &AssetServer,
-    window: Entity,
-    gallery_camera: Entity,
-) {
+const SPLASH_PHYSICAL_SIZE: UVec2 = UVec2::new(1920, 1080);
+
+pub(crate) fn setup(commands: &mut Commands, server: &AssetServer, main: Entity) {
+    let server = server.clone();
+    commands.queue(move |world: &mut World| -> Result {
+        match build(world, &server, main) {
+            Ok(()) => Ok(()),
+            Err(error) => super::fail_startup(world, error),
+        }
+    });
+}
+
+fn build(world: &mut World, server: &AssetServer, main: Entity) -> Result {
+    let window = Splash::start(
+        world,
+        main,
+        Window {
+            title: "Widget Gallery Splash".into(),
+            resolution: SPLASH_PHYSICAL_SIZE.into(),
+            skip_taskbar: true,
+            ..default()
+        },
+    )
+    .map_err(|error| error.into_bevy_error())?;
+    world
+        .entity_mut(window)
+        .insert(Name::new("GallerySplashWindow"));
+    let camera = world
+        .spawn((
+            Name::new("GallerySplashCamera"),
+            Camera2d,
+            Camera {
+                clear_color: ClearColorConfig::Custom(canvas_color()),
+                ..default()
+            },
+            RenderTarget::Window(WindowRef::Entity(window)),
+        ))
+        .id();
     let loaded: Vec<Handle<Image>> = crate::assets::splash_frames()
         .map(|path| server.load(path))
         .collect();
-    let fallback = commands
-        .spawn_scene_with_error_handler(bsn! {
-            Name("SplashOpaqueCover")
-            UiTargetCamera(gallery_camera)
-            GlobalZIndex(FALLBACK_Z_INDEX)
-            @full_window()
-            BackgroundColor({canvas_color()})
-        })
-        .id();
     let first = loaded[0].clone();
-    let skip = super::skip::scene();
-    let overlay = commands.spawn_scene_with_error_handler(bsn! {
-        Name("SplashDisplay")
-        UiTargetCamera(gallery_camera)
-        GlobalZIndex(ANIMATION_Z_INDEX)
-        @full_window()
-        template(move |_| Ok(ImageNode { image: first.clone(), image_mode: NodeImageMode::Stretch, ..default() }))
-        Children [@{skip}]
-    }).id();
-    commands.insert_resource(SplashPresentation::new(
+    let overlay = match spawn_scene(
+        world,
+        bsn! {
+            Name("SplashDisplay")
+            UiTargetCamera(camera)
+            @full_window()
+            template(move |_| Ok(ImageNode { image: first.clone(), image_mode: NodeImageMode::Stretch, ..default() }))
+            Children [@{super::skip::scene()}]
+        },
+    ) {
+        Ok(root) => root,
+        Err(error) => {
+            world.despawn(camera);
+            let error = error.into_bevy_error();
+            return Err(match Splash::cancel(world, window) {
+                Ok(()) => error,
+                Err(cleanup) => crate::diagnostics::combine(error, cleanup.into_bevy_error()),
+            });
+        }
+    };
+    world.insert_resource(SplashPresentation::new(
         window,
-        gallery_camera,
+        camera,
         overlay,
         loaded.iter().map(Handle::id).collect(),
     ));
-    commands.insert_resource(SplashSession {
-        gallery_camera,
+    world.insert_resource(SplashSession {
+        main,
+        window,
+        camera,
         overlay,
-        fallback: Some(fallback),
         loaded,
         finish_requested: false,
     });
+    debug!(
+        ?window,
+        ?main,
+        ?camera,
+        "Gallery 已创建独立 Splash 会话，等待应用内容和首帧"
+    );
+    Ok(())
 }
 
 fn full_window() -> impl Scene {

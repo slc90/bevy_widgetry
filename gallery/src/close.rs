@@ -36,6 +36,10 @@ pub(crate) fn request_exit(world: &mut World) -> Result {
     shutdown::begin(world, AppExit::Success)
 }
 
+pub(crate) fn request_failed_startup_exit(world: &mut World) -> Result {
+    shutdown::begin(world, AppExit::error())
+}
+
 #[derive(Component)]
 pub(crate) struct GalleryIndependentWindow;
 
@@ -88,9 +92,23 @@ fn close_requests(
         .map(|request| request.window)
         .collect();
     for native in requests {
+        if world
+            .get::<bevy_widgetry::splash::SplashWindow>(native)
+            .is_some()
+        {
+            if !world.resource::<GalleryTrayState>().exiting {
+                info!(window = ?native, "用户关闭 Splash，正常退出 Gallery");
+                request_exit(world)?;
+            }
+            continue;
+        }
         if world.get::<PrimaryWindow>(native).is_some() {
             if !world.resource::<GalleryTrayState>().exiting {
-                open_confirmation(world, native)?;
+                if crate::splash::is_starting(world) {
+                    request_exit(world)?;
+                } else {
+                    open_confirmation(world, native)?;
+                }
             }
             continue;
         }

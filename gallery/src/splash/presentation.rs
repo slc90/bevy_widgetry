@@ -20,40 +20,32 @@ use std::time::Instant;
 #[derive(Resource, Clone)]
 pub(super) struct SplashPresentation {
     pub(super) window: Entity,
-    gallery_camera: Entity,
+    splash_camera: Entity,
     overlay: Entity,
     images: Vec<AssetId<Image>>,
     pub(super) source_ready: Arc<AtomicBool>,
     pub(super) presented: Arc<AtomicBool>,
     pub(super) present_count: Arc<AtomicU64>,
     pub(super) present_interval_ns: Arc<AtomicU64>,
-    terminal: bool,
-    pub(super) terminal_presented: Arc<AtomicBool>,
 }
 
 impl SplashPresentation {
     pub(super) fn new(
         window: Entity,
-        gallery_camera: Entity,
+        splash_camera: Entity,
         overlay: Entity,
         images: Vec<AssetId<Image>>,
     ) -> Self {
         Self {
             window,
-            gallery_camera,
+            splash_camera,
             overlay,
             images,
             source_ready: default(),
             presented: default(),
             present_count: default(),
             present_interval_ns: default(),
-            terminal: false,
-            terminal_presented: default(),
         }
-    }
-
-    pub(super) fn submit_terminal(&mut self) {
-        self.terminal = true;
     }
 }
 
@@ -123,7 +115,7 @@ fn presented(
             .and_then(|(_, _, ui, _)| ui_views.get(ui.0).ok())
             .and_then(|view| phases.get(&view.retained_view_entity))
     };
-    let image_ready = phase_for(source.gallery_camera).is_some_and(|phase| {
+    let image_ready = phase_for(source.splash_camera).is_some_and(|phase| {
         phase.items.values().any(|item| {
             item.entity.1.id() == source.overlay
                 && !item.batch_range.is_empty()
@@ -146,27 +138,8 @@ fn presented(
         .any(|(main, window)| main == source.window && window.swap_chain_texture.is_none());
     let target_presented = cameras
         .iter()
-        .any(|(main, target, _, _)| main.id() == source.gallery_camera && target.needs_present());
-    // A zero-alpha ImageNode may be culled; extraction of the terminal state plus a present proves its removal reached the window.
-    if window_presented && target_presented && (image_ready || source.terminal) {
-        if !source.presented.load(Ordering::Acquire) {
-            winsafe::DwmFlush().map_err(|error| {
-                crate::diagnostics::at(
-                    error,
-                    bevy_widgetry::diagnostics::ErrorFrame::new("等待 Splash 首帧呈现失败"),
-                )
-            })?;
-            source.presented.store(true, Ordering::Release);
-        }
-        if source.terminal && !source.terminal_presented.load(Ordering::Acquire) {
-            winsafe::DwmFlush().map_err(|error| {
-                crate::diagnostics::at(
-                    error,
-                    bevy_widgetry::diagnostics::ErrorFrame::new("等待 Splash 透明末帧呈现失败"),
-                )
-            })?;
-            source.terminal_presented.store(true, Ordering::Release);
-        }
+        .any(|(main, target, _, _)| main.id() == source.splash_camera && target.needs_present());
+    if window_presented && target_presented && source.presented.load(Ordering::Acquire) {
         let now = Instant::now();
         if let Some(previous) = pending.last_present.replace(now) {
             source.present_interval_ns.store(

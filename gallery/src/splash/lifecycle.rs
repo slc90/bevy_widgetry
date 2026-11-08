@@ -24,16 +24,20 @@ enum SplashPhase {
     Fading,
     Previewing,
     Finished,
-    Fallback,
+    HandingOff,
+    Failed,
 }
 
 #[derive(Resource, Reflect, Default)]
 #[reflect(Resource)]
-struct SplashLifecycle {
+pub(super) struct SplashLifecycle {
     phase: SplashPhase,
     active_ms: f32,
     wait_ms: f32,
     fade_ms: f32,
+    ready_sent: bool,
+    main_ready_sent: bool,
+    finished_sent: bool,
 }
 
 #[derive(Resource)]
@@ -93,11 +97,12 @@ fn duration(name: &str, default_value: f32) -> Result<f32> {
 
 fn advance(
     mut commands: Commands,
-    mut session: ResMut<SplashSession>,
-    mut presentation: ResMut<SplashPresentation>,
+    session: Res<SplashSession>,
+    presentation: Res<SplashPresentation>,
     mut lifecycle: ResMut<SplashLifecycle>,
     validation: Res<SplashValidation>,
     clock: Res<SplashAnimationClock>,
+    time: Res<Time<Real>>,
     preview: Res<SplashPreview>,
     mut status: ResMut<SplashStatus>,
     server: Res<AssetServer>,
@@ -114,54 +119,86 @@ fn advance(
     ),
     mut redraw: MessageWriter<RequestRedraw>,
 ) {
-    if windows.get(presentation.window).is_err() {
-        lifecycle.phase = SplashPhase::Finished;
-        super::cleanup(&mut commands, &mut session);
+    use bevy_widgetry::splash::{MainWindowReady, SplashFinished, SplashReady};
+    if matches!(lifecycle.phase, SplashPhase::Finished | SplashPhase::Failed) {
         return;
     }
-    lifecycle.active_ms += clock.visible_delta_ms;
+    lifecycle.active_ms += time.delta_secs() * super::animation::MILLISECONDS_PER_SECOND;
     let (nodes, hosts, content, page, ready) = gallery;
-    let cpu_ready = session.loaded.iter().all(|h| images.contains(h.id()))
+    let cpu_ready = session
+        .loaded
+        .iter()
+        .all(|handle| images.contains(handle.id()))
         && lifecycle.active_ms >= validation.assets_delay_ms;
     status.cpu_assets_ready = cpu_ready;
-    let gallery_ready = ready.is_some_and(|ready| {
-        ready.window == presentation.window && nodes.get(ready.background).is_ok()
-    }) && *page.get() == GalleryPage::Button
+    let gallery_ready = ready
+        .is_some_and(|ready| ready.window == session.main && nodes.get(ready.background).is_ok())
+        && *page.get() != GalleryPage::Initializing
         && hosts.iter().count() == 1
         && content
             .single()
-            .is_ok_and(|content| content.0 == GalleryPage::Button)
+            .is_ok_and(|content| content.0 == *page.get())
         && lifecycle.active_ms >= validation.gallery_delay_ms;
-    if !preview.retain && status.elapsed_ms >= super::animation::ANIMATION_DURATION_MS {
-        session.finish_requested = true;
-    }
-    for mut visible in &mut skip {
-        *visible = if status.presented && cpu_ready && !session.finish_requested {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    let previous_phase = lifecycle.phase;
-    let mut failure = session
+    let mut failures: Vec<BevyError> = session
         .loaded
         .iter()
-        .find_map(|h| match server.get_load_state(h.id()) {
-            Some(LoadState::Failed(error)) => Some(format!("SplashAssetFailed: {error}")),
+        .filter_map(|handle| match server.get_load_state(handle.id()) {
+            Some(LoadState::Failed(source)) => Some(crate::diagnostics::at(
+                source,
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.splash.asset")
+                    .field("asset", format_args!("{:?}", handle.id())),
+            )),
             _ => None,
+        })
+        .collect();
+    if windows.get(session.window).is_err() {
+        failures.push(crate::diagnostics::at(
+            SplashContentError::WindowLost {
+                window: session.window,
+            },
+            bevy_widgetry::diagnostics::ErrorFrame::new("gallery.splash.window"),
+        ));
+    }
+    if cpu_ready && presentation.source_ready.load(Ordering::Acquire) && !lifecycle.ready_sent {
+        lifecycle.ready_sent = true;
+        commands.trigger(SplashReady {
+            splash: session.window,
         });
+    }
+    if gallery_ready && !lifecycle.main_ready_sent {
+        lifecycle.main_ready_sent = true;
+        commands.trigger(MainWindowReady {
+            splash: session.window,
+        });
+    }
+    let previous_phase = lifecycle.phase;
     if !cpu_ready {
         lifecycle.phase = SplashPhase::WaitingAssets;
     } else if !status.presented {
         lifecycle.phase = SplashPhase::WaitingFirstSplashPresent;
+    } else if lifecycle.finished_sent {
+        lifecycle.phase = SplashPhase::HandingOff;
     } else if preview.retain && !session.finish_requested {
         lifecycle.phase = SplashPhase::Previewing;
-    } else if !session.finish_requested {
+    } else if !session.finish_requested
+        && status.elapsed_ms < super::animation::ANIMATION_DURATION_MS
+    {
         lifecycle.phase = SplashPhase::Playing;
     } else if !gallery_ready {
         lifecycle.phase = SplashPhase::HoldingForGallery;
     } else {
         lifecycle.phase = SplashPhase::Fading;
+    }
+    for mut visible in &mut skip {
+        *visible = if status.presented
+            && cpu_ready
+            && !session.finish_requested
+            && status.elapsed_ms < super::animation::ANIMATION_DURATION_MS
+        {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
     if lifecycle.phase != previous_phase {
         lifecycle.wait_ms = 0.0;
@@ -172,58 +209,122 @@ fn advance(
         SplashPhase::WaitingAssets
             | SplashPhase::WaitingFirstSplashPresent
             | SplashPhase::HoldingForGallery
+            | SplashPhase::HandingOff
     );
-    if waiting || (lifecycle.phase == SplashPhase::Fading && lifecycle.fade_ms >= FADE_DURATION_MS)
-    {
-        lifecycle.wait_ms += clock.visible_delta_ms;
+    if waiting {
+        lifecycle.wait_ms += time.delta_secs() * super::animation::MILLISECONDS_PER_SECOND;
         if lifecycle.wait_ms >= validation.timeout_ms {
-            failure = Some(format!("Splash 等待超时: {:?}", lifecycle.phase));
+            failures.push(crate::diagnostics::at(
+                SplashContentError::Timeout {
+                    phase: lifecycle.phase,
+                    timeout_ms: validation.timeout_ms,
+                },
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.splash.timeout"),
+            ));
         }
     }
     status.playing = cpu_ready
         && status.presented
         && (lifecycle.phase == SplashPhase::Playing
             || (preview.repeat && lifecycle.phase == SplashPhase::Previewing));
-    if status.presented
-        && cpu_ready
-        && let Some(fallback) = session.fallback.take()
-    {
-        commands.entity(fallback).try_despawn();
-    }
     if lifecycle.phase == SplashPhase::Fading {
         lifecycle.fade_ms = (lifecycle.fade_ms + clock.visible_delta_ms).min(FADE_DURATION_MS);
         status.alpha = 1.0 - lifecycle.fade_ms / FADE_DURATION_MS;
         if let Ok(mut image) = display.get_mut(session.overlay) {
             image.color.set_alpha(status.alpha);
         } else {
-            failure = Some("Splash 显示节点丢失".into());
+            failures.push(crate::diagnostics::at(
+                SplashContentError::DisplayMissing {
+                    display: session.overlay,
+                },
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.splash.display"),
+            ));
         }
-        if lifecycle.fade_ms >= FADE_DURATION_MS {
-            presentation.submit_terminal();
+        if lifecycle.fade_ms >= FADE_DURATION_MS && !lifecycle.finished_sent {
+            lifecycle.finished_sent = true;
+            commands.trigger(SplashFinished {
+                splash: session.window,
+            });
+            debug!(window = ?session.window, "Gallery Splash 内容已结束，等待库安全交接");
         }
-        if presentation.terminal_presented.load(Ordering::Acquire) {
-            debug!(window = ?presentation.window, "Splash 淡出帧已呈现，完成 Gallery 交接");
-            lifecycle.phase = SplashPhase::Finished;
-            status.playing = false;
-            super::cleanup(&mut commands, &mut session);
-            redraw.write(RequestRedraw);
-            return;
-        }
-    } else {
+    } else if !lifecycle.finished_sent {
         status.alpha = 1.0;
     }
-    if let Some(reason) = failure {
-        warn!(
-            reason,
-            elapsed_ms = lifecycle.active_ms,
-            "Splash 降级并释放覆盖，继续 Gallery"
-        );
-        lifecycle.phase = SplashPhase::Fallback;
+    if let Some(error) = failures.into_iter().reduce(crate::diagnostics::combine) {
+        lifecycle.phase = SplashPhase::Failed;
         status.playing = false;
-        super::cleanup(&mut commands, &mut session);
-        redraw.write(RequestRedraw);
-        return;
+        commands.queue(move |world: &mut World| super::fail_startup(world, error));
     }
-    // Windows has no winit occlusion events; polling also detects exposure without a focus change.
+    // Windows does not report native occlusion; keep the host animation and startup waits advancing.
     redraw.write(RequestRedraw);
 }
+
+pub(super) fn on_shown(
+    event: On<bevy_widgetry::splash::SplashShown>,
+    session: Option<Res<SplashSession>>,
+    presentation: Option<Res<SplashPresentation>>,
+    mut status: ResMut<SplashStatus>,
+) {
+    if session
+        .as_ref()
+        .is_some_and(|session| session.window == event.splash)
+        && let Some(presentation) = presentation
+    {
+        presentation.presented.store(true, Ordering::Release);
+        status.presented = true;
+        debug!(window = ?event.splash, "Gallery Splash 首帧已安全显示");
+    }
+}
+
+pub(super) fn on_completed(
+    event: On<bevy_widgetry::splash::SplashCompleted>,
+    session: Option<Res<SplashSession>>,
+    mut lifecycle: ResMut<SplashLifecycle>,
+    mut status: ResMut<SplashStatus>,
+    mut commands: Commands,
+) {
+    if !session
+        .as_ref()
+        .is_some_and(|session| session.window == event.splash)
+    {
+        return;
+    }
+    lifecycle.phase = SplashPhase::Finished;
+    status.playing = false;
+    status.visible = false;
+    let window = event.splash;
+    debug!(?window, main = ?event.main, "Gallery 已完成独立 Splash 交接");
+    commands.queue(move |world: &mut World| -> Result {
+        if world
+            .get_resource::<SplashSession>()
+            .is_some_and(|session| session.window == window)
+        {
+            super::cleanup(world)?;
+        }
+        Ok(())
+    });
+}
+
+#[derive(Debug)]
+enum SplashContentError {
+    Timeout { phase: SplashPhase, timeout_ms: f32 },
+    WindowLost { window: Entity },
+    DisplayMissing { display: Entity },
+}
+impl std::fmt::Display for SplashContentError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Timeout { phase, timeout_ms } => write!(
+                formatter,
+                "Gallery Splash 等待超时：phase={phase:?}, timeout_ms={timeout_ms}"
+            ),
+            Self::WindowLost { window } => {
+                write!(formatter, "Gallery Splash 原生窗口已丢失：{window:?}")
+            }
+            Self::DisplayMissing { display } => {
+                write!(formatter, "Gallery Splash 内容节点已丢失：{display:?}")
+            }
+        }
+    }
+}
+impl std::error::Error for SplashContentError {}

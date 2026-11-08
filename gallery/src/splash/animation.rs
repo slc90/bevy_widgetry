@@ -1,5 +1,5 @@
 pub(super) const ANIMATION_DURATION_MS: f32 = 5000.0;
-const MILLISECONDS_PER_SECOND: f32 = 1000.0;
+pub(super) const MILLISECONDS_PER_SECOND: f32 = 1000.0;
 const FRAME_DURATION_MS: f32 = 125.0;
 const ANIMATION_FRAME_COUNT: usize = 40;
 const SOURCE_SIZE: Vec2 = Vec2::new(1920.0, 1080.0);
@@ -75,50 +75,56 @@ pub(super) fn animate(
     monitors: Query<&Monitor>,
     mut images: Query<&mut ImageNode>,
 ) {
-    let uncovered = match handles.get(presentation.window) {
-        Ok(handle) => match super::visibility::is_uncovered(
-            handle,
-            monitors.iter().map(|monitor| winsafe::RECT {
-                left: monitor.physical_position.x,
-                top: monitor.physical_position.y,
-                right: monitor.physical_position.x + monitor.physical_width as i32,
-                bottom: monitor.physical_position.y + monitor.physical_height as i32,
-            }),
-        ) {
-            Ok(visible) => {
-                if clock.visibility_error.take().is_some() {
-                    info!("Splash 窗口遮挡检测已恢复");
-                }
-                visible
-            }
-            Err(error) => {
-                if clock.visibility_error.as_ref() != Some(&error) {
-                    let failure = crate::diagnostics::failure(
-                        crate::diagnostics::GalleryError::Operation(error.clone().into()),
-                        bevy_widgetry::diagnostics::ErrorFrame::new("gallery.splash.visibility")
-                            .field("window", format_args!("{:?}", presentation.window)),
-                    );
-                    clock.visibility_error = Some(error);
-                    failure.record_handled(
-                        "降级为可见窗口继续播放 Splash",
-                        "保持动画并等待可见性查询恢复",
-                    );
-                }
-                true
-            }
-        },
-        Err(_) => false,
-    };
-    let visible = windows.get(presentation.window).is_ok_and(|window| {
+    let native_visible = windows.get(presentation.window).is_ok_and(|window| {
         window.visible && window.physical_width() > 0 && window.physical_height() > 0
-    }) && uncovered
-        && WINIT_WINDOWS.with_borrow(|native| {
-            native
-                .get_window(presentation.window)
-                .is_some_and(|window| {
-                    window.is_visible() != Some(false) && window.is_minimized() != Some(true)
-                })
-        });
+    }) && WINIT_WINDOWS.with_borrow(|native| {
+        native
+            .get_window(presentation.window)
+            .is_some_and(|window| {
+                window.is_visible() != Some(false) && window.is_minimized() != Some(true)
+            })
+    });
+    let uncovered = if !native_visible {
+        false
+    } else {
+        match handles.get(presentation.window) {
+            Ok(handle) => match super::visibility::is_uncovered(
+                handle,
+                monitors.iter().map(|monitor| winsafe::RECT {
+                    left: monitor.physical_position.x,
+                    top: monitor.physical_position.y,
+                    right: monitor.physical_position.x + monitor.physical_width as i32,
+                    bottom: monitor.physical_position.y + monitor.physical_height as i32,
+                }),
+            ) {
+                Ok(visible) => {
+                    if clock.visibility_error.take().is_some() {
+                        debug!("Splash 窗口遮挡检测已恢复");
+                    }
+                    visible
+                }
+                Err(error) => {
+                    if clock.visibility_error.as_ref() != Some(&error) {
+                        let failure = crate::diagnostics::failure(
+                            crate::diagnostics::GalleryError::Operation(error.clone().into()),
+                            bevy_widgetry::diagnostics::ErrorFrame::new(
+                                "gallery.splash.visibility",
+                            )
+                            .field("window", format_args!("{:?}", presentation.window)),
+                        );
+                        clock.visibility_error = Some(error);
+                        failure.record_handled(
+                            "降级为可见窗口继续播放 Splash",
+                            "保持动画并等待可见性查询恢复",
+                        );
+                    }
+                    true
+                }
+            },
+            Err(_) => false,
+        }
+    };
+    let visible = native_visible && uncovered;
     clock.visible_delta_ms = if visible && status.visible {
         time.delta_secs() * MILLISECONDS_PER_SECOND
     } else {

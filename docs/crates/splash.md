@@ -1,6 +1,6 @@
 # Splash
 
-`SplashPlugin` 提供独立原生 Splash 窗口的创建与固定几何策略。仅安装插件不创建 Splash、不隐藏主窗口。Facade 的 `splash` Feature 默认关闭，经 `splash` 模块导出；它不自动启用 `ui_scale` 或 `window` Feature。Gallery 目前仅显式开启编译 Feature，仍使用应用原有覆盖层 Splash，尚未接入独立窗口。
+`SplashPlugin` 提供独立原生 Splash 窗口、固定几何、首帧安全显示与主窗交接。仅安装插件不创建 Splash、不隐藏主窗口。Facade 的 `splash` Feature 默认关闭，经 `splash` 模块导出；它不自动启用 `ui_scale` 或 `window` Feature。Gallery 显式开启 Feature，按本次运行的启动选择装配插件、独立 Window 与应用自有 Camera/图片；主窗在启用时从原生创建起隐藏，不启用时正常独立显示。
 
 宿主调用 `Splash::start(&mut World, main, Window)`，传入已存在的普通主窗口 Entity 及完整 Window 基础配置，返回独立 Splash Window Entity。输入物理宽高非零；错误不创建半成品或修改主窗口。不能将已有 Splash 当成主窗口。插件不创建 Camera、UI、图片、动画或默认内容；宿主自行绑定渲染目标并管理内容生命周期。
 

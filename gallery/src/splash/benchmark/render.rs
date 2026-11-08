@@ -72,9 +72,13 @@ pub(super) fn install(app: &mut App) -> Result {
 
 fn extract_window(
     windows: Extract<Query<Entity, With<PrimaryWindow>>>,
+    splash: Extract<Option<Res<super::super::presentation::SplashPresentation>>>,
     mut pending: ResMut<PendingPresent>,
 ) {
-    pending.window = windows.iter().next();
+    pending.window = splash
+        .as_ref()
+        .map(|splash| splash.window)
+        .or_else(|| windows.iter().next());
     pending.acquired = false;
 }
 

@@ -452,7 +452,7 @@ mod tests {
         let config = AppConfig::default();
         app.insert_resource(WidgetryUiScale::new(config.scale_factor).unwrap())
             .add_plugins(bevy_widgetry::ui_scale::WidgetryUiScalePlugin);
-        let window = app.world_mut().spawn(crate::gallery_window()).id();
+        let window = app.world_mut().spawn(crate::gallery_window(false)).id();
         let window = app.world().get::<Window>(window).unwrap();
         assert_eq!(
             window.resolution.size(),

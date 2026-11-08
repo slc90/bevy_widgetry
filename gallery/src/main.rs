@@ -89,6 +89,7 @@ fn run(
     if let Some(mode) = std::env::var_os("GALLERY_DIAGNOSTIC_PROBE") {
         return diagnostics::run_probe(&mut app, &mode);
     }
+    let splash_enabled = splash::enabled_for_run();
     let loaded = config::load(executable.with_file_name("config").join("config.ron"));
     app.insert_resource(loaded.config.language);
     app.insert_resource(loaded.config.theme.colors());
@@ -105,7 +106,7 @@ fn run(
             .build()
             .disable::<LogPlugin>()
             .set(WindowPlugin {
-                primary_window: Some(gallery_window()),
+                primary_window: Some(gallery_window(splash_enabled)),
                 close_when_requested: false,
                 exit_condition: bevy::window::ExitCondition::DontExit,
                 ..default()
@@ -156,7 +157,7 @@ fn run(
         .insert_resource(loaded.file);
     header::install(&mut app)?;
     startup_cursor::install(&mut app)?;
-    splash::install(&mut app)?;
+    splash::install(&mut app, splash_enabled)?;
     waveform_benchmark::install(&mut app)?;
     file_dialog_benchmark::install(&mut app)?;
     page_lifecycle_benchmark::install(&mut app)?;
@@ -177,11 +178,12 @@ fn window_startup_failure(failure: bevy_widgetry::window::WindowFailure) -> Bevy
 
 const STARTUP_LOGICAL_SIZE: UVec2 = UVec2::new(1920, 1080);
 
-fn gallery_window() -> Window {
+fn gallery_window(splash_enabled: bool) -> Window {
     prepare_native_window(Window {
         title: "Widget Gallery".into(),
         resolution: WindowResolution::new(STARTUP_LOGICAL_SIZE.x, STARTUP_LOGICAL_SIZE.y),
         position: WindowPosition::Centered(MonitorSelection::Primary),
+        visible: !splash_enabled,
         ..default()
     })
 }
@@ -200,6 +202,9 @@ fn setup(
         )
     })?;
     let camera = commands.spawn(Camera2d).id();
+    commands
+        .entity(target)
+        .insert(Name::new("GalleryMainWindow"));
     let title = header::scene(&mut commands)?;
     let root = commands.spawn_scene_with_error_handler(bsn! {
         @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{@{title}}, bsn_list!{@gallery::scene()})
@@ -207,7 +212,7 @@ fn setup(
     }).id();
     commands.insert_resource(startup_cursor::StartupCursor::new(target, camera, root));
     if splash_enabled.is_some() {
-        splash::setup(&mut commands, &asset_server, target, camera);
+        splash::setup(&mut commands, &asset_server, target);
     }
     // The default State's OnEnter precedes Startup, so complete deferred shell construction before entering Button.
     next_page.set_if_different(GalleryPage::Button);
