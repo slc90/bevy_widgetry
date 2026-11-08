@@ -20,6 +20,14 @@ Monitor 元数据缺失，或 Automatic/Current 的原生主窗口位置尚不�
 
 隐藏窗口可在本项目 Windows/DX12 链路完成首帧渲染；握手等待期间通过 Winit WakeUp 推进桌面 Reactive 模式，即使所有窗口都隐藏也能闭环。显示完成或呈现失败后停止该请求的主动唤醒，不安装全局持续刷新。Splash 与 Window 插件幂等安装 Core 共享的 DX12 多窗口 Camera 提交和无 Camera 初始 Present 保护；Splash 不依赖 Window 控件。透明 DX12 设备初始化仍由宿主选择。
 
-呈现同步真实失败以 `SplashError::Presentation` 保留 HRESULT 原因。Render 线程创建的原始诊断共享至主线程 ECS 边界，多个请求聚合，失败会话停止推进但保留等待阶段，不自动回退、销毁、退出或显示主窗口。该诊断不是已处理；宿主决定处理策略。当前尚不提供主窗口就绪与交接。
+宿主通过同步 `Splash::finished` / `Splash::main_ready` 或排队的 `SplashFinished { splash }` / `MainWindowReady { splash }` 提交播放结束和主业务内容就绪。三类信号相互独立，支持任意顺序与合法重复；主窗关联取自会话，事件的 `splash` 指返回的会话窗口 Entity。主窗必须在原生创建前由宿主设为隐藏，插件不替宿主事后隐藏已经可见的主窗。未启用会话的普通窗口不受影响。
 
-`cargo run -p bevy_widgetry_splash --example splash_windows` 用宿主 Camera ClearColor 提供内容；S 声明内容就绪，1/2/3 设置普通窗口的 1.0/1.25/2.0，Splash 保持480×270。添加 `-- --hidden-main` 可从原生创建时隐藏主窗，配合 BRP 触发 Ready 验证全隐藏 Reactive 启动。示例使用宿主 Window 的 DX12 呈现配置，仅安装 SplashPlugin，不额外安装 Window 控件插件。
+Splash 显示后收到 Finished，但未收到主内容 Ready 时进入 `WaitingForMainContent`，继续保留宿主画面；两者收到后进入 `WaitingForMainFrame`，为主窗当前物理尺寸/比例建立独立帧 Ticket。主窗先 Ready 不提前结束动画。宿主负责保持 Splash 末帧可渲染，系统正常曝光/Redraw仍可重绘；库不生成末帧、不添加加载超时。
+
+主窗隐藏业务帧通过同一呈现检查后，库在 Windows 主线程 Show 并请求 Focus，进入 `HandingOff`。为避免 DWM Show 动画在交接中露出后景，交接期间临时设置 `DWMWA_TRANSITIONS_FORCEDISABLED=true`，Show 后 DwmFlush 并设回 false，恢复系统常规动画。该 DWM 属性不可读取，启动交接托管这项属性，宿主不应同时写入自定义值。交接再创建新 Ticket，确认主窗在显示后实际完成新帧呈现，并核查原生/ECS可见性，才隐藏及销毁 Splash Window、释放会话并触发一次 `SplashCompleted { splash, main }`。结束后 `Splash::phase` 返回 `None`；原生 Focus 请求仍受 Windows 前台策略约束。主窗帧快照在 Core 共享的全局缩放 Sync 标记之后取得，缩放中间尺寸不能被误当成交接凭据。
+
+`Splash::cancel(world, splash)` 是与完成交接不同的终止入口：取消在途 Ticket，隐藏/销毁 Splash Window 并删除会话，不打开、聚焦或销毁主窗，也不发 Completed。窗口的 Camera 与 Content 仍由宿主拥有；正常 Completed 后或主动取消时，宿主自行清理自身资源，库不按 RenderTarget 搜索并越权删除其他对象。未知同步请求返回领域失败，已结束会话收到排队信号时正常过滤。
+
+呈现同步真实失败以 `SplashError::Presentation` 保留 HRESULT 原因；原生句柄查找和 DWM 动画设置失败分别保留 Win32/HRESULT source。Render 线程创建的原始诊断共享至主线程 ECS 边界，多个请求及 Show 同步/动画恢复的独立失败聚合，失败会话停止推进但保留当前阶段。该诊断不是已处理；宿主决定保留、取消、降级或退出。Show 后同步或动画恢复失败时，主窗可能已经可见，库保留真实 Window 状态及 Splash，不擅自回滚显示或销毁会话。
+
+`cargo run -p bevy_widgetry_splash --example splash_windows` 用宿主 Camera ClearColor 提供内容；S 声明 Splash 内容就绪，F 声明播放结束，M 声明主内容就绪，C 取消；1/2/3 设置普通窗口的 1.0/1.25/2.0，Splash 保持480×270。添加 `-- --hidden-main` 可从原生创建时隐藏主窗，配合 BRP 输入验证全隐藏 Reactive 启动与交接。示例使用宿主 Window 的 DX12 呈现配置，仅安装 SplashPlugin，不额外安装 Window 控件插件；示例自行在 Completed/取消时清理它的 Splash Camera。

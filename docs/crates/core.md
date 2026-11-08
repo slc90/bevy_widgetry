@@ -120,6 +120,8 @@ Core 的 `diagnostics::FailureState<K>` 重导出独立 diagnostics crate 的 Be
 
 `window_presentation::install` 是 Window 与 Splash 共用的内部 DX12 呈现装配入口，不经 Facade 导出。它在 RenderApp 中幂等注册每个 Core2d Camera 后的命令提交，以及无可写 Camera 时的初始 Present 保护；缺少 RenderApp 时不装配。各调用插件在 finish 阶段确保装配完成，宿主不需要另行调用该入口。
 
+`window_scale::WidgetryUiScaleSystems` 提供全局缩放的共享 Sync 顺序标记，由 ui_scale 按原 API 重导出；Splash 在其后读取 Window 的首帧/交接快照，无需依赖 ui_scale crate。
+
 ## 已知限制
 
 - Font、Icon 和 Scene 各能力有各自的装配前提；Core 不是全局业务 Model。

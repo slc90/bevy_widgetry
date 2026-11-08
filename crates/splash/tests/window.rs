@@ -5,7 +5,8 @@ use bevy::{
     window::{Monitor, PrimaryMonitor, WindowPosition},
 };
 use bevy_widgetry_splash::{
-    Splash, SplashError, SplashPhase, SplashPlugin, SplashReady, SplashShown, SplashWindow,
+    MainWindowReady, Splash, SplashCompleted, SplashError, SplashFinished, SplashPhase,
+    SplashPlugin, SplashReady, SplashShown, SplashWindow,
 };
 use bevy_widgetry_ui_scale::{WidgetryUiScale, WidgetryUiScalePlugin, WindowScaleExcluded};
 
@@ -151,6 +152,112 @@ fn readiness_waits_for_metadata_and_rejects_invalid_direct_requests() {
     );
     assert!(!app.world().get::<Window>(splash).unwrap().visible);
     assert!(app.world().get::<Window>(main).unwrap().visible);
+}
+
+#[test]
+fn cancellation_preserves_the_main_and_host_owned_content_and_cannot_reenter() {
+    let mut app = app();
+    let main = main_window(&mut app);
+    app.world_mut().get_mut::<Window>(main).unwrap().visible = false;
+    let splash = Splash::start(app.world_mut(), main, splash_config()).unwrap();
+    let other = Splash::start(app.world_mut(), main, splash_config()).unwrap();
+    let camera = app
+        .world_mut()
+        .spawn((
+            Camera2d,
+            bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(splash)),
+        ))
+        .id();
+    let content = app
+        .world_mut()
+        .spawn(Name::new("Host owned splash content"))
+        .id();
+    assert!(Splash::main_ready(app.world_mut(), splash).unwrap());
+    assert!(Splash::finished(app.world_mut(), splash).unwrap());
+    assert!(!Splash::finished(app.world_mut(), splash).unwrap());
+    Splash::cancel(app.world_mut(), splash).unwrap();
+    assert!(app.world().get_entity(splash).is_err());
+    assert!(app.world().get_entity(camera).is_ok());
+    assert!(app.world().get_entity(content).is_ok());
+    assert!(app.world().get::<Window>(other).is_some());
+    assert_eq!(Splash::phase(app.world(), splash), None);
+    for request in [Splash::ready, Splash::finished, Splash::main_ready] {
+        assert!(matches!(
+            request(app.world_mut(), splash).unwrap_err().kind(),
+            SplashError::UnknownSplash { .. }
+        ));
+    }
+    app.world_mut().trigger(SplashReady { splash });
+    app.world_mut().trigger(SplashFinished { splash });
+    app.world_mut().trigger(MainWindowReady { splash });
+    app.update();
+    assert!(!app.world().get::<Window>(main).unwrap().visible);
+    assert_eq!(
+        Splash::phase(app.world(), other),
+        Some(SplashPhase::WaitingForContent)
+    );
+}
+
+#[test]
+fn finished_and_main_ready_cannot_reveal_a_window_without_presented_frames() {
+    let mut app = app();
+    app.init_resource::<ShownCount>()
+        .add_observer(|_: On<SplashCompleted>, mut count: ResMut<ShownCount>| count.0 += 1);
+    monitor(&mut app, IVec2::new(-1920, 0), UVec2::new(1920, 1080));
+    let main = main_window(&mut app);
+    app.world_mut().get_mut::<Window>(main).unwrap().visible = false;
+    let splash = Splash::start(app.world_mut(), main, splash_config()).unwrap();
+    for _ in 0..2 {
+        app.world_mut().trigger(MainWindowReady { splash });
+        app.world_mut().trigger(SplashFinished { splash });
+        app.world_mut().trigger(SplashReady { splash });
+        app.update();
+        assert!(!app.world().get::<Window>(splash).unwrap().visible);
+        assert!(!app.world().get::<Window>(main).unwrap().visible);
+        assert_eq!(
+            Splash::phase(app.world(), splash),
+            Some(SplashPhase::WaitingForFrame)
+        );
+    }
+    assert_eq!(app.world().resource::<ShownCount>().0, 0);
+    Splash::cancel(app.world_mut(), splash).unwrap();
+    assert_eq!(app.world().resource::<ShownCount>().0, 0);
+}
+
+#[test]
+fn queued_signals_are_discarded_if_the_session_is_cancelled_before_execution() {
+    use bevy_widgetry_test_utils::ErrorCapture;
+    for signal in 0..3 {
+        let mut app = app();
+        app.set_error_handler(ErrorCapture::handler());
+        let main = main_window(&mut app);
+        app.world_mut().get_mut::<Window>(main).unwrap().visible = false;
+        let splash = Splash::start(app.world_mut(), main, splash_config()).unwrap();
+        app.update();
+        let errors = ErrorCapture::default();
+        errors.run(|| {
+            match signal {
+                0 => app.world_mut().trigger(SplashReady { splash }),
+                1 => app.world_mut().trigger(SplashFinished { splash }),
+                _ => app.world_mut().trigger(MainWindowReady { splash }),
+            }
+            Splash::cancel(app.world_mut(), splash).unwrap();
+            app.world_mut().flush();
+            app.update();
+        });
+        assert!(
+            errors.take_records().is_empty(),
+            "a cancelled signal must not become an API error"
+        );
+        assert_eq!(Splash::phase(app.world(), splash), None);
+        assert!(!app.world().get::<Window>(main).unwrap().visible);
+        assert!(matches!(
+            Splash::finished(app.world_mut(), splash)
+                .unwrap_err()
+                .kind(),
+            SplashError::UnknownSplash { .. }
+        ));
+    }
 }
 
 #[test]

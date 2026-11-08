@@ -12,6 +12,18 @@ pub enum SplashError {
     WindowMissing {
         window: Entity,
     },
+    NativeHandleMissing {
+        window: Entity,
+    },
+    NativeWindowQuery {
+        window: Entity,
+        source: winsafe::co::ERROR,
+    },
+    WindowTransition {
+        window: Entity,
+        disabled: bool,
+        source: winsafe::co::HRESULT,
+    },
     Presentation {
         window: Entity,
         source: winsafe::co::HRESULT,
@@ -42,6 +54,20 @@ impl fmt::Display for SplashError {
         match self {
             Self::UnknownSplash { splash } => write!(f, "Splash 会话 {splash:?} 不存在"),
             Self::WindowMissing { window } => write!(f, "Splash 呈现窗口 {window:?} 已不存在"),
+            Self::NativeHandleMissing { window } => {
+                write!(f, "Splash 交接窗口 {window:?} 缺少有效原生句柄")
+            }
+            Self::NativeWindowQuery { window, source } => {
+                write!(f, "查找 Splash 交接窗口 {window:?} 失败：{source}")
+            }
+            Self::WindowTransition {
+                window,
+                disabled,
+                source,
+            } => write!(
+                f,
+                "设置 Splash 交接窗口 {window:?} 的显示动画 disabled={disabled} 失败：{source}"
+            ),
             Self::Presentation { window, source } => {
                 write!(f, "等待窗口 {window:?} 的桌面呈现失败：{source}")
             }
@@ -70,6 +96,8 @@ impl Error for SplashError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Presentation { source, .. } => Some(source),
+            Self::WindowTransition { source, .. } => Some(source),
+            Self::NativeWindowQuery { source, .. } => Some(source),
             Self::NativePosition { source, .. } => Some(source),
             _ => None,
         }

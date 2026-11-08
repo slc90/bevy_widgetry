@@ -13,7 +13,7 @@ use bevy::{
     },
     winit::WinitMonitors,
 };
-use bevy_widgetry_core::window_scale::WindowScaleExcluded;
+use bevy_widgetry_core::window_scale::{WidgetryUiScaleSystems, WindowScaleExcluded};
 use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState},
@@ -38,6 +38,7 @@ impl Plugin for SplashPlugin {
                 PostUpdate,
                 (SplashSystems::Geometry, SplashSystems::Presentation)
                     .chain()
+                    .after(WidgetryUiScaleSystems::Sync)
                     .before(CameraUpdateSystems),
             )
             .add_systems(PostUpdate, sync.in_set(SplashSystems::Geometry));

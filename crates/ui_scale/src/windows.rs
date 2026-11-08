@@ -10,6 +10,7 @@ use bevy::{
     window::{Monitor, PrimaryMonitor, WindowResized, WindowScaleFactorChanged},
     winit::WinitMonitors,
 };
+use bevy_widgetry_core::window_scale::WidgetryUiScaleSystems;
 use bevy_widgetry_diagnostics::{
     ErrorFrame,
     bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
@@ -18,11 +19,6 @@ use bevy_widgetry_internal_log::widgetry_debug;
 use std::sync::Arc;
 
 pub struct WidgetryUiScalePlugin;
-
-#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum WidgetryUiScaleSystems {
-    Sync,
-}
 
 impl Plugin for WidgetryUiScalePlugin {
     fn build(&self, app: &mut App) {

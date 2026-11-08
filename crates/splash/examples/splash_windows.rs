@@ -13,7 +13,8 @@ use bevy::{
 use bevy_brp_runtime::BrpRuntimePlugin;
 use bevy_widgetry_diagnostics::ErrorFrame;
 use bevy_widgetry_splash::{
-    Splash, SplashError, SplashFailure, SplashPlugin, SplashReady, SplashShown,
+    MainWindowReady, Splash, SplashCompleted, SplashError, SplashFailure, SplashFinished,
+    SplashPlugin, SplashReady, SplashShown,
 };
 use bevy_widgetry_ui_scale::{WidgetryUiScale, WidgetryUiScalePlugin};
 use bevy_widgetry_window::transparent_render_creation;
@@ -24,7 +25,10 @@ const MAIN_COLOR: Color = Color::srgb(0.12, 0.25, 0.4);
 const SPLASH_COLOR: Color = Color::srgb(0.8, 0.35, 0.1);
 
 #[derive(Resource)]
-struct DemoSplash(Entity);
+struct DemoSplash {
+    window: Entity,
+    camera: Entity,
+}
 
 fn main() -> Result {
     let hidden_main = std::env::args().any(|argument| argument == "--hidden-main");
@@ -44,7 +48,7 @@ fn main() -> Result {
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: "Splash host: S declares content ready, 1/2/3 scale".into(),
+                        title: "Splash host: S ready, F finished, M main ready, C cancel".into(),
                         resolution: MAIN_SIZE.into(),
                         visible: !hidden_main,
                         ..default()
@@ -58,8 +62,15 @@ fn main() -> Result {
             info!(splash = ?event.splash, main = ?event.main,
                 phase = ?Splash::phase(world, event.splash), "Splash 首帧已显示");
         })
+        .add_observer(
+            |event: On<SplashCompleted>, splash: Res<DemoSplash>, mut commands: Commands| {
+                info!(splash = ?event.splash, main = ?event.main, "主窗口已接替 Splash");
+                commands.entity(splash.camera).try_despawn();
+                commands.remove_resource::<DemoSplash>();
+            },
+        )
         .add_systems(Startup, setup)
-        .add_systems(Update, input);
+        .add_systems(Update, input.run_if(resource_exists::<DemoSplash>));
     app.run();
     Ok(())
 }
@@ -100,16 +111,21 @@ fn setup(world: &mut World) -> Result {
     world
         .entity_mut(splash)
         .insert(Name::new("Splash Demo Window"));
-    world.spawn((
-        Name::new("Splash Demo Camera"),
-        Camera2d,
-        Camera {
-            clear_color: ClearColorConfig::Custom(SPLASH_COLOR),
-            ..default()
-        },
-        RenderTarget::Window(WindowRef::Entity(splash)),
-    ));
-    world.insert_resource(DemoSplash(splash));
+    let camera = world
+        .spawn((
+            Name::new("Splash Demo Camera"),
+            Camera2d,
+            Camera {
+                clear_color: ClearColorConfig::Custom(SPLASH_COLOR),
+                ..default()
+            },
+            RenderTarget::Window(WindowRef::Entity(splash)),
+        ))
+        .id();
+    world.insert_resource(DemoSplash {
+        window: splash,
+        camera,
+    });
     Ok(())
 }
 
@@ -131,8 +147,33 @@ fn input(
         }
     }
     if keys.just_pressed(KeyCode::KeyS) {
-        info!(splash = ?splash.0, "声明 Splash 内容已就绪");
-        commands.trigger(SplashReady { splash: splash.0 });
+        info!(splash = ?splash.window, "声明 Splash 内容已就绪");
+        commands.trigger(SplashReady {
+            splash: splash.window,
+        });
+    }
+    if keys.just_pressed(KeyCode::KeyF) {
+        info!(splash = ?splash.window, "声明 Splash 已播放完成");
+        commands.trigger(SplashFinished {
+            splash: splash.window,
+        });
+    }
+    if keys.just_pressed(KeyCode::KeyM) {
+        info!(splash = ?splash.window, "声明主窗口内容已就绪");
+        commands.trigger(MainWindowReady {
+            splash: splash.window,
+        });
+    }
+    if keys.just_pressed(KeyCode::KeyC) {
+        let window = splash.window;
+        let camera = splash.camera;
+        commands.queue(move |world: &mut World| -> Result {
+            Splash::cancel(world, window).map_err(|error| error.into_bevy_error())?;
+            world.despawn(camera);
+            world.remove_resource::<DemoSplash>();
+            info!(?window, "已取消 Splash，会话不自动恢复主窗口");
+            Ok(())
+        });
     }
     Ok(())
 }

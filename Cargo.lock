@@ -2223,6 +2223,7 @@ dependencies = [
  "bevy_widgetry_test_utils",
  "bevy_widgetry_ui_scale",
  "bevy_widgetry_window",
+ "raw-window-handle",
  "winit",
  "winsafe",
 ]

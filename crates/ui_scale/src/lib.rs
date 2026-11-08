@@ -7,7 +7,7 @@ mod native;
 mod scale;
 mod windows;
 
-pub use bevy_widgetry_core::window_scale::WindowScaleExcluded;
+pub use bevy_widgetry_core::window_scale::{WidgetryUiScaleSystems, WindowScaleExcluded};
 pub use error::{UiScaleError, UiScaleFailure};
 pub use scale::WidgetryUiScale;
-pub use windows::{WidgetryUiScalePlugin, WidgetryUiScaleSystems};
+pub use windows::WidgetryUiScalePlugin;
