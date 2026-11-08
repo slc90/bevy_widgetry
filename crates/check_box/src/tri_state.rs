@@ -1,7 +1,5 @@
 use crate::indicator::checkbox_indicator_scene;
 use crate::{CheckBoxError, CheckBoxFailure, error::failure};
-use accesskit::{Role, Toggled};
-use bevy::a11y::AccessibilityNode;
 use bevy::input::{
     ButtonState,
     keyboard::{KeyCode, KeyboardInput},
@@ -28,7 +26,7 @@ pub enum WidgetryCheckState {
 }
 
 #[derive(SceneComponent, Default, Clone)]
-#[require(Node, WidgetryCheckState, AccessibilityNode(accesskit::Node::new(Role::CheckBox)), Hovered, bevy_widgetry_core::pointer::WidgetryPointerPressed, TabIndex(-1))]
+#[require(Node, WidgetryCheckState, Hovered, bevy_widgetry_core::pointer::WidgetryPointerPressed, TabIndex(-1))]
 pub struct WidgetryTriStateCheckboxHeadless;
 
 impl WidgetryTriStateCheckboxHeadless {
@@ -62,13 +60,7 @@ impl Plugin for WidgetryTriStateCheckboxHeadlessPlugin {
             .add_observer(on_release)
             .add_observer(on_drag_end)
             .add_observer(on_cancel)
-            .add_observer(on_key)
-            .add_systems(
-                PostUpdate,
-                sync_accessibility
-                    .after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled)
-                    .before(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
-            );
+            .add_observer(on_key);
         bevy_widgetry_internal_log::widgetry_debug!(
             "WidgetryTriStateCheckboxHeadlessPlugin 注册完成"
         );
@@ -238,28 +230,6 @@ fn on_key(
     {
         event.propagate(false);
         WidgetryTriStateCheckboxHeadless::cycle_state(&mut commands, event.focused_entity);
-    }
-}
-
-fn sync_accessibility(
-    mut query: Query<
-        (&WidgetryCheckState, &mut AccessibilityNode),
-        (
-            With<WidgetryTriStateCheckboxHeadless>,
-            Or<(
-                Changed<WidgetryCheckState>,
-                Added<AccessibilityNode>,
-                Added<WidgetryTriStateCheckboxHeadless>,
-            )>,
-        ),
-    >,
-) {
-    for (state, mut node) in &mut query {
-        node.set_toggled(match state {
-            WidgetryCheckState::Unchecked => Toggled::False,
-            WidgetryCheckState::Checked => Toggled::True,
-            WidgetryCheckState::Indeterminate => Toggled::Mixed,
-        });
     }
 }
 

@@ -1,7 +1,5 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
-use accesskit::{Role, Toggled};
 use bevy::{
-    a11y::AccessibilityNode,
     input::{
         ButtonState,
         keyboard::{Key, KeyboardInput},
@@ -93,17 +91,6 @@ fn independent_binary_behavior_uses_actual_picking_without_default_indicator() {
         );
         assert!(app.world().get::<Checked>(root).is_some());
         assert_eq!(app.world().resource::<Requests>().0, [true]);
-        assert_eq!(
-            app.world().get::<AccessibilityNode>(root).unwrap().role(),
-            Role::CheckBox
-        );
-        assert_eq!(
-            app.world()
-                .get::<AccessibilityNode>(root)
-                .unwrap()
-                .toggled(),
-            Some(Toggled::True)
-        );
         assert_eq!(
             app.world().get::<BackgroundColor>(root).unwrap().0,
             Color::srgb_u8(12, 34, 56)

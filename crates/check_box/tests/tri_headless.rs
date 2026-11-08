@@ -1,7 +1,5 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
-use accesskit::Toggled;
 use bevy::{
-    a11y::AccessibilityNode,
     input::{
         ButtonState,
         keyboard::{Key, KeyboardInput},
@@ -108,7 +106,7 @@ fn activate_on_press_is_one_shot_and_cancel_clears_pressed_without_an_indicator(
 }
 
 #[test]
-fn mounting_behavior_on_an_existing_state_initializes_accessibility_without_notification() {
+fn mounting_behavior_preserves_existing_state_without_notification() {
     let (mut app, _, _, _) = fixture(PointerId::Mouse);
     let root = app
         .world_mut()
@@ -121,26 +119,19 @@ fn mounting_behavior_on_an_existing_state_initializes_accessibility_without_noti
         .unwrap();
     app.update();
     assert_eq!(state(&app, root), WidgetryCheckState::Indeterminate);
-    assert_eq!(
-        app.world()
-            .get::<AccessibilityNode>(root)
-            .unwrap()
-            .toggled(),
-        Some(Toggled::Mixed)
-    );
     assert!(app.world().get::<Checked>(root).is_none());
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
 #[test]
-fn three_picking_cycles_commit_and_accessibility_works_without_indicator_or_checked() {
+fn three_picking_cycles_commit_without_indicator_or_checked() {
     for id in pointer_ids() {
         let (mut app, root, _, at) = fixture(id);
         pointer(&mut app, id, &at, PointerAction::Move { delta: Vec2::ZERO });
-        for (expected, toggled) in [
-            (WidgetryCheckState::Checked, Toggled::True),
-            (WidgetryCheckState::Indeterminate, Toggled::Mixed),
-            (WidgetryCheckState::Unchecked, Toggled::False),
+        for expected in [
+            WidgetryCheckState::Checked,
+            WidgetryCheckState::Indeterminate,
+            WidgetryCheckState::Unchecked,
         ] {
             pointer(
                 &mut app,
@@ -156,13 +147,6 @@ fn three_picking_cycles_commit_and_accessibility_works_without_indicator_or_chec
                 PointerAction::Release(PointerButton::Primary),
             );
             assert_eq!(state(&app, root), expected);
-            assert_eq!(
-                app.world()
-                    .get::<AccessibilityNode>(root)
-                    .unwrap()
-                    .toggled(),
-                Some(toggled)
-            );
             assert!(app.world().get::<Checked>(root).is_none());
             assert!(app.world().get::<Pressed>(root).is_none());
         }
@@ -232,13 +216,6 @@ fn queued_set_cycle_same_value_and_disabled_preserve_single_state_authority() {
     app.world_mut().flush();
     app.update();
     assert_eq!(state(&app, root), WidgetryCheckState::Indeterminate);
-    assert_eq!(
-        app.world()
-            .get::<AccessibilityNode>(root)
-            .unwrap()
-            .toggled(),
-        Some(Toggled::Mixed)
-    );
     assert!(app.world().get::<Checked>(root).is_none());
     assert_eq!(app.world().resource::<Changes>().0.len(), 4);
 }

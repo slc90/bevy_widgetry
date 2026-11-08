@@ -3,8 +3,6 @@
 
 const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(2);
 
-use accesskit::{Role, Toggled};
-use bevy::a11y::AccessibilityNode;
 use bevy::ecs::world::CommandQueue;
 use bevy::input::{
     ButtonState,
@@ -306,32 +304,6 @@ fn activate_on_press_cycles_once() {
 }
 
 #[test]
-fn tri_state_accessibility_tracks_programmatic_state() {
-    let (mut app, entity) = tri_app();
-    let node = &app
-        .world()
-        .get::<AccessibilityNode>(entity)
-        .expect("test entity exists")
-        .0;
-    assert_eq!(node.role(), Role::CheckBox);
-    assert_eq!(node.toggled(), Some(Toggled::False));
-    WidgetryTriStateCheckboxHeadless::set_state(
-        &mut app.world_mut().commands(),
-        entity,
-        WidgetryCheckState::Indeterminate,
-    );
-    app.update();
-    assert_eq!(
-        app.world()
-            .get::<AccessibilityNode>(entity)
-            .expect("test entity exists")
-            .0
-            .toggled(),
-        Some(Toggled::Mixed)
-    );
-}
-
-#[test]
 fn mark_entity_is_stable_across_states() {
     let (mut app, entity) = tri_app();
     let indicator = app
@@ -478,19 +450,6 @@ fn state_changes_refresh_checkbox_style() {
 
 fn assert_projection(app: &App, root: Entity, expected: WidgetryCheckState) {
     assert_eq!(app.world().get::<WidgetryCheckState>(root), Some(&expected));
-    let toggled = match expected {
-        WidgetryCheckState::Unchecked => Toggled::False,
-        WidgetryCheckState::Checked => Toggled::True,
-        WidgetryCheckState::Indeterminate => Toggled::Mixed,
-    };
-    assert_eq!(
-        app.world()
-            .get::<AccessibilityNode>(root)
-            .unwrap()
-            .0
-            .toggled(),
-        Some(toggled)
-    );
     let indicator = app.world().get::<Children>(root).unwrap()[0];
     let mark = app.world().get::<Children>(indicator).unwrap()[0];
     assert_eq!(
