@@ -353,7 +353,7 @@ fn existing_nested_content_reparented_into_button_remains_non_pickable() {
     let branch = app
         .world_mut()
         .spawn_scene(bsn! {
-            Node { width: px(70), height: px(50) }
+            Node { position_type: PositionType::Absolute, left: px(0), top: px(0), width: px(70), height: px(50) }
             template(move |_| Ok(UiTargetCamera(camera)))
             Children [Node { width: percent(100), height: percent(100) } Children [Text("Moved")]]
         })
@@ -371,6 +371,13 @@ fn existing_nested_content_reparented_into_button_remains_non_pickable() {
         .get::<UiGlobalTransform>(nested)
         .unwrap()
         .transform_point2(Vec2::ZERO);
+    let center = app
+        .world()
+        .get::<UiGlobalTransform>(root)
+        .unwrap()
+        .transform_point2(Vec2::ZERO);
+    let radius = app.world().get::<ComputedNode>(root).unwrap().size().x / 2.0;
+    assert!(at.position.distance(center) < radius);
     input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ONE });
     input(
         &mut app,

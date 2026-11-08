@@ -7,7 +7,7 @@ use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::ui::{ComputedStackIndex, InteractionDisabled, UiSystems};
-use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
+use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon};
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_list_view::{
@@ -484,16 +484,19 @@ fn resize_structural_changes_and_shrink_preserve_invariants() {
 fn real_ui_app() -> (App, Handle<Font>) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin))
-        .configure_sets(
-            PostUpdate,
-            (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
-        );
+    app.add_plugins(WidgetryIconPlugin).configure_sets(
+        PostUpdate,
+        (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
+    );
     // Preload through the semantic asset API so initial row measurement is independent of asynchronous readiness.
     let font = app
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
     let warm = app.world_mut().spawn_scene(bsn! {
         @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(8))} }
     }).unwrap().id();
@@ -503,6 +506,7 @@ fn real_ui_app() -> (App, Handle<Font>) {
         &format!("内建 Font {:?}", font.id()),
         |world| {
             world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
                 && world.get::<Children>(warm).is_some_and(|children| {
                     world.get::<ImageNode>(children[0]).is_some_and(|image| {
                         world.resource::<Assets<Image>>().contains(&image.image)
@@ -540,7 +544,7 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         );
         assert_eq!(
             app.world().get::<TextFont>(text).unwrap().font,
-            bevy::text::FontSource::Handle(font.clone()),
+            with_emoji(&app, &font),
             "初次生成的 Text 必须在本帧应用 fallback"
         );
         let computed = app.world().get::<ComputedNode>(row).unwrap();
@@ -577,7 +581,7 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         );
         assert_eq!(
             app.world().get::<TextFont>(text).unwrap().font,
-            bevy::text::FontSource::Handle(font.clone()),
+            with_emoji(&app, &font),
             "滚入的新 Text 必须在本帧应用 fallback"
         );
         let computed = app.world().get::<ComputedNode>(row).unwrap();
@@ -619,7 +623,7 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     assert_ne!(rebuilt.2, before.2);
     assert_eq!(
         app.world().get::<TextFont>(rebuilt.2).unwrap().font,
-        bevy::text::FontSource::Handle(font)
+        with_emoji(&app, &font)
     );
     assert_eq!(
         app.world().get::<ComputedNode>(rebuilt.2).unwrap().size().x,
@@ -705,7 +709,7 @@ fn assert_text_icon_rows(app: &mut App, font: &Handle<Font>) {
         let world = app.world();
         assert_eq!(
             world.get::<TextFont>(text).unwrap().font,
-            bevy::text::FontSource::Handle(font.clone())
+            with_emoji(app, font)
         );
         assert!(
             !world
@@ -742,4 +746,15 @@ fn assert_text_icon_rows(app: &mut App, font: &Handle<Font>) {
             assert_eq!(computed.inverse_scale_factor(), 0.5);
         }
     }
+}
+
+fn with_emoji(app: &App, primary: &Handle<Font>) -> bevy::text::FontSource {
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
+    bevy::text::FontSource::list([
+        bevy::text::FontSource::Handle(primary.clone()),
+        bevy::text::FontSource::Handle(emoji),
+    ])
 }

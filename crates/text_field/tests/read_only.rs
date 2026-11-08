@@ -257,7 +257,8 @@ fn read_only_filters_mutations_and_keeps_navigation() {
             assert!(editable.pending_paste.is_none());
             assert_eq!(editable.value().to_string(), "before");
         })
-        .in_set(EditableTextSystems),
+        .in_set(EditableTextSystems)
+        .before(bevy::text::apply_text_edits),
     );
     app.update();
 }
@@ -289,7 +290,8 @@ fn disabled_read_only_discards_every_command() {
             assert!(editable.pending_edits.is_empty());
             assert!(editable.pending_paste.is_none());
         })
-        .in_set(EditableTextSystems),
+        .in_set(EditableTextSystems)
+        .before(bevy::text::apply_text_edits),
     );
     app.update();
 }

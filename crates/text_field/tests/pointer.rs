@@ -11,7 +11,7 @@ use bevy::{
     input::keyboard::Key, input_focus::InputFocus, picking::pointer::*, prelude::*,
     ui::InteractionDisabled, ui_widgets::TextInputPlugin,
 };
-use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
+use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_test_utils::{
     advance_until, picking_app, pointer_ids, queue_pointer, spawn_picking_camera,
@@ -28,20 +28,23 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
             let mut app = picking_app();
             app.init_resource::<ButtonInput<Key>>()
                 .add_message::<bevy::window::Ime>()
-                .add_plugins((
-                    WidgetryAssetPlugin,
-                    TextInputPlugin,
-                    WidgetryTextFieldPlugin,
-                ));
+                .add_plugins((TextInputPlugin, WidgetryTextFieldPlugin));
             let font = app
                 .world()
                 .resource::<AssetServer>()
                 .load::<Font>(BuiltinFont::Default.path());
+            let emoji = app
+                .world()
+                .resource::<AssetServer>()
+                .load::<Font>(BuiltinFont::Emoji.path());
             advance_until(
                 &mut app,
                 ASSET_WAIT_TIMEOUT,
                 "Pointer TextField 字体",
-                |world| world.resource::<Assets<Font>>().contains(&font),
+                |world| {
+                    world.resource::<Assets<Font>>().contains(&font)
+                        && world.resource::<Assets<Font>>().contains(&emoji)
+                },
             )
             .unwrap();
             app.set_default_font(bevy::text::FontSource::Handle(font));

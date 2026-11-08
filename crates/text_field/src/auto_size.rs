@@ -314,12 +314,18 @@ pub(crate) fn resize_editors(
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, scene_app};
+    use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
     use std::error::Error;
 
     #[test]
     fn missing_layout_resources_keep_domain_errors_and_recover_without_replacing_editors() {
-        let mut app = scene_app();
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            AssetPlugin::default(),
+            bevy::scene::ScenePlugin,
+            bevy::input_focus::InputFocusPlugin,
+        ));
         app.add_plugins(crate::WidgetryTextFieldAutoSizePlugin);
         app.set_error_handler(ErrorCapture::handler());
         app.edit_schedule(PostUpdate, |schedule| {

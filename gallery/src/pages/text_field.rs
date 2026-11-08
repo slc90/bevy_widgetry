@@ -58,6 +58,7 @@ fn toggle_auto_width(
 
 mod auto_size;
 mod custom;
+mod font;
 
 pub(crate) struct TextFieldDemoPlugin;
 
@@ -81,6 +82,7 @@ fn exit(world: &mut World) -> Result {
 
 pub(crate) fn scene() -> impl SceneList {
     bsn_list! {
+        @font::scene()--
         @custom::scene()--
         @auto_size::scene()--
         @WidgetryTextField { @value: {("Single line").to_owned()}, @show_count: true }

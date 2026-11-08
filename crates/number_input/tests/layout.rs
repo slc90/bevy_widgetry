@@ -13,7 +13,7 @@ use bevy::{
     time::TimeUpdateStrategy,
     ui_widgets::ValueChange,
 };
-use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
+use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_core::{WidgetryAppExt, input_target::WidgetryInputTarget, scene::spawn_scene};
 use bevy_widgetry_number_input::{WidgetryNumberInput, WidgetryNumberInputPlugin};
 use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
@@ -36,16 +36,22 @@ struct Fixture {
 
 fn fixture(value: f64, read_only: bool) -> Fixture {
     let mut app = bevy_widgetry_test_utils::text_edit_app();
-    app.add_plugins(WidgetryAssetPlugin);
     let font = app
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
         ASYNC_WAIT_TIMEOUT,
         "NumberInput layout font",
-        |world| world.resource::<Assets<Font>>().contains(&font),
+        |world| {
+            world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
+        },
     )
     .unwrap();
     app.set_default_font(bevy::text::FontSource::Handle(font));

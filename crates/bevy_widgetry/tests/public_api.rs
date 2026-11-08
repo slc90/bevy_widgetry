@@ -490,8 +490,8 @@ fn window_plugin_installs_app_font_fallback() {
     let entity = app.world_mut().spawn(TextFont::default()).id();
     app.update();
     assert!(matches!(
-        app.world().get::<TextFont>(entity).unwrap().font,
-        FontSource::Handle(_)
+        &app.world().get::<TextFont>(entity).unwrap().font,
+        FontSource::List(sources) if matches!(sources.as_slice(), [FontSource::Handle(_), FontSource::Handle(_)])
     ));
 }
 
@@ -725,9 +725,10 @@ fn style_theme_api_and_plugins_work_together() {
     let _: &WidgetryTheme = &bevy_widgetry_theme::WIDGETRY_DARK_THEME;
     let mut app = App::new();
     app.add_plugins(WidgetryThemePlugin);
-    app.set_default_font(FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default()))
-        .init_asset::<Image>();
+        .init_asset::<Image>()
+        .init_asset::<Font>();
+    app.set_default_font(FontSource::monospace());
     app.insert_resource(bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
         .add_plugins((WidgetryButtonPlugin, WidgetryComboBoxPlugin));
     WidgetryTheme::set_in_world(app.world_mut(), bevy_widgetry_theme::WIDGETRY_LIGHT_THEME)
@@ -815,7 +816,8 @@ fn button_scene_api_is_usable() {
         MinimalPlugins,
         AssetPlugin::default(),
         bevy::scene::ScenePlugin,
-    ));
+    ))
+    .init_asset::<Font>();
     app.set_default_font(FontSource::monospace());
     app.add_plugins(WidgetryButtonPlugin);
     let entity = app

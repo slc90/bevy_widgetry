@@ -8,6 +8,9 @@ use bevy_widgetry_internal_log::widgetry_debug;
 #[derive(Resource)]
 struct DefaultFont(FontSource);
 
+#[derive(Resource)]
+struct EmojiFont(Handle<Font>);
+
 pub struct WidgetryFontPlugin;
 
 pub trait WidgetryAppExt {
@@ -16,11 +19,15 @@ pub trait WidgetryAppExt {
 
 fn apply_default_font(
     default_font: Res<DefaultFont>,
+    emoji_font: Res<EmojiFont>,
     mut fonts: Query<&mut TextFont, Added<TextFont>>,
 ) {
     for mut text_font in &mut fonts {
         if text_font.font == FontSource::default() {
-            text_font.font = default_font.0.clone();
+            text_font.font = FontSource::list([
+                default_font.0.clone(),
+                FontSource::Handle(emoji_font.0.clone()),
+            ]);
         }
     }
 }
@@ -40,10 +47,15 @@ impl Plugin for WidgetryFontPlugin {
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);
         }
+        if !app.is_plugin_added::<WidgetryAssetPlugin>() {
+            app.add_plugins(WidgetryAssetPlugin);
+        }
+        let emoji = app
+            .world()
+            .resource::<AssetServer>()
+            .load(BuiltinFont::Emoji.path());
+        app.insert_resource(EmojiFont(emoji));
         if !app.world().contains_resource::<DefaultFont>() {
-            if !app.is_plugin_added::<WidgetryAssetPlugin>() {
-                app.add_plugins(WidgetryAssetPlugin);
-            }
             let font = app
                 .world()
                 .resource::<AssetServer>()
@@ -70,6 +82,8 @@ mod tests {
     #[test]
     fn fallback_precedes_bevy_text_detection() {
         let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Font>();
         app.set_default_font(FontSource::monospace());
         app.world_mut()
             .schedule_scope(PostUpdate, |world, schedule| {

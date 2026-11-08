@@ -1089,8 +1089,8 @@ fn plugin_reuses_dependencies_and_preserves_font_policy() {
     let option = app.world().get::<Children>(root).unwrap()[0];
     let label = app.world().get::<Children>(option).unwrap()[1];
     assert_eq!(
-        app.world().get::<TextFont>(label).unwrap().font,
-        bevy::text::FontSource::monospace()
+        app.world().get::<TextFont>(label).unwrap().font.flatten()[0],
+        &bevy::text::FontSource::monospace()
     );
 }
 

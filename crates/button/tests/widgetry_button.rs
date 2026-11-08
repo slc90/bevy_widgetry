@@ -14,7 +14,7 @@ use bevy::{
     ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed},
     ui_widgets::{Activate, ButtonPlugin},
 };
-use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
+use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::foreground::ResolvedForeground;
@@ -697,6 +697,8 @@ fn scene_provides_default_shell() {
 fn plugin_ensures_official_button_behavior() {
     for preinstalled in [false, true] {
         let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Font>();
         app.set_default_font(bevy::text::FontSource::monospace());
         if preinstalled {
             app.add_plugins(ButtonPlugin);
@@ -733,7 +735,7 @@ fn scene_layout_patch_survives_style_updates() {
 #[test]
 fn foreground_propagates_to_children() {
     let mut app = app();
-    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+    app.add_plugins(WidgetryIconPlugin);
     let button = app
         .world_mut()
         .spawn_scene(bsn! {

@@ -210,11 +210,18 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
         .world()
         .resource::<AssetServer>()
         .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(bevy_widgetry_asset::BuiltinFont::Emoji.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
         ASYNC_WAIT_TIMEOUT,
         "TextField font",
-        |world| world.resource::<Assets<Font>>().contains(&font),
+        |world| {
+            world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
+        },
     )
     .unwrap();
     bevy_widgetry_core::WidgetryAppExt::set_default_font(

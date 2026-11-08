@@ -21,7 +21,7 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 
 ## 主要功能
 
-- 默认字体设置：只对适用的新增 `TextFont` 使用缺省字体，保留调用方的显式字体。
+- 默认字体设置：只对适用的新增 `TextFont` 使用主字体与 Noto Color Emoji 组成的 `FontSource::list()`，保留调用方的显式字体。
 - `WidgetryText` 和内容 Foreground：按最近颜色作用域、Theme 与覆盖解析 Text / TextSpan。
 - `WidgetryIcon`：通过 SVG 生成图像，可设置、替换或清除显式颜色与 SVG 输入。
 - 有效 Disabled：组合祖先继承、本地请求和控件原生限制，并投影到官方输入状态。
@@ -61,6 +61,14 @@ Disabled 将具有 `Node` 或 `ComputedNode` 的实体识别为受管理 UI。�
 UI Hierarchy 的 Disabled 有效值采用 OR 继承，本地请求即使在继承期间修改也必须保留。官方 Hovered 包含子代命中，DirectlyHovered 限于直接命中；共享 Pointer 投影拥有相应写入权。Widgetry 内容颜色只影响使用标记的 Text，原生 Text 仍保留自身定义。Scene Props 在构造后不充当运行时状态。
 
 Disabled 不通过 Native Window Owner 关系跨窗口传播。单独禁用的内容使用对应 Theme Fallback。`WidgetryPointerPressed` 只清理标记控件所拥有的真实 Pointer Press 会话，不接管预先存在的程序化 Pressed 或官方正常 Activation。默认字体可通过 `WidgetryFontPlugin` 或 `WidgetryAppExt::set_default_font` 启用，诊断状态与 Z-index 标识供自定义控件复用。
+
+## 默认字体
+
+`WidgetryFontPlugin` 自动确保内建 Asset 注册，未指定主字体时加载得意黑，并始终加载 Noto Color Emoji 回退句柄。字体资源在 App 内由文本实体共享。应用需先安装 Bevy 的 Asset 基础设施及 Font 类型支持（通常由 `DefaultPlugins` 提供）。`set_default_font()` 只替换主 `FontSource`，包括主字体自身的列表优先级链；Emoji 始终追加在最后。无需额外注册或配置 Emoji。
+
+默认字体仅应用到新增且 `font == FontSource::default()` 的 `TextFont`，覆盖 `Text`、`TextSpan`、`Text2d` 和 `EditableText`。显式字体（包括列表）保持原样；后续修改默认字体不会追溯替换已有文本。应用默认链发生在 Bevy 文本重排检测前。组合 Emoji 与彩色字形的具体呈现依赖 Bevy / Parley / Swash，不额外拆分字符或使用独立 Emoji 渲染器。
+
+列表中所有字体资产就绪后，Bevy 才能完成使用该列表的文本布局；异步等待不会改写调用方的字体配置。
 
 ## 边界情况与错误处理
 

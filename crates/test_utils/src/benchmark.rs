@@ -13,7 +13,7 @@ pub mod artifact;
 use artifact::{Artifact, error};
 use bevy::prelude::*;
 use bevy::text::TextLayoutInfo;
-use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
+use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_core::WidgetryAppExt;
 use criterion::{Criterion, SamplingMode};
 use serde_json::json;
@@ -262,16 +262,22 @@ pub fn ui_app() -> Result<App> {
     let mut app = crate::scene_app();
     crate::add_ui_plugins(&mut app);
     crate::spawn_ui_camera(&mut app, BENCHMARK_VIEWPORT, 1.0);
-    app.add_plugins(WidgetryAssetPlugin);
     let font = app
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
     crate::advance_until(
         &mut app,
         FONT_LOAD_TIMEOUT,
         "benchmark 内建字体",
-        |world| world.resource::<Assets<Font>>().contains(&font),
+        |world| {
+            world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
+        },
     )
     .map_err(BevyError::error)?;
     app.set_default_font(bevy::text::FontSource::Handle(font));

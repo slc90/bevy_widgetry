@@ -49,7 +49,8 @@ fn workaround_is_scoped_and_runs_before_official_editing() {
             assert_eq!(editable.pending_edits.len(), 1);
             assert!(editable.pending_paste.is_some());
         })
-        .in_set(EditableTextSystems),
+        .in_set(EditableTextSystems)
+        .before(bevy::text::apply_text_edits),
     );
     app.update();
 }
@@ -114,21 +115,18 @@ fn enabled_text_field_does_not_discard_queued_edits() {
     .unwrap()
     .pending_paste = Some(ClipboardRead::Ready(Ok("pending".into())));
 
+    let editor = support::editor_entity(app.world(), entity);
+    app.add_systems(
+        PostUpdate,
+        (move |editors: Query<&EditableText>| {
+            let editable = editors.get(editor).unwrap();
+            assert_eq!(editable.pending_edits.len(), 1);
+            assert!(editable.pending_paste.is_some());
+        })
+        .in_set(EditableTextSystems)
+        .before(bevy::text::apply_text_edits),
+    );
     app.update();
-
-    assert_eq!(
-        support::editor(app.world(), entity)
-            .unwrap()
-            .pending_edits
-            .len(),
-        1
-    );
-    assert!(
-        support::editor(app.world(), entity)
-            .unwrap()
-            .pending_paste
-            .is_some()
-    );
 }
 
 #[test]

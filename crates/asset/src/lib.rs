@@ -63,12 +63,14 @@ pub enum BuiltinIcon {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinFont {
     Default,
+    Emoji,
 }
 
 impl BuiltinFont {
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
             Self::Default => embedded_path!(DEFAULT_FONT.0),
+            Self::Emoji => embedded_path!(constants::EMOJI_FONT.0),
         };
         AssetPath::from_path_buf(path).with_source(EMBEDDED_SOURCE)
     }
@@ -127,6 +129,7 @@ impl Plugin for WidgetryAssetPlugin {
             CHECKBOX_CHECK_ICON,
             CHECKBOX_INDETERMINATE_ICON,
             DEFAULT_FONT,
+            constants::EMOJI_FONT,
             WINDOW_CLOSE_ICON,
             WINDOW_MAXIMIZE_ICON,
             WINDOW_MINIMIZE_ICON,

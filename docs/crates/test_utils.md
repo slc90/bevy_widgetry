@@ -13,6 +13,7 @@
 ## 主要功能
 
 - `scene_app`、`text_input_app`、`text_edit_app`、`picking_app` 等不同能力的 App Fixture。
+- `scene_app` 在设置默认等宽主字体前准备 Asset / Text Plugin；默认文本附加内建 Emoji 回退，后续 UI Fixture 复用这些资源，不再重复注册 Text / Widgetry Asset Plugin。
 - UI Plugin、Camera、Viewport / Scale Factor 准备。
 - Pointer Move / Press / Release / Cancel / Drag 等输入构造，以及确定性的 Custom Pointer Identity。
 - Queue KeyboardInput、Focus Dispatch、Theme 切换及条件等待。

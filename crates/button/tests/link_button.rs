@@ -152,7 +152,6 @@ fn long_url_wraps_without_truncating_content() {
     let mut app = app();
     add_ui_plugins(&mut app);
     use bevy_widgetry_core::WidgetryAppExt;
-    app.add_plugins(bevy_widgetry_asset::WidgetryAssetPlugin);
     let font = app
         .world()
         .resource::<AssetServer>()

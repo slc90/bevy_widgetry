@@ -103,6 +103,28 @@ fn fixture() -> App {
     });
     app.add_plugins(WidgetryFileDialogPlugin);
     app.add_plugins(bevy::input_focus::InputDispatchPlugin);
+    let primary = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(bevy_widgetry_asset::BuiltinFont::Emoji.path());
+    bevy_widgetry_test_utils::advance_until(
+        &mut app,
+        ASYNC_WAIT_TIMEOUT,
+        "FileDialog 布局字体",
+        |world| {
+            let fonts = world.resource::<Assets<Font>>();
+            fonts.contains(&primary) && fonts.contains(&emoji)
+        },
+    )
+    .unwrap();
+    bevy_widgetry_core::WidgetryAppExt::set_default_font(
+        &mut app,
+        bevy::text::FontSource::Handle(primary),
+    );
     app
 }
 
@@ -1039,13 +1061,15 @@ fn detail_columns_align_with_header_when_scrollbar_appears() {
             .get::<UiGlobalTransform>(heading)
             .unwrap()
             .translation
-            .x;
+            .x
+            - app.world().get::<ComputedNode>(heading).unwrap().size().x / 2.0;
         let cell_x = app
             .world()
             .get::<UiGlobalTransform>(cell)
             .unwrap()
             .translation
-            .x;
+            .x
+            - app.world().get::<ComputedNode>(cell).unwrap().size().x / 2.0;
         assert!(
             (header_x - cell_x).abs() <= pixel_tolerance,
             "count={count}, header={header_x}, cell={cell_x}"
@@ -1572,8 +1596,8 @@ fn sidebar_locations_follow_disabled_and_resolved_tab_state() {
             .size
             .y;
         assert!(
-            (label_y - box_height / 2.0 + text_height / 2.0 - row_y).abs() < pixel_tolerance,
-            "navigation text must be centered within its row"
+            (label_y - box_height / 2.0 + text_height / 2.0 - row_y).abs() <= pixel_tolerance,
+            "navigation text must be centered within its row: row_y={row_y}, label_y={label_y}, box_height={box_height}, text_height={text_height}"
         );
     }
     for resolved in [false, true] {
@@ -2038,21 +2062,7 @@ fn ime_pending_composition_does_not_submit_or_cancel_dialog() {
 
 #[test]
 fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
-    use bevy_widgetry_asset::BuiltinFont;
-    use bevy_widgetry_core::WidgetryAppExt;
     let mut app = fixture();
-    let font = app
-        .world()
-        .resource::<AssetServer>()
-        .load::<Font>(BuiltinFont::Default.path());
-    bevy_widgetry_test_utils::advance_until(
-        &mut app,
-        ASYNC_WAIT_TIMEOUT,
-        "FileDialog 编辑选择字体",
-        |world| world.resource::<Assets<Font>>().contains(&font),
-    )
-    .unwrap();
-    app.set_default_font(bevy::text::FontSource::Handle(font));
     let root = app
         .world_mut()
         .spawn_scene(bsn! { @WidgetryFileDialog Node { width: px(800), height: px(600) } })

@@ -20,6 +20,7 @@
 ## Transitions
 
 - Font 成功解析；SVG 使用各自语义标识。
+- 得意黑与 Noto Color Emoji 通过各自 `BuiltinFont` 语义路径读取 Embedded 字节并解码为 Font；Core 验证 AssetServer 实际加载和组合回退。
 - 45种静态备用与动画第一帧的图像对应。
 
 ## Invariants

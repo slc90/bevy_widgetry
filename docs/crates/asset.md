@@ -12,7 +12,7 @@ Kamuri Cursor 素材和元数据属于 Gallery，由应用 Asset Plugin 注册�
 
 ## 主要功能
 
-- 提供内建 CJK Font 路径，供需要默认字体的应用或基础设施使用。
+- `BuiltinFont::Default` 提供得意黑 CJK 字体，`BuiltinFont::Emoji` 提供 Noto Color Emoji；两者均由同一 Asset Plugin 注册，来源版本和许可证见 `crates/asset/LICENSES/README.md`。
 - 提供 CheckBox、Tree、Window、FileDialog、Table 排序及筛选、Playback 播放/暂停等内建 SVG Icon 的语义路径。
 - FileDialog 的后退、前进、上一级、刷新和搜索使用 Fluent 20 Regular 图形，按控件前景色着色；素材来源版本及随附许可证见 `crates/asset/LICENSES/README.md`。
 - `BuiltinIcon::DatePickerToday` 提供 DatePicker 固定朱红色透明笔圈 SVG；笔触与颜色由素材本身确定。

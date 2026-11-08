@@ -12,17 +12,20 @@ fn builtin_font_resolves_to_valid_embedded_font() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryAssetPlugin));
     let server = app.world().resource::<AssetServer>();
-    let path = BuiltinFont::Default.path();
-    let source = server.get_source(path.source()).unwrap();
-    let bytes = block_on(async {
-        let mut reader = source.reader().read(path.path()).await.unwrap();
-        let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes).await.unwrap();
-        bytes
-    });
-    assert!(bytes.starts_with(&TRUETYPE_SFNT_VERSION));
-    let font = Font::from_bytes(bytes);
-    assert!(!font.data.is_empty());
+    for builtin in [BuiltinFont::Default, BuiltinFont::Emoji] {
+        let path = builtin.path();
+        assert_eq!(path.source(), &AssetSourceId::from("embedded"));
+        let source = server.get_source(path.source()).unwrap();
+        let bytes = block_on(async {
+            let mut reader = source.reader().read(path.path()).await.unwrap();
+            let mut bytes = Vec::new();
+            reader.read_to_end(&mut bytes).await.unwrap();
+            bytes
+        });
+        assert!(bytes.starts_with(&TRUETYPE_SFNT_VERSION));
+        let font = Font::from_bytes(bytes);
+        assert!(!font.data.is_empty());
+    }
 }
 
 #[test]

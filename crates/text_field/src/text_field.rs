@@ -177,13 +177,20 @@ mod tests {
             .get_mut::<EditableText>(normal)
             .unwrap()
             .queue_edit(TextEdit::Insert("X".into()));
-        app.update();
-        assert!(
-            app.world()
-                .get::<EditableText>(normal)
-                .unwrap()
-                .pending_edits
-                .contains(&TextEdit::Insert("X".into()))
+        app.add_systems(
+            PostUpdate,
+            (move |editors: Query<&EditableText>| {
+                assert!(
+                    editors
+                        .get(normal)
+                        .unwrap()
+                        .pending_edits
+                        .contains(&TextEdit::Insert("X".into()))
+                );
+            })
+            .in_set(bevy::text::EditableTextSystems)
+            .before(bevy::text::apply_text_edits),
         );
+        app.update();
     }
 }

@@ -25,6 +25,14 @@ use std::time::Duration;
 struct Label(String);
 
 fn assert_text_ready(app: &mut App, font: &Handle<Font>, expected: &[&str]) {
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
+    let expected_font = bevy::text::FontSource::list([
+        bevy::text::FontSource::Handle(font.clone()),
+        bevy::text::FontSource::Handle(emoji),
+    ]);
     let texts = app
         .world_mut()
         .query::<(Entity, &Text)>()
@@ -37,10 +45,7 @@ fn assert_text_ready(app: &mut App, font: &Handle<Font>, expected: &[&str]) {
     }
     for (entity, _) in texts {
         let world = app.world();
-        assert_eq!(
-            world.get::<TextFont>(entity).unwrap().font,
-            bevy::text::FontSource::Handle(font.clone())
-        );
+        assert_eq!(world.get::<TextFont>(entity).unwrap().font, expected_font);
         assert!(
             !world
                 .get::<bevy::text::TextLayoutInfo>(entity)
@@ -132,6 +137,10 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
     let mut warm = Vec::new();
     for icon in [BuiltinIcon::TreeExpand, BuiltinIcon::TreeCollapse] {
         warm.push(app.world_mut().spawn_scene(bsn! { @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(12))} } }).unwrap().id());
@@ -142,6 +151,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
         "Tree Font 与 expander SVG 前置就绪",
         |world| {
             world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
                 && warm.iter().all(|&entity| {
                     world.get::<Children>(entity).is_some_and(|children| {
                         world.get::<ImageNode>(children[0]).is_some_and(|image| {

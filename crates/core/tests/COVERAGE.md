@@ -47,7 +47,7 @@
 ## Coverage Map
 
 - `color_schedule.rs`、`ui_schedule.rs`：System 顺序与动态内容准备。
-- `default_font.rs`：默认字体策略。
+- `default_font.rs`：默认主字体 / Emoji 资源链与共享句柄，自定义主字体（含列表）及运行期替换，显式字体保留，新增组件过滤，四类文本默认行为和初始化顺序。`font.rs` Unit Test 保护 Bevy 文本检测前的调度依赖。
 - `content_colors.rs`：Foreground / Text / Theme / Disabled。
 - `state_diagnostics.rs`：无效颜色原值与嵌套 Template 的同源身份；Text/Disabled 合法同值和重复无日志；失效 Entity/缺失 DisabledRuntime 的同步及真实 queued 失败、原生访问 source；选择集合/初始多选分类，以及失效 Root/选项/非法目标在拒绝前不更改有效 Checked。
 - `effective_disabled.rs`、`disabled_input.rs`：有效 Disabled 及官方输入阻止；无 ComputedNode 时按 Node 身份继承与撤销内部理由，仅有 ComputedNode 的原生 UI 仍参与投影，两类 UI 身份移除/重建后的有效状态生命周期。

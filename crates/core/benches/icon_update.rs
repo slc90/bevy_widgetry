@@ -1,6 +1,6 @@
 const ASYNC_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 use bevy::prelude::*;
-use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
+use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run};
 use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app, spawn_ui_camera};
@@ -234,7 +234,7 @@ fn density_fixture(count: usize) -> Result<DensityFixture> {
 
 fn fixture(count: usize) -> Result<Fixture> {
     let mut app = scene_app();
-    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+    app.add_plugins(WidgetryIconPlugin);
     let mut icons = Vec::with_capacity(count + 2);
     for index in 0..count + 2 {
         let path = if index == count + 1 {

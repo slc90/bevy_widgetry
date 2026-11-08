@@ -51,6 +51,8 @@
 
 ## Coverage Map
 
+- `style.rs` 的布局 fixture 预载得意黑与 Emoji 回退，使用真实字体验证列文字起点对齐和 Sidebar 文字垂直居中，避免空布局掩盖几何错误。
+
 - `diagnostics.rs`：公开 scope / Filter / 容量分类、Storage Revision 与路径字段、真实 Scene 失败 Root 清理及源头 origin、排队非法请求的宿主接收、Job 失败保持原类别 / 身份，以及过期正常回复和合法 No-op 的静默性。Session 耗尽由私有局部计数器回归保护，避免污染全局 Session 序列。
 - `diagnostics.rs` 同时检查 Snapshot 的目录 / Token / 原始条目路径分类、源头一次 ERROR，以及转换到 Bevy 后的 Error Severity 与同一 origin。
 - `diagnostics.rs` 检查单次请求失败只在状态提交 / 明确废弃后记录 DEBUG，过期 Validation / Locations 不修改新请求；递送自身失败聚合原诊断与新契约错误且不记录已处理。非法文件名与正常取消保持静默。

@@ -17,8 +17,13 @@ use std::time::{Duration, Instant};
 
 pub fn scene_app() -> App {
     let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        InputFocusPlugin,
+        bevy::text::TextPlugin,
+    ));
     app.set_default_font(bevy::text::FontSource::monospace());
-    app.add_plugins((MinimalPlugins, AssetPlugin::default(), InputFocusPlugin));
     app.init_asset::<Image>();
     app.init_asset::<Mesh>();
     app.init_asset::<bevy::mesh::skinning::SkinnedMeshInverseBindposes>();
@@ -32,6 +37,9 @@ pub fn scene_app() -> App {
 }
 
 pub fn add_ui_plugins(app: &mut App) {
+    if !app.is_plugin_added::<bevy::text::TextPlugin>() {
+        app.add_plugins(bevy::text::TextPlugin);
+    }
     app.init_resource::<bevy::text::FontCx>()
         .init_resource::<bevy::text::ScaleCx>()
         .init_resource::<bevy::text::TextPipeline>()
@@ -40,7 +48,6 @@ pub fn add_ui_plugins(app: &mut App) {
         .init_asset::<bevy::image::TextureAtlasLayout>()
         .add_plugins(bevy::input::InputPlugin)
         .add_plugins(bevy::picking::DefaultPickingPlugins)
-        .add_plugins(bevy::text::TextPlugin)
         .add_plugins(bevy::ui::UiPlugin);
 }
 

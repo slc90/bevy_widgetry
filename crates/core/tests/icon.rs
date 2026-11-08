@@ -104,7 +104,7 @@ fn scene_accepts_nonempty_initial_path_before_asset_loading() {
 #[test]
 fn entity_api_commits_inputs_and_distinguishes_same_values() {
     let mut app = scene_app();
-    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+    app.add_plugins(WidgetryIconPlugin);
     let entity = app.world_mut().spawn_scene(bsn! {
         @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }
     }).unwrap().id();
@@ -188,7 +188,7 @@ fn missing_asset_server_rejects_svg_requests_without_changing_inputs() {
         logs.run(|| {
             let mut app = scene_app();
             app.set_error_handler(ErrorCapture::handler());
-            app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+            app.add_plugins(WidgetryIconPlugin);
             let entity = app.world_mut().spawn_scene(bsn! {
             @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @colors: { bevy_widgetry_core::icon::WidgetryIconColorOverrides { normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::BLACK) }, disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::BLACK) } } } }
         }).unwrap().id();
@@ -230,7 +230,7 @@ fn queued_inputs_merge_at_execution_and_report_stale_targets() {
     errors.run(|| {
         let mut app = scene_app();
         app.set_error_handler(ErrorCapture::handler());
-        app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+        app.add_plugins(WidgetryIconPlugin);
         let entity = app
             .world_mut()
             .spawn_scene(bsn! {
@@ -285,11 +285,10 @@ fn queued_inputs_merge_at_execution_and_report_stale_targets() {
 fn runtime_mutations_survive_scene_initialization() {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin))
-        .configure_sets(
-            PostUpdate,
-            (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
-        );
+    app.add_plugins(WidgetryIconPlugin).configure_sets(
+        PostUpdate,
+        (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
+    );
     spawn_ui_camera(&mut app, UVec2::splat(400), 2.0);
     let entity = app
         .world_mut()
@@ -426,7 +425,7 @@ fn asynchronous_icons_request_redraw_until_ready() {
 fn ui_app() -> App {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+    app.add_plugins(WidgetryIconPlugin);
     spawn_ui_camera(&mut app, UVec2::splat(400), 2.0);
     app.configure_sets(
         PostUpdate,

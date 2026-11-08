@@ -21,7 +21,7 @@ use bevy::{
     ui::{ComputedStackIndex, InteractionDisabled, OverrideClip, UiSystems},
     ui_widgets::popover::Popover,
 };
-use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
+use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon};
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_core::{WidgetryAppExt, z_index};
 use bevy_widgetry_test_utils::{
@@ -55,22 +55,18 @@ fn inject_hover(target: Res<HoverTarget>, mut map: ResMut<HoverMap>) {
 fn app() -> App {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.add_plugins((
-        WidgetryAssetPlugin,
-        WidgetryIconPlugin,
-        WidgetryTooltipPlugin,
-    ))
-    .init_resource::<HoverTarget>()
-    .configure_sets(
-        PostUpdate,
-        (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
-    )
-    .add_systems(
-        PreUpdate,
-        inject_hover
-            .after(PickingSystems::Hover)
-            .before(PickingSystems::PostHover),
-    );
+    app.add_plugins((WidgetryIconPlugin, WidgetryTooltipPlugin))
+        .init_resource::<HoverTarget>()
+        .configure_sets(
+            PostUpdate,
+            (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
+        )
+        .add_systems(
+            PreUpdate,
+            inject_hover
+                .after(PickingSystems::Hover)
+                .before(PickingSystems::PostHover),
+        );
     spawn_ui_camera(&mut app, UVec2::splat(600), 1.0);
     *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
         TimeUpdateStrategy::ManualDuration(Duration::ZERO);
@@ -78,6 +74,10 @@ fn app() -> App {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
     let warm = app.world_mut().spawn_scene(bsn! { @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} } }).unwrap().id();
     advance_until(
         &mut app,
@@ -85,6 +85,7 @@ fn app() -> App {
         "Tooltip font/icon 前置资源",
         |world| {
             world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
                 && world.get::<Children>(warm).is_some()
         },
     )

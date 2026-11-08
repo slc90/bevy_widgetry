@@ -408,11 +408,18 @@ fn native_editor_copy_ownership() {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(bevy_widgetry_asset::BuiltinFont::Emoji.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
         ASYNC_WAIT_TIMEOUT,
         "Table editor font",
-        |world| world.resource::<Assets<Font>>().contains(&font),
+        |world| {
+            world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
+        },
     )
     .unwrap();
     app.set_default_font(bevy::text::FontSource::Handle(font));

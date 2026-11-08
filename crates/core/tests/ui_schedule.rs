@@ -6,7 +6,7 @@ use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::text::{FontSource, TextLayoutInfo};
 use bevy::ui::{ComputedStackIndex, UiSystems};
-use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
+use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app, spawn_ui_camera};
@@ -80,19 +80,26 @@ fn both_build_phases_prepare_replaced_content_in_same_frame() {
 fn both_build_phases_measure_deferred_text_in_same_frame() {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.add_plugins(WidgetryAssetPlugin);
     let font = app
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
     advance_until(
         &mut app,
         ASYNC_WAIT_TIMEOUT,
         &format!("调度测试 Font {:?}", font.id()),
-        |world| world.resource::<Assets<Font>>().contains(&font),
+        |world| {
+            let fonts = world.resource::<Assets<Font>>();
+            fonts.contains(&font) && fonts.contains(&emoji)
+        },
     )
     .expect("调度断言之前字体必须已加载");
     app.set_default_font(FontSource::Handle(font.clone()));
+    let expected_font = FontSource::list([FontSource::Handle(font), FontSource::Handle(emoji)]);
     spawn_ui_camera(&mut app, UVec2::splat(400), 2.0);
     app.configure_sets(
         PostUpdate,
@@ -130,7 +137,7 @@ fn both_build_phases_measure_deferred_text_in_same_frame() {
             assert_eq!(app.world().get::<ChildOf>(text).unwrap().parent(), branch);
             assert_eq!(
                 app.world().get::<TextFont>(text).unwrap().font,
-                FontSource::Handle(font.clone())
+                expected_font
             );
             for entity in [branch, text] {
                 assert!(

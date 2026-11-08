@@ -19,6 +19,7 @@ pub(super) const FILE_DIALOG_FOLDER_ICON: (&str, &[u8]) =
 pub(super) const FILE_DIALOG_FILE_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/file_dialog_file.svg");
 pub(super) const DEFAULT_FONT: (&str, &[u8]) = asset_data!("assets/fonts/SmileySans-Oblique.ttf");
+pub(super) const EMOJI_FONT: (&str, &[u8]) = asset_data!("assets/fonts/NotoColorEmoji.ttf");
 pub(super) const CHECKBOX_CHECK_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/checkbox_check.svg");
 pub(super) const CHECKBOX_INDETERMINATE_ICON: (&str, &[u8]) =

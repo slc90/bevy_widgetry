@@ -1,5 +1,7 @@
 # HoldButton coverage
 
+Reparented-content Picking uses an absolutely positioned branch and verifies its target point stays inside the circular face, independently of label font measurement.
+
 - `interaction.rs`: real UI layout and Picking for Mouse and Custom Pointer; transparent corner pass-through, content hit routing, short press rejection, immediate one-shot Activate at full charge, release/repress cycles, drag-out/re-entry lockout and ancestor Disabled/Visibility recovery. Existing nested content reparenting preserves Picking pass-through. Verifies the absence of native Button and default TabIndex.
 - `headless.rs`: independent public HeadlessPlugin without Shader resources or default children; rectangular corner hits for Mouse/Custom Pointer, public progress and attempt state committed before threshold Activate, charge/decay RequestRedraw and idle/full stop, exit/re-entry lockout, residual resume, and public duration Props including zero charge/decay.
 - Internal Headless unit tests: linear charge/decay, clamping and zero Duration, partial resume, success latch, idle wake-up and delayed Virtual delta exclusion, release-at-threshold settlement and feedback, same-frame in-place Hidden / Display::None interruption priority; ECS keyboard focus, repetition, mixed sources and state interruption contracts.

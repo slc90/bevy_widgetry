@@ -41,11 +41,18 @@ fn fixture(len: usize) -> Fixture {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(bevy_widgetry_asset::BuiltinFont::Emoji.path());
     bevy_widgetry_test_utils::advance_until(
         &mut app,
         ASYNC_WAIT_TIMEOUT,
         "搜索编辑字体",
-        |world| world.resource::<Assets<Font>>().contains(&font),
+        |world| {
+            world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
+        },
     )
     .unwrap();
     app.set_default_font(bevy::text::FontSource::Handle(font));

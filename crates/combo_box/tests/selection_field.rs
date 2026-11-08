@@ -502,11 +502,18 @@ fn programmatic_selection_prepares_field_text_in_same_frame() {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
     advance_until(
         &mut app,
         Duration::from_secs(10),
         &format!("内建 Font {:?}", font.id()),
-        |world| world.resource::<Assets<Font>>().contains(&font),
+        |world| {
+            world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
+        },
     )
     .expect("内建字体应在期限内加载");
     app.set_default_font(bevy::text::FontSource::Handle(font));

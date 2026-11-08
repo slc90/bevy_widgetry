@@ -46,16 +46,22 @@ fn fixture_title(
     if layout {
         add_ui_plugins(&mut app);
         spawn_ui_camera(&mut app, UVec2::new(1400, 900), scale);
-        app.add_plugins(bevy_widgetry_asset::WidgetryAssetPlugin);
         let font = app
             .world()
             .resource::<AssetServer>()
             .load::<Font>(bevy_widgetry_asset::BuiltinFont::Default.path());
+        let emoji = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<Font>(bevy_widgetry_asset::BuiltinFont::Emoji.path());
         advance_until(
             &mut app,
             ASYNC_WAIT_TIMEOUT,
             "Tabs built-in font",
-            |world| world.resource::<Assets<Font>>().contains(&font),
+            |world| {
+                world.resource::<Assets<Font>>().contains(&font)
+                    && world.resource::<Assets<Font>>().contains(&emoji)
+            },
         )
         .unwrap();
         bevy_widgetry_core::WidgetryAppExt::set_default_font(

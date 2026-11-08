@@ -135,6 +135,10 @@ fn real_ui_app() -> App {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let emoji = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Emoji.path());
     let warm = app.world_mut().spawn_scene(bsn! {
         @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::splat(16))} }
     }).unwrap().id();
@@ -144,6 +148,7 @@ fn real_ui_app() -> App {
         "ComboBox 字体和 renderer icon 前置资源",
         |world| {
             world.resource::<Assets<Font>>().contains(&font)
+                && world.resource::<Assets<Font>>().contains(&emoji)
                 && world.get::<Children>(warm).is_some_and(|children| {
                     world.get::<ImageNode>(children[0]).is_some_and(|image| {
                         world.resource::<Assets<Image>>().contains(&image.image)

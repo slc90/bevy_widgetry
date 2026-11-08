@@ -40,6 +40,8 @@
 
 ## Coverage Map
 
+- 编辑队列过滤在 `EditableTextSystems` 内、官方 `apply_text_edits` 消费前断言，保留命令及 Paste 的精确检查；AutoSize 的缺失资源单元回归使用不安装 TextPlugin 的隔离 App，防止 Bevy 官方 System 的额外错误干扰领域诊断。
+
 - `widgetry_text_field.rs`：Scene、Layout、Font 策略与完整 Style / Theme。
 - `disabled.rs`：编辑阻止、Queue 清理与恢复。
 - `read_only.rs`：ReadOnly Mutation 边界、Navigation / Selection / Focus。
