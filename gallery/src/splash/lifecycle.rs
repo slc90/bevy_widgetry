@@ -11,6 +11,7 @@ use crate::{
     gallery::{GalleryPage, GalleryPageContent, GalleryPageHost},
     startup_cursor::GalleryFirstFrameReady,
 };
+use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
 use bevy::{asset::LoadState, prelude::*, window::RequestRedraw};
 use std::sync::atomic::Ordering;
 
@@ -68,8 +69,30 @@ pub(super) fn install(app: &mut App) -> Result {
         advance
             .after(super::animation::animate)
             .run_if(resource_exists::<SplashSession>),
-    );
+    )
+    .add_systems(Last, wake_startup.run_if(resource_exists::<SplashSession>));
     Ok(())
+}
+
+fn wake_startup(
+    status: Res<SplashStatus>,
+    lifecycle: Res<SplashLifecycle>,
+    exit: Res<Messages<AppExit>>,
+    proxy: Res<EventLoopProxyWrapper>,
+) -> Result {
+    if status.presented
+        || matches!(lifecycle.phase, SplashPhase::Finished | SplashPhase::Failed)
+        || !exit.is_empty()
+    {
+        return Ok(());
+    }
+    // Hidden Windows do not reliably produce redraw callbacks before content is ready.
+    proxy.send_event(WinitUserEvent::WakeUp).map_err(|source| {
+        crate::diagnostics::at(
+            source,
+            bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 无法唤醒 Splash 启动流程"),
+        )
+    })
 }
 
 fn duration(name: &str, default_value: f32) -> Result<f32> {
