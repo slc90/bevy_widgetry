@@ -1,46 +1,42 @@
-# tooltip Integration Test Coverage
+# tooltip 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- 无候选 / 等待 / 显示 / Warm、Anchor 与 Owner Identity。
-- Theme、Disabled、动态内容及 Popup 可见性。
+- 无候选／Cold Wait／Warm Wait／Visible，Anchor／Owner 身份与 Popup 生命周期。
+- Theme、局部覆盖、Disabled 和动态内容准备状态。
 
 ## Stimuli
-
-- 真实 / 控制 Hover、时间推进、Anchor / Owner Despawn、Theme。
-- Content Factory 调用、动态 Text / Icon 准备。
+- 真实／受控 Hover、时间推进、Anchor／Owner 销毁、Content Factory、Theme／Override 与 Window Focus 变化。
 
 ## Guards
-
-- 必须提供 Content Factory；同 Anchor 不重复构造。
-- Disabled Anchor 仍允许 Tooltip 显示。
+- 必须具备有效 Content Factory；同一 Anchor 持续悬停不能重复创建；Disabled Anchor 仍允许 Tooltip 显示。
 
 ## Transitions
-
-- Cold / Warm Wait → Show → Exit / Cleanup。
-- 切换 Anchor、Pointer 失效、Target Despawn 后重新决策。
+- Hover Wait → Show → 离开／销毁后 Cleanup；Anchor／Pointer 更换和 Warm Window 影响后续显示。
 
 ## Invariants
-
-- 同时最多一个 Popup；Factory 只在显示时执行。
-- 失效 / 离开后不留孤儿 Entity。
-- 新 Popup Subtree 在实际 Picking 前具备 IGNORE 与 UI 消费准备。
+- 同时至多一个 Popup，Factory 仅在真正显示时执行；失效 Anchor 或隐藏后不残留孤儿 Entity。
+- 新 Popup 在真实 Picking 前完成忽略命中标记和 Text／Icon 内容准备。
+- Headless 不要求默认字体／视觉 Plugin，默认 Plugin 与自定义实例共存不抢夺归属。
+- Theme／Override 更新可见内容不重建业务子树；故障 Popup 清理、诊断身份和恢复行为符合托管约束。
 
 ## Couplings
-
-- Hover Ownership × Timing / Warm Window。
-- Theme × Popup Shell 与动态 Text/Icon。
-- Anchor 覆盖色更新 / 清除 × 可见 Popup，主题切换保留局部覆盖；隐藏后 Warm 重现使用当前 palette 与新 Factory 内容。
+- Hover Owner × 冷／暖等待；Factory × Popup 生命周期；Theme × Anchor／动态内容；Window 失焦 × Hide。
 
 ## Coverage Map
 
-- `tooltip.rs`：公开 Scene、Hover / Timer、Factory、Popup Lifecycle、Theme 和真实内容准备。
-- `independent.rs`：不经默认字体或 UI Plugin 安装纯 Headless，无 Factory/默认 Style；保护异位 Popup 归属、持续悬停单次 Show、Anchor Despawn / 能力移除、重复与过期登记/Hide、排队构造前失效、Scene 失败清理、原生 WindowFocused 消息转换的 Cancel / Hide，以及安装默认 Plugin 时不接管自定义实例。
-- 源码 `headless.rs`、`style.rs` 局部测试负责精确计时、前景命中与私有 Guard。
-- `style.rs` 局部测试另保护构造完成时立即采用 Anchor 覆盖色、稳定显示零重复配色、无关 Anchor 更新及 Popup 重新绑定；`tooltip.rs` 验证可见覆盖 / 清除 / Theme 与富 Text/Icon 前景同步，颜色变化不重建内容。
+### Integration Test
 
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `diagnostics.rs` | 非法颜色／内容请求、Owner／Scene 失败与诊断传播。 |
+| `independent.rs` | 独立 Headless、异位 Popup、过期请求和销毁／失焦边界。 |
+| `tooltip.rs` | 公开 Scene、真实 Hover／Timer、Popup、Theme 和内容准备。 |
 
-- `diagnostics.rs`：颜色领域分类、Core source / origin 传播、托管拒绝、缺失内容通过 Scene 保持分类，独立无效请求拥有不同 ID。
-- `style.rs` 局部诊断测试覆盖运行期 Factory 缺失内容、嵌套 Scene 原诊断和 Anchor/Popup 上下文、失败 Popup 清理，以及两 Popup 样式失败批量上报、重复观察保持 origin、恢复 INFO。正常显示、隐藏、重复请求和无目标过滤无诊断事件。
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/headless.rs` | 精确计时、Owner／Anchor 资格与私有 Guard。 |
+| `src/style.rs` | Popup 配色、动态部件归属、局部工作量及故障恢复。 |

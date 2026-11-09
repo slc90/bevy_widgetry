@@ -1,40 +1,44 @@
-# Segmented Integration Test Coverage
+# segmented 测试覆盖模型
+
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
+- Option 集合、初始 Checked 声明、唯一选中成员、Focus／Disabled、结构故障和恢复。
 
-- 合法非空 Option 集合、初始 Checked 声明、当前唯一 Checked、结构错误与恢复。
-- Group Focus、Group / Option 有效 Disabled、用户通知与程序静默。
+## Stimuli
+- BSN 构造、真实 Pointer／Keyboard、程序 Commands、动态 Option 增删、Theme／Override 与布局改变。
 
-## Stimuli / Guards
+## Guards
+- 初始冲突 Checked、空 Group、非法 Child／Index／Root 明确拒绝；Disabled 阻止用户交互。
+- 方向键按 Group 主轴导航，跳过 Disabled 并在首尾停止；Tab 不改变当前控件焦点。
 
-- BSN 构造及任意内容组合、后代 PointerClick / PointerPress、实际键盘派发、程序 Commands、增删层级、标记失效。
-- 初始多个 Checked 拒绝且不覆盖声明；空集合、非法 Root / Child / Index 以 Severity::Error 传播。
-- Focus 内对应方向轴有效；跳过 Disabled、首尾停止，其他按键和无焦点忽略。Tab / Shift+Tab 不改变当前控件焦点。
+## Transitions
+- 缺省选择首项或按有效 Checked 初始化；用户改选、批量增删修复、冲突解除和程序化设置。
 
-## Transitions / Invariants
+## Invariants
+- 有效 Group 维持唯一 Checked，先提交后发用户通知；程序设置、重复点击和自动 Repair 静默。
+- 删除当前 Option 后依既定邻接位置补选，合法新成员与自定义 Option 不被默认样式误写。
+- 同一命令批次的非法请求不部分更新或阻断其他健康 Group；错误保留原始身份，恢复后继续工作。
+- 自然／等宽布局、Theme／Override 和托管状态配色不改变选择或用户内容。
 
-- 首次无 Checked 选择首项；一个 Checked 采用指定项；冲突诊断去重，移除冲突标记后恢复。
-- 添加及未选中项删除保持身份，删除选中项选相邻项，全部替换恢复首项。
-- 用户变更先提交唯一 Checked，再通知 Root 的索引；重复点击 / 程序设置 / 自动修复不重复发用户事件。
-- 禁用仅限制用户操作，允许程序选择与结构补选；多个组及嵌套原生 RadioGroup 独立。
-- 排队命令在执行时检查当前 Root / Child / Index；失败不部分改选，不阻止后续合法组命令，同值保留 Checked change tick。
+## Couplings
+- 动态 Option × 选择修复；Focus × 方向键；Disabled × 自定义成员；Theme × Highlight／Layout。
 
 ## Coverage Map
 
-- `external.rs`：独立行为插件、四种默认/自定义 Group/Option 组合的真实 Mouse/Custom Picking 和焦点、两轴不循环键盘及通知内已提交 Checked；自定义 Option 不被默认样式写入、纯 Headless 父级 Theme 回退、动态成员静默修复、布局 Patch 不改变键盘轴及独立初始冲突恢复。不安装原生 RadioGroup/RadioButton。
+### Integration Test
 
-- `diagnostics.rs`：多个无效组与孤立 Option 的批量归属、稳定帧零检查、持续失败重查复用 ID / origin、修复 INFO、初始 Checked 冲突身份、独立程序请求的索引与新 ID，以及多个样式失败在 Theme 重算与修复中的诊断生命周期。
-- `headless.rs`：初始化、结构、输入、Disabled、事件、队列错误、场景组合与嵌套组隔离；两方向输入轴、首尾 / Disabled、Tab 保持焦点、结构回退语义一致。
-- `group.rs` Unit Test：稳定结构不重复校验、受影响组局部维护、后装 Plugin 和无效初始化请求。
-- 共享选择历史的连续 / 批量删除、临时 Checked 项与复用原 Option 清空恢复，同时由 RadioGroup 的实际集成回归保护。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `diagnostics.rs` | 组／成员结构与样式诊断、持续故障和恢复。 |
+| `external.rs` | 独立行为插件、自定义 Group／Option 的真实输入。 |
+| `headless.rs` | 初始化、选择、Disabled、队列和输入／事件隔离。 |
+| `layout.rs` | 自然宽度／等宽布局与动态内容。 |
+| `style.rs` | 选中高亮、Hover／Focus／Disabled、Theme 和覆盖色。 |
 
-- `style.rs`：同帧高亮转移、Focus / Hover / Disabled 叠加与恢复、三套内置主题、组与局部字段覆盖、无效颜色和托管拒绝、真实 UI 布局及外部内容独立颜色。
-- Style Unit Test：局部工作量与稳定帧零工作、托管输出缺失诊断及重插恢复。
+### Unit Test
 
-- `layout.rs`：自然宽度 / 水平等宽的真实 ComputedNode 尺寸、非文本内容、固定与 intrinsic 容器、动态追加、Theme / Checked / Disabled 不改变模式、Node 覆盖优先；Vertical 等宽不转等高、三套内置主题 / 焦点 / Disabled 保持。
-
-- `headless.rs` 还覆盖取消旧 Checked 的生命周期 Observer 删除新目标后的真实用户提交失败：保留 Core EntityAccess/原 origin，仅一条源头 ERROR，不发虚假 ValueChange。
-
-## Boundary
-
-Gallery 提供独立 Segmented 页面；不支持运行时任意重排。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/group.rs` | 局部结构维护、后装插件与选择状态。 |
+| `src/style.rs` | 部件配色、托管结构和稳定帧行为。 |

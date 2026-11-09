@@ -1,31 +1,47 @@
-# DatePicker coverage
+# date_picker 测试覆盖模型
 
-`language.rs` switches English/Simplified Chinese in date, month and year views, retaining selection, committed month, temporary candidates and entity identity. It verifies weekday rotation, localized clear/month/year labels and absence of language-induced business events.
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-`headless.rs` covers independent selection/displayed-month states, initialization priority, continuous 42-day projection across leap/month/year boundaries and weekday starts, inclusive bounds, same-value and clear transitions, committed notifications, delayed Commands, invalid requests and Disabled programmatic updates.
+## States
+- 选中日期、当前展示月份及临时月／年候选；日／月／年三个视图、Today 与边界范围。
+- Focus、Disabled、Theme、颜色覆盖和本地化语言。
 
-Model unit tests inject local-date failure and UTC fallback to cover source ERROR and handled DEBUG diagnostics, correlated by error ID, without depending on the host clock. The projection accepts a separate optional Today input and never invents Today from fallback dates.
+## Stimuli
+- BSN 构造、公开同步／排队选择与浏览、真实 Pointer／Keyboard、Clear、Today 和语言／Theme 切换。
 
-`view.rs` exercises real PointerClick routing to calendar cells, arrows and clear; adjacent/out-of-range dates, root/ancestor Disabled guards, and programmatic updates. It also verifies local color overrides survive four Theme changes, clearing restores Theme values, and invalid colors preserve the previous configuration.
+## Guards
+- 无效日期、范围、Root／Navigation 结构和失效命令必须拒绝；Disabled 阻止相应用户输入，但程序化更新可用。
+- 月年浏览不等同最终选择，不应发送虚假的日期业务通知。
 
-PointerPress / PointerRelease exercise native Button pressed-state writers and their visual projection on dates, arrows and clear, including the Disabled press guard.
+## Transitions
+- 选择／清空、跨月／跨年导航、临时候选确认／放弃及三视图切换；语言变更保留现有业务状态。
 
-Clear-label color follows normal foreground while a selection is available, and disabled foreground after clearing or inheriting Disabled. The regression covers four themes and independent foreground/adjacent/disabled overrides, retaining adjacent-day styling.
+## Invariants
+- 选中日期与展示月份相互独立；日期网格覆盖完整六周投影，包含闰年、月界及不同周起始日。
+- 状态先提交再通知；同值与候选浏览静默；Queued 命令以执行时实际状态为准。
+- Theme／语言更新不改变 Selection、候选或实体身份，文字标签、邻月日期和清除按钮的配色与可用状态一致。
+- Today 由显式可用的日期输入决定；本地日期失败的 UTC fallback 不能冒充业务 Today。
+- Headless／独立导航组合不依赖默认子树或无关 Plugin。
 
-`navigation.rs` covers the three inline views, temporary candidate year/page navigation without business changes, committed-month/year highlighting independent of selection, same-month confirmation, browsing beyond selection bounds, Disabled guards and stable outer dimensions.
+## Couplings
+- Selection × 展示月份／导航；语言 × 日期投影／标签；Disabled × Pointer／Keyboard；Theme × 动态内容。
 
-Today unit tests inject monotonic deadlines and local-date reads to cover the one-minute cadence, midnight/resume changes, failure/recovery logging, removal of untrusted Today, shared projection across selected/bounded/disabled calendars without business notifications, and fixed icon tint under four themes. Reactive Winit wait limits reserve a timeout budget for both redraw and app update while preserving shorter waits, continuous updates and event flags; actual sleeping-loop wakeup is validated separately with BRP.
+## Coverage Map
 
-A headless UI-layout regression waits for the actual SVG raster, then checks the transformed image bounds and center against its day cell at 1x/2x scale; this protects against intrinsic-size image overflow.
+### Integration Test
 
-The internal Today icon rejects public Icon color set/clear operations immediately after scene construction and flush, reports Error diagnostics, and retains its fixed normal/disabled white tint across subsequent view updates.
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `diagnostics.rs` | 日期／导航／颜色请求的领域错误、诊断身份及 Command 传播。 |
+| `headless.rs` | 公开日期状态、日历投影、范围校验与通知。 |
+| `independent.rs` | 独立 Headless 场景的日期 API 与状态隔离。 |
+| `independent_navigation.rs` | 自定义导航、候选、命令和缺省部件边界。 |
+| `language.rs` | 语言切换、星期排列、标签与状态保留。 |
+| `navigation.rs` | 日月年视图切换、候选及提交语义。 |
+| `view.rs` | 真实 UI 输入、Theme／Override、Disabled 和布局投影。 |
 
-Host Winit policy regressions cover changing either focused or unfocused mode independently, editing event flags without losing original waits, and explicitly reasserting same-value settings after a temporary limit.
+### Unit Test
 
-`diagnostics.rs` covers exact range/selection snapshots through domain APIs and Scene expansion, calendar year/grid boundaries with the original `time::ComponentRange`, immutable state after rejection, source identity through the Bevy Command boundary, `Severity::Error`, and Core color-source propagation without duplicate ERROR.
-
-Today unit tests retain the original `IndeterminateOffset`, share one origin across repeated readers and the periodic check, record handled DEBUG only after removing Today, emit one recovery INFO, create a fresh ID on recurrence, and release the recovered origin. Model fallback tests distinguish min-date and UTC fallback actions without inventing selection or Today.
-
-`independent.rs` uses only HeadlessPlugin and a root without Children. It covers None initialization, selecting and browsing independently, same-date month preservation, clear-with-month preservation, Sunday/42-day/Today data, bounds and Disabled user guards, and queued programmatic writes while disabled. Existing model/default view tests share the same State authority and protect extreme dates, diagnostics, committed notifications, trusted Today failures and the unchanged default three-view presentation.
-
-`independent_navigation.rs` composes optional navigation on a Headless root without Children or default Style. It covers semantic parent/browse/year/month operations, queued confirmation, committed-month highlighting independent of selection, no business notifications during candidate browsing, current-page qualification, ancestor Disabled, extreme month/page guards, invalid roots and removed navigation. The existing default navigation/language tests protect same-month silence, programmatic changes while browsing, fixed layout and localization without candidate reset.
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/model.rs` | 日期来源异常、UTC fallback 与 Today 的独立语义。 |

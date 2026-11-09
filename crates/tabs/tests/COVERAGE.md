@@ -1,25 +1,46 @@
-# Tabs Coverage
+# tabs 测试覆盖模型
 
-`selection.rs` 覆盖固定 BSN 配对与变量 SceneList、默认及指定初值、选择提交、同步与延后执行 API、PointerClick 从 Header 内容冒泡、同值静默、通知时已完成 Checked 与 Display 投影、实例隔离。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-状态为唯一 usize Selection、Header Checked 投影、页面 Display 和输入焦点。真实改变后始终只有一个 Header 选中、一个页面显示；所有页面实体、正文和应用滚动偏移保留。仅隐藏页面子树中的焦点会被清除，不向新页面转移。
+## States
+- 唯一 Selection、Header Checked、对应 Page Display、Focus、Disabled、Theme 和 Header 滚动位置。
 
-无效 Root、空集合、初始及运行时越界、缺失配对和执行时结构损坏返回领域失败；ECS 执行边界显式转换为 Error Severity。拒绝不改选、不发通知、不部分重排页面。构造期拒绝与健康实例共存，两个失败 Root 同时保留；稳定帧不重复诊断。
+## Stimuli
+- 固定／动态 BSN 配对、公开选择 API、真实 Pointer／Keyboard、Page／Header 结构变化、Theme 和布局 Resize。
 
-有效 Disabled 覆盖本地 Header、Root 祖先继承、用户拒绝、已选禁用保留、公开同步 / 排队选择放行、切页后继承保持、解除祖先时本地请求保留；Header 与页面不共享禁用父子关系，Disabled 本身不发选择通知。
+## Guards
+- Root、配对集合和 Index 合法；已初始化配对关系损坏与初始空集合应按不同错误处理。
+- Disabled Header／Root 阻止用户切换，但程序化选择仍可用；非对应方向键不修改状态。
 
-`text_input.rs` 使用真实 WidgetryTextField 与 Bevy 键盘派发：输入后隐藏页面，后续按键不写入隐藏编辑器，返回原页面后正文和页面实体保留，不自动抢回焦点。两种选中状态下 Pointer 聚焦活动页面的真实编辑器后仍可键入。
+## Transitions
+- 初始化 → 同步／排队改选 → Header／Page 投影；切换时隐藏 Page 焦点回收、滚动定位与配对错误修复。
 
-`keyboard.rs` 覆盖 PointerPress 内容冒泡聚焦 Header、两种方向轴的自动激活、首尾停止、禁用中间 / 尾部跳过与无目标、失焦及 Root Disabled guard、非对应箭头及 Home/End 静默、事件时已提交页面投影、Header TabIndex(-1) 与 Tab / Shift+Tab 不跨控件移焦。程序化选择不移焦，焦点和选择不同时从 Header 焦点位置继续导航。
+## Invariants
+- 同一 Tabs 只有一个 Header 选中、一个 Page 显示；切换不销毁页面实体、正文或应用滚动状态。
+- Selection、Checked 和 Display 同帧完成，通知可读已提交状态；合法同值静默，失效请求不部分提交。
+- 隐藏页面的旧输入焦点不能继续消费键盘；切回页面不自动抢回此前的编辑焦点。
+- Theme／Override、Header 自然／统一尺寸、溢出滚动与当前选择相互独立；当前 Header 可见定位不应强行覆盖用户手动滚动。
+- Scene／结构／配色错误保留原始 Root、配对关系及诊断身份，多实例故障隔离。
 
-`style.rs` 验证三套内置主题的普通/选中、Hover、Pressed、Disabled、选中禁用及焦点样式；Root与Header覆盖优先级、同值/非法输入、配置清除；样式不改选、不发业务通知、不覆盖页面背景。真实UI布局覆盖两种方向及1/1.25/2尺度的自然/统一宽度、统一高度、贴合边界、长文字省略与原文保留、本地化式文本更新后取消省略。托管Header、面板与省略标签输出缺失去重报错，重新插入后恢复。
-- Review回归：Header直接Text及子Text在透明/半透明背景下按字形截断；缩放、文字与宽度重排恢复完整派生排版，稳定帧不改写。
+## Couplings
+- Selection × Header／Page Visibility；Focus × Keyboard／隐藏页面；Theme × Header Layout；滚动 × 选中可见定位。
 
-`scrolling.rs` 使用真实 Bevy UI 布局验证两轴 Auto 溢出/无溢出、无滚动槽时贴合、Header 不压缩/不换行；初始非零选择、程序/方向键/点击共享可视定位，Disabled 程序路径，已可见与同值不改偏移。手动滚动不改选或回跳，页面自有 ScrollArea Entity/偏移保留，扩大布局后重新限制偏移。
-- 滚轮回归：Header Outline 与弹出层内容测量变化不触发旧选择回跳；两轴同时改选/Resize 与 UiScale 变化重新定位，区分跨轴共享边框的物理像素取整。
+## Coverage Map
 
-`diagnostics.rs` 覆盖双 Root 初始化聚合与各自初始索引 / 空集合现场、合法销毁取消、Page / 容器的预期与实际父级、缺失 Node、固定配对重排的完整实体顺序、真实 Command Handler 及 Scene / Core 包装的原始 origin / source、源头 ERROR 一次和纯传播无 handled DEBUG。样式跨 Root 聚合在 Theme 重刷时复用原 origin，修复分别恢复 INFO，再次损坏生成新诊断。
+### Integration Test
 
-末尾已选配对移出标签栏后，合法选择请求优先报告固定关系变化，保留完整原始 / 当前 Header / Page 配对；不得将旧 Selection 随结构损坏越界误报为请求索引无效。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `diagnostics.rs` | 无效配对、Source／样式结构和 Command 错误传播。 |
+| `keyboard.rs` | 两轴方向键、Focus、Disabled 与通知时序。 |
+| `scrolling.rs` | Header 溢出滚动、选中可见定位和缩放／Resize。 |
+| `selection.rs` | 场景配对、公开选择、同步／队列操作及实例隔离。 |
+| `style.rs` | Header／Page 样式、布局、文本裁剪与 Theme／Override。 |
+| `text_input.rs` | 页面切换对真实 TextField／Keyboard Focus 的影响。 |
 
-初始化后的全部配对被移走时，查询与选择请求均报告 `FixedPairs`（当前配对为空），保留原始实体关系；与初始空集合明确区分。
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/selection.rs` | 缺失状态或配对部件时的结构错误分类、Root／Header／Part 身份。 |
+| `src/scrolling.rs` | 多个 Header 布局部件失效时的诊断归属与真实 System 错误聚合。 |

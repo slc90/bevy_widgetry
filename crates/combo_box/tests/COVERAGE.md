@@ -1,66 +1,48 @@
-# combo_box Integration Test Coverage
+# combo_box 测试覆盖模型
 
-`search.rs` 还验证内部 TextField 编辑器缺失时，Search API 与 Command 保留下层诊断和 ComboBox 操作上下文，只有一次源头 ERROR，失败进入宿主而非转为字符串或空查询。
-
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- Source 有效 / 失效；Selection None / 有效 ID。
-- Popup Open / Closed、Focus、Disabled、Model Revision 与 Field 内容。
+- Source 有效／失效，Selection None／有效 ID，Popup Open／Closed，Focus、Disabled、Field 文本和 Model Revision。
 
 ## Stimuli
-
-- Typed Scene 构造、Model CRUD、程序化 Selection、真实 Pointer / Keyboard、Theme / Asset、Popup 生命周期。
+- Typed BSN 构造、Model CRUD、公开选择 API、真实 Pointer／Keyboard、搜索输入、Theme 与 Popup 生命周期。
 
 ## Guards
-
-- Source / Renderer / 尺寸有效。
-- Closed 或 Disabled 不能接受隐藏列表的输入；失效 ID / Root 必须拒绝。
+- Source、Renderer、尺寸和目标身份有效；关闭／禁用 Popup 不接收隐藏列表输入。
+- 无效 ID、错误 Field 绑定或过期命令不得部分提交 Selection／Popup 状态。
 
 ## Transitions
-
-- 构造空选择与 Placeholder、显式程序选择、Popup 开关、选项重选及 Escape / Outside Click 关闭。
-- Model Move / Remove / Edit 后 Selection 和 Field 投影。
-- 程序化 Selection 在执行时提交，Field 更新不生成重复通知。
+- 初始化空选择／占位符 → 打开 Popup → 选择／重新选择 → 关闭；Escape／外部点击可取消。
+- Model 移动／删除／编辑后，Field 与 Selection 依据当前稳定 ID 更新；程序命令以执行时状态校验。
 
 ## Invariants
-
-- Stable ID 在移动后不漂移；共享 Model 的多个 View Selection 独立。
-- Authority 先于 `ValueChange`，合法同值不通知。
-- Field Shell / List Identity 可保留，旧 Renderer 内容及时清理；隐藏 Popup 不吞掉新的 Keyboard 输入。
-- 唯一 Selection Authority 位于内部 ListView；Source-local ID 随 Model Move 保持，Disabled 不修改 Model Metadata。
-- Field Open 配色优先于 Hover / Pressed；Popup 可见性驱动 Arrow，SVG 替换保留 Icon Entity 和尺寸，托管部件拒绝公开颜色写入。
-- 关闭及时阻断同批剩余 Keyboard；解除禁用保留 Metadata 并可重新打开，Field 投影不生成业务变化通知。
+- Model 移动不改变 Stable ID；共享 Model 的多个 View 分别维护 Selection。
+- Selection Authority 位于内部 ListView，先提交再通知；合法同值、仅 Field 投影和自动修复不重复发业务通知。
+- Popup 的显示、Focus、键盘和搜索输入不越界；隐藏 Popup 不吞掉后续输入。
+- Field Shell／List 身份可保留，Renderer 替换清理旧内容；Theme／Override 和 Owner 作用域在动态部件上正确。
+- Search／编辑器错误保留下层原因链与 ComboBox 操作上下文，不伪造成功查询。
 
 ## Couplings
-
-- Popup × Focus、Disabled × 输入、Model Revision × Field Materialization。
-- 动态 Text / Icon Asset 与实际 Layout 的同帧准备。
+- Model Revision × Selection／Field；Popup × Focus／Keyboard；Search × Field／隐藏选择；Theme × Renderer／Owner。
 
 ## Coverage Map
 
-- `headless.rs`：公开Headless和根内多层显式trigger/popup/list绑定，不要求默认Field或Popup标记；None初始化、独占ListView选择Authority与根通知、程序选择保留打开状态、关闭焦点与幂等性、外部布局高度保留、禁用立即关闭但允许程序选择、部件失效关闭、根销毁清理嵌套Popup、Model为空拒绝打开、Source映射诊断，以及拒绝跨根绑定和Multiple列表。真实键盘派发验证确认后同批后续键拒绝、Escape回到显式触发器，以及外部点击保留新的外部焦点。
+### Integration Test
 
-- `data_contract.rs`：泛型 Source、Model ID、共享 Source 与构造诊断；失效 Source 经组合层保留 ListView 领域分类、实际 Source、原始诊断 ID 及单次源头日志。
-- `diagnostics.rs`：独立无效请求的 Root / 类型和新 ID；同轮多个 Field 结构故障及重复观察共享 origin；Model / Popup / 内部 List 映射、失效 ID 与执行时 index 拒绝；List 注册冲突的原类型和单次源头日志；多个 Field Scene 失败的原始 origin、原生 cause / Severity / payload 与自有内容清理和独立业务 Entity 归属；颜色拒绝的原值及底层类型。
-- `selection_field.rs`：Selection Authority 到 Field / Placeholder 的投影、公开本体查询、执行时原始索引、隐藏选择保留、通知顺序及 Model Revision。失败 Renderer 的清理回归显式覆盖下拉箭头延后生成 Image 的初始化时序，在具体 Icon 的 Image 与资产就绪后记录全局实体基线，再验证失败内容及预约 Entity 全部清理，避免将合法异步实体误判为泄漏。
-- `popup_composition.rs`：真实 Pointer / Keyboard、Focus、弹层关闭、动态内容与 Layout；组合 Override 在局部 Row 输入、滚动复用、Model Edit / Move 及 Field 内容替换后的当帧 Text Foreground，保留 Popup / Focus / Stable Selection 和通知。
-- `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
-- `search.rs`：可选搜索的每实例 Projection 隔离、真实文本键入与结果导航的分流、光标编辑、IME 确认隔离、携带换行正文的 Enter、关闭后同批确认阻断、无结果展示及 Model 自动刷新、隐藏选择与真实删除、重新打开重置查询、有效 Disabled、外部编辑器焦点配色、同周期变化合并和稳定帧不重复匹配，以及 10,000 项结果的有界行数及 Reveal。
-- `search.rs` 同时保护同帧文本 / 确认的相对顺序、确认后丢弃剩余正文，以及原生编辑器重新开启冒泡后 Enter / Esc 仍不能触发外层快捷键。
-- 搜索确认通知的消费者可将焦点移到下一输入框、排队销毁根或立即重新打开同一实例；旧输入批次必须在关闭通知前结束，不清理新焦点、不对正常销毁误报，也不把旧尾随正文交给新会话。
-- 同页有多个同T搜索实例时，先处理实例的确认消费者可销毁整个页面；同步循环必须跳过已销毁的后续实例，不能对正常页面清理报告结构错误。
-- 公开open排队后紧接销毁根时，延迟搜索初始化取消，不产生伪错误或业务变化通知。
-- `search.rs` 的真实 UI Layout 回归保护搜索结果的 viewport 和行宽撑满 Popup 内宽，覆盖首次打开、过滤为单结果、无结果后恢复和根宽变化。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `bsn_combo_box.rs` | Typed Scene、部件归属和默认组合结构。 |
+| `data_contract.rs` | Source／ID／Selection 的公开数据语义与失效处理。 |
+| `diagnostics.rs` | 多个业务／配色失败的诊断传播、去重及恢复。 |
+| `headless.rs` | 独立无默认 Style 的 Selection、Popup 与输入行为。 |
+| `popup_composition.rs` | Popup 内容重建、键盘／焦点和组合控件边界。 |
+| `search.rs` | 搜索绑定、TextField 编辑、结果过滤和错误传播。 |
+| `selection_field.rs` | Selection 与 Field 显示投影、Theme 和内容身份。 |
 
-搜索新增 Query 空 / 有匹配 / 无匹配、输入框 Focus 与 List Active 的耦合。过滤不改 Selection / Model，导航不提交选择，只有有效确认才关闭并通知。`benches/search.rs` 在真实 Headless UI / Layout 中固定 1,000 / 10,000 条数据，交替测单结果 / 全部 / 无结果 / 多结果的查询更新（含两次 App Update，使变化后的 Popup 尺寸被虚拟化消费），以及 10,000 项结果窗口 0 / 640px 往返滚动，核对匹配数量、渲染行数和 Text 就绪；不代表原生 Present 或完整 GUI 60 FPS。
+### Unit Test
 
-
-私有单元回归保护稳定帧零归属发现、单实例 Owner 修复、独立构造后延后挂接、Popup 换父级、ListView 重建、Root / 部件标记移除、多 T 隔离和销毁清理；计数不进入公共 API。样式单元回归同时保护稳定帧零整套颜色解析 / 应用、单 Field 变化只更新其所属实例、Hovered / Pressed 移除、局部与根 Disabled 添加 / 移除、跨 T 的 Override 隔离、真正 Owner palette 的保留与解除托管、箭头替换及必需输出失败传播与修复后重试。`bsn_combo_box.rs` 继续保护首次颜色消费前的归属与托管部件拒绝公开覆盖写入。
-
-Field 私有单元回归保护 Field / Icon 持续结构故障的重复观察、真实修复后一次恢复 INFO、再次故障新 ID，以及无虚假 handled DEBUG。直接返回错误的 System 在单线程测试 Schedule 中进入真实宿主 Handler。稳定帧及单实例输入的配色工作量测试共用就绪等待：Icon 实际 Image 加载完成并消费结构变化后才清空计数、施加刺激，避免把异步素材构造混入 idle 或局部输入。
-
-`benches/owners.rs` 使用真实 Headless UI / Layout，固定 10 / 100 / 1000 个 ComboBox、每 Model 100 条数据，测 idle、仅一个实例丢失 Owner 后的修复、单 Field Hover 交替及单 Popup 的 0 / 64px 往返滚动；滚动时固定 8 个可见行，其余实例保持关闭。每次验证所有 Field / List 的归属与 Field 颜色，滚动时核对复用行 Index 和实际 Background / Text Foreground，以及实体数量稳定。该结果不代表原生 Present 或 60 FPS 验收。
-
-`search.rs` 还覆盖无默认Field/Popup标记的多层搜索绑定、独立TextField Headless/Editor、隐藏选择、重新打开、无结果继续编辑、Escape后同批确认、字素上限与ReadOnly，以及外来搜索字段拒绝不部分打开。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/field.rs` | Field 内部结构、部件故障和诊断生命周期。 |
+| `src/style.rs` | 归属、调色板更新及稳定帧的局部工作量。 |

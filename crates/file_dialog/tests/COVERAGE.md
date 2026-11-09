@@ -1,132 +1,50 @@
-# file_dialog Integration Test Coverage
+# file_dialog 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- Session / Generation、Directory / History、Selection / Active、Search / Filter / Sort。
-- Confirmation / Overwrite、Storage Scope、Runtime Loading / Ready / Partial / Failed。
-- Embedded / Owned、Modal / NonModal、Viewport / Editor / Theme。
+- Session／Generation、目录历史、Selection／Active、Search／Filter／Sort 和文件确认／覆盖状态。
+- 异步目录 Snapshot 的 Loading／Partial／Ready／Failed，Storage Scope／Prefs，Embedded／Owned Window 和 IME／Focus。
 
 ## Stimuli
-
-- BSN Spawn、`World` / `Commands` API、后台 Snapshot / Validation Reply。
-- 目录导航、批量 Selection、Keyboard / Pointer / IME、FileDialog Result、Cancel。
-- Streaming I/O、Prefs Load / Save、Window Closing、Theme 与 Color Override。
+- BSN 构造、公开 World／Commands API、目录导航／批量选择、Keyboard／Pointer／IME、后台读取与校验回复。
+- Streaming I/O、偏好读写、窗口关闭、Theme／Override 与 Session 重开。
 
 ## Guards
-
-- 有效 Root / Session / Token / Revision、Mode / Entry Kind。
-- Confirm 不能穿透 Pending Selection / Projection / Validation。
-- Disabled、Focus、IME Composition 和旧 Row Press 不得触发错误提交。
-- 非空预编辑与待处理 IME Commit 保留输入保护；空预编辑清理不能阻断 Escape 取消。
-- Snapshot / Queue / Job 容量边界。
+- Root、Session、Token、Revision、Mode 和 Entry Kind 必须匹配当前请求；旧回复及旧 Row 输入不得提交。
+- Pending Selection／Projection／Validation 时不能越过确认守卫；Disabled、Focus 和活动 IME 组合态不得产生错误提交。
+- 异步队列、Job 和 Snapshot 维持容量及取消边界；Owned Window 保持禁止用户 Resize 的策略。
 
 ## Transitions
-
-- Started / Partial / Ready / Failed 的目录请求生命周期。
-- Navigate / Search / Select / Save / Overwrite / Cancel / Reopen。
-- Scope Preferences Merge 与迟到 Reply 丢弃。
-- Owned Window 在结果 Consumer 后结束，外部销毁不合成 Cancel。
-- Owned Window 禁用用户 Resize 与原生最大化，传入 Native Window 的启用请求不覆盖该约束；程序化尺寸调整保留。
+- 启动 → 目录 Partial／Ready／Failed，导航／搜索／选择 → 保存／覆盖确认／取消／重开。
+- Storage Scope 偏好合并与迟到回复丢弃；Owned Window 在结果消费后完成自有资源清理。
 
 ## Invariants
-
-- Session Result Once-only；通知读取已提交 Authority。
-- Stable EntryId / PathBuf 原始身份不由 Lossy UI 文本重造。
-- Disabled / Editor Cursor、可见 Row 和 UI Style 在 Theme / Scroll / Reuse 后一致。
-- 后台 I/O 不阻塞 App Update；已完成业务结果不因 Storage 失败回滚。
-- 新一轮 Session 不接受旧 Reply。
-- 目录 I/O 在受管线程执行，全部后台操作与快照生命周期纳入共享Manager；I/O 不在 App Thread 执行且不会占满共享 I/O 池，队列 / Snapshot 容量及 Cancel 不等待 I/O 分别验证。
-- 根颜色 Owner 控制部件、动态 Row、Owned Window 和 Overwrite MessageBox；托管部件拒绝直接覆盖，Theme / Clear 不改确认状态。
-- PickFile Draft 与 Selection 分离，Enter / Open 解析当前可见 EntryId 后异步校验；非法名字、目录、Query Repair 和陈旧文件不能提交旧 Selection。
-- Owned 结果先由 Observer / Deferred Consumer 消费，再发送 WindowClosing，允许 Render Extraction 释放 Surface，应用 CursorSystems::Update 的 Deferred Commands 后才销毁 Native Window；宿主禁用默认关闭系统时，同一轮 Last 的原生后端仍能消费到 Window 移除，不依赖后端的注册先后顺序。
+- 每 Session 最多提交一次 Result，通知时业务 Authority 已提交；新 Session 不接受旧 Generation 的结果。
+- `EntryId` 与原始 `PathBuf` 是业务身份，不从 Lossy UI 文本重建；PickFile 草稿与 Selection 分离。
+- 后台 I/O 不占用 App Update 或耗尽共享 I/O 池；结果不因偏好存储失败而回滚，取消／关闭安全回收 Job 与缓冲。
+- 动态 Row、Editor、筛选／搜索和确认面板的显示状态与当前 Session、Disabled、Theme／Override 一致；颜色归属由 FileDialog Owner 管理。
+- 非法请求及底层存储／布局／颜色错误保持原始原因链、请求现场和宿主传播语义；失败不破坏其他 Session。
 
 ## Couplings
-
-- Selection × Snapshot / Query / Entry Kind。
-- Filename Draft × Overwrite Candidate × Backend Validation。
-- Scope Prefs × 多 Session；Modal × Window Focus / IME。
-- Virtualization × 动态 Theme / Row Press Identity。
+- Session／Generation × 异步回复；Selection／Search × Validation／Confirm；Owned Window × IME／Modal；Theme × 动态 Row／MessageBox。
 
 ## Coverage Map
 
-- `style.rs` 的布局 fixture 预载得意黑与 Emoji 回退，使用真实字体验证列文字起点对齐和 Sidebar 文字垂直居中，避免空布局掩盖几何错误。
+### Integration Test
 
-- `diagnostics.rs`：公开 scope / Filter / 容量分类、Storage Revision 与路径字段、真实 Scene 失败 Root 清理及源头 origin、排队非法请求的宿主接收、Job 失败保持原类别 / 身份，以及过期正常回复和合法 No-op 的静默性。Session 耗尽由私有局部计数器回归保护，避免污染全局 Session 序列。
-- `diagnostics.rs` 同时检查 Snapshot 的目录 / Token / 原始条目路径分类、源头一次 ERROR，以及转换到 Bevy 后的 Error Severity 与同一 origin。
-- `diagnostics.rs` 检查单次请求失败只在状态提交 / 明确废弃后记录 DEBUG，过期 Validation / Locations 不修改新请求；递送自身失败聚合原诊断与新契约错误且不记录已处理。非法文件名与正常取消保持静默。
-- `style.rs` 的组合错误回归检查两份 TextField Query 原因与四份 ScrollArea 缺失部件诊断全部到达宿主，并验证真实 System context 和所属实例；不再将已迁移的 TextField 诊断当作原生字符串错误。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `contract.rs` | 公开 Session、目录、选择、确认／取消及错误契约。 |
+| `diagnostics.rs` | 请求／后台／颜色／存储失败的领域诊断、归属与宿主传播。 |
+| `folder_shutdown.rs` | 目录读取与关闭、取消、后台资源回收协作。 |
+| `runtime.rs` | 受管异步快照、Job、存储、容量、Session 隔离与迟到回复。 |
+| `style.rs` | 真实 UI／IME／Layout、动态内容和 Theme／Owner 投影。 |
+| `window.rs` | Owned Window、Modal、Focus、Overwrite、标题与生命周期。 |
 
-- `contract.rs`：Headless API、Session / Scope、Navigation / Selection、确认与通知。
-- `runtime.rs`：受管快照生命周期与偏好 Job、JobManager 安装与宿主实例复用、手工模式、固定容量、流式更新、取消、存储与 Session 释放；目录读取失败、100,000条目边界与每帧消息预算。
-- `style.rs`：真实 BSN / Input / Layout、编辑器、可见 Row、Theme 与 Color Owner，以及排队空 IME 清理后的真实键盘取消；窄视口中文件名列保留宽度、导航换行、编辑器与底部操作保持在界内。
-- `window.rs`：Owned Window、Modal / NonModal、Focus、IME、Overwrite MessageBox 和资源回收，包含嵌套 MessageBox 关闭后焦点恢复与 Escape 取消；Tab / Shift+Tab 保持当前目标、忽略旧 TabGroup 顺序，保留 Pointer 焦点可见性且仍作为 FocusedInput 送到编辑器。
-- `window.rs` 同时保护独立 Dialog 的默认标题绑定、原生 / 可见标题同步和更新时内容身份保持。
-- `window.rs` 的覆盖确认配色回归验证最终 FileDialog Owner 的 Hover 覆盖色、Hover 移除及 Theme / Override 清除，不由中间 MessageBox 自行覆盖。
-- `style.rs` 的配置回归保护 Style 更新时保留编辑内容及 Session；源码 Unit Test 保护稳定帧无字体遍历 / Shell 重写，以及延后字体与容器重挂后的配置补偿。
-- TextField 复合结构的断言分别检查根 Part、内部编辑状态及 Frame / Editor 配色；Pointer → Filter、Disabled 拦截、IME、Enter 与文本投影回归保护真实业务路由。Search Suffix 保护仅在搜索框出现、框内右侧布局、长文本输入、非 Picking / 独立焦点 及原焦点归属。
-- 精简布局回归保护常驻工具栏消失、四种排序状态下表头均无箭头 / UTC 标签、样式更新不重置排序 / Hidden / System / Pin 偏好，以及静态分隔线的尺寸与输入排除。侧栏保护后端自定义路径、固定顺序、缺失项不伪造、磁盘 / 固定目录不显示及真实激活导航；原位置 Disabled、颜色、内部键盘与 Pointer 焦点回归继续适用。
-- 新建目录内部面板保留 Enter 错误后处理同帧 Escape、先关闭面板再取消 Dialog 的覆盖；不再断言已移除的可见入口存在。独立窗口的 Popup 焦点恢复改由仍可见的 Filter 验证。
+### Unit Test
 
-- 源码 Owner 生命周期测试保护稳定帧零归属处理、延后 Control、Owner 丢失 / 替换修复、跨 Root 重绑、Marker 移除与 Root 恢复；既有 Style / Window 回归保护嵌套控件、复用行与覆盖确认。
-
-- 源码配色工作量回归保护静止零配色、局部 Hover / 移除只更新单个 Control、Selection 只更新受影响行及同 Entity 新绑定初始化；现有 Style / Window 回归继续保护 Focus、Disabled、滚动、主题与覆盖确认的配色。
-
-## 覆盖边界
-
-目录源码测试保护128条目/8ms阈值、真实目录流式快照、容量1背压、无订阅者、取消确认、阻塞backend不占满共享I/O池、CPU末批应答先于Finished，以及执行Completed后必须等消费Finished才发布最终快照；旧服务耗尽共享预算后仍为目录积压续帧。旧Runtime场景继续保护双Session、快速导航、搜索/排序、Partial、旧Token过滤、关闭/重开和大型Snapshot后台持有。
-
-共享保留容量测试保护八条32项缓冲目录流在消费暂停时保持Running，恢复消费后各自按序完成，以及容量等待中的取消退出。CPU预算单元测试保护压力下返回未处理批次、释放后重试和为八个Session旧投影保留空间；退出测试同时保护最后清空/Receiver析构窗口、Sender存活时释放排队应答，以及ECS admission不等待入队锁。
-
-Runtime 源码回归在取消通知的同步唤醒点检查 JobManager 请求先于旧 Control 旗标发布；服务 fault 回归固定结果缓冲已满的交错，保护 Runtime 仍存活时取消目录 Job、确认真实退出并回收记录。
-
-缓存重投影回归保护 CPU Job 身份、Manager 关闭后拒收、执行 Completed 与订阅 Finished 消费分离、新 Query / 快照版本 / Session 拒收旧结果及后台保留引用；Runtime Integration Test 保护 Pending 保留上次 Snapshot、同 Query no-op、EntryId 稳定及无需再次读取目录。既有 Filter / Sort / Selection、窗口关闭与手工 Headless 路径继续覆盖迁移后的行为。
-
-独立 Selection 源码回归保护 CPU Job 身份、选择变化不触发冗余投影、SelectAll → Toggle 顺序、Active / Selection 分离、Item / Finished 消费、Manager 关闭拒收、后台集合保留，以及新意图 / Query / Cancel-Reopen 拒收旧 Completed 结果。既有 Contract 的冻结已到达范围、Shift Range、非法 Kind、128意图容量及 Runtime / Style 交互回归继续保护业务选择契约。
-
-SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished 未消费时编辑 Filename，保护编辑版本独立于选择身份、选择准备能结束、已编辑文件名保留且 Confirm 恢复可用。
-
-完整候选 Job 回归保护受管线程身份、阻塞校验期间不提前完成且共享 I/O 池仍可推进、迟到取消不改写成功 Completed / 错误 Failed、准备错误业务回复及 backend panic 隔离。Runtime 回归保护Manager关闭拒收、Item / Finished分离、Filename / Reopen拒收旧候选，以及没有可交付Item时从迟到取消或panic恢复为确认错误；既有单/多选、目录、SaveFile、Overwrite、并发Session、最多一次Result及手工Reply场景继续保护对外确认契约。
-
-真实 OS 文件系统 / Native Window 完整行为仍需相应环境验证；测试用受控 Backend 和 ECS Runtime 验证已定义 Contract。
-
-创建文件夹 Job 回归覆盖受管线程身份、真实临时目录副作用、权限/冲突/panic 错误及迟到取消终态；Runtime 覆盖 shutdown 拒收、Item/Finished 分离、固定请求去重与 Reopen 拒收旧回复；集成覆盖慢创建期间多帧更新、重复请求拒绝、Cancel 不等待后台及成功完成后的目录刷新。单次创建副作用不承诺取消撤销。
-
-单独的 folder_shutdown Integration Test 进程固定共享 I/O 池为单线程，提交八个慢创建，确认不更新 App 期间共享 I/O sentinel 仍推进、关闭可观测 TimedOut 并在真实结束后 Completed；该测试不直接观测 Winit WakeUp。
-
-位置查询回归覆盖空/普通/128项成功、129项容量失败与Backend错误、阻塞期间共享I/O池推进、迟到取消不改写终态及受管线程身份。Runtime保护shutdown拒收、Item/Finished分离、Query修改仍可提交、导航Generation和重开Session拒收旧结果，以及位置失败保留原列表与Ready目录。集成验证多个并发会话和重开后的查询次数，不随稳定帧重复初始化；既有automatic=false手工通道回归继续适用。
-
-偏好Job回归覆盖阻塞Load/Save、真实磁盘写入、失败与迟到取消Completed/Failed；Runtime覆盖Manager关闭拒收、无Dialog时共享消息预算及Item/Finished分离、旧保存Ack不清理新Revision。原Worker私有I/O槽/唤醒实现测试退役，既有Scope合并、晚Load、失败抑制、路径编码、Cancel不修改LastPicked与手工模式继续保护业务。Retention回归覆盖管理器取消后持有UI引用时保持Stopping，释放最后UI引用并真实退出后才Canceled；目录背压和批次等待回归保留。
-
-全局关闭竞态回归先等待Retention真实启动，再在begin_shutdown后等待其实际停止Admission，覆盖未提交选择/投影/确认/Folder不滞留Pending；OperationsStopped公共契约覆盖同代幂等、保留已提交选择与Open会话、之后用户Cancel仅一个Result。Gallery全局关闭UI接入之前，该时序由确定性Runtime与Contract保护，原GUI偏好/取消/重开证据不等同于全局Shutdown UI验证。
-
-后台结果携带共享JobFailure，工作原IO/Bevy对象与递送失败可并存；Prepared/Directory/Preference消费点在交付失败状态后处理，过期任务回收明确放弃结果。Preference私有回执与JobOutcome共享诊断。
-
-`style.rs` 保护跨两个 Dialog 的 Sidebar / Entries 同时失去 ScrollArea 标记时，四个受管失败均保留部件与 Dialog 上下文并到达宿主；并发 TextField 原生样式失败经真实 Command 边界分别保留 Severity，不丢失受管诊断。
-
-正常停止与故障区分：服务shutdown/业务Control停止先于Job自身取消、在途oneshot关闭不创建失败；未停止时真实Closed仍失败。Directory的Interrupted仅在明确停止/取消下视为正常结束。
-
-目录源码回归同时保护 12 条失败各自产生一次 ERROR / 跳过 DEBUG，摘要只保留前 8 条且未知路径不被编造；原生解析失败保留 Canonicalize、目录 / Token、ErrorKind 与 raw OS cause。受控慢 I/O 的迟到取消保留真实 Failed，但已取消的原始 Interrupted 确认 Canceled。Retention 回归固定 CPU 已产生 Snapshot 失败后取消的时序，验证批次回执与最终 JobOutcome 共享 origin；真实 CPU 应答断连保留 oneshot source，明确服务停止时正常结束。
-
-自定义 Backend 将真实 `SendFailure` 包装为 Other 或 Interrupted 时，目录 Owner 复用 Job 的受管 I/O 转换；独立日志捕获子进程验证原 origin、一次源头 ERROR、传播上下文与迟到取消后的 Failed，不将已存在的发送失败再次分类为正常取消。
-
-单次操作的生产回执与最终 JobOutcome 共享原诊断：候选、创建目录、位置查询均在原有迟到取消矩阵中断言。原生多选用一项真实文件和一项缺失文件验证失败路径、候选索引、Token / 模式、ErrorKind 与共享 origin；原生 SavePath 不存在单独验证返回 false 且无诊断。
-
-普通自定义 Backend 的校验错误同时保护实际单路径与共享多选 Paths。多选回归比较 Backend 接收的候选 Arc 与错误上下文 Arc 的指针身份，保留完整候选但不复制集合；多选未知具体失败项时 resource / index 为空。
-
-同一多选矩阵还覆盖自定义 Backend 返回现有 JobFailure 与真实关闭通道产生的 SendFailure：原 origin / source、类型化候选上下文和共享 Paths 在回执 / JobOutcome 中同时保留。
-
-原生 SaveFile 父目录不存在的回归同时断言候选 `path` 含完整文件名、实际失败 `resource` 为父目录、操作阶段 / Token / 模式 / ErrorKind 与回执-终态同源；原生多选的失败资源不覆盖候选集合。
-
-偏好源码回归保护损坏 JSON 的原始 serde 类型 / 位置、首次缺文件静默空加载、非法存储路径的 Scope / 提交 Revision、Windows 真实锁定替换失败的原生 IO source 与原文件保留。独立日志子进程在真实生产线程验证回执 / JobOutcome 共享 origin、源头一次 ERROR、传播尚无处理 DEBUG；自定义 Backend 的 JobFailure / SendFailure 保留类型化偏好 Context 和原 source。
-
-偏好递送回归固定已关闭的真实 Job 通道，验证 I/O 与递送失败两份诊断同时保留；既有慢 IO / 晚取消矩阵继续保护已完成磁盘事实。Runtime 源码回归区分失败状态提交后的 DEBUG 与实际成功确认后的恢复 INFO，正常取消不恢复，同一恢复只记录一次；原保存 Revision 与失败抑制回归继续运行。
-
-Manager shutdown 拒收偏好加载 / 保存时，Runtime 回归检查原 SubmitFailure origin 与 ShuttingDown 分类、类型化目标文件 / 操作及完整保存 Revision；源头一次 ERROR，在失败状态与抑制规则提交后一次处理 DEBUG。
-
-Runtime 源码回归保护启动拒收与两会话递送失败同时保留三份诊断、完成降级前无 handled、修复 Storage 后正确降级且同源处理一次，以及错误返回时 Runtime 仍在 World。另一回归固定两会话各两个 Job 访问失败，验证服务源头与四个清理失败同时保留；PreparedJob 回归保护终态业务失败与移除失败同时传播，并保留原 origin / 请求 frame。满目录缓冲故障回归继续确认实际取消与回收，并检查安全降级后的处理 DEBUG。
-
-`diagnostics.rs` 保护颜色 API 的 CoreColor 类型与源头身份、失败配置不写入、无效 Entity 的结构化故障，以及真实排队 Command 的 Error Severity 与按 ID 关联的源头记录。`style.rs` 的无效样式回归检查领域故障与 Root 上下文，继续保护一次报告、不阻塞另一 Dialog 及配置恢复。
-
-FileDialog 不投影动态 Tab Stop：style 回归检查 Entries/按钮的 -1 Pointer 标记、文本 Root 不附加顺序标记且点击真实 editor 保持映射；Filter Field 的 Pointer 聚焦、Enter 打开 Popup 与 Disabled 传播仍生效。隐藏 Folder/Overwrite Panel 与不可确认按钮的业务守卫继续保留。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/style.rs` | 样式刷新、字体与 Shell 的局部更新及结构恢复。 |
+| `src/runtime.rs` | 目录流容量、CPU 消费预算和异步退出的局部时序。 |

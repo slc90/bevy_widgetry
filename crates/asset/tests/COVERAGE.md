@@ -1,43 +1,31 @@
-# asset Integration Test Coverage
+# asset 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- Embedded Source 未注册 / 已注册。
-- Font、SVG、Cursor 静态和动画图集未加载 / 取得字节 / 已解码。
+- Embedded Source 未注册／已注册；内建 Font、Icon、Shader 和 Cursor 等资源的寻址与解码状态。
 
 ## Stimuli
-
-- 注册 `WidgetryAssetPlugin`；通过 `BuiltinFont`、`BuiltinIcon`、`BuiltinShader` 加载与解码。
+- 注册 `WidgetryAssetPlugin`，通过 `BuiltinFont`、`BuiltinIcon`、`BuiltinShader` 等语义入口读取内嵌资源。
 
 ## Guards
-
-- 验证 Font、Icon 和 Shader；真实 Kamuri 图集、解码和时序覆盖随素材归属移入 Gallery。
-
-- 素材必须经 Embedded Source 寻址，不从磁盘回退。
+- 内建素材必须经 Embedded Source 读取，不依赖磁盘回退；路径应指向有效、可解码的数据。
 
 ## Transitions
-
-- Font 成功解析；SVG 使用各自语义标识。
-- 得意黑与 Noto Color Emoji 通过各自 `BuiltinFont` 语义路径读取 Embedded 字节并解码为 Font；Core 验证 AssetServer 实际加载和组合回退。
-- 45种静态备用与动画第一帧的图像对应。
+- 注册 Source → 根据语义标识获得字节 → 解析字体、SVG、Shader 或光标资源。
 
 ## Invariants
-
-- 45种Cursor素材与语义对应，均为80px RGBA，边界透明，完全透明像素无残余RGB。
-- 45种Atlas与RGBA数据合法，各自动画非静态，首帧身份独立；3×3热点区域全帧固定，独立时序在帧边界和Duration::MAX下循环有效。
-- 内建 Font / Icon / Cursor 路径确实指向可读取资源。
-- FileDialog 的四个导航图标与搜索图标各自通过语义标识读取唯一的 Embedded SVG。
-- DatePicker Today SVG 通过专用 Icon 语义标识读取真实 Embedded 字节。
+- 内建字体、导航／搜索／日历 Icon、HoldButton 与 Canvas Shader 的语义路径对应实际资源。
+- Cursor 静态后备与图集素材的身份、像素、透明边缘、热点和帧时序满足既有素材契约。
+- 字体 fallback 所需资源保持可获取，素材身份不因资源读取方式而改变。
 
 ## Couplings
-
-- Path 标识、Embedded 注册与实际解码协作。
+- 语义路径 × Embedded Source 注册 × 解码结果；Cursor 静态后备 × 动画图集。
 
 ## Coverage Map
 
-- `embedded.rs`：全部 Embedded Font、Icon、Cursor 与 HoldButton Shader 资源 Contract。
+### Integration Test
 
-
-内建 HoldButton 与 Canvas Alpha 转换 Shader 都通过语义路径读取 Embedded Source，验证实际字节可加载。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `embedded.rs` | 内建 Font、Icon、Cursor、Shader 的路径、字节、格式及素材契约。 |

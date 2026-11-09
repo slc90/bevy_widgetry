@@ -1,16 +1,44 @@
-# Waveform File Coverage
+# waveform_file 测试覆盖模型
 
-- `recording.rs`：真实落盘与再打开、元信息一致性、不同密度和跨桶随机读取、逐通道缺口、短尖峰、边界极值精确性、可见工作集与 I/O 有界、异常构建不发布文件、损坏文件拒绝。
-- `source.rs`：后台 Pending、最新请求优先、reader 隔离、取消旧目标、真实文件错误。
-- `source.rs` 还覆盖显式共享 Manager 的关闭拒收。Source 模块并发回归覆盖空闲全局取消、阻塞查询期间 Drop 返回且仍 Stopping、Timeout 后真实退出、过期失败不干扰其他 reader、线程 panic 后公开读取错误，以及 Source 销毁/关闭后迟到的 panic 诊断消费与失败记录释放。
-- `source.rs` 同时检查真实读取的有界统计快照：查询计数、实际读取字节、非零文件 I/O 计时，以及包含 I/O 的完整查询耗时。不将机器耗时作为性能断言。
-- `lttb.rs`：六个 LTTB 密度独立等价于直接原始样本降采样；跨块缺口、样本身份、时序、PolyLine 算法一致性及局部随机窗口。`source.rs` 还覆盖快速 MinMax/LTTB 交替后的最新算法结果。
-- `diagnostics.rs`：真实不存在/权限拒绝、截断及打开后文件截短、错误标识、JSON 原因、单位与层表布局、两算法索引 offset、原始/producer 非有限样本、错误帧/通道范围与零密度；检查可匹配分类、path、offset/length 与通道/范围/算法语境。producer 原 origin 与块现场保持，失败清理临时资源、拒绝覆盖保留已有目标；源头一次 ERROR、纯传播无 handled、实际 Command 经宿主保留 Error Severity 和原 origin。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-所有数据查询经正式文件格式执行，无模拟延迟。耗时由 Benchmark 测量，行为测试只断言确定性结果及工作量。
+## States
+- 文件 Recording／Index、原始与预降采样数据、通道缺口和多层密度；后台 Source Reader Pending／Ready／Failed。
+- 共享 JobManager、取消／关闭、多个 Reader 和统计快照。
 
-- 控制诊断：关闭拒收保留 SubmitError::ShuttingDown、共享 origin、源头一次 ERROR、无虚假 handled，并经真实 Bevy Command 保持 Error Severity；已移除记录的 Source Drop 无错误，panic 结束后移除再读取保留 NotFound 诊断。
+## Stimuli
+- 真实文件写入／读取、随机窗口与 LTTB／MinMax 查询、Reader 请求替换、Manager 关闭、文件损坏或原生 I/O 失败。
 
-- Source 并发回归同时检查已完成失败在取消、同 reader 替换、Source 销毁及阻塞查询迟到后被明确废弃时，只记录同源处理 DEBUG；错误构造于捕获作用域，真实执行线程显式携带测试 dispatcher。既有受管 Job 控制报告直接共享，不再匹配旧 enum 包装。
-- Reader 模块回归还覆盖：同一次队列中毒跨 stats/read/终态只保留一个 origin；工作线程真实 I/O 错误经过请求通道到 WaveformRuntime 保留 origin、原生原因和结构化现场；查询失败与队列中毒同时到达时全部保留；工作线程已持锁 panic 后 Source Drop 才发现的队列故障也在真实退出后消费。清理与传播不依赖错误链的固定包装深度。
-- `recording.rs` 的固定 wire fixture 独立检查原始有效性记录、MinMax span、六层 LTTB 数据点及索引偏移、文件头/尾与 JSON 字段；同时直接打开独立组装的 fixture，避免仅靠读写 round-trip 掩盖共同布局错误。
+## Guards
+- 非法文件、头／尾／偏移／通道／密度和非有限样本必须拒绝；失败不得覆盖已有合法目标文件。
+- 旧请求、关闭后的提交和迟到后台结果不能污染当前 Reader。
+
+## Transitions
+- Recording 构建 → 发布文件 → 重新打开与查询；Source Pending → 完成／错误／取消；Request 替换旧目标。
+
+## Invariants
+- Wire Layout、原始有效性、MinMax／LTTB 分层索引及样本身份可由独立 Fixture 验证，不能只依赖自身读写 Round-trip。
+- 不同密度／跨块缺口的随机窗口读取保留时间、极值和通道语义；可见工作集及实际 I/O 请求保持有界。
+- 多 Reader 隔离，最新目标优先；Manager 关闭、Source Drop、线程 panic 或队列异常后，已完成错误被正确归属和消费。
+- 真实 I/O 错误的 source、origin、path、offset、通道及算法上下文在后台和宿主 ECS 之间保持一致；持续故障不伪造新的根因。
+- 查询统计可反映读取字节与耗时，但业务测试不将机器耗时当作性能阈值。
+
+## Couplings
+- 文件索引 × MinMax／LTTB；Reader 并发 × 取消／Manager；损坏文件 × 错误传播／输出原子性。
+
+## Coverage Map
+
+### Integration Test
+
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `diagnostics.rs` | 文件内容、I/O、索引／单位和后台命令错误的原因链。 |
+| `lttb.rs` | 各级 LTTB 与原始样本在不同窗口／缺口下的一致性。 |
+| `recording.rs` | 真实录制文件构建、独立 Wire Fixture、再打开及非法数据拒绝。 |
+| `source.rs` | 后台 Reader、请求替换、Manager 关闭、并发、统计与失败回收。 |
+
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/source.rs` | 后台 Reader 的取消、替换、Drop 与真实退出；阻塞请求、线程 Panic／队列中毒及跨线程失败诊断的归属和消费。 |

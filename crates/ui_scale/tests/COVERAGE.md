@@ -1,12 +1,41 @@
-# Ui Scale 覆盖模型
+# ui_scale 测试覆盖模型
 
-- 状态：应用缩放值、Window 的逻辑尺寸基准、普通/排除窗口、插件安装前已有/后建窗口。
-- 刺激：初始资源、Scale 更新、相同值、用户物理 Resize、排除标记加入/移除、Window 移除后重建。
-- 不变量：普通窗口采用当前统一 Scale，缩放保留逻辑设计范围，用户 Resize 成为下一次基准；排除窗口包括同批 Bundle 创建时不被改写，同值不标记 Window 变化。
-- `scaling.rs` 验证真实 App/World 组合、无原生窗口环境的基本缩放和排除。
-- 静态帧与同值 Scale 由排在 Sync 之后的同帧 `Changed<Window>` 消费者验证，不依赖帧结束后的 tracker 清理；实际比例变化仍通知一次。
-- 运行期修改原生 Resize Constraints 立即约束尺寸，后续 Scale 使用新约束；放宽约束恢复未丢失的设计尺寸基准。
-- `camera.rs` 使用 Bevy 真实 Camera System 与显式 Viewport，验证缩小比例时窗口与相机在同帧收敛，避免新输出纹理配旧 scissor。
-- Windows 算法单元覆盖位于 `geometry.rs` / `native.rs`：DPI 两种到达顺序、同 DPI 的工作区变化、用户 Resize、负坐标和重叠/距离选择、原生边框预算、暂停/恢复、部分约束更新、有效位置保持和出界夹紧；Monitor Index 使用 Winit 的真实排序，不以 ECS 迭代顺序冒充。
-- `windows.rs` 使用受控原生查询失败验证真实 SysError 载荷保留、同一失败源头一次 ERROR/不重复传播、等待 Monitor 元数据期间保持原故障身份且不记恢复、实际取得工作区后恢复并允许新失败获得新 ID。真实 Native Maximize/Minimize、跨屏和系统 DPI 行为由任务级运行时证据另行记录，不以这些 Headless 测试取代。
-- `validation.rs` 验证非有限/非正 Scale 的领域分类、请求值、状态保留及源头一次 ERROR；传播保留 origin，不虚报 handled，真实 Startup System 的错误以 Error Severity 到达宿主 Handler。有限正数不受 Gallery 四档限制。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
+
+## States
+- 当前全局 UI Scale、Window 逻辑尺寸基准、普通／排除窗口、现有／新建 Window、显示器／DPI 几何状态。
+
+## Stimuli
+- 初始资源、Scale 更新／同值、用户 Resize、排除标记增删、Window 重建、Viewport 和 Monitor 状态变化。
+
+## Guards
+- Scale 必须是有限正数；非法输入拒绝并保留旧状态。排除窗口不能被全局缩放误写。
+
+## Transitions
+- Scale 修改 → 普通窗口尺寸／约束收敛；用户 Resize 更新设计基准；排除标记切换后重新投影。
+
+## Invariants
+- 普通窗口按当前 Scale 变换并保留逻辑设计尺寸；用户真实 Resize 成为后续计算的基准。
+- 排除窗口在初次创建及运行期不被误改写；同值 Scale／稳定帧不触发冗余 `Changed<Window>`。
+- Window／Camera／Viewport 在当前调度帧完成尺寸同步；修改 Resize Constraints 后 Clamp 一致，不丢失原设计基准。
+- Win32 显示器工作区和 Native 查询错误保留源头身份，实际恢复前不伪报恢复；宿主可观察到原始诊断。
+
+## Couplings
+- UI Scale × 设计尺寸／Constraints；DPI／Monitor × 原生窗口；Viewport × 相机当帧尺寸。
+
+## Coverage Map
+
+### Integration Test
+
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `camera.rs` | 真实 Bevy Camera／Viewport 与缩放窗口的同帧收敛。 |
+| `scaling.rs` | App／World 全局 Scale、排除窗口和变化通知。 |
+| `validation.rs` | 非法 Scale、初始配置和错误传播。 |
+
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/geometry.rs` | Monitor 几何、逻辑／物理尺寸和原生位置计算。 |
+| `src/native.rs` | DPI／工作区更新、约束与原生状态转换。 |

@@ -1,11 +1,42 @@
-# HoldButton coverage
+# hold_button 测试覆盖模型
 
-Reparented-content Picking uses an absolutely positioned branch and verifies its target point stays inside the circular face, independently of label font measurement.
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-- `interaction.rs`: real UI layout and Picking for Mouse and Custom Pointer; transparent corner pass-through, content hit routing, short press rejection, immediate one-shot Activate at full charge, release/repress cycles, drag-out/re-entry lockout and ancestor Disabled/Visibility recovery. Existing nested content reparenting preserves Picking pass-through. Verifies the absence of native Button and default TabIndex.
-- `headless.rs`: independent public HeadlessPlugin without Shader resources or default children; rectangular corner hits for Mouse/Custom Pointer, public progress and attempt state committed before threshold Activate, charge/decay RequestRedraw and idle/full stop, exit/re-entry lockout, residual resume, and public duration Props including zero charge/decay.
-- Internal Headless unit tests: linear charge/decay, clamping and zero Duration, partial resume, success latch, idle wake-up and delayed Virtual delta exclusion, release-at-threshold settlement and feedback, same-frame in-place Hidden / Display::None interruption priority; ECS keyboard focus, repetition, mixed sources and state interruption contracts.
-- Internal Style unit tests: Theme / instance override / clear, success flash duration and idle redraw behavior.
-- `diagnostics.rs`: invalid diameter values (NaN/infinity/zero/negative) survive Scene propagation with their original source identity and no empty root; Core color source/origin/state/field and unchanged configuration, silent equal requests, and real queued color target failures with Error severity and matching source ID.
-- Internal color/style diagnostics: missing private color state, actual liquid/wave field context, multiple owned material/structure failures batched to the host, typed material identity and Query source, stable IDs across repeated frames, and recovery only after actual repair. Headless diagnostics also verify that success, repeated input and focus cancellation remain silent with unchanged activation counts.
-- GPU shader appearance and animation timing are additionally checked in the Gallery via BRP, outside the headless suite.
+## States
+- Idle、Charging、Charged、Decaying／Interrupted；按住进度、成功锁存、Disabled／ReadOnly 和视觉状态。
+
+## Stimuli
+- 真实 Mouse／Custom Pointer 按下、移动、松开或取消；公开持续时间与 Props、时间推进、Theme／Override。
+
+## Guards
+- 只有有效且未禁用的交互能充能；拖出后的同一次按压不直接重新获得成功资格。
+- 非法直径、颜色或无效托管结构必须拒绝且保持已提交状态。
+
+## Transitions
+- 按下 → 充能 → 达阈值触发一次 Activate；释放／取消后衰减或重按；隐藏／失焦／Disabled 中断。
+
+## Invariants
+- Progress／Attempt 先提交再触发达到阈值的通知；一次有效按住只产生一次激活。
+- Headless 不依赖默认 Shader／视觉 Children；视觉圆形命中与透明角穿透遵循自己的几何规则。
+- 动画仅在状态变化期间请求重绘，静止／已结束不持续唤醒；Theme／局部覆盖不改变充能状态。
+- 故障诊断保留原始配置和托管部件归属，多处失败完整传播，修复后恢复。
+
+## Couplings
+- Pointer Capture × Charge；Disabled／Visibility × 会话取消；Headless × 默认 Style；充能进度 × 视觉动画。
+
+## Coverage Map
+
+### Integration Test
+
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `diagnostics.rs` | 非法尺寸、颜色、结构及受管材质诊断与恢复。 |
+| `headless.rs` | 独立无默认 Style 的公开状态、时间推进、通知和输入守卫。 |
+| `interaction.rs` | 真实布局／Picking、圆形命中、按住激活、拖出与中断。 |
+
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/headless.rs` | 充能／衰减算法、边界计时、取消和输入会话。 |
+| `src/style.rs` | 主题覆盖、成功闪烁与空闲重绘控制。 |

@@ -1,60 +1,44 @@
-# radio_group Integration Test Coverage
+# radio_group 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- 动态 Option 集合、有效非空 / 空集合错误与恢复、当前 Selected Index、Group Focus / Disabled。
-- 各 Option Checked 和交互 / Theme 配色。
-- 独立 Headless、默认 Group / 自定义 Option、自定义 Group / 默认 Option，以及混合成员。
+- 动态 Option 集合、唯一 Checked／选中索引、Focus、Disabled、Theme，以及 Headless／默认／自定义成员组合。
 
 ## Stimuli
-
-- BSN 构造、Pointer / Keyboard、程序化 Set、Theme、Disabled / Enabled。
-- 延后父子挂接、ChildOf 替换、Group / Option 标记移除和恢复、Root 回收。
+- BSN 构造、公开 Set、真实 Pointer／Keyboard、Option 增删／重挂及 Theme／Override 改变。
 
 ## Guards
-
-- Option 必须是 Group 的直接 Child；Index / Root 有效。
-- 同值程序化 Set 不产生用户业务 Event。
+- Option 必须是所属 Group 的直接 Child；Root、Index 和非空集合有效。
+- Disabled 仅阻止用户输入，合法程序化 Set 和自动修复遵循原有状态契约。
 
 ## Transitions
-
-- 初始化选择首项；输入切换选项；程序 Setter 修改 Checked 投影。
-- 增删保留选中实体；选中首 / 中 / 末项删除及连续删除按旧顺序选后继 / 前驱，批量删除与脱离层级同样修复；空集合诊断去重后恢复首项。
-- Disabled / Re-enabled 的用户输入边界。
+- 初始选中、用户改选、程序更新、删改 Option 后按既有邻近顺序修复、空集合失效与重新恢复。
 
 ## Invariants
-
-- 一个 Group 恰有一个 Checked；不同 Group 的选择相互独立。
-- 程序更新静默；来自用户的通知与实际选择一致。
-- 用户 Index 通知时 Checked 已提交；Mouse / Custom Pointer 均可聚焦 Headless Group 并交给原生键盘处理。
-- 默认样式不修改自定义 Option 的颜色或 Children；纯 Headless 父级下的默认 Option 回退 Theme，默认父级缺失颜色配置仍报错。
-- 非法程序请求在队列执行时以 Severity::Error 传播并记录 Root / Index ERROR，不部分修改 Checked 或初始化状态，不阻止同批有效操作。
-- Theme / Layout Patch 不改变选项顺序与业务状态。
-- 父 / 子颜色覆盖更新与清除遵守局部优先级，选择更新后前景传播至实际 Label；其他 Group 不受影响，Focus 转移不改变 Option 调色语义或产生业务通知。
-- 结构校验失败以 Severity::Error 传播，不同有效 Group 不受阻碍；静态故障不逐帧重验或重复记录，恢复与再次故障按真实状态转换记录。
-- 已初始化 Group 的结构恢复保留原选择；Root 回收不伪造恢复日志或业务通知。
+- 每个有效 Group 恰有一个 Checked，跨 Group／自定义 Option 不串扰；用户事件产生时 Checked 已提交，程序更新和 Repair 静默。
+- 移除非当前成员保留选中身份；删除当前成员按旧位置选择邻项，空集合恢复到首项。
+- 默认样式不覆盖用户自定义 Option 的 Children／颜色；父子颜色 Override、Theme、Focus 在现有成员及后挂载成员上正确投影。
+- 多处结构错误独立报告并保留原始诊断，稳定故障不重复记录；健康 Group 不因邻组故障停用。
 
 ## Couplings
-
-- Group Disabled × Children 请求。
-- Focus × Keyboard，Theme × Option Foreground / Background。
-- Tab / Shift+Tab 保留当前焦点；Pointer 从后代获取组 Focus 后保留方向键交互，显式离焦后方向键不再改选。
-- 动态结构 × Checked 身份与通知静默、Disabled 替补、命令执行时索引。
+- 动态结构 × Checked Repair；Focus × 方向键；Group Disabled × Child 输入；Theme × Option 前景／Indicator。
 
 ## Coverage Map
 
-- `widgetry_radio_group.rs`：初始化、交互、场景组合、程序设置、颜色与失效结构诊断。
-- `diagnostics.rs`：多个非法 Group / Option 同次校验完整批量传播、领域归属、稳定帧无轮询、显式重复校验复用各源头、修复后恢复且健康 Group 保持选择；多个 Option 样式损坏跨 Theme 保持原 ID，健康项继续更新，修复按局部信号恢复。
-- `color_diagnostics.rs`：Group/Option 颜色保留 Core source/origin、完整颜色状态与字段及旧配置，托管 Owner、同值静默；独立越界请求和真实颜色 Command 的领域类型、Error Severity、源头身份及纯传播无 handled；两种 Scene 初始颜色失败保留身份并清理 Root。
-- 动态选项测试覆盖选中项删除与批量删除、追加 Checked 项不抢选且不重写既有 Checked、移除未选项保持身份、清空恢复与诊断、禁用替补、双 Group 隔离和排队删除后的索引选择。临时 Checked 项新增后立即删除不覆盖原删除位置；旧项全部替换或清空后恢复时，新项的初始 Checked 不覆盖默认首项规则。
-- 程序设置覆盖未初始化 / 已初始化 Group、合法同值与不同值、Disabled、越界、错误类型或已销毁 Root，以及排队后类型 / 层级失效。
-- 结构生命周期覆盖延后挂接、替换旧父级和新父级、ChildOf 不变时移除 Group 标记、Option 标记恢复及持续故障后的 Root 回收。内部 Unit Test 另保护稳定帧零结构校验、变化仅影响对应 Group，以及后安装 Plugin 的一次性补偿。
-- 内部样式 Unit Test 保护稳定帧零 Option 配色、Hover 局部刷新与移除、父配置缺失后的真实恢复、Dot 输出修复与 Indicator 新建后延后挂接；持续故障不靠逐帧重试，修复及再次故障均保留诊断语义。
-- 内部颜色 Unit Test 保护私有 ColorState / OptionColorState 缺失时的真实 Group/Option 身份；Option 样式 Unit Test 检查每个缺失父颜色配置的 Query source，并验证 Theme 同时上报父容器与各 Option 诊断。
+### Integration Test
 
-## 覆盖边界
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `color_diagnostics.rs` | 组／选项颜色请求与原始 Core 诊断传播。 |
+| `diagnostics.rs` | 多组结构错误、持续故障、修复及 Handler 行为。 |
+| `headless.rs` | 独立 Headless／自定义成员、焦点与真实输入。 |
+| `widgetry_radio_group.rs` | 公开 Group 构造、选择、样式、动态成员和组合交互。 |
 
-运行时任意重排 Option 不属于当前公开行为。动态增删通过 BSN 构造与正常 ECS 层级 / Despawn 操作验证；空集合恢复同时覆盖新建与复用原 Option，两者都重置为首项。
+### Unit Test
 
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/group_style.rs` | Group 配色与 Owner 的局部管理。 |
+| `src/option_style.rs` | Option／Indicator 样式更新与异常修复。 |
+| `src/colors.rs` | Group／Option 颜色状态的归属与错误现场。 |

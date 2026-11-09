@@ -1,7 +1,37 @@
-# PowerInhibit 覆盖模型
+# power_inhibit 测试覆盖模型
 
-- `resource.rs` 从外部通过真实 Bevy `ResMut` 调用公开 API：无窗口插件、无更新时钟，重复开关、重新启用、移除后重建 Resource、App 释放。
-- 私有调用边界的 Unit Test 覆盖创建/两类设置失败、回滚失败、单类/双类清除失败、重试、部分清除后的开启、销毁失败日志，以及每类型计数与单次句柄释放。
-- 失败回归逐项检查 `PowerFailures` 中主操作与 cleanup 的类型、请求状态、原始 OS source、独立 ID、强制捕获的回溯及真实 Command Handler 接收到的共享 origin。成功回滚不记录主失败已处理；Drop 只在释放句柄后记录 clear 失败的处理 DEBUG，正常重复开关无错误日志。
-- 私有 FFI Unit Test 使用真实 Win32 API，检查关闭、移除 Resource、释放 App 后句柄无效，并覆盖跨线程开关和原始 Win32 错误传播。
-- API 成功与句柄释放不代表已观测 DISPLAY/SYSTEM 系统列表、实际空闲超时策略或窗口最小化/失焦/托盘隐藏期间的系统请求。该边界需独立 Windows 实机验收。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
+
+## States
+- DISPLAY／SYSTEM 两种抑制请求、原生句柄的开启／关闭、Resource 存活与 App 生命周期。
+
+## Stimuli
+- 公开 Resource API 的开关、重建、App 释放，以及原生 FFI 失败或清理失败。
+
+## Guards
+- 原生创建／设置／清理失败必须保留错误和句柄状态，不能报告虚假成功；重复请求遵循幂等语义。
+
+## Transitions
+- 创建句柄 → 开启／关闭两类请求 → Resource 移除或 App 结束时释放；部分失败与回滚后允许后续重试。
+
+## Invariants
+- 每类请求计数和句柄生命周期保持一致；释放后不得继续使用旧 Win32 句柄。
+- 主操作与 Cleanup 失败分别保留原生 source、origin、请求状态及宿主传播身份；Drop 的错误处理在句柄释放后发生。
+- 无窗口 Plugin／时钟依赖时，公开 Resource 仍可独立工作。
+
+## Couplings
+- DISPLAY × SYSTEM；原生操作 × 回滚／Drop；Resource 生命周期 × 跨线程句柄。
+
+## Coverage Map
+
+### Integration Test
+
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `resource.rs` | 公开 Resource 的抑制切换、重建、跨生命周期行为。 |
+
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/power/tests.rs` | 私有 Win32 FFI 句柄、失败注入、回滚、重试及资源释放。 |

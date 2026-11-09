@@ -1,65 +1,48 @@
-# window Integration Test Coverage
+# window 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- Borrowed / Owned Root、Native Window / Camera 绑定、Modal Child Count。
-- Theme / Image Background、Image Ready / Pending、Layout / Opacity。
-- Focus / IME Qualification 与 Window Lifecycle。
+- Borrowed／Owned Window Root、Native Window／Camera 绑定、Modal Child Count、Focus／IME 和关闭生命周期。
+- Theme／Image 背景、Asset Ready、Opacity、Cover 与实际 Layout。
 
 ## Stimuli
-
-- Native Window Preparation、Scene Spawn / Despawn、WindowClosed。
-- Modal Child 创建 / 结束、Theme 切换、Asset 加载、真实 Layout。
-- Focus / IME Mode、Window 属性与错误配置。
+- Native 准备、BSN Spawn／Despawn、WindowClosed、Modal Child、Theme／Override、图片加载、Focus／IME 和标题修改。
 
 ## Guards
-
-- Native Window 与 Camera 必须有效且唯一绑定。
-- 借用资源不得被 Root Cleanup 删除。
-- Cover 仅在图片和 Layout 尺寸有效时更新。
+- Native Window／Camera 绑定必须有效且唯一；Borrowed 资源不可被 Root Cleanup 误删。
+- Cover 仅在图片资源和布局尺寸有效时更新；失效／重复绑定不得破坏既有健康实例。
 
 ## Transitions
-
-- Native / Camera 初次绑定；重复或非法绑定拒绝。
-- Owned Root 结束清理自有资源；Modal 最后一个 Child 结束释放 Blocker。
-- Theme / Image 背景投影、Cover 裁剪、IME Mode 改变时取消旧 Composition。
+- Window 与 Camera 绑定／取消、Owned Root 生命周期、最后 Modal Child 释放 Blocker。
+- Theme／Image 切换、资产加载后 Cover 裁剪、Focus／IME 模式更新和旧组合态取消。
 
 ## Invariants
-
-- 不同 Window 的 Owner / Camera / Entity 集合隔离。
-- Theme 与 Image 背景互斥；Image Opacity 不复合积累。
-- Image 未就绪不强行渲染 Theme 背景。
-- 失效 Native / Duplicate Camera 不破坏既有有效绑定。
-- Cover 在当前帧 Layout 后居中裁剪，Asset 首次就绪即使没有新的 Layout 变化也会同步；无效尺寸恢复后重新裁剪，空闲 Frame 不重写 ImageNode。
-- 内容 Host 的局部 Disabled 独立决定 Frame 前景，Color Override / Theme / 恢复遵守该状态。
-- Embedded / Managed Window 禁用时保留 Focus 和路由但不 Activate，隐藏时迁移 Focus；TextInput / 普通 EditableText、Editable / ReadOnly / Static 的 IME Qualification 分别覆盖，Mode 改变取消旧 Composition。
+- 不同 Window 的 Owner、Camera、Focus 和资源独立；关闭 Owned Root 只清理自有资源。
+- Theme 与 Image 背景投影不冲突，Opacity 不重复累乘；图片未就绪和无效布局时不强行投影错误背景。
+- Cover 根据实际 Layout 居中裁剪，在资产就绪／布局恢复时更新；稳定帧不反复改写 ImageNode。
+- Disabled／Hidden／Modal 影响真实输入和 Focus，但不改变合法业务状态；IME 对可编辑、只读与静态目标的资格正确。
+- 标题绑定、颜色 Owner／Override、动态托管部件的恢复不修改正文或其他窗口；错误保留原始诊断及请求身份。
 
 ## Couplings
-
-- Window Lifecycle × Camera Ownership / Modal Blocker。
-- Image Readiness × UI Layout / Cover。
-- Focus × Modal / Disabled / IME。
+- Window Lifecycle × Camera／Modal Ownership；Image × Layout／Cover；Focus × IME／Disabled；Theme × 动态 Title／Body。
 
 ## Coverage Map
 
-- `window.rs`：Native 属性、绑定、Camera / Scene Slot、Controls 与 Theme。
-- `title.rs`：长标题单行裁剪、窄窗口下关闭按钮保留尺寸并位于窗口范围内，标题栏保持 36 逻辑像素高；标题栏 Popout 向下超出标题栏仍不被裁剪。
-- `owned_window.rs`：Owned Lifecycle、Modal 资源隔离、Focus / IME。
-- `owned_window.rs` 同时保护不依赖 TabIndex 的复合 Root 初始优先级与真实输入目标路由、隐藏/Disabled/失效/跨作用域映射候选的排除、销毁后的候选回退与无显式候选时 Window Root 兜底。
-- 显式清空 Focus（含隐藏旧页面）后，普通键与快捷键 Release 不恢复旧 Editor，也不选择新 Editor；Tab / Shift+Tab 同样不会进入其他控件。
-- `background.rs`：Theme / Image、Opacity、Cover 与实际 Layout 时序。
-- `title.rs`：显式标题标记、额外文本 / 正文隔离、多窗口和嵌套窗口、无绑定、延后构造与 Native 更新、重复同值、无效 / 歧义绑定的原子拒绝、排队执行期验证及持续错误 / 恢复；正常 WindowClosing→延迟 WindowClosed 不报故障，不带关闭信号的 Native 丢失仍传播 Error，其他窗口继续同步。
-- 源码 Module Unit Test 负责更细的 Resize Mapping、Modal 关系和 Native Request。
-- `runtime_error` 源码 Unit Test 保护 TitleState / WindowStyle 丢失后的外置诊断身份、补建后的真实恢复与 Root 销毁释放；状态被移除或补建会使标题重新校验。
-- `native_icon` 源码 Unit Test 保护 PNG / RGBA 的具体 source 与路径 / 格式 / 尺寸、真实 System 的主窗口缺失 / 歧义传播、相同集合的共享 origin 和不同集合的独立 origin。等待 native window 不产生错误或恢复；隐藏的真实 winit 窗口在所属线程应用 Window / Taskbar Icon 后仅记录一次关联恢复，已应用后不重复查询。此用例只验证设置调用及生命周期，不证明任务栏实际显示的像素。
-- `render` 源码 Unit Test 保护 adapter 错误适配与真实 DX12 device 请求失败的原生 source、backend / adapter 现场及 ECS 转换后的原始诊断，不代表透明窗口完整渲染或 Present 验收。
-- 样式源码 Unit Test 保护稳定帧零重复 Palette / 部件应用、单按钮 Hover / Pressed / Disabled 添加与移除的局部工作量、托管最终 Palette 与 Owner 移除、Theme / Override、内容身份、部件重挂与销毁、业务子树 / 嵌套 Window 边界及失败重试 / 恢复；缺失输出不阻塞其他窗口，错误保持宿主 Error 级别。
+### Integration Test
 
-## 覆盖边界
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `background.rs` | Theme／Image 背景、Opacity、Cover 与布局时序。 |
+| `diagnostics.rs` | Native／Camera／标题／颜色结构故障和宿主传播。 |
+| `owned_window.rs` | Owned／Modal 生命周期、Focus／IME 与资源归属。 |
+| `title.rs` | 标题绑定、截断、动态更新与窄窗口布局。 |
+| `window.rs` | Native 属性、Scene／Camera 绑定、控件及 Theme。 |
 
-`diagnostics.rs` 验证非法绑定的全部领域失败抵达真实 Handler、Borrowed 资源保留；Owned 相机绑定被移除后仍回收实际分配。多个标题 / 样式故障各自复用原始 origin，真实修复记录对应恢复、销毁不伪恢复、再次故障产生新 ID；三个歧义标题的 archetype 次序变化不替换诊断。非法嵌套配色保留 Core cause / 原始 origin 位置与部件 / 状态现场，失败不提交。部分 Owned / Borrowed Scene 的下层诊断、普通 / Panic Severity 和 payload 保留，失败不删除外部 Native / Camera，也不遗留 Owned 分配。
+### Unit Test
 
-Headless 测试不能证明原生窗口移动、Resize 或最大化是否在 OS 侧成功；依赖 `WINIT_WINDOWS` 的 Native Maximize Guard 未由现有 Headless 测试完整验证。
-
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/style.rs` | 托管色板、部件 Owner、Theme／Override 和故障恢复。 |
+| `src/title.rs` | 标题投影、绑定身份与动态变化。 |
+| `src/input.rs` | Focus／IME 资格及输入清理的内部规则。 |

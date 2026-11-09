@@ -64,17 +64,30 @@ Integration Test 放在对应 Crate 的 `tests/` 目录中，可以根据实际�
 
 ### Coverage Model
 
-包含 Integration Test 的 Crate，应在 `tests/COVERAGE.md` 中记录其测试覆盖模型，而不是在各 Rust 测试文件头部维护重复说明。
+包含 Integration Test 的 Crate，应在 `tests/COVERAGE.md` 中维护行为覆盖模型，集中描述测试所保护的重要业务契约及测试职责，而不是记录具体测试用例或测试开发历史。
 
-Coverage Model 根据实际模块复杂度描述相关的 States、Stimuli、Guards、Transitions、Invariants 和 Couplings，明确重要行为的覆盖边界。
+根据实际模块复杂度，按需描述 States、Stimuli、Guards、Transitions、Invariants 和 Couplings。简单模块只记录有实际意义的维度和约束，不为了填满所有栏目制造内容，也不要求维护完整的 Transition Table。
 
-对于简单模块，只记录有实际意义的维度和约束，不为了填满所有栏目制造内容，也不要求维护完整 Transition Table。
+Coverage Model 应保持稳定、简洁，重点描述当前测试保护了什么，而不是测试如何实现。
 
-当 Integration Test 分布在多个文件时，可以增加 **Coverage Map**，说明各文件主要负责的业务行为领域，以及重要跨领域契约的覆盖归属。
+#### Coverage Map
 
-每种重要 Stimulus 和业务契约应有明确的主要覆盖位置，避免测试分散后遗漏整体行为。Coverage Map 不需要列举每个测试函数。
+Coverage Map 用于说明测试文件或源码测试模块的主要职责，分为 Integration Test 和 Unit Test 两部分。
 
-新增、删除或调整 Integration Test，导致实际覆盖范围或职责发生变化时，必须同步更新 `tests/COVERAGE.md`。
+- 使用 Markdown 表格组织，以测试文件或源码测试模块为单位记录职责。
+- 同一测试文件或模块只出现一次，相关职责应合并描述。
+- 每项使用简短、概括性的说明，不逐条罗列测试场景、输入组合、断言或回归案例。
+- 重要 Stimulus 和业务契约应有明确的主要覆盖位置，但不要求每个测试函数都映射到文档。
+- Unit Test 与 Integration Test 应分别归类，不混合描述。
+
+#### 内容与维护
+
+- `COVERAGE.md` 只描述当前有效的行为覆盖模型，不记录测试新增、修改、Bug 修复或其他开发历史。
+- 新增测试如果仅加强已有行为的验证，不要求修改 Coverage Model。
+- 重要业务契约、实际覆盖范围或测试文件主要职责发生变化时，应同步更新对应内容。
+- 不重复记录相同测试文件的职责，不因新增回归测试而持续追加具体场景说明。
+- 属于测试契约的重要条件和约束应归入对应行为维度；其他验证方式或任务的说明不纳入 Coverage Model。
+- 不为了统一文档形式而强制所有 Crate 使用完全相同的章节结构。
 
 Unit Test 不单独创建 Coverage Markdown。
 

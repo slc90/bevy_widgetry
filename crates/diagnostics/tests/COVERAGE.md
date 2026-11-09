@@ -1,16 +1,39 @@
-# Diagnostics Integration Test Coverage
+# diagnostics 测试覆盖模型
 
-`lifecycle.rs` 从公开 API 验证真实错误的产生、传播、共享及释放。`log_lifecycle.rs` 在独立测试进程中验证源头与处理日志，避免无 Subscriber 的并发源头测试干扰 Tracing callsite 的动态注册。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-- 源头保存调用位置，并在移除回溯环境变量的子进程中强制捕栈；普通 Display/Debug 与源头日志不输出原栈。
-- 初始现场、追加 context、领域包装及真实 source/downcast 链同时保留；跨线程共享不改变 origin/ID。
-- 独立失败（包含相同文案）和并发失败有不同身份；最后一个拥有者释放后 origin 可销毁。
-- 真实 Subscriber 组合观察到源头一次 ERROR、仅传播静默、显式实际处理一次 DEBUG；关联同一 ID，包含措施和结果。观察与 Drop 不推断已处理。
+## States
+- 已捕获的源头诊断、追加 Context、共享 Origin／ID，以及传播、显式处理和最终宿主报告阶段。
 
-`ecs_bridge.rs` 仅在 `bevy` Feature 下运行，覆盖真实 System/Observer/Commands::queue 的 Error Severity、共享 origin/source、多层上下文、空批量和多失败逐项分发；原生 BevyError 保留原始对象、context、Severity 及 panic payload。
+## Stimuli
+- 构造领域错误、包装原生 source、跨线程共享、经 System／Observer／Command 转发及日志捕获。
 
-同一 origin 的重复与八线程并发终结分发只调用一次 managed 报告；此报告状态与 handled 独立。带受管载体但采用原生 Panic 策略的错误仍完整交给 native 回调，每次保留 payload，且不占用后续 Error Severity 的 managed 报告资格。
+## Guards
+- 普通格式化不得泄漏完整回溯；观察或 Drop 不能冒充已处理；原生 BevyError 的 Severity／Panic 策略必须保留。
 
-ID 计数器的跨字长进位由 `origin.rs` 的 Unit Test 覆盖。宿主最终日志/持久化及领域生产者迁移尚不属于此层。
+## Transitions
+- 错误捕获 → 追加上下文／共享 → ECS 宿主传播 → 显式处理或终结报告；最后的拥有者释放后源头身份可释放。
 
-`lifecycle.rs` 另覆盖宿主自定义源头reporter：接收已捕获的同一origin，传播后身份不变；普通格式化无完整栈。
+## Invariants
+- 原始 source／downcast 链、Context、调用位置、Origin 和 ID 在传播及并发中保持一致。
+- 独立失败即使文案相同也有不同身份；同一受管 Origin 的报告在并发终结时去重，但报告状态与 handled 独立。
+- 源头 ERROR、纯传播静默及实际处理 DEBUG 按相同 ID 关联；宿主仍可按原始 Severity 和 payload 处理原生错误。
+
+## Couplings
+- Origin 身份 × 错误共享；ECS Handler × 受管／原生错误；Tracing Subscriber × 进程／线程边界。
+
+## Coverage Map
+
+### Integration Test
+
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `ecs_bridge.rs` | Bevy System／Observer／Command 的 Error／Panic 传播及原始对象保留。 |
+| `lifecycle.rs` | 诊断产生、Context、共享、释放和自定义 reporter。 |
+| `log_lifecycle.rs` | 独立子进程中真实源头、处理、兜底日志的生命周期。 |
+
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/origin.rs` | 诊断 ID 计数与跨字长进位的局部正确性。 |

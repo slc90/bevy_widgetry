@@ -1,80 +1,51 @@
-# list_view Integration Test Coverage
+# list_view 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- Model Source 与 Stable ID / Revision、Selection、Active、Focus。
-- Root / Item / Container Disabled，Viewport Range、可见 / 离屏 Row 生命周期。
+- Source、Stable ID／Revision、Selection／Active／Focus；Root／Item／Container Disabled。
+- 可见区、离屏行、虚拟化 Row 与 Renderer 内容状态。
 
 ## Stimuli
-
-- Typed Scene / Renderer 注册；Model CRUD、公开 Setter / Clear。
-- Renderer Template 已产生的诊断穿过内部 Scene 尝试进入真实 Handler，保留源头身份且 Owner 不重复记录 ERROR。
-- Pointer、Keyboard、Wheel、Scroll / Resize、Theme 与 Item Metadata 更新。
+- Typed Scene、Model CRUD、Selection API、真实 Pointer／Keyboard／Wheel、Scroll／Resize、Theme 与 Item Metadata。
 
 ## Guards
-
-- Source / Renderer / Item Height 合法。
-- Disabled 阻止用户操作，程序更新保持可用。
-- 旧 Press 不能跨 Row Reuse 选择新 Identity。
+- Source、Renderer、Item Height 和目标身份有效；Disabled 阻止用户确认，但合法程序化操作仍可执行。
+- Row Reuse 后的旧 Press／Selection 不能误作用到新的 Stable ID。
 
 ## Transitions
-
-- 初始构造、选择 / 清空、Active Navigation、数据删除 Repair。
-- 移动 / 更新数据之后刷新对应可见内容；Scroll / Resize 重建 Range。
+- 初始化、选择／多选／清空、Active 导航、源数据增删移动、Selection Repair、投影过滤重排与 Row Reuse。
 
 ## Invariants
-
-- 真实 Selection 先提交再通知，合法同值和自动 Repair 静默。
-- Stable ID 保持、Active / Selection 各自修复。
-- 虚拟化只保留需要的可见 Row；Content Revision 只影响对应项。
-- Theme / Disabled 不破坏 Row 内的业务内容与 Identity。
-- 行复用换 ID、Renderer 内容替换和滚动返回旧数据后，当前 Override 与前景在生成帧生效；清除 Override 恢复主题。
-- Root / Viewport / Content / Item Disabled 分别保护用户确认入口；多个共享 Source 的 View 不共享 Selection 或用户通知。
-- Model 删除按旧 Active 位置修复，Source 失效后报错、恢复后重新投影；Typed Runtime 注册幂等，Props 不形成第二份运行期状态。
-- 可见投影无 Overscan，重叠 Row 复用；Identity / Revision 决定 Subtree 重建，生成帧内完成真实 Text / Icon 消费准备。
+- Selection Authority 先提交再通知；合法同值和自动 Repair 静默，Active／Selection 分别修复。
+- Stable ID 不随原始顺序或显示投影漂移；多个共享 Source 的 View 各自维护 Selection／Focus／Disabled。
+- 虚拟化保持有界可见 Row 数，正确复用身份并在当前帧完成新 Text／Icon 内容准备；Content Revision 只更新相关项。
+- 过滤和重排保留隐藏选择及原始／显示索引语义；数据损坏、失效 Source 和 Renderer 错误不破坏健康实例。
+- Theme／Override／Disabled 与动态 Row 的受管理配色保持一致；运行时注册和状态来源保持唯一。
 
 ## Couplings
-
-- Model CRUD × Selection / Active Repair。
-- Focus / Disabled × Pointer / Keyboard。
-- Renderer Content × Row Reuse / Text / Icon 准备。
+- Model CRUD × Selection／Active Repair；投影 × 虚拟化／拖放；Disabled／Focus × 输入；Renderer Reuse × Theme／内容准备。
 
 ## Coverage Map
 
-- `contract.rs`：Typed Source、Scene 配置、Shell 与错误路径。
-- `selection_api.rs`：集合 Authority、提交后集合/差量事件、ID/原始索引/显示索引、执行时解析与过期 ID 拒绝。
-- `multi_selection.rs`：Ctrl 切换、Shift 投影范围与锚点回退、整源批量全选、Single 配置、禁用守卫及共享 View 独立集合。
-- `behavior.rs`：真实输入、Selection / Active、共享 Model View 隔离和 Repair。
-- `projection.rs`：共享 Model 独立过滤/重排、原始索引与显示索引区分、隐藏选择保留和删除修复，以及 Entity 身份、临时拥有数据和无 Revision 数据源。
-- `virtualization.rs`：Viewport Range、Row Reuse、Revision 与当帧 Content。
-- `runtime_diagnostics.rs`：同轮多 Root 的 Source / Viewport / Style 失败集和健康 Root 隔离；持续故障共享 origin、恢复后新 ID、零布局不产生虚假恢复；不可枚举 Source、u128 重复身份 / 不可用行及非有限总高度的实际现场；Source 枚举失效清理旧行及修复后重建；多个 Renderer 源头身份、上下文、独立原生重试的实际 cause / payload、Panic 策略与独立业务 Entity 归属；颜色领域分类与拒绝后原值保持。
-- `style.rs`：Theme、Focus、Hover / Pressed 与 Disabled 样式。
-- 私有单元工作量回归：稳定帧零配色解析、单行交互不扩散、Focus 旧新目标隔离，以及 Owner 调色板在局部变化和新内容中保持。计数不进入公共 API。
-- 虚拟化私有单元回归：缓存行缺失渲染 revision 时报告原行 / Source / Key，清理并在后续更新重新构造。
-- `runtime_diagnostics.rs` 同时保护 Viewport / Content 标记失效或实体删除、任一或两个 Spacer 删除后的缓存清理与重新发现共用同一 origin，以及零布局销毁故障行时配色诊断不虚假恢复，待有效布局中重新验证行输出后才恢复。
+### Integration Test
 
-## 覆盖边界
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `behavior.rs` | 真实输入、单／多 View 行为、Selection 与 Active 修复。 |
+| `contract.rs` | Typed Source、Scene、Renderer 和结构错误。 |
+| `diagnostics.rs` | 公开选择／数据请求的领域诊断与 Command 传播。 |
+| `drag.rs` | Row 拖放、投影顺序、虚拟化身份、取消与非法提交。 |
+| `multi_selection.rs` | 多选集合、键盘修饰、范围／全选和 View 隔离。 |
+| `projection.rs` | 过滤重排、隐藏选择、原始／显示索引及身份稳定性。 |
+| `runtime_diagnostics.rs` | 多个 Root／Renderer 的持续故障、传播、恢复与隔离。 |
+| `selection_api.rs` | 公开集合 Authority、事件、索引和延后操作。 |
+| `style.rs` | Theme、Focus、Hover、Disabled、前景与覆盖样式。 |
+| `virtualization.rs` | 有界可见投影、Row Reuse、Revision 和动态内容同步。 |
 
-`behavior.rs` 在已有共享 Source 用例上覆盖文字与图标文字双 Renderer：Pointer / Keyboard 的通知归属、Focus 转移、禁用一侧后的组合 Insert / Edit / Move / Remove 和静默 Repair，以及独立 Wheel 与禁用恢复。Renderer 真实像素准备仍由 `virtualization.rs` 负责；Gallery 并排操作与语言切换由任务级 BRP 验证。
+### Unit Test
 
-`benches/update.rs` 固定 Model 数量与 Viewport，分别测 idle、hover_one 和 scroll；Hover 刺激在 Picking 后提交并核对颜色输出。Headless Update / Layout 耗时不代表原生窗口 Present 或持续交互 60 FPS。
-
-
-- `drag.rs`：真实 Pointer 事件前/后锚点穷举、过滤隐藏项和多选保持、原始索引变更、失效 ID、Disabled / Cancel / Row 复用 / 无合法悬停拒绝、同位置不触发 Changed、共享 Model 不被拖拽修改、View 显示顺序/选择/锚点/Active 隔离；Camera DPI / viewport 与额外 UiScale 的坐标转换，以及取消拖动后抑制本次释放 Click、后续点击恢复。
-- `benches/update.rs` 的 `draggable_idle` / `draggable_scroll` 对照默认关闭路径，仍验证有界 Row 和实际滚动内容。
-
-Tree 组合通过 `crates/tree/tests/multi_selection.rs` 验证 VisibleUnion 的隐藏集合保留、真实 Ctrl+A 与 Disabled View 程序化全选；普通 Source 范围的全模型选择继续由本 crate 的 `multi_selection.rs` 保护。
-
-Tree 专用内部桥接的三段落点、Inside禁止反馈与实时加载状态、运行时开关取消、Entity复用和万项滚动组合由 `crates/tree/tests/drag.rs` 保护；本 crate 保留原列表上下半区与过滤排序回归。
-
-`drag.rs` 另保护完整手动顺序的数据刷新/新增末尾/删除、过滤隐藏身份恢复、过滤状态下 Before/After 只移动实际源 ID、关闭后保序与显式重置、主动投影策略替换及同数值 ID/revision Source 更换重置、旧命中 Row 销毁与实际 Text 内容刷新。`projection.rs` 验证只读外部数据源不需要写入适配即可启用 View 拖拽。
-
-`drag.rs` 工作量回归保护无数据变化的拖拽提交不重新求值投影资格；`benches/drag.rs` 在 1k/10k/100k 项上经真实 Pointer 事件反复换位并完成一次 Headless Update，核对 Model 不变、每次投影实际改变与可见行有界，记录 CPU/Layout 耗时，不覆盖原生窗口 Present。
-
-`diagnostics.rs` 覆盖 Model 越界精确现场、合法缺失无伪错误、自定义 u128 Key 的类型和值、原子选择拒绝、重复/清空的静默路径、注册冲突类型、Source 请求目标，以及真实 Commands 的 Severity::Error 与源头诊断身份。Model 单元耗尽测试同步检查 ID / revision / len / next_id 快照和失败后索引不变；Property 测试继续保护操作序列中的身份账本。
-
-Virtualization renderer coverage checks 2× DPI icon raster resolution while retaining the logical icon bounds and same-frame materialization.
-
-Root 保留值为 -1 的 Pointer 焦点标记，Row 不增加 Tab Stop；Pointer 聚焦后的内部按键继续按列表契约处理。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/model.rs` | Source／Stable ID 更新、耗尽和操作序列不变量。 |
+| `src/style.rs` | 配色与部件 Owner 的局部更新契约。 |

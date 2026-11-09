@@ -1,52 +1,46 @@
-# Slider 测试覆盖模型
+# slider 测试覆盖模型
 
-`headless.rs` 在只有 Asset/Scene 基础设施、没有 UI/布局的环境中验证独立构造与只读 State、双向端点可达、Disabled 程序设置、通知内已提交值、同值 change tick、原始 f32 拒绝快照、失效目标/缺状态、构造失败活动实体清理和 queued 错误隔离。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-`value_api.rs` 从 crate 外验证 BSN 构造、只读查询和 World / Commands 更新。
+## States
+- 连续／步进值、范围端点、方向／刻度、Disabled、Focus，以及拖动会话和外部交互策略。
 
-- 状态：连续 / 步进、默认 / 显式初始值、方向、Disabled。
-- 刺激：BSN 创建、同步写入、延迟写入、命令执行前目标失效。
-- 守卫：目标身份和完整状态、有限范围及跨度、正步长、有限值、范围、双端点可达性。
-- 转移：真实变化、合法同值、无效写入、创建失败、命令执行时校验。
-- 不变量：失败原子性；仅真实变化发事件；Observer 可读取已经提交的值；初始化不通知；失败的 Scene 不残留预约实体。
-- 耦合：Disabled 不阻止程序化更新；Commands 可引用前序 Scene 命令尚未创建的 Slider；失败命令交宿主 Error Handler。
-- 延迟 Scene 失败：spawn / apply 每次失败只记录一次诊断，保留 Error Severity；spawn 清理失败 Root，apply 保留既有 Root。
+## Stimuli
+- BSN／Headless 构造、公开 World／Commands 数值 API、真实 Pointer／Keyboard、滑块抓取／释放、Theme／Override。
 
-`input.rs` 通过真实 Bevy Picking Pipeline 和 KeyboardInput 派发验证输入组合：
+## Guards
+- 数值、范围和步长必须合法且有限；非法 Root／结构／失效命令不部分提交。
+- Disabled 阻止用户操作，但合法程序化更新不受阻；非当前 Pointer、非主键和错误捕获不能启动手势。
 
-- 水平 / 垂直、Mouse / Custom Pointer、连续 / 双端点步进。
-- Thumb 抓取偏移不跳值、轨道立即更新并继续拖动、拖出轨道 Clamp、Release / Cancel 无重复事件。
-- 相同正反向行程的稀疏 / 密集事件产生相同数值序列。
-- Disabled、窗口失焦、Capture 丢失、Pointer Despawn、Hidden 清理手势。
-- 焦点守卫、键盘重复、1% 连续步长、端点无事件、无 Home / End、大偏移下浮点步进仍通过 API 校验。
-- Observer 在每次通知时读取到匹配的已提交值。
-- 独立拖动生命周期：无移动 Start/Completed；Start 先于轨道值变更且其 Observer Commands 可先禁用；多次 Move 只一对边界；Release/DragEnd 任一先到只结算一次。
-- Cancel、Disabled/祖先 Disabled、Display::None、Hidden、窗口失焦及 Pointer/Capture 丢失均报告 Cancelled，保留值；结束通知前 Pressed/捕获已清理。
-- 非 Primary、非有限位置、已有捕获及 Disabled 拒绝 Press，无伪生命周期；键盘/API 只产生原有真实数值通知。
-- 非零 Camera viewport 原点的 Thumb 抓取及轨道投影；未处理方向及 Disabled 按键继续冒泡给父节点。
-- Visible 在 Slider 本体或中间容器上覆盖祖先 Hidden 后仍可指针 / 键盘交互；不覆盖祖先 Disabled / Display::None。
+## Transitions
+- 初始化 → 修改值／合法同值 → 通知；拖动 Start → 值更新 → Completed／Cancelled；外部策略可等待或拒绝开始。
 
-局部数值边界及浮点误差由 `value.rs` Unit Tests 补充，方向反转由 `gesture.rs` Unit Test 保护。
+## Invariants
+- Slider Authority 先提交再通知；非法请求原子拒绝，合法同值不产生额外业务变化。
+- 水平／垂直、连续／步进以及窗口 Scale 下的 Thumb 抓取偏移和轨道映射一致，范围端点可达。
+- Pointer 取消、失焦、隐藏、Disabled、Capture 丢失等结束会话时，生命周期通知最多一次且已清理捕获。
+- 独立 Headless／自定义策略不要求默认 Track／Thumb；用户 Theme／布局更新不改变已提交数值。
+- 不同实例输入和诊断归属隔离；错误报告保留原始 source 与请求上下文。
 
-`style.rs` 从外部验证真实 BSN / UI Layout：
+## Couplings
+- Pointer Capture × Drag Lifecycle；方向／步进 × 值映射；Disabled × 程序更新；Theme／Layout × Thumb。
 
-- 默认及自定义 Track / Thumb 尺寸；水平左右、垂直下上填充；端点及中间值投影。
-- 运行期根主轴长度变化后 Thumb 大小不变、行程更新。
-- DPI 1 / 1.5、UiScale 1 / 1.5 下，自定义 Thumb 尺寸、抓取偏移与输入行程一致。
-- Scale 1.25 的非对称 padding 像素取整后，真实 Track 中点点击仍精确映射数值中点。
-- 跨越极不同数量级的连续值域（如 -1e20..1），点击 Track 端点精确到达 max，避免浮点相消丢失端点。
-- 外部完整配色在 Scene 构造时立即用于 Track / Fill / Thumb，不先使用 Dark。
-- 三套内置主题、局部颜色覆盖 / 清除、Hovered / Pressed / Focused / Disabled，以及状态切换几何保持。
-- 非法尺寸构造失败和预约实体清理。
-- 颜色 Commands 执行时校验及错误传播；失败不覆盖原有局部配色，清除恢复默认覆盖配置。
+## Coverage Map
 
-`diagnostics.rs` 覆盖所有数值配置拒绝类别及原始浮点位、共享 origin / 源头一次 ERROR / 无完整栈、Scene 边界及宿主递送、Core 颜色原因与状态 / 字段、合法端点和同值无日志。样式验证多个损坏 Root 的完整聚合、持续失败身份复用和恢复 INFO。`input.rs` Unit Test 区分布局等待 / 目标销毁和缺失自有 SliderState / 线性绑定，原有真实输入集成测试继续保护取消、Clamp 和手势通知。
+### Integration Test
 
-输入 Unit Test 还验证活动手势中丢失 线性绑定 / SliderState 时，先清除 DragState、Pressed 和 Pointer Capture，再向宿主传播原诊断（单个源头 ERROR）。绑定丢失仍提供当前真实值的 Cancelled；State 丢失时不能伪造终止值。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `diagnostics.rs` | 数值、运行时结构、样式及命令错误传播。 |
+| `headless.rs` | 独立无视觉的公开 Slider 状态与数值 API。 |
+| `input.rs` | 默认真实 Picking／Keyboard、拖动会话和边界行为。 |
+| `interaction.rs` | 外部策略、独立 Headless 触发器和手势通知。 |
+| `style.rs` | 真实 UI 方向、尺寸、Theme、Override 和 Slider 投影。 |
+| `value_api.rs` | 公共 World／Commands 的数值合法性、提交和失败原子性。 |
 
+### Unit Test
 
-`interaction.rs` 从库外实现策略及每次手势 session，不安装默认 Style、不创建 Track/Thumb。覆盖真实 Picking 抓取偏移与非 final 提交、实例隔离、同值手势、开始拒绝、Wait 后续接、显式 Cancel、方向步进反转、W/S 键位替换与键盘中断、Disabled 程序设置、错误后先清理再发送真实 Cancelled、原始外部错误类型/source及单次源头ERROR。默认 `input.rs` / `style.rs` 继续保护线性 Scale/viewport/抓取/生命周期/配色尺寸契约。
-
-`input.rs` 还验证容差内合法步进初值的 Thumb Press、零位移 Move 和 Release 保留原始 f32 位且不发 ValueChange。
-
-默认 Slider 两个方向的 Root 使用 -1 Pointer 焦点标记，失焦/聚焦/Disabled 的内部按键保护保持。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/value.rs` | 步进数值、浮点误差和边界校验。 |
+| `src/gesture.rs` | 局部拖动方向、手势状态和中断。 |

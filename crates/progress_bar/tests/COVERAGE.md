@@ -1,21 +1,43 @@
-# ProgressBar Coverage Model
+# progress_bar 测试覆盖模型
 
-`headless.rs` 从 crate 外部通过真实 BSN、World 和 Commands 验证状态与初始化。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-- States：确定进度比例 / 不确定模式；默认、非零初值、直接不确定初始化。
-- Stimuli：同步设置、排队设置、BSN 新建和应用到已有实体；入队后目标销毁、排队构造后设置。
-- Guards：有限且属于 `[0, 1]`；有效目标及必需运行时状态。NaN、正负无穷、上下越界和无效目标均明确拒绝。
-- Transitions：增加、倒退、归零、完成后减小、双向模式切换、同值 No-op。
-- Invariants：读回已提交状态；失败不修改；无 ValueChange 业务事件；调用方 Name 保留；初始化失败清理新建根；延迟失败进入宿主 Handler 且为 Error Severity，并只记录一次诊断。
+## States
+- 确定进度 `[0,1]`、不确定模式；已提交业务状态、动画显示状态和 Theme／布局。
 
-私有状态校验与无效结构、同值不标脏由 `progress.rs` Unit Test 补充。不涉及动画、用户输入或 Gallery。
+## Stimuli
+- BSN／Headless 构造、World／Commands 设置、模式切换、时间推进、Theme／Override 与尺寸变化。
 
-`style.rs` 验证真实 UI Layout 的 0/65/100% 内侧填充、12px 默认高度、父级宽度和根高度变更、Props 高度校验、调用方 Name、无 Text/TabIndex；三套内置主题 原位刷新、局部部分覆盖及清除、颜色错误与延迟错误传播，均保留真实进度。
+## Guards
+- 无效 Root／运行时结构及 NaN、无穷或范围外进度明确拒绝；失败后旧状态不变。
 
-`animation.rs` Integration Test 覆盖即时状态与 150ms 视觉追赶、倒退/重置、连续目标从可见位置重定位、每帧新目标仍持续推进、合法同值不重启、过渡中尺寸/Theme/局部覆盖、空闲首帧与静止后停止重绘；Unit Test 检查 Ease-Out 减速和精确收敛。
+## Transitions
+- 增加／倒退／归零／完成后回退、两种模式切换、视觉追赶和循环动画启停。
 
-循环动画覆盖初始直接可见、向右移动与跨周期、双向模式即时交接、同值保持相位、退出停止重绘、三套内置主题 / UI Scale / 局部覆盖及尺寸变化；状态始终为调用方最后提交值。Unit Test 检查窗口有界和跨模式丢弃旧计时。
+## Invariants
+- 状态 API 即时读回最后提交值；合法同值不重启动画，不产生业务 `ValueChange` 事件。
+- 构造失败清理新 Root，延后错误交给宿主 Handler；不重置调用方 Name 和布局身份。
+- 确定进度的视觉过渡收敛，不确定模式的循环区间有界；静止时停止额外 RequestRedraw。
+- Headless 独立运行时不创建默认 Style 或动画资源；Theme／尺寸更新保留业务值。
 
-`diagnostics.rs` 验证非法请求保留实际浮点位、Root / 缺失状态分类、Core 颜色原因链与字段；域失败转换保留共享 origin，源头 ERROR 单次且不含完整栈，合法切换与同值无日志。Deferred 高度 Template 错误经 Scene 桥进入宿主且清理根。样式覆盖多个损坏 Root 的完整聚合、持续失败复用身份、恢复 INFO 及恢复后重新失败创建新诊断。
+## Couplings
+- 业务进度 × 动画插值；模式 × 循环相位；Theme／Layout × 视觉填充；Headless × 默认 Style。
 
-`independent.rs` installs only HeadlessPlugin and constructs roots without visual Children. It protects immediate true-state reads, queued writes, both modes, no-op and invalid input preservation, invalid initialization cleanup, stale queued targets and absence of animation RequestRedraw. Existing default-style tests protect shared diagnostics, geometry and all animation timing independently of the new marker.
+## Coverage Map
+
+### Integration Test
+
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `animation.rs` | 确定进度过渡、不确定循环、暂停／恢复与重绘。 |
+| `diagnostics.rs` | 非法状态、颜色／结构和 Scene／Command 错误传播。 |
+| `headless.rs` | 公开状态、构造、读回、模式与非法输入。 |
+| `independent.rs` | 独立无视觉 Headless、排队提交及无额外动画。 |
+| `style.rs` | 真实布局、尺寸、Theme、Override 和视觉填充。 |
+
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/progress.rs` | 局部状态校验、同值处理和非法结构。 |
+| `src/animation.rs` | 插值收敛、循环边界与跨模式计时。 |

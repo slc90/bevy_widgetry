@@ -1,139 +1,69 @@
-# table Integration Test Coverage
+# table 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
-
-`editing.rs` 还验证 TextField read 失败经 Table Editor 回调进入宿主，保留原始诊断和 Table 上下文、仅源头一次 ERROR，不显示为普通解析反馈，也不发起 Pending 提交。
-
-只读单元格的外部光标回归使用公开主题描述与小型合成图集，验证 ReadOnly Hint 映射到指定 Image、有效帧与固定热点；随后验证 Disabled 和关闭编辑资格恢复系统光标。
-
-`column_order.rs` 保护默认关闭与程序启停、主体阈值/插入线/合法释放、Resize及排序筛选按钮分区、跨冻结边界、共享View独立顺序、Model增列追加/删列修复/移列与行修改保留偏好、行投影独立、重置幂等/queued校验/状态先于通知、同Source替换Model实例后清空偏好并显示新值，以及范围/导航/TSV按显示顺序取值。生命周期覆盖Cancel/禁用/无效落点/销毁/虚拟化/重置释放capture及插入线，真实PointerInput覆盖Move+Release同帧与跨帧且不误选整列；DPI、UiScale、非零Camera viewport与分数两轴滚动保持冻结与有限Shell。源码ViewState单元测试保护同tick结构修改时手动顺序的稳定ID和新列追加。原生Mouse cursor lease只在模拟Window输入组合中验证清理，不代表OS交互。
-
-`frozen.rs` 保护冻结/滚动区域的稳定 X、共同 Y、离屏行有界虚拟化、透明区域真实 Clip、冻结区滚轮路由、N=0/1/2/超过列数、窄视口/列宽/列增删不减少配置、共享 View 隔离、DPI/UiScale 与分数滚动下 Header/Cell/行号对齐、跨区拖选和捕获释放、两区 Resize 身份、Flexible 宽度 API 使用完整视口、真实字体在 Resize 首次 Update 后的 glyph/clip、全冻结时键盘 Y Reveal，以及编辑草稿跨区换父和空行/空列。`view.rs` 继续保护六个实际根区域的构造契约，其余既有场景回归 N=0。字形布局回归不替代 BRP 运行时截图验证。
-
-`clipboard.rs` 主要保护完整逻辑选区的强类型 TSV：单格/行列/范围/全选、过滤后的显示顺序、离屏数据、双 View 与 Source 列覆盖隔离、Tab/CR/LF/引号/Unicode/空值无损往返、缺失/类型不匹配/失败格式化器的原子拒绝和稳定 Cell 错误身份。原生 Clipboard 用例集中串行执行，覆盖失败时旧内容不变、成功写入、不含 Header、空投影/Disabled/编辑中 guard；真实 TextInputPlugin + TextField 验证编辑器 Ctrl+C 文本选区拥有权与 Esc 后恢复 Table 复制。提交入口的零次/一次写入由 Module Unit Test 保护。
-
-投影清空或 Model 删除端点后同帧立即复制按自动修复后的逻辑选区处理，不依赖后续 reconciliation 帧，也不将正常失效选区报告为错误。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- Model Row / Column Stable ID、Selection None / Row / Column / Cell。
-- Focused Cell、Viewport X/Y、Renderer Registry、Layout / Width 和 Resize Gesture。
-- Source 有效 / 失效、Visible / Offscreen Cell 和各区域 Theme / Disabled。
-- 各 View 的 Override 与 Style padding / border，逐部件 Hover 与样式输出失效 / 恢复。
+- Model Row／Column Stable ID、Cell／Row／Column Selection、Focused Cell 与 Source Revision。
+- X／Y Viewport、可见／离屏 Cell、Renderer Registry、冻结列、列显示顺序、Sort／Filter／Projection。
+- Editing／Clipboard、Header Action、Resize／Reorder Gesture、Theme／Disabled 和各 View 的状态。
 
 ## Stimuli
-
-- BSN 构造、Model CRUD / Projection Revision、Renderer 注册与替换。
-- Pointer / Keyboard / Scroll、Programmatic Selection / Width、Resize Drag / Cancel、Theme。
+- BSN Scene、Model／Schema CRUD、受控行投影、Renderer 注册／替换和 Column Order 更新。
+- 真实 Pointer／Keyboard／Wheel、选择／范围／全选、拖动 Resize／Reorder、编辑／粘贴／复制、Header 排序／筛选。
+- Viewport／Scale／Theme／Override 变化与 Source 失效、恢复或销毁。
 
 ## Guards
-
-- Source、Schema、Renderer 与 ID 有效；Disabled 阻止用户输入。
-- Primary Pointer / Focus / Gesture Owner 必须有效，Resize Target 消失即取消。
+- Source、Schema、Renderer、Stable ID 与当前请求有效；Disabled 和当前编辑焦点决定用户操作资格。
+- Resize／Reorder／Selection Gesture 的 Primary Pointer 和目标必须仍存在，失效时清理捕获。
+- Clipboard／Editing 的格式、类型、目标与草稿校验失败不得部分写入 Model 或覆盖原有外部内容。
 
 ## Transitions
-
-- Model Data → Cell / Header Projection。
-- Selection / Focused Cell Navigation；程序化清空和 Model Repair。
-- Resize Start → Width Changed → End / Cancel。
-- X/Y Viewport 切换只实例化与当前矩形相交的 Cells。
+- Model／Projection → 可见 Cell／Header；Selection／Focused Cell 变化、静默 Repair 和 Reveal。
+- Resize／Column Reorder 的开始 → 预览／提交 → 结束／取消，受控投影／列顺序的设置与重置。
+- Editor 打开 → 草稿／验证 → 提交或取消；Header Sort／Filter 请求；TSV Copy 与 Clipboard 交付。
 
 ## Invariants
-
-- Row / Column Identity 和 Selection 在移动后稳定、删除后修复。
-- 真实 State 先提交再通知；同值和自动 Repair 静默。
-- Cell / Header 内容与对应 Value Type、Revision 一致。
-- 静止时不重复投影 Schema，不重复发布没有变化的 Shell State。
-- Resize Gesture 每次只有一个合法终止事件。
-- Cell / Header Registry 隔离，替换仅影响相应 Factory；缺失 Renderer / Registry 报 Error，不以 Fallback 代替。
-- 重叠可见 Cell / Header 保留 Entity，空 Axis 和两轴变化保持 Pair 唯一；Revision / Type / Renderer 替换只重建相应内容。
-- Resize Callback Mutation 参与当前 Projection；Mouse Resize 的 Cursor Lease 随开始 / 离开 / 终止管理，Custom 不影响 OS Cursor。
+- Row／Column Stable ID 在移动／重排后不漂移，删除后 Selection 和 Focused Cell 按当前投影修复；状态先提交再通知，同值／自动 Repair 静默。
+- 二维虚拟化只创建与当前可见矩形相交的 Cell／Header，重叠部分复用实体；Revision／Type／Renderer 变化只重建相关内容。
+- Cell／Header 的实际强类型值、Renderer Registry 和显示行列顺序相符；缺失 Registry 报错，不偷偷用 Fallback 替代。
+- 多个共享 Model 的 View 各自维护投影、列顺序、宽度、Selection／Focus／Scroll／Theme，互不修改对方。
+- 冻结列与滚动区的横向位置分离、纵向位置同步；不同 DPI／UiScale 与动态布局下 Header、Cell 和行号对齐。
+- Resize／Reorder 捕获和提示层在取消、目标删除、失焦、Disabled 和虚拟化变化后正确清理；每次合法手势终止一次。
+- 逻辑 Selection／Range／All 包含离屏数据，并按受控显示顺序投影；清空或删除端点后同帧修复，不依赖额外刷新帧。
+- TSV Copy 使用完整逻辑选择及强类型格式化，不损坏 Tab／换行／Unicode 等字符；失败不覆盖旧 Clipboard，也不抢占活动 Editor 的复制。
+- Editor 的 Focus／输入映射、草稿与正式提交分离；只读、Disabled、类型错误和虚拟化离屏不能产生伪提交。
+- Header 排序／筛选和手动列序发出对应 View／Column 身份的请求，未确认前不提前修改 Source；布局样式不破坏状态。
+- 动态样式、颜色 Owner 和 Renderer 输出在当帧同步，持续结构故障保留 source／origin 并隔离健康实例。
 
 ## Couplings
-
-- 两轴 Scroll × Header 同步与 Visible Range。
-- Selection / Focus × Virtualization / Disabled。
-- Resize × DPI / Column Lifecycle / Layout。
-- Renderer Type Registry × Cell / Header Value。
+- X／Y Scroll × Header／冻结区域；Projection × Selection／Virtualization／Column Order。
+- Resize／Reorder × DPI／捕获；Editor／Clipboard × Focus／Selection；Renderer Registry × Cell Type／Revision。
 
 ## Coverage Map
 
-- `renderers.rs`：Cell / Header Typed Registry、异构内容与缺失 Renderer 错误。
-- `view.rs`：四区布局、Scene、Source / Revision 与 Theme / Disabled；无效构造 Layout 保留原生错误，源头和普通 Display 不保存 Bevy 边界栈；Cell Renderer 的既有 Shell 失败与重试逐次保留实际 source、Panic Severity/payload 和源头身份，不按观察帧合并新的 Scene 失败；Scene 成功不伪造持续状态恢复。
-- `view.rs` 还覆盖共享 Model 的两侧独立配色、禁用侧数据更新、内容 / Renderer 替换、两轴滚动后的新建 / 复用 Cell 在同帧完成 Text 前景、Font、glyph、Visibility、Stack 和 Layout 准备；字体前置使用现有 test_utils 真实 UI 设施。
-- 源码样式单元测试保护稳定帧零重复根解析 / 区域配色，单 Cell Hover / Disabled 及移除的局部工作量，旧 / 新 Row、Column、Cell Selection 与 Focus 区域，纯 Style 几何变化不重算颜色，Override / Theme、Selected 输出修复，以及持续 Error 的宿主传播、诊断去重和真实恢复。
-- `virtualization.rs`：二维可见范围、Row / Column Header 复用与静止投影。
-- `interaction.rs`：Selection、Focused Cell、真实输入、Resize 及各种取消时序。
-- `interaction.rs` 的共享 Model 双 View 用例覆盖不同初始 Layout / 列宽、单侧改宽、Pointer / Keyboard 的事件归属和 Focus 转移、独立两轴 Scroll / Disabled，以及共享 Edit / Insert / Move / Remove 后的 Row / Column Stable ID、各自静默 Repair 和 View 销毁后的 Model 所有权。
-- `common/mod.rs`：共享 Fixture 与输入 Helper，不单独拥有业务覆盖。
+### Integration Test
 
-## 覆盖边界
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `clipboard.rs` | 逻辑选区 TSV、强类型格式化、原生 Clipboard 和 Editor 归属。 |
+| `column_order.rs` | 手动列重排、显示顺序、冻结边界和列生命周期。 |
+| `copy_diagnostics.rs` | 复制格式化／选区／Clipboard 失败的来源与传播。 |
+| `diagnostics.rs` | 公共构造、Selection／Width／Renderer 等错误契约。 |
+| `edit_diagnostics.rs` | Editor／类型／提交失败的领域上下文和宿主处理。 |
+| `editing.rs` | 真实 Editor、草稿、Focus、ReadOnly／Disabled 和提交／取消。 |
+| `frozen.rs` | 冻结列／滚动区对齐、虚拟化、Resize 与编辑内容。 |
+| `header.rs` | Header Sort／Filter 真实按钮、请求与确认语义。 |
+| `interaction.rs` | 真实选择／焦点、范围／全选、Resize 和 Pointer／Keyboard 手势。 |
+| `renderers.rs` | Cell／Header Typed Renderer Registry 与异构内容。 |
+| `runtime_diagnostics.rs` | 动态 Runtime／Renderer／Style 持续故障和恢复。 |
+| `view.rs` | Scene／Source、Model 投影、宽度、共享 View 状态与布局。 |
+| `virtualization.rs` | 二维可见范围、Cell／Header 复用与动态投影。 |
 
-- 编辑组合回归使用真实 TextField 验证本帧 pending text edit 与 Enter / Ctrl+Enter 的请求值一致，使用真实已打开 ComboBox 验证 Esc 取消整个 Table 草稿；Cell/Body 局部 Disabled 阻止请求并丢弃草稿。
-- 三个 View 同帧排队提交、应用首个请求 Observer 关闭整个页面时，后续提交跳过已销毁 View，不 panic，也不销毁共享 Model。
+### Unit Test
 
-- `editing.rs`：默认关闭、类型默认及 Source/Column 覆盖、错误类型只读、ReadOnly Hint 与 Disabled guard；真实 UI Mouse picking 后解析 System Cell / 外部合成图集、Disabled 优先、编辑开关恢复默认及再次进入只读；Enter/双击启动、Esc/外部 Press 取消、编辑器及锚定 Popup 内部 Press 保留、多行 Ctrl+Enter、解析失败；Pending 先于强类型通知、重复提交及 Pending 取消 guard、Rejected 重试、新旧 request ID、错误 View/已删除 Row 回执拒绝；Revision 和虚拟化保留编辑器，Accepted 结束，不由 Table 写 Model。
-
-Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽和区域 Style。Renderer 仍按 App 的值类型注册；逐 View Column Schema 和 Renderer 不在当前能力内。BRP 可自动验证 Custom Pointer 与键盘交互，OS Mouse 及实际显示性能不由这些 Headless 用例证明。
-
-
-## 行投影与受控更新
-
-- `view.rs`：默认与受控 View 独立序列、实际 Cell Text 顺序、原子提交 rows/sort/filters、重复或过期 ID 拒绝且保持旧事实、空投影/重置、queued 执行时重新校验；共享 Model 插入/移动不自动进入受控结果，删除清理及 Row/Column 指标失效、重排后内容 Revision 与 Shell Identity；同 World tick 连续结构编辑与同步 API 的缓存一致性。
-- `interaction.rs`：键盘与 Reveal 使用显示索引、过滤后的 Selection/Focus 静默修复、空投影和过滤行程序 Focus 拒绝。
-- `virtualization.rs`：2000×40 的过滤倒序、双轴滚动下完整逻辑行到有限 Cells 的投影、显示行号、实际强类型内容与 Revision 不串位。
-- `benches/update.rs` 的 row_projection/projected_idle/projected_scroll 测量受控更新和受控 View 稳定/滚动路径，校验实际新序列、Model 不变、Cell 内容与 Entity 数量有界；不代表完整 GPU/Present 性能。
-
-## 表头请求
-
-- `header.rs`：可选排序/筛选按钮的真实 Press/Click/Release、事件 ColumnId 和目标 View、基于已确认状态的排序循环/换列、未回填重复请求、未改变 Model/Selection/投影、多列过滤指示；Disabled/配置关闭/列删除 guard，以及两轴虚拟化后重建的稳定按钮身份和标题选择。
-- 原子失败回填由 `view.rs` 的完整 rows/sort/filters 验证承担；原有 `interaction.rs` 保持 Resize Start/End/Cancel 回归覆盖。
-- `benches/update.rs` 的 header_idle/header_scroll/header_commit 覆盖启用入口后的稳定、滚动和确认指标更新，检查按钮数量有界；只测量 Headless CPU/ECS 路径。
-
-## 连续范围与全选
-
-- States：单项与 Rows/Columns/Cells 稳定 ID 端点、All、独立 Focus、拖选指针会话与捕获。
-- `interaction.rs`：同类型 Shift 多次延伸保留锚点、跨类型重设；受控显示次序下范围解析、状态先提交及去重；Corner/Ctrl+A 全选当前完整投影与空投影；拖选阈值内微小移动保留原选区/焦点及 Shift 点击锚点，跨横纵 Scroll 保留拖选锚点，终止保留范围；Disabled/任一端点行列删除/终点过滤/取消/销毁释放捕获并阻止晚到输入，失效端点修复静默。
-- `view.rs`：共享 Model 相同端点在两个不同投影中产生不同连续范围；重排后旧/新范围成员高亮更新，单侧清空不改变另一侧。
-- `virtualization.rs`：2000×40 数据过滤倒序后的 All、跨离屏矩形、逻辑范围完整且可见 Shell 数量有界，新建 Cell 的 Selected 与显示位置一致。
-- `benches/update.rs` 的 range_selection/all_selection/range_scroll 测量范围提交与滚动，验证逻辑状态、可见 Selected 和区域配色，保留旧 Selection / Resize / Header Benchmark。
-- `interaction.rs` 的真实 PointerInput 队列覆盖 Move/Release 同帧及跨帧释放：不产生临时单格通知，释放后下一次正常 Click 恢复可用。
-- 拖选期间 Renderer 缺失导致投影丢弃时立即释放捕获，补齐 Renderer 不复活旧选区或通知；Source 在 Update 阶段销毁同样清理。
-
-
-`diagnostics.rs` 验证重复行及失效排序 / 筛选列请求保存具体身份，Selection 和非法宽度保存实际值（包括 NaN 位值）且失败不提交；真实 queued Handler 保留原始领域诊断、Severity 与单次源头日志。Runtime 非法布局重复观察复用 origin / ID，实际修复后记录关联恢复，再次故障创建新 ID。Model 单元回归核对插入越界、行列 ID / revision 耗尽的实际轴、稳定 ID、index / len 与 counter，继续保护失败后数据、索引、次序和 revision 不变。
-
-## Runtime 诊断
-
-- `diagnostics.rs` 覆盖多个 View 同帧失去 Source 时全部抵达真实宿主 Handler，持续状态共享原始 origin、每个源头只记录一次 ERROR。
-- `runtime_diagnostics.rs` 覆盖共享 Source 的普通/冻结 View 同帧多个 Header/Cell Scene 失败，所有原因链、独立 ID、Error/Panic Severity 和普通/Panic payload 保留，行列和区域可定位，健康 Cell 继续显示；缺失 Registry 按 Cell 槽位复用诊断并在重新验证后恢复。
-- 受管 Viewport、冻结区、表头及 Canvas 的标记/Node/实体销毁在清理后保持原故障身份；销毁 View 不记录恢复。Renderer 部分构造后失败只清理本次实体，挂接的已有业务子树脱离并保留已提交状态。
-- 多 Cell 样式输出失效全部抵达 Handler，重复观察不重建诊断，零高度导致 Shell 离开可见区域不伪造恢复。
-- `renderers.rs` 验证公开注册/展开返回可识别领域拒绝，Cell/Header Registry 保持隔离；generation 耗尽的纯分类与不覆盖旧注册由源码 Unit Test 保护。
-
-- 结构销毁后的完整 BSN 补建能够重新发现新 Body/Canvas，并以原诊断 ID 记录一次真实恢复；Resize 期间切换为未注册 Header 值类型时，预检查与后续普通/冻结表头投影共享 ColumnId、区域和原始 origin。Scene 成功后的无伪恢复断言按统一 phase 与对应 error_id 检查。
-
-- Body/Canvas 脱离父级的归属错误与重新发现时的缺失错误共享槽位身份，重新挂接不留下重复 Shell。全部根部件销毁后也保持首次故障身份并支持BSN补建。Resize 期间移除共享 Layout 的故障保持根级Site，不归入Header列。
-
-- Body、ColumnHeaders、RowHeaders、FrozenBody 依次缺少ScrollPosition时，各部件保留自己的区域、实际Entity、新origin与源头ERROR，不因同名Component被前一处故障覆盖。
-
-- 导航Focus产生待执行Reveal时移除Body的ScrollPosition，交互同步和清理后普通投影保持同一Body区域及诊断origin。列拖拽读取Body的ComputedNode/ScrollPosition也沿用该区域现场。
-
-## 复制诊断
-
-- `copy_diagnostics.rs` 保护受管格式化回调的自定义cause、原始origin/ID、源头一次ERROR及逐格View/Source/Row/Column上下文；普通外部错误可在完整原因链downcast，重复独立请求产生不同ID。排队复制经真实Command/Handler保留同一诊断与Severity::Error，不把传播记录为已处理。
-- `clipboard.rs` 保留实际系统剪贴板的原子写入、guard、格式化/类型/缺失拒绝，以及制表符/引号/Unicode/换行回归。源码Unit Test保护带引号字段/分隔符的容量边界、原生写入失败的ClipboardError与字节规模，以及零次/一次提交边界；写入失败模拟使用与真实提交相同的原生结果适配，不将其视为OS锁竞争的验证。
-
-## 编辑诊断
-
-- `edit_diagnostics.rs` 保护非法取消的 View / 阶段和单次受管源头；业务解析拒绝、合法取消及无会话提交保持静默，旧回执携带具体请求与 Pending 身份且不提交状态。
-- 同帧多个 View 的读取失败全部抵达真实宿主 Handler，保留外部具体 cause、Severity::Error 和单次源头，不创建 Pending / 伪验证反馈；`editing.rs` 的真实 TextField 组合保护下层诊断和读取阶段上下文。
-- Editor Scene 失败保留普通 / Panic Severity 与 payload、原生具体 cause 和独立 ID；失败重试只清理本次构造，已有业务实体与已提交的状态保留。
-
-- 内嵌业务 Button 的拖动隔离同时覆盖原生 Button 与公开 WidgetryButtonHeadless，避免表格矩形选择抢占子控件输入。
-
-`interaction.rs` 验证 Pointer 聚焦 Table 后初始化 Focused Cell，不额外选择或发出业务事件。
-
-`editing.rs` 保护无非负 TabIndex 的非文本复合 Editor 通过既有 WidgetryInputTarget 获得真实按钮焦点，Space 产生草稿修改、提交读取当前草稿、Accepted 后回收输入并恢复 Table Focus，且 Focused Cell/Selection 不因解析输入目标改变。焦点 helper Unit Test 覆盖显式映射优先、缺失/跨 Editor/隐藏/Disabled 目标与祖先过滤和容器兜底；既有 TextField、Popup、禁用和虚拟化生命周期回归继续保护编辑行为。
-
-Root 的 TabIndex(-1) 仍支持 Pointer 焦点及 Focused Cell 初始化；编辑器输入目标另按真实映射解析。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/view_state.rs` | 手动列顺序、结构变化后的 Stable ID 与投影状态。 |
+| `src/clipboard.rs` | Clipboard 提交次数、类型和失败原子性。 |
+| `src/editing.rs` | Editor 输入目标解析、生命周期及失效焦点映射。 |
+| `src/selection.rs` | Selection／Range 的局部状态与修复。 |

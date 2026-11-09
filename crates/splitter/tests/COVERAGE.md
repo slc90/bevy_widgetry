@@ -1,25 +1,47 @@
-# Splitter coverage
+# splitter 测试覆盖模型
 
-`layout.rs` 使用真实 Bevy UI Layout 与 BSN Scene，覆盖主轴方向、Pane 本体 Patch、默认及初始化 Clamp、双侧 min/max 与根范围、单侧无上限、父级溢出、被动 Resize 目标保持、嵌套独立性和错误通路。状态维度为方向、保存比例、初始化阶段与原生约束；输入包括构造、父级尺寸及 Pane Node 变化。初始化保持通知静默。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-`constraints.rs` 覆盖百分比约束与逻辑像素/Scale Factor 的耦合，以及外部 ScrollArea 包装最小尺寸溢出的真实布局；ScrollPosition 与 Overflow 保持其原生职责。动态给两个百分比最小尺寸 Pane 设置像素最大值时，先应用根范围再校验收敛后的单侧限制，合法更新不进入 error handler。
+## States
+- 水平／垂直主轴、保存比例、Pane 最小／最大约束、布局尺寸及 Resizable／Disabled。
+- Pointer Drag、Focus、Theme／Override 和嵌套 Splitter。
 
-持续约束错误时，等待根重排保留诊断状态，不虚发恢复日志；只有实际有效布局恢复后才记录一次恢复。
+## Stimuli
+- BSN 构造、尺寸／约束变化、公开 Ratio World／Commands、真实 Pointer Drag、Theme 与窗口 Scale。
 
-`diagnostics.rs` 覆盖缺失 Handle 的比例命令保留 Root / Parts、真实 QueryEntityError、请求比例、Severity::Error 且仅一条源头 ERROR；多个布局 Root 与多个细线样式失败聚合、持续重查 / Theme 刷新复用 origin、有效修复 INFO、构造尺寸值经 Scene 包装不丢 origin，以及 Core 颜色原因链和原始回溯身份到 ECS 边界保留。`constraints.rs` 同时保护无效最小尺寸变化生成对应新诊断，布局等待不虚发恢复。
+## Guards
+- 非法尺寸、NaN 约束、缺失 Handle／Pane、无有效布局或失效 Root 必须拒绝，不改变已提交比例。
+- Disabled／Resizable=false 阻止对应拖动，但合法程序化比例更新继续可用。
 
-NaN 约束在真实 Splitter System 中保留具体 Pane 与原始位模式；相同 NaN 连续三帧只产生一个源头，改变 NaN 位模式产生新诊断，避免用浮点 NaN 的普通相等比较破坏持续状态识别。
+## Transitions
+- 初始化约束收敛 → Ratio Clamp；主动拖动／设置 → 比例更新；父级 Resize 和 Pane 约束变化 → 被动修正。
 
-`ratio_api.rs` 覆盖横/纵向 World Setter 与 Commands 的时机、[0.3,0.8] 可达区间 Clamp、同值静默、初始化/被动变化静默、回调读取已提交比例、主动替换被动不可达目标。错误路径包括非法数值、失效/错误/不完整Root、内部Handle丢失、未布局/隐藏后的无效尺寸及临时约束冲突；失败不改比例或通知，Commands实际错误由宿主捕获。分数端点保护初始化与Setter比例始终属于[0,1]。
+## Invariants
+- 约束求解在真实布局与 Border／Padding 下保持两侧可达范围和有限比例；首次初始化的被动调整不产生虚假通知。
+- 主动提交先于通知，合法同值与被动 Resize 静默；失败保留当前比例、Pane 和用户内容。
+- 指针离开区域、Clamp 到端点、取消／失焦／销毁后 Capture 正确回收；嵌套实例不串用手势。
+- Theme／Override、细线尺寸和独立命中区域不改变 Pane 几何与比例。
+- 持续布局／结构故障按真实恢复时机去重；原始浮点位、Owner 和宿主错误链保留。
 
-`input.rs` 使用真实Picking覆盖Mouse/Custom Pointer、横/纵向按住即更新、移出区域Capture、两端Clamp后立即反向、同值/无移动静默、Release/Cancel/失焦/Capture丢失/指针丢失/隐藏/禁用/resizable中断清理与保留最后比例。覆盖Capture丢失后排队Move、不同Pointer/Target/Button终止事件隔离、拖动期间程序Setter及约束更新、DPI/UiScale、嵌套实例隔离、键盘不控制手势，以及Despawn即时释放Capture。
+## Couplings
+- Min／Max × Pane／Root Layout；Pointer × Capture／Resizable；DPI／UI Scale × Ratio；Theme × Handle 样式。
 
-`resizable` Props、查询与World/Commands API保护错误结构及执行时机；真实Pane Button在resizable=false时保持可用，祖先InteractionDisabled时继承禁用。程序比例Setter在两种禁用下仍正常工作。
+## Coverage Map
 
-同一update内排队Move→Release时，Mouse/Custom在命中区内、区域外及超出约束的最后位移均先提交再清理；不把Bevy提前清除Capture误判为外部Capture丢失。
+### Integration Test
 
-GUI 视觉、外部 ScrollArea 滚动由任务级 BRP 验证；不将合成 ComputedNode 或测试通过当作 GUI 证据。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `box_layout.rs` | Box Pane 的 Padding／Border、分数约束与初次比例收敛。 |
+| `constraints.rs` | 两侧 Min／Max、百分比／像素约束及动态布局。 |
+| `diagnostics.rs` | 结构、比例、样式和布局故障的身份、传播和恢复。 |
+| `input.rs` | 真实 Pointer Drag、Clamp、取消／失焦与嵌套隔离。 |
+| `layout.rs` | 主轴布局、初始／被动求解和 Pane 身份。 |
+| `ratio_api.rs` | 公开 World／Commands Ratio、通知和非法操作。 |
+| `style.rs` | Handle 几何、Theme／Override、Disabled／Resizable 和 Cursor。 |
 
-`style.rs` 使用真实 UI Layout 验证横/纵向默认及自定义细线、居中、独立命中尺寸与 1.0/1.25/1.5 DPI；真实 Picking 验证三套内置主题下 Normal/Hovered/Dragging/Disabled、resizable 与根 Disabled 的优先级、取消后清理及光标意图撤销，Pane 背景和比例保持。覆盖部分颜色 Override 的主题回退、构造与运行时 get/set/clear、合法同值、Commands 执行时机，以及非法尺寸/颜色/目标的错误、宿主传播和失败不提交。
+### Unit Test
 
-`box_layout.rs` 保护分数 min 尺寸及 1.0/1.25/1.5 Scale Factor 下的首次比例修正，横/纵向 ContentBox Pane 与根的 padding/border 只计入一次，并验证 Bevy 原生 border 像素吸附后的双侧最大范围。百分比 padding 保留主轴比例关系，根范围稳定后才提交初始化比例，避免临时尺寸永久改变初值修正结果。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/input.rs` | 多手势 Owner 的 Capture／Pressed 清理、局部失败隔离，以及移动命令中主错误与清理错误的共同传播。 |

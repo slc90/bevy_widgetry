@@ -1,19 +1,43 @@
-# Collapsible 测试覆盖
+# collapsible 测试覆盖模型
 
-`state.rs` 从公开 API 与真实 BSN/ECS 组合验证：
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-- 状态：唯一 Expanded；默认展开、初始折叠，不发送初始化事件。
-- 刺激：同步 setter、Commands 实际执行；重复同值为 no-op。
-- Guards：失效 Entity、错误类型、必要内部 Node 缺失；领域分类、源头 Error 日志，ECS 边界 Severity 与宿主 error handler。
-- 不变量：提交后通知；切换只改 Content 容器的 Display/Visibility 及派生可见性，保留实体、Grid、编辑值、ScrollPosition 和显式隐藏子项。
-- 布局：实际 UI Layout 中折叠 Content 高度为零。
+## States
+- Expanded／Collapsed、Header 局部 Disabled 与 Root／祖先 Disabled、内容可见性及 Focus。
 
-`input.rs` 验证固定 WidgetryButton 的真实 Press/Click/Release 与 Pointer 聚焦后的 Enter/Space 路径：应用 HeaderContent 交互不折叠；Disabled、隐藏、重复键盘事件拒绝激活。同步 setter 的折叠将深层 Content 焦点移至可用按钮，否则清除；保留外部焦点，展开不恢复旧焦点。Tab 不将焦点转交其他控件。
+## Stimuli
+- BSN Scene、公开 World／Commands Set、真实 Pointer／Keyboard 输入、Theme 和样式更新。
 
-`disabled.rs` 验证 Header 局部请求初始化、查询、同步/排队更新、同值与无效结构错误；根/局部请求两种解除顺序、祖先请求与 Header 自身请求独立保留，禁用不通知展开事件。Header 局部禁用时真实 TextField 仍可编辑，根禁用阻止输入；禁用期间程序化折叠与焦点清理仍生效，包含初次 update 前的折叠。
+## Guards
+- 失效 Root、错误结构或缺失必要部件拒绝更新；Disabled／Hidden 阻止相应用户输入，但不禁止程序化折叠。
+- Header Content 内部业务输入不应冒充折叠动作；合法同值请求不产生事件。
 
-`style.rs` 验证默认卡片尺寸与分隔线、两种初始展开状态及重复切换的 SVG 方向和实体保留；三套内置主题、局部覆盖及清除、应用 Children 样式保留；Header 禁用时箭头继承 Button 前景且方向不变；颜色 API 同值、无效颜色不提交、错误目标及 Commands 执行时错误传播。实际卡片渲染、SVG 像素与用户输入由 Gallery BRP 验收。
+## Transitions
+- 初始展开／折叠 → Toggle → 内容显示或隐藏；折叠时按作用域回收深层焦点，重新展开不自动恢复旧焦点。
 
-`diagnostics.rs` 负责组合失败现场与生命周期：同一轮初始化中多个 Root 的失败全部到宿主；结构请求保留部件、实际 / 预期父级，箭头失败保留 Icon source 和原 origin；真实 Command 与 Scene 错误边界不重复源头 ERROR。持续样式失败在 Theme 重刷时复用诊断，实际修复后恢复。
+## Invariants
+- Expansion Authority 先提交再通知，初始化和合法同值静默。
+- 折叠仅改变受管内容的可见投影，不销毁业务实体，也不丢失 Grid、编辑草稿、滚动位置或显式隐藏子项。
+- Header 局部禁用与 Root 禁用相互独立；箭头／Card 的 Theme 投影不破坏调用方内容和业务状态。
+- 非法结构和颜色产生可追溯的领域错误；持续故障去重，修复后实际恢复。
 
-固定按钮复用基础 -1 标记，Pointer 和 Enter/Space 激活及深层 Content 折叠后的焦点回收继续有效。
+## Couplings
+- Header Disabled × 内嵌编辑器；展开状态 × Focus 回收；Theme × 箭头及内容样式。
+
+## Coverage Map
+
+### Integration Test
+
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `diagnostics.rs` | 结构与样式故障聚合、原因链、真实错误传播及恢复。 |
+| `disabled.rs` | Header 局部禁用 API、继承禁用与输入隔离。 |
+| `input.rs` | 真实 Button／Keyboard 折叠、Focus 与 Disabled 守卫。 |
+| `state.rs` | 公开展开状态、同步／排队提交和内容投影。 |
+| `style.rs` | 默认布局、箭头方向、Theme／Override 与颜色错误。 |
+
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/state.rs` | 局部状态与结构校验：缺失 Expanded、HeaderDisabled 或 Parts 的分类和实体身份；Disabled 失败时的原始诊断与既定提交顺序。 |

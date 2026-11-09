@@ -1,91 +1,66 @@
-# waveform Integration Test Coverage
+# waveform 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- Source 未填满 / 稳定 / 滚动、Cursor Boundary、Reduction Density。
-- Source 成功 / 失败、渲染可见 / 隐藏 / 销毁、Polyline / Envelope。
-- 算法 MinMax / LTTB、目标算法与已提交显示、后台重建在途 / 过期 / 就绪。
-- 受管 CPU 重建的执行状态与 Runtime Item/Finished 消费、独占 Reducer 交还分离；Manager 关闭拒收不破坏已提交快照。
+- Source 未填满／稳定／滚动，Cursor Boundary、显示 Duration／Density 与各通道幅值范围。
+- Live／Replay／Playback、Session、MinMax／LTTB 目标算法与已提交 Reduced Output。
+- 后台 Reducer Pending／Ready／Stale、Runtime Job／独占槽、Renderer／Mesh／Time Axis／Measurement 状态。
 
 ## Stimuli
-
-- Cursor 连续前进、跳转、倒退；Source Partial / Failed Read。
-- BSN Scene、实际 Layout Width / Resize、Style / Theme、Despawn。
+- Source 采样到达、Cursor 跳转／回退、窗口时间范围或物理宽度改变、同步／排队算法／会话 API。
+- Playback 控制、通道／幅值／网格设置、真实 Pointer 测量、Theme／Override、Renderer 生命周期与异步计算完成。
 
 ## Guards
-
-- Config 的 Sample Rate、Duration、统一对称幅值上限有效。
-- Source 返回请求范围的完整有限数据；零尺寸不创建有效可见几何。
+- Sample Rate、Duration、幅值上限、Source 范围及数据有限性必须合法；零尺寸不创建错误几何。
+- 过期 Session／算法／密度结果或失效请求不得覆盖当前已提交波形；Manager 关闭与失败保持旧画面。
 
 ## Transitions
-
-- 初始填充 → 增量滚动；Density 改变重建 Reduced Output。
-- 失败保留先前已提交 Display；相同 Boundary / Density 为 NoOp。
-- 相同 Cursor / Density 在读取失败后重试并恢复，成功后的稳定帧清空读取和 Reduction Stats；密度改变经过零宽再恢复时重建输出。
-- Render Scene 从准备转为可见 / 隐藏并最终释放资源。
+- 初始填充 → 增量滚动；改变 Duration／Density／算法／Session 后重建输出，Pending → 提交或过期废弃。
+- Live ↔ Replay，播放／暂停／定位／停止／重播，波形 Renderer 可见／隐藏／销毁。
+- 通道布局、时间轴、幅值缩放、测量框与鼠标交互的更新。
 
 ## Invariants
-
-- Channel Data、Viewport 与 Reduced Output 同步提交；失败不留下半完成画面。
-- `algorithm.rs` 负责算法 API 的同步/排队、同值通知、Live/Replay、多实例隔离、暂停刷新与物理单位；Pending 请求身份随算法失效，旧画面保留到新结果完整就绪。大窗口后台重建不能提前提交原始缓存，旧算法或旧密度任务不能覆盖新目标。
-- 暂停 Replay 的后台算法重建通过真实 App 调度验证：每个在途帧发出 RequestRedraw，直到完整折线快照提交，不依赖外部采集时钟或输入。
-- Runtime 并发回归覆盖：阻塞旧重建取消后仍占唯一在途槽、未确认迟到取消保持 Completed、恢复同一 Reducer 后处理最新 preview、失败保留快照、取消未计算时共享交还槽仍能恢复独占状态，以及 Manager 执行结束/记录移除不提前提交 UI。
-- Ring / Reduction 工作量与容量有界。
-- Mesh、Camera 和 Renderer Layer 的资源归属隔离。
-- Theme / Palette Override 不破坏已有几何。
-- NoOp 不读取 Source、不执行 Reduction；增量原始 Sample 扫描只随新增 Sample 与边缘 Bucket 增长。LTTB 还按当前可见桶数进行代表点查询，凸包内使用二分，避免凸曲线候选数退化成每帧全窗口重扫。
-- Renderer 保持单 Viewport / Camera、独立波形 Mesh 和主网格 Mesh，失败保留已提交波形 Mesh，Root 同时管理 Entity 和 Asset；Disabled / Override / Theme 的 Palette 与 Background 解析后，Clear 恢复当前状态 Theme。
+- Channel Data、Cursor、时间窗口和 Reduced Output 必须作为一致快照提交；源读取或后台重建失败不留下半完成画面。
+- 相同目标处于稳定状态时为 No-op，不额外读取或重算；增量扫描与 Ring／Reduction 的容量和工作量有界。
+- MinMax／LTTB 的有效值、缺口、单元转换及物理密度投影一致；超大窗口由后台 Job 重建，不阻塞主线程。
+- 后台计算的旧结果、取消后迟到的 Outcome 或未交还的 Reducer 不能修改当前 Session；任务与独占资源完成交接后才更新 UI。
+- Replay 暂停时由实际在途工作驱动 RequestRedraw，最终完整画面提交后停止无谓唤醒；失败／重试不丢失已提交快照。
+- 多实例分别持有 Viewport／Camera／Mesh／离屏 Layer，资源创建／销毁有界；共享层号池回收不影响其他 View。
+- Playback、幅值、Duration、网格、通道布局和测量状态按公开 Authority 先提交再通知；禁用、Theme／Override 不重置业务时序。
+- Renderer 的几何、时间轴、通道标签与当前投影同帧一致；隐藏／零视口的故障恢复遵循真实就绪条件。
+- Runtime／Source／Style 错误保留请求目标、单位、原始 I/O source 和共享 origin，合法稳定帧不制造新的故障身份。
 
 ## Couplings
-
-- Source Read × Cursor / Transaction。
-- Output Density × Physical Layout Width。
-- Renderer Lifecycle × Asset 释放和 View Isolations。
-- Waveform 多实例与额外 Core 离屏目标共用层号池，目标释放后复用层号不影响已有 Waveform 相机。
+- Source Read × Cursor／Transaction；Duration／Density／算法 × 物理 Layout／Reducer。
+- Session／Playback × Pending 请求；Channel／Measurement × Renderer；多实例 × 资源归属／Layer 回收。
 
 ## Coverage Map
 
-- Replay Slider 的真实 Mouse/Custom Picking 覆盖开始早于轨道 seek、外部 Commands 控制器先提交暂停、释放同位置仍 End、程序化进度投影不回写。Playback 测试覆盖 preview 状态、双算法四分之一/最终密度、快速远距反向目标合并、Pending 波形/窗口一致、最终同位置刷新及会话清除 preview。
+### Integration Test
 
-- `playback.rs`：外部 Playback 状态同步/排队、提交后通知、暂停定位刷新、同值/非法/过期请求、倍率保留与换会话归零、末尾/重播、Pending 时钟持续推进与波形/轴快照、真实错误暂停且不重试、停止后恢复。播放栏 Unit Test 覆盖 Live 无栏、Replay 动态创建/回收、拒绝播放/倍率意图不改真实状态、程序化状态投影不回写意图。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `algorithm.rs` | MinMax／LTTB 切换、后台重建、算法 API 和旧结果隔离。 |
+| `amplitude.rs` | 幅值单位／范围、重投影、公开 API 与通知。 |
+| `axis.rs` | 时间轴、网格、布局、窗口同步和可见性。 |
+| `channels.rs` | 多通道布局、标签、滚动、密度与资源投影。 |
+| `diagnostics.rs` | Source／Runtime／Model／Render 失败的诊断身份与宿主传播。 |
+| `duration.rs` | 时间窗口长度、累计时间、Replay／Live 和更新原子性。 |
+| `gaps.rs` | 逐通道数据缺口、MinMax／环形缓冲的一致性。 |
+| `headless.rs` | 无渲染环境的采样、Cursor、Ring／Reducer 与错误恢复。 |
+| `measurement.rs` | 真实 Pointer 测量、选区／拖动、时间幅值换算与生命周期。 |
+| `playback.rs` | 回放开始／暂停／定位／停止、通知、时钟和结果同步。 |
+| `reduced_source.rs` | 预降采样源、有限窗口、Pending 和旧快照保护。 |
+| `renderer.rs` | BSN／Layout／Mesh、样式、离屏资源和多 View。 |
+| `requests.rs` | 后台请求身份、过期结果、共享 Source 读者和重绘。 |
+| `session.rs` | Live／Replay Session 切换、配置保留和公开状态。 |
 
-- `reduced_source.rs`：预降采样源不分配 Raw Ring，完整结果、单位转换与窗口成对提交，Pending/过期身份/非法数值/读取失败保留旧画面，稳定目标 NoOp，Live 错误恢复。
+### Unit Test
 
-- `headless.rs`：Source / Cursor / Ring / Reducer 的更新、失败与增量数据 Contract。
-- `renderer.rs`：BSN、Layout、Mesh、资源生命周期、Style / Theme 和多 View 隔离；Scene 配置/元信息/容量/分配失败保持单次源头与真实 source，排队会话替换保留原始诊断，运行时 Style 连续异常仍由既有 Owner 去重。
-- `session.rs`：同根实体 Live 32 → Replay 64 → Replay 8 → Live 切换、元信息验证、显示配置保留、V 单位换算、归零与暂停、停止保留画面、清空会话、排队更新及提交后通知、实例错误查询。
-- 会话替换使所有旧 Raw / Reduced 表示失效；Renderer 的 Camera、Mesh、Image 和 Entity 身份保持稳定，下一帧清除旧几何（`renderer.rs`）。
-
-
-- `gaps.rs`：逐通道显式缺口、真实零值、MinMax 有效段分离、跨桶边界/环回/缺口淘汰的增量与完整重建一致性、非法缺失区间拒绝。
-- `requests.rs`：Pending 与过期 Ready 保留一致快照，Live 追到最新窗口；同目标 request 身份稳定，密度/会话变更使旧身份失效，共享 Source 的读取者互相隔离；Replay Pending 继续、真错误停止且不自动重试。
-- 几何 Unit Test 覆盖 Polyline 显式断点、自定义 Reducer 稀疏代表点仍连线、独立有效样本可见及全缺失时透明空 Mesh。
-- `duration.rs`：8s/30s 左起填充、35s/10s 累计时间滚动、同一时刻扩大/缩短窗口、缺口保留、候选/无效实体校验、提交后通知、Pending / 历史不足保留快照、暂停重算与新会话归零、空暂停 Replay 不读取；缓存随当前窗口缩小。
-- 控制栏 Unit Test 使用真实 ComboBox / Layout，覆盖初始化选中、API 投影、选项更新同一状态、稳定 Model / Combo 实体及随根清理。
-- 取消大窗口 Pending 后缩到小窗口，不将旧暂存容量转为小窗口的长期缓存（`duration.rs`）。
-- `axis.rs`：主网格与累计秒数标尺消费同一已提交窗口、滚动连续移动、Pending 时保持旧窗口、网格公开 API 同值不通知及先提交后通知、开关不读取源且保留波形与时间、窄宽度和 UI 缩放下实际文字不重叠、根销毁清理网格和标尺。时间刻度 Unit Test 覆盖零点锚定、1–2–5 密度、次刻度最小距离、小数秒及长累计时间。
-- 文字保护消费当前 NoWrap 字体测量后的 ComputedNode，不读取后续 PostLayout 才刷新的旧 TextLayoutInfo：Unit Test 覆盖真实 MenuPlugin / TextInputPlugin 的调度组合，`axis.rs` 验证累计时间位数、字号及缩放同时变化当帧的文字不越界或重叠。
-- `amplitude.rs`：幅值 API 先提交后通知、同值不通知、排队入口、无会话可设、非法输入/失效实体保持状态；真实 Renderer 下 V/mV/µV 等价、暂停重投影不读取或降采样、跨会话保留。控制栏 Unit Test 覆盖幅值与时间选择器共存、候选校验、用户选择/API 投影同一状态和实体清理；几何 Unit Test 覆盖行高、±3A 越道和整体裁剪的真实重入交点。
-- `channels.rs`：6/16 及 64通道 × 600px 的8/16/32/全部真实布局、24px最小行高、标签精确文本与间距；局部行滚动、密度/窗口高度变化的顶部锚点、真实波形Mesh与标签中心一致；独立多视图滚动、末尾钳制、换会话标签/密度保留、空会话与极窄根尺寸；垂直操作不增加源读取、不改变降采样 revision/时间窗口。Unit Test 覆盖每屏数量提交后通知、非法配置和三个 ComboBox 共存及用户选择。既有 Renderer / Axis 的负载按实际绘图区宽度保持。
-
-- `measurement.rs`：Mouse / Custom Pointer 的真实 Picking 绘制、持续选中、内部平移、边角编辑、单像素窄框、跨通道换算、唯一框替换；Live / Replay 播放和暂停、时间/幅值/密度/尺寸重算、Pending 使用已提交时间尺度，不因手势读源或暂停；关闭/重开、换会话清框保留开关，取消/焦点/隐藏/Disabled/销毁释放捕获及提交后通知；测量开启时真实 Picking 可展开并选择控制栏下拉项，弹出层不受工具栏裁剪且不触发绘制。Gesture Unit Test 覆盖四边四角命中和编辑、反向绘制及平移边界尺寸保持。为保持已有绘图区负载，未带选择器的旧 fixture 总高度增加44px容纳新工具栏。
-
-
-`renderer.rs` 另验证多个视图同次 Offscreen 失败的真实 System 聚合、Core 原诊断身份、源头一次 ERROR、传播无 handled、恢复一次 INFO；外部离屏租约有独立 Owner，释放不影响波形图层。
-
-- `diagnostics.rs`：Metadata / Raw / Reduced Source 失败跨 Runtime 保留同一 origin、原始 I/O source、完整已知请求字段与一次源头 ERROR；数值校验保留幅值单位、非有限值、时间/采样率及容量参数。普通领域错误和执行边界的 Error Severity 分开验证。
-- Source 源码回归覆盖通道表/完整帧长度/重叠缺口/NaN 的结构化分类与实际位置，分配回归验证样本和超大通道表返回原 TryReserveError 及请求规模，避免容量溢出 panic。既有 gap、两种 reducer 数值及工作量回归继续保护正常计算。
-
-- Runtime 多实例同帧失败在 `diagnostics.rs` 验证全部 origin 与实体语境进入同次 System 报告；Runtime 单元测试验证 Reducer panic 跨 Job 保留 origin、任务现场、已提交快照及 reducer 生命周期，目标退休后的晚到失败由实际 Owner 消费，再提交新算法结果。
-
-- 视图/组合错误：renderer 集成测试验证样式故障的受管 origin、Root 语境、多实例同帧聚合、持续状态去重与独立恢复；controls 单元测试验证某一 Model 失效时兄弟选择器成功投影不会误报恢复。保留配置/颜色/播放状态与先提交后通知回归，并在真实 Commands/Observer/System 边界检查 Severity。
-
-- Geometry 单元回归验证非法 Mesh 属性在拒绝更新前不会移走健康 buffer，重复验证保持原故障类别。
-
-- 公开非法通道数、NaN 幅值与空会话启动错误保留调用目标 root；数值/Runtime 层原始诊断只增加已知目标语境，不重新捕获 origin。
-
-- 周期布局同步使用未创建诊断的结构 fault，持续缺失布局只保留同一 origin，恢复后再缺失才生成新 ID；选择器 Model 缺失时校验实际 Model Entity，避免被根实体替代。公开查询仍按独立调用创建请求诊断。
-
-- Renderer 样式故障在隐藏/零 viewport 等未验证阶段保持 origin；恢复可见且实际校验通过后才记录恢复 INFO，显示恢复前不因等待重新创建源头。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/geometry.rs` | Renderer 几何边界与无效 Mesh 更新保护。 |
+| `src/controls.rs` | 播放／幅值／通道控制状态和局部投影。 |
+| `src/runtime.rs` | 受管 Reducer、Job Outcome、取消与独占槽的交接。 |
+| `src/source.rs` | Source 读取、缓存与有效窗口的局部契约。 |

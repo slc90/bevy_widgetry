@@ -1,50 +1,53 @@
-# NumberInput 覆盖模型
+# number_input 测试覆盖模型
 
-`custom_repeat.rs` 只安装 Headless Plugin，以根外原生触发器和公开 Repeat 标记验证首步/400ms等待/100ms间隔、长空闲后的新按下、掉帧不追补、释放/取消/根销毁后不再请求帧、只读守卫、根及Editor禁用后的旧会话取消（包括同Tick前禁用再启用、首次按下的首步通知中禁用再启用）、丢失/恢复Step关联与旧按住中重新插入Repeat标记不能续接。默认布局/Native窗口焦点/多Pointer/同帧重按的既有回归继续由 `repeating.rs` 负责。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
-`custom_step.rs` 通过只安装 Headless Plugin 的外部多层 Editor 与根外单按钮，覆盖公开直接/排队步进、合法/非法草稿合并、端点静默、真实 Picking 按下单步和释放不加步、焦点保留、方向键重复、ReadOnly/根及 Editor Disabled/待处理 IME 守卫、程序设置权限、失效触发器宿主 Error Severity，以及 f64/u128 混合根的精确调度与通知归属。默认原类型饱和、全部布局/长按/样式回归继续由原文件负责。
+## States
+- 正式数值／编辑草稿、14 种原生数值类型、精度／格式／步长／范围。
+- Editor Focus、ReadOnly、Disabled、IME、Stepper／Repeat 会话及 Theme。
 
-带 TabIndex、释放时激活的外部触发器还验证 AcquireFocus 事件目标重定向；在全局重定向之后运行真实原生 tab-focus Observer，保护 Observer 顺序变化时的 Editor 焦点与草稿单次合并，按下不提前提交、释放只通知最终步进结果。
+## Stimuli
+- BSN 构造、同步／排队数值 API、键盘提交／取消／失焦、真实 Pointer Step、按住 Repeat、Theme／Style 变化。
 
-释放激活组合使用真实 WidgetryButtonHeadless；另明确区分空 IME 清理与非空预编辑/活动组词，空清理不阻断有效步进。
+## Guards
+- 不完整 Editor、类型／绑定不匹配、非法数值／步长和失效目标在写入前拒绝；失败保持原数值与草稿。
+- ReadOnly、Disabled 和活动 IME 按各自契约限制用户输入；禁用不阻断合法程序化数值更新。
 
-仅禁用 TextField 或 Editor、数值根仍启用时，实际 Picking 点击带 TabIndex 的外部触发器应保留 Editor 焦点和旧草稿，不经失焦间接提交，且不通知。
+## Transitions
+- 草稿编辑 → 验证／提交／取消；Step 单步或持续重复；Focus／Disabled／IME 状态改变中断旧交互。
 
-`headless.rs` 从外部使用公开数值根与 TextField 绑定，验证没有默认 Frame/按钮的多层 Editor 的初始化、原类型 API 身份、精度切换、草稿/正式值分离、Enter/非法保留/Esc/失焦提交、根 source/final 通知，以及只读和祖先禁用期间程序设置、同值清理与解除禁用不补交。
+## Invariants
+- 数值以原始类型精度保存，包括整数极值；草稿与正式值分离，通知只对真实提交的值产生。
+- 合法同值和边界饱和按既定静默规则处理，Observer 读取已经提交的数值；非法请求不得部分更新。
+- Headless 支持外部 Editor／触发器而不依赖默认按钮；Editor 目标重定向不误提交草稿或改变焦点。
+- Repeat 遵循固定等待与节奏、退出／取消后停止唤醒；先前会话不能因禁用恢复或重新挂载标记而继续。
+- Style／Theme 更新保留草稿、正式值及其通知次数；诊断保留原类型、请求值和底层 TextField 原因链。
 
-公开绑定同时覆盖全部 14 种数值类型、u128 精确极值、跨根绑定及只读模式不一致的写入前拒绝。长度受限或多行 Editor 的配置单独拒绝，保护完整数值投影与 Enter 提交，失败保持原数值和草稿。
+## Couplings
+- Focus／IME × 草稿提交；ReadOnly／Disabled × 步进；Repeat × 生命周期；外部触发器 × Editor 输入映射。
 
-`diagnostics.rs` 覆盖全部 14 种支持类型的快照分类与原类型名、u128 / i128 极值精确拒绝字段、f32 NaN 原始位、初始配置拒绝类别 / step / decimals、Scene 桥保留原 origin、TextField 原因链及两层操作上下文、Command 的 Error Severity 和源头一次 ERROR。`editing.rs` 的既有草稿 / Enter / Esc / 失焦场景额外断言正常拒绝和恢复无错误或虚假处理日志。
+## Coverage Map
 
-映射回归区分 TextField 自有编辑器有效与 WidgetryInputTarget 指向失效 / 无 EditableText 目标；Enabled / Disabled Setter 均在写入前拒绝，保持原数值与草稿。
+### Integration Test
 
-`value_api.rs` 覆盖所有支持数值类型的 BSN 构造、同步读取/设置、同值静默、原类型极值、固定范围、非网格设值以及先提交再通知的根身份契约。
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `custom_repeat.rs` | 独立 Headless 自定义触发器的重复时序、取消和恢复。 |
+| `custom_step.rs` | 外部步进触发器、键盘、IME／焦点与数值提交。 |
+| `diagnostics.rs` | 原类型、极值、绑定及编辑器错误的领域诊断。 |
+| `editing.rs` | 草稿解析、Enter／Esc／失焦、拒绝与恢复。 |
+| `formatting.rs` | 原生数值的格式、精度及文本投影。 |
+| `headless.rs` | 无默认框架的多层 Editor、公开 API 和状态提交。 |
+| `layout.rs` | 默认 Frame、Editor 与步进部件的实际布局。 |
+| `modes.rs` | 类型／模式、ReadOnly／Disabled 与编辑契约。 |
+| `repeating.rs` | 默认步进长按、时钟、Pointer 会话与停止条件。 |
+| `stepping.rs` | 数值步进、边界饱和、按键与触发器状态。 |
+| `style.rs` | Theme／Override、托管内容及状态颜色。 |
+| `value_api.rs` | 多数值类型的公开 World／Commands API 和一致性。 |
 
-非法配置和 API 请求覆盖缺失初始值、非有限数、错误范围/步长、越界值、失效实体、错误泛型类型及缺失运行时状态。失败保持旧值。Commands 覆盖延迟校验、失效目标及宿主错误处理；程序化设值不受 Disabled 限制。
+### Unit Test
 
-`editing.rs` 覆盖真实 TextField/官方键盘分发中的草稿与正式值分离、主键盘及数字小键盘 Enter 合法规范化/非法保留、Esc 恢复且保留焦点、外部失焦提交/恢复，以及程序化合法/同值/无效 Setter 对草稿、编辑队列与 IME 的优先级。数值通知不因取消、拒绝或合法同值增加。
-
-数值模块 Unit Test 覆盖有符号/无符号整数及浮点的普通十进制语法、类型范围与禁止的特殊文本。
-
-`formatting.rs` 覆盖浮点固定小数位显示、完整精度焦点投影、同帧输入保留、快速进出焦点不写回舍入值、失焦后同帧同值/变化 Setter 的投影不被再次提交，以及 f32/f64 正负极值/次正规数的无指数十进制往返。格式切换及显示舍入不产生数值通知。整数拒绝 decimals 配置。
-
-`stepping.rs` 覆盖实际键盘/Pointer 输入的当前值步进、端点可达、同值静默、草稿合并一次最终通知、内部按钮保留焦点、重复方向键、活动/待处理 IME 组合态的方向键保护、失焦/Disabled guard、固定范围、u8 边界以及滚轮继续父 ScrollArea 滚动而不改变数值。数值 Unit Test 另覆盖所有整数和浮点类型的原类型安全饱和运算。
-
-`repeating.rs` 使用真实 Mouse/Custom Pointer 与手动实时时钟覆盖短按、400ms 延迟、100ms 间隔、长时间空闲后首次按下、掉帧不追补、端点静默且按钮不禁用、释放/取消/祖先禁用停止，以及重新按下重新计时（含同帧释放后重按）。次键释放引起的共享 Pressed 恢复，以及其他 Pointer 的主键按下和释放，均不重置所有者的计时；两种 Pointer 互换主次身份验证共享会话查询。等待与重复阶段必须请求后续帧，终止后不再请求，保护 Reactive 桌面调度契约。
-
-长按另覆盖原生 Mouse 窗口失焦取消、重新聚焦不恢复旧计时、同帧失焦/聚焦消息。Mouse 经 Winit 有序 WindowEvent 源及真实 Picking 验证按下→失焦→聚焦、失焦→聚焦→按下及按下→失焦→聚焦→按下；旧会话外部丢失 Release 后，每次新按下仍能激活并建立独立长按。主/次/中键保持原生 Button 的接受语义，先接受的按键拥有会话，其他按键释放不终止 owner。Custom Pointer 不依赖原生窗口焦点。
-
-`modes.rs` 覆盖构造时固定 ReadOnly 的真实只读 TextField 组合、选择与修改过滤、方向键/按钮/长按拒绝；本地及祖先 Disabled 中途放弃草稿、清除待处理 Paste/IME、解除禁用后不补交。四种 ReadOnly/Disabled 组合均覆盖公开读取、合法/同值/非法同步设值及排队设值的通知。另覆盖初始即本地禁用或嵌入已禁用祖先时的 BSN 构造、长按中途继承禁用、重新按下的新计时，以及 ReadOnly/Disabled 与完整精度/舍入焦点显示的耦合，模式变化不通知。
-
-`layout.rs` 以实际 UI 布局覆盖普通/只读两种构造的三段结构、统一外框和两个分隔线、增宽时仅中间区域增长、极窄父容器下保留最小可用宽度、居中编辑文本，以及长数值的原生 Home/End 和可滚动视口。最小宽度下以真实 Pointer 检验草稿直接步进、长按与焦点保留，布局变化本身不产生数值通知。
-
-圆角回归使用实际 ComputedNode 的圆角轮廓，在普通/只读及整数/小数缩放下检查按钮背景不会越出共同外框，靠中间分隔线的角仍为直角。
-
-`style.rs` 覆盖三套内置主题 的统一焦点外框、内部编辑器/按钮文字颜色与样式归属、真实 Picking Hover/Pressed/释放的局部反馈、端点不禁用、ReadOnly 与祖先 Disabled 及恢复。状态和主题刷新保持几何、草稿及正式值，不发数值通知。Gallery 由任务级 BRP 验证。
-
-初始禁用的延迟恢复还覆盖首帧前重新启用后真实键盘输入，不能被旧初始化请求清除。
-有效禁用期间收到字符键而在同帧 Update 重新启用时，清除原生 TextInput 排入的旧请求；覆盖根与祖先两种恢复路径，并验证之后新键入仍可用。
-
-`style.rs` also checks an external complete Theme against the shared shell and owned TextField/Button outputs while retaining draft text, formal value, and notification count.
-
-默认内嵌 TextField 不额外配置 TabIndex；Pointer 与程序化聚焦复用 TextField 的真实 Editor 映射，内部数值按键与步进触发器焦点契约保持。
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/number.rs` | 各数值类型的十进制解析、原生范围与非法文本拒绝。 |
+| `src/value.rs` | 各整数和浮点类型的原类型安全饱和步进。 |

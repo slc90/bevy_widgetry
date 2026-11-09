@@ -1,41 +1,39 @@
-# app_logging Integration Test Coverage
+# app_logging 测试覆盖模型
 
-本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+本模型记录当前自动化测试保护的主要行为契约与测试职责，不逐项列举测试用例。
 
 ## States
-
-- 输出未安装 / 已安装；目标目录不存在 / 可创建 / 不可写。
-- Terminal 与 File Layer 准备及日志 Guard 生命周期。
+- 日志输出未安装／已安装，目标目录及文件可用／不可用，终端与文件输出层的生命周期。
+- 写入线程的标识，以及 Guard 持有和释放状态。
 
 ## Stimuli
-
-- 构造 `AppLogging`、调用 `install`，装配 Bevy `LogPlugin` 并写入日志。
-- 从命名和未命名的日志生产线程写入事件，检查终端与异步文件输出。
-- 未安装时调用 Layer Factory；结束时释放 Guard。
+- 构造并安装 `AppLogging`、接入 Bevy `LogPlugin`、跨线程记录事件和释放 Guard。
+- 日志目录或 Writer 准备失败、异步写入／刷新与关闭。
 
 ## Guards
-
-- 目录与文件准备失败必须返回错误，不伪造已安装状态。
+- 初始化和输出准备失败必须返回带上下文的错误，不得伪造安装成功；缺少安装时 Layer Factory 不产生输出层。
 
 ## Transitions
-
-- 准备目录及文件 → 安装输出层 → 记录日志 → Guard 释放后刷新。
-- 缺少安装时 Factory 返回 None；准备失败走 Error 传播。
+- 准备目录与输出层 → 安装 → 写入 → 关闭并刷新；失败路径保持可辨识的阶段与原因。
 
 ## Invariants
-
-- 文件输出保留日志来源位置、时间戳和结构化信息。
-- 终端和文件输出保留生产者的 Rust 线程名与线程 ID；未命名线程保留 ID，文件中的 ID 与生产线程一致。
-- 普通准备失败保留领域 stage/path/origin/source，ECS 显式转换保留 Error Severity；退出前日志能够刷新。
+- 日志文件保留来源位置、时间戳、等级、结构化字段及生产线程名／ID；未命名线程仍保留 ID。
+- 异步输出在背压和关闭时不默默丢弃已接受事件；写入失败保留真实原因，故障输出不递归报告。
+- 领域错误保留 stage、path、origin、source；经 ECS 显式传播时维持错误等级，正常退出前刷新已记录内容。
 
 ## Couplings
-
-- 应用目录与输出 Layer 的装配顺序。
-- Bevy `LogPlugin`、文件 Writer 与 Guard 的完成时机。
+- 目录准备 × Layer 安装顺序；Writer 背压 × Guard 释放；生产线程上下文 × 终端／文件输出。
 
 ## Coverage Map
 
-- `app_logging.rs`：完整应用日志准备、集成输出、失败与清理生命周期。
+### Integration Test
 
+| 测试文件 | 主要测试职责 |
+|---|---|
+| `app_logging.rs` | 实际日志层安装、线程元数据、日志内容、失败传播及退出刷新。 |
 
-完整 LogPlugin 的全局 Subscriber 测试在无 RUST_LOG 的子进程执行，文件保留库和宿主普通 DEBUG、必要处理诊断、INFO/WARN/ERROR、真实多行栈、最终日志与退出 flush；两个 Target 的 TRACE 默认不落盘。writer 模块单测使用容量1与慢writer、多生产者检验背压下200条完整事件不丢弃，覆盖写失败/零写/flush失败、队列断连与受控flush超时，不通过失效后端递归报告。初始化与 install 不配置 ECS Handler。
+### Unit Test
+
+| 源码测试模块 | 主要测试职责 |
+|---|---|
+| `src/writer.rs` | 异步 Writer 的背压、完整事件交付、故障处理与受控刷新。 |
