@@ -38,6 +38,18 @@ Reviewer 应先通过 `$code-review` 获取并检查本轮 Review Target / Diff�
 - 不根据任务名称或文件路径机械加载全部规则。
 - 变更涉及某项规则的实际约束时，必须在形成对应 Review 判断前读取该规则。
 
+### 设计上下文读取
+
+Initial Full Review 必须先获取并检查 Review Target / Diff，确定本次修改涉及的模块、机制及影响范围。
+
+随后读取 `docs/design/architecture.md` 了解整体架构，并通过 `docs/` 中的文档导航，按需阅读相关模块、跨模块机制及功能文档。
+
+不要求阅读全部设计文档。设计文档用于理解现有系统、判断修改是否合理，以及识别可能受到影响的其他部分。
+
+如果本次修改依据已确认的新设计调整现有架构，Reviewer 应结合新方案判断，不得仅因实现不同于旧设计就认定存在问题。
+
+Incremental Review 和 Final Full Review 默认不再读取设计文档，仍按实际 Diff 和 Findings 读取必要的工程规则。
+
 ### 专项规则选择
 
 - `rules/code.md`：修改 Rust 源码时，包括测试、Benchmark、Build Script 和 Gallery Rust 代码。
@@ -126,6 +138,14 @@ Reviewer 应逐项判断既有 Findings 是否真正解决，并检查修复引�
 如果 Incremental Review 仍有 Findings，实施 Agent 先记录结果，再条件更新 Baseline，之后继续修复。
 
 如果 Incremental Review 精确返回 `No review findings.`，进入 Final Full Review。
+
+### 设计审查范围发生变化
+
+如果 Findings 修复实质性改变了 Initial Full Review已经审查的架构范围，例如引入新的跨模块关系、改变模块职责或状态归属，则下一轮改用 Full Review，重新按设计上下文读取规则审查相关设计。
+
+普通 Findings 修复不触发这一例外。
+
+重新执行 Full Review 时，保留已有 Findings、任务进度及必要的 Baseline 状态，按照现有Full Review 和 Baseline 管理规则处理，不得直接丢弃尚未解决的问题。
 
 ### Final Full Review
 
