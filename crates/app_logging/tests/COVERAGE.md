@@ -10,6 +10,7 @@
 ## Stimuli
 
 - 构造 `AppLogging`、调用 `install`，装配 Bevy `LogPlugin` 并写入日志。
+- 从命名和未命名的日志生产线程写入事件，检查终端与异步文件输出。
 - 未安装时调用 Layer Factory；结束时释放 Guard。
 
 ## Guards
@@ -24,6 +25,7 @@
 ## Invariants
 
 - 文件输出保留日志来源位置、时间戳和结构化信息。
+- 终端和文件输出保留生产者的 Rust 线程名与线程 ID；未命名线程保留 ID，文件中的 ID 与生产线程一致。
 - 普通准备失败保留领域 stage/path/origin/source，ECS 显式转换保留 Error Severity；退出前日志能够刷新。
 
 ## Couplings

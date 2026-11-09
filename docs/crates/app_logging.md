@@ -6,7 +6,7 @@
 
 宿主先 install，再由自身调用 `app.add_plugins(log_plugin())`。该函数返回官方 Bevy LogPlugin 的完整配置：外层允许 DEBUG，文件层保存 DEBUG、INFO、WARN、ERROR，包括库和宿主普通模块的生命周期及错误处理诊断，不再要求 DEBUG 带 error_id/phase。TRACE 默认关闭，终端只展示 INFO 及以上。环境过滤是宿主主动覆盖项，RUST_LOG 的显式过滤仍生效；第三方噪声可按 Target 单独过滤。若自行使用 `file_layer` / `terminal_layer`，须保证外层过滤不裁掉必要诊断。Facade 独立非默认 app_logging Feature 重导出这些 API 与错误类型。
 
-两层保持本地时间、毫秒格式；文件无 ANSI 并保存源码位置。正式诊断的多行 Backtrace 按 Display 写入。
+两层使用本地时间、毫秒格式，并显示日志生产者的 Rust 线程名称与 `std::thread::ThreadId`；未命名线程仅显示 ID。线程信息在事件格式化时捕获，文件的异步写入不会将其替换成写入线程的信息。文件无 ANSI 并保存源码位置。正式诊断的多行 Backtrace 按 Display 写入。
 
 ## 写入和关闭
 

@@ -38,6 +38,8 @@ pub fn terminal_layer(app: &mut App) -> Option<BoxedFmtLayer> {
     Some(Box::new(
         tracing_subscriber::fmt::layer()
             .with_timer(timer(output.offset))
+            .with_thread_names(true)
+            .with_thread_ids(true)
             .with_target(false)
             .with_file(false)
             .with_line_number(false)
@@ -53,6 +55,8 @@ pub fn file_layer(app: &mut App) -> Option<BoxedLayer> {
     Some(Box::new(
         tracing_subscriber::fmt::layer()
             .with_timer(timer(output.offset))
+            .with_thread_names(true)
+            .with_thread_ids(true)
             .with_target(false)
             .with_file(true)
             .with_line_number(true)

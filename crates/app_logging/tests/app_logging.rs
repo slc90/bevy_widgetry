@@ -9,6 +9,9 @@ const HOUR_END: usize = 13;
 const MINUTE_END: usize = 16;
 const SECOND_END: usize = 19;
 const MILLISECOND_RANGE: std::ops::Range<usize> = 20..23;
+const PRODUCER_THREAD_NAME: &str = "logging-producer";
+const NAMED_THREAD_MESSAGE: &str = "命名线程日志验证";
+const UNNAMED_THREAD_MESSAGE: &str = "未命名线程日志验证";
 
 use bevy::ecs::error::Severity;
 use bevy::log::{debug, error, info, trace, warn};
@@ -63,6 +66,11 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
+        let terminal = String::from_utf8_lossy(&output.stderr);
+        let named = event_prefix(&terminal, NAMED_THREAD_MESSAGE)?;
+        assert!(named.contains(PRODUCER_THREAD_NAME));
+        assert!(named.contains("ThreadId("));
+        assert!(event_prefix(&terminal, UNNAMED_THREAD_MESSAGE)?.contains("ThreadId("));
         return Ok(());
     }
     let directory = TestDirectory::new()?;
@@ -99,11 +107,29 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     trace!(target: "ordinary_module", "宿主TRACE默认关闭验证");
     trace!(target: "bevy_widgetry", "库TRACE默认关闭验证");
     error!(target: "widget_gallery", error_id = "probe", phase = "unhandled", backtrace = %"frame1\nframe2", "最终报告验证");
+    let named_thread_id = std::thread::Builder::new()
+        .name(PRODUCER_THREAD_NAME.into())
+        .spawn(|| {
+            info!("{}", NAMED_THREAD_MESSAGE);
+            format!("{:0>2?}", std::thread::current().id())
+        })?
+        .join()
+        .map_err(|_| "命名日志生产线程意外panic")?;
+    let unnamed_thread_id = std::thread::spawn(|| {
+        info!("{}", UNNAMED_THREAD_MESSAGE);
+        format!("{:0>2?}", std::thread::current().id())
+    })
+    .join()
+    .map_err(|_| "未命名日志生产线程意外panic")?;
     drop(app);
     info!("guard 释放前的最后一条日志");
     drop(guard);
 
     let contents = fs::read_to_string(path)?;
+    let named = event_prefix(&contents, NAMED_THREAD_MESSAGE)?;
+    assert!(named.contains(PRODUCER_THREAD_NAME));
+    assert!(named.contains(&named_thread_id));
+    assert!(event_prefix(&contents, UNNAMED_THREAD_MESSAGE)?.contains(&unnamed_thread_id));
     assert!(contents.contains(&format!("app_logging.rs:{line}")));
     assert!(contents.contains("应用日志输出验证"));
     assert!(contents.contains("Widgetry target 输出验证"));
@@ -126,6 +152,13 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
             .all(u8::is_ascii_digit)
     );
     Ok(())
+}
+
+fn event_prefix<'a>(contents: &'a str, message: &str) -> Result<&'a str> {
+    contents
+        .lines()
+        .find_map(|line| line.split_once(message).map(|(prefix, _)| prefix))
+        .ok_or_else(|| "缺少线程日志验证事件".into())
 }
 
 #[test]
