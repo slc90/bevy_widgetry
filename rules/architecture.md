@@ -2,7 +2,7 @@
 
 ## Workspace / Crate 职责与依赖管理
 
-当前 Workspace 结构与各成员职责见 `docs/architecture.md`。本节约束 crate 的职责边界、依赖方向及依赖管理方式。
+当前整体设计与模块职责关系见 `docs/design/architecture.md`，模块核心设计见 `docs/design/modules/`。本节约束 crate 的职责边界、依赖方向及依赖管理方式。
 
 ### Crate 职责与依赖方向
 

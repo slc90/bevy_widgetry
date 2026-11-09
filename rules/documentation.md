@@ -24,7 +24,7 @@ Git Commit Message 使用英文，具体要求遵循 `rules/git.md`。
 
 不为普通 Type、Field、Function、Module 或 Test 编写显而易见的职责说明，也不在 `lib.rs`、`main.rs` 或 Integration Test 文件头部重复描述已集中维护的功能与测试覆盖信息。
 
-Crate 功能及行为契约由 `docs/crates/` 集中记录。Gallery 的展示与交互以 `gallery/` 中的实际实现为准，不维护独立的集中功能文档。
+Crate 功能及行为契约由 `docs/features/` 集中记录，模块核心设计及跨模块机制由 `docs/design/` 记录。Gallery 的展示与交互以 `gallery/` 中的实际实现为准，不维护独立的集中功能文档。
 
 Integration Test 的 Coverage Model 由对应 Crate 的 `tests/COVERAGE.md` 维护，具体遵循 `rules/testing.md`。
 

@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1090" height="460" viewBox="0 0 1090 460" role="img" aria-label="UI 组合 · ComboBox 行为状态和可见部件分离">
+<rect width="1090" height="460" fill="#f8fafc" />
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">UI 组合 · ComboBox 行为状态和可见部件分离</text>
+<rect x="25" y="70" width="505" height="335" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="47" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">用户看到的 ComboBox</text>
+<text x="47" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Trigger、Popup 和结果行</text>
+<rect x="67" y="141" width="390" height="60" rx="9" fill="#ffffff" stroke="#5268d8" stroke-width="2" />
+<text x="89" y="179" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="400" fill="#17243d" text-anchor="start">Beta</text>
+<rect x="67" y="212" width="390" height="155" rx="8" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<rect x="80" y="222" width="364" height="40" rx="5" fill="#ffffff" stroke="none" stroke-width="0" />
+<text x="103" y="248" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">Alpha</text>
+<rect x="80" y="266" width="364" height="40" rx="5" fill="#eaf0ff" stroke="none" stroke-width="0" />
+<text x="103" y="292" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">Beta</text>
+<rect x="80" y="310" width="364" height="40" rx="5" fill="#ffffff" stroke="none" stroke-width="0" />
+<text x="103" y="336" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">Gamma</text>
+<rect x="560" y="70" width="505" height="335" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="582" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">背后的职责</text>
+<text x="582" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">逻辑状态与视觉部件分别拥有职责</text>
+<rect x="593" y="145.0" width="426" height="68" rx="7" fill="#e6f7f1" stroke="#1e9b83" stroke-width="1.5" />
+<text x="613" y="171.0" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="700" fill="#1e9b83" text-anchor="start">Headless 协调打开状态</text>
+<text x="613" y="196.0" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">选择由 ListView State 唯一持有</text>
+<rect x="593" y="230.0" width="426" height="68" rx="7" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" />
+<text x="613" y="256.0" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="700" fill="#17243d" text-anchor="start">Trigger + Popup + ListView</text>
+<text x="613" y="281.0" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">负责交互与可见候选</text>
+<rect x="593" y="315.0" width="426" height="68" rx="7" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" />
+<text x="613" y="341.0" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="700" fill="#17243d" text-anchor="start">默认 Style</text>
+<text x="613" y="366.0" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">决定 Field 和行的视觉</text>
+<path d="M 414 166 L 430 166 L 422 175 Z" fill="#5268d8" /></svg>

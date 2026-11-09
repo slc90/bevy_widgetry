@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1050" height="430" viewBox="0 0 1050 430" role="img" aria-label="外观 · 主题来源与局部覆盖">
+<rect width="1050" height="430" fill="#f8fafc"/>
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">外观 · 主题来源与局部覆盖</text>
+<rect x="25" y="70" width="315" height="300" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="47" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">默认主题</text>
+<text x="47" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Normal / Hovered 都取当前 Theme</text>
+<text x="48" y="149" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Normal</text>
+<rect x="67" y="160" width="228" height="56" rx="10" fill="#6379ca" stroke="#6379ca" stroke-width="0" />
+<text x="181" y="196" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">保存</text>
+<text x="48" y="254" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Hovered</text>
+<rect x="67" y="265" width="228" height="56" rx="10" fill="#425dca" stroke="#425dca" stroke-width="0" />
+<text x="181" y="301" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">保存</text>
+<rect x="370" y="70" width="315" height="300" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="392" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">仅覆盖 Normal</text>
+<text x="392" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Hovered 仍然使用 Theme</text>
+<text x="393" y="149" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Normal</text>
+<rect x="412" y="160" width="228" height="56" rx="10" fill="#dc845b" stroke="#dc845b" stroke-width="0" />
+<text x="526" y="196" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">保存</text>
+<text x="393" y="254" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Hovered</text>
+<rect x="412" y="265" width="228" height="56" rx="10" fill="#425dca" stroke="#425dca" stroke-width="0" />
+<text x="526" y="301" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">保存</text>
+<rect x="715" y="70" width="315" height="300" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="737" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">切换 Theme 后</text>
+<text x="737" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Normal 保留覆盖；Hovered 更新</text>
+<text x="738" y="149" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Normal</text>
+<rect x="757" y="160" width="228" height="56" rx="10" fill="#dc845b" stroke="#dc845b" stroke-width="0" />
+<text x="871" y="196" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">保存</text>
+<text x="738" y="254" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Hovered</text>
+<rect x="757" y="265" width="228" height="56" rx="10" fill="#158a76" stroke="#158a76" stroke-width="0" />
+<text x="871" y="301" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">保存</text>
+</svg>

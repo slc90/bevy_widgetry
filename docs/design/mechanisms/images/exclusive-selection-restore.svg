@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="420" viewBox="0 0 1040 420" role="img" aria-label="排他选择 · 删除已选选项后的结构恢复">
+<rect width="1040" height="420" fill="#f8fafc"/>
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">排他选择 · 删除已选选项后的结构恢复</text>
+<rect x="25" y="70" width="315" height="300" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="47" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">删除之前</text>
+<text x="47" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">B 被选中</text>
+<circle cx="80" cy="170" r="10" fill="#ffffff" stroke="#5268d8" stroke-width="2"/>
+<text x="102" y="176" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">A</text>
+<circle cx="80" cy="230" r="10" fill="#ffffff" stroke="#5268d8" stroke-width="2"/>
+<circle cx="80" cy="230" r="4" fill="#5268d8" stroke="none" stroke-width="0"/>
+<text x="102" y="236" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">B</text>
+<rect x="164" y="216" width="120" height="28" rx="14" fill="#e6f7f1" stroke="#e6f7f1" stroke-width="0" />
+<text x="224.0" y="236" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="650" fill="#1e9b83" text-anchor="middle">Checked</text>
+<circle cx="80" cy="290" r="10" fill="#ffffff" stroke="#5268d8" stroke-width="2"/>
+<text x="102" y="296" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">C</text>
+<rect x="370" y="70" width="315" height="300" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="392" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">删除 B</text>
+<text x="392" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">B 从直接 Children 中移除</text>
+<circle cx="425" cy="170" r="10" fill="#ffffff" stroke="#5268d8" stroke-width="2"/>
+<text x="447" y="176" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">A</text>
+<circle cx="425" cy="230" r="10" fill="#ffffff" stroke="#5268d8" stroke-width="2"/>
+<text x="447" y="236" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">C</text>
+<rect x="715" y="70" width="315" height="300" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="737" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">恢复完成</text>
+<text x="737" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">优先选择仍存在的后继 C</text>
+<circle cx="770" cy="170" r="10" fill="#ffffff" stroke="#5268d8" stroke-width="2"/>
+<text x="792" y="176" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">A</text>
+<circle cx="770" cy="230" r="10" fill="#ffffff" stroke="#5268d8" stroke-width="2"/>
+<circle cx="770" cy="230" r="4" fill="#5268d8" stroke="none" stroke-width="0"/>
+<text x="792" y="236" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">C</text>
+<rect x="854" y="216" width="120" height="28" rx="14" fill="#e6f7f1" stroke="#e6f7f1" stroke-width="0" />
+<text x="914.0" y="236" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="650" fill="#1e9b83" text-anchor="middle">Checked</text>
+</svg>

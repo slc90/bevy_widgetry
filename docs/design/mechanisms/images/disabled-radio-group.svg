@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="652" viewBox="0 0 1500 652" role="img" aria-labelledby="heading desc">
+<title id="heading">Disabled 的 UI 层级继承：RadioGroup 三阶段对比</title>
+<desc id="desc">第一阶段只有 Option B 本地禁用。第二阶段整个 RadioGroup 禁用，A 和 C 继承禁用，B 同时受到本地和继承禁用。第三阶段恢复 Group，A 和 C 可交互，B 仍因本地请求禁用。选中状态 A 在三个阶段保持不变。</desc>
+<rect x="0" y="0" width="1500" height="652" rx="0" fill="#F7F9FC"/>
+<rect x="50" y="36" width="5" height="38" rx="2" fill="#4169D2"/>
+<text x="72" y="68" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="32" font-weight="700" fill="#17243B" text-anchor="start">Disabled：父级禁用与子级本地状态</text>
+<text x="52" y="108" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="400" fill="#59677B" text-anchor="start">同一组 WidgetryRadioGroup，观察禁用与恢复过程中三个 RadioOption 的状态</text>
+<rect x="50" y="146" width="434" height="426" rx="18" fill="#FFFFFF" stroke="#DCE4ED" stroke-width="1.4"/>
+<circle cx="86" cy="184" r="18" fill="#EAF0FF" stroke="none" stroke-width="1"/>
+<text x="86" y="190" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700" fill="#3C63C5" text-anchor="middle">01</text>
+<text x="116" y="190" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="700" fill="#1B2A3F" text-anchor="start">仅禁用 Option B</text>
+<text x="74" y="224" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#637287" text-anchor="start">Group 可用，B 保留本地禁用</text>
+<rect x="73" y="244" width="388" height="269" rx="12" fill="#FAFBFD" stroke="#CBD6E4" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="92" y="273" font-family="Noto Sans CJK SC, Consolas, monospace" font-size="15" font-weight="650" fill="#42516A" text-anchor="start">WidgetryRadioGroup</text>
+<rect x="349" y="254" width="93" height="28" rx="14" fill="#E7F4EE"/>
+<text x="395.5" y="273" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#27785C" text-anchor="middle">Group 可用</text>
+<rect x="90" y="292" width="354" height="57" rx="9" fill="#FFFFFF" stroke="#D7E1F0" stroke-width="1"/>
+<circle cx="122" cy="320" r="11" fill="#FFFFFF" stroke="#4775D4" stroke-width="2.2"/>
+<circle cx="122" cy="320" r="5" fill="#4775D4" stroke="none" stroke-width="1"/>
+<text x="148" y="327" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#1F3652" text-anchor="start">Option A</text>
+<rect x="353" y="307" width="88" height="28" rx="14" fill="#E9F1FF"/>
+<text x="397.0" y="326" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#2F66CA" text-anchor="middle">可交互</text>
+<rect x="90" y="359" width="354" height="57" rx="9" fill="#F2F4F6" stroke="#E4E9EE" stroke-width="1"/>
+<circle cx="122" cy="387" r="11" fill="#F6F7F9" stroke="#9DA8B6" stroke-width="2.2"/>
+<text x="148" y="394" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#8A95A4" text-anchor="start">Option B</text>
+<rect x="353" y="374" width="88" height="28" rx="14" fill="#FFF0CC"/>
+<text x="397.0" y="393" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#915F09" text-anchor="middle">本地禁用</text>
+<rect x="90" y="426" width="354" height="57" rx="9" fill="#FFFFFF" stroke="#D7E1F0" stroke-width="1"/>
+<circle cx="122" cy="454" r="11" fill="#FFFFFF" stroke="#4775D4" stroke-width="2.2"/>
+<text x="148" y="461" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#1F3652" text-anchor="start">Option C</text>
+<rect x="353" y="441" width="88" height="28" rx="14" fill="#E9F1FF"/>
+<text x="397.0" y="460" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#2F66CA" text-anchor="middle">可交互</text>
+<path d="M74 530 H460" stroke="#E3E9F1" stroke-width="1"/>
+<circle cx="89" cy="548" r="6" fill="#DFA23F" stroke="none" stroke-width="1"/>
+<text x="104" y="554" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#6B542A" text-anchor="start">B 的本地禁用请求：始终保留</text>
+<rect x="533" y="146" width="434" height="426" rx="18" fill="#FFFFFF" stroke="#DCE4ED" stroke-width="1.4"/>
+<circle cx="569" cy="184" r="18" fill="#EAF0FF" stroke="none" stroke-width="1"/>
+<text x="569" y="190" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700" fill="#3C63C5" text-anchor="middle">02</text>
+<text x="599" y="190" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="700" fill="#1B2A3F" text-anchor="start">禁用整个 Group</text>
+<text x="557" y="224" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#637287" text-anchor="start">全部 Option 都继承禁用</text>
+<rect x="556" y="244" width="388" height="269" rx="12" fill="#FAFBFD" stroke="#CBD6E4" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="575" y="273" font-family="Noto Sans CJK SC, Consolas, monospace" font-size="15" font-weight="650" fill="#42516A" text-anchor="start">WidgetryRadioGroup</text>
+<rect x="832" y="254" width="93" height="28" rx="14" fill="#ECEFF2"/>
+<text x="878.5" y="273" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#677483" text-anchor="middle">Group 禁用</text>
+<rect x="573" y="292" width="354" height="57" rx="9" fill="#F2F4F6" stroke="#E4E9EE" stroke-width="1"/>
+<circle cx="605" cy="320" r="11" fill="#F6F7F9" stroke="#9DA8B6" stroke-width="2.2"/>
+<circle cx="605" cy="320" r="5" fill="#B2BCC9" stroke="none" stroke-width="1"/>
+<text x="631" y="327" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#8A95A4" text-anchor="start">Option A</text>
+<rect x="828" y="307" width="96" height="28" rx="14" fill="#ECEFF2"/>
+<text x="876.0" y="326" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#677483" text-anchor="middle">继承禁用</text>
+<rect x="573" y="359" width="354" height="57" rx="9" fill="#F2F4F6" stroke="#E4E9EE" stroke-width="1"/>
+<circle cx="605" cy="387" r="11" fill="#F6F7F9" stroke="#9DA8B6" stroke-width="2.2"/>
+<text x="631" y="394" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#8A95A4" text-anchor="start">Option B</text>
+<rect x="806" y="374" width="118" height="28" rx="14" fill="#F3E7D4"/>
+<text x="865.0" y="393" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#806136" text-anchor="middle">本地 + 继承</text>
+<rect x="573" y="426" width="354" height="57" rx="9" fill="#F2F4F6" stroke="#E4E9EE" stroke-width="1"/>
+<circle cx="605" cy="454" r="11" fill="#F6F7F9" stroke="#9DA8B6" stroke-width="2.2"/>
+<text x="631" y="461" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#8A95A4" text-anchor="start">Option C</text>
+<rect x="828" y="441" width="96" height="28" rx="14" fill="#ECEFF2"/>
+<text x="876.0" y="460" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#677483" text-anchor="middle">继承禁用</text>
+<path d="M557 530 H943" stroke="#E3E9F1" stroke-width="1"/>
+<circle cx="572" cy="548" r="6" fill="#DFA23F" stroke="none" stroke-width="1"/>
+<text x="587" y="554" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#6B542A" text-anchor="start">B 的本地禁用请求：始终保留</text>
+<rect x="1016" y="146" width="434" height="426" rx="18" fill="#FFFFFF" stroke="#DCE4ED" stroke-width="1.4"/>
+<circle cx="1052" cy="184" r="18" fill="#EAF0FF" stroke="none" stroke-width="1"/>
+<text x="1052" y="190" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700" fill="#3C63C5" text-anchor="middle">03</text>
+<text x="1082" y="190" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="700" fill="#1B2A3F" text-anchor="start">重新启用 Group</text>
+<text x="1040" y="224" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#637287" text-anchor="start">A / C 恢复，B 仍然禁用</text>
+<rect x="1039" y="244" width="388" height="269" rx="12" fill="#FAFBFD" stroke="#CBD6E4" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="1058" y="273" font-family="Noto Sans CJK SC, Consolas, monospace" font-size="15" font-weight="650" fill="#42516A" text-anchor="start">WidgetryRadioGroup</text>
+<rect x="1315" y="254" width="93" height="28" rx="14" fill="#E7F4EE"/>
+<text x="1361.5" y="273" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#27785C" text-anchor="middle">Group 可用</text>
+<rect x="1056" y="292" width="354" height="57" rx="9" fill="#FFFFFF" stroke="#D7E1F0" stroke-width="1"/>
+<circle cx="1088" cy="320" r="11" fill="#FFFFFF" stroke="#4775D4" stroke-width="2.2"/>
+<circle cx="1088" cy="320" r="5" fill="#4775D4" stroke="none" stroke-width="1"/>
+<text x="1114" y="327" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#1F3652" text-anchor="start">Option A</text>
+<rect x="1319" y="307" width="88" height="28" rx="14" fill="#E9F1FF"/>
+<text x="1363.0" y="326" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#2F66CA" text-anchor="middle">可交互</text>
+<rect x="1056" y="359" width="354" height="57" rx="9" fill="#F2F4F6" stroke="#E4E9EE" stroke-width="1"/>
+<circle cx="1088" cy="387" r="11" fill="#F6F7F9" stroke="#9DA8B6" stroke-width="2.2"/>
+<text x="1114" y="394" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#8A95A4" text-anchor="start">Option B</text>
+<rect x="1319" y="374" width="88" height="28" rx="14" fill="#FFF0CC"/>
+<text x="1363.0" y="393" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#915F09" text-anchor="middle">本地禁用</text>
+<rect x="1056" y="426" width="354" height="57" rx="9" fill="#FFFFFF" stroke="#D7E1F0" stroke-width="1"/>
+<circle cx="1088" cy="454" r="11" fill="#FFFFFF" stroke="#4775D4" stroke-width="2.2"/>
+<text x="1114" y="461" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#1F3652" text-anchor="start">Option C</text>
+<rect x="1319" y="441" width="88" height="28" rx="14" fill="#E9F1FF"/>
+<text x="1363.0" y="460" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="13" font-weight="600" fill="#2F66CA" text-anchor="middle">可交互</text>
+<path d="M1040 530 H1426" stroke="#E3E9F1" stroke-width="1"/>
+<circle cx="1055" cy="548" r="6" fill="#DFA23F" stroke="none" stroke-width="1"/>
+<text x="1070" y="554" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#6B542A" text-anchor="start">B 的本地禁用请求：始终保留</text>
+<path d="M 494 369 L 514 369 M 507 362 L 514 369 L 507 376" fill="none" stroke="#6E85A9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 977 369 L 997 369 M 990 362 L 997 369 L 990 376" fill="none" stroke="#6E85A9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="50" y="597" width="1400" height="39" rx="10" fill="#EDF2FA"/>
+<circle cx="73" cy="616" r="7" fill="#4367BB" stroke="none" stroke-width="1"/>
+<text x="90" y="622" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="500" fill="#354C70" text-anchor="start">关键关系：父级禁用只改变子级的有效状态，不覆盖子级原有的本地禁用；选中的 Option A 也保持不变。</text>
+</svg>

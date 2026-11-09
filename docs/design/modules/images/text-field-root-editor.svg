@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1035" height="465" viewBox="0 0 1035 465" role="img" aria-label="TextField · 可见布局与真正的 EditableText 实体分开">
+<rect width="1035" height="465" fill="#f8fafc"/>
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">TextField · 可见布局与真正的 EditableText 实体分开</text>
+<rect x="25" y="70" width="475" height="350" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5"/>
+<text x="47" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">可见的 TextField</text>
+<text x="47" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">根、外框、标签与输入区域</text>
+<rect x="64" y="155" width="392" height="124" rx="10" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5"/>
+<text x="82" y="188" font-family="Noto Sans CJK SC, sans-serif" font-size="13" font-weight="400" fill="#526279" text-anchor="start">名称</text>
+<rect x="82" y="201" width="350" height="50" rx="7" fill="#f0f4fa" stroke="#5268d8" stroke-width="2"/>
+<text x="100" y="231" font-family="Noto Sans CJK SC, sans-serif" font-size="16" font-weight="400" fill="#17243d" text-anchor="start">正在编辑的文字</text>
+<rect x="530" y="70" width="477" height="350" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5"/>
+<text x="552" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">ECS 中的职责</text>
+<text x="552" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">状态权威属于真实 Editor</text>
+<rect x="565" y="140.0" width="411" height="70" rx="7" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5"/>
+<text x="585" y="167.0" font-family="Noto Sans CJK SC, sans-serif" font-size="16" font-weight="700" fill="#17243d" text-anchor="start">Headless Root</text>
+<text x="585" y="191.0" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">稳定绑定 Editor 身份</text>
+<rect x="565" y="225.0" width="411" height="70" rx="7" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5"/>
+<text x="585" y="252.0" font-family="Noto Sans CJK SC, sans-serif" font-size="16" font-weight="700" fill="#17243d" text-anchor="start">Content / Frame</text>
+<text x="585" y="276.0" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">外观、布局、附加内容</text>
+<rect x="565" y="312.0" width="411" height="70" rx="7" fill="#e6f7f1" stroke="#1e9b83" stroke-width="1.5"/>
+<text x="585" y="339.0" font-family="Noto Sans CJK SC, sans-serif" font-size="16" font-weight="700" fill="#1e9b83" text-anchor="start">Editor + EditableText</text>
+<text x="585" y="363.0" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">文字、Caret、Selection 唯一权威</text>
+</svg>

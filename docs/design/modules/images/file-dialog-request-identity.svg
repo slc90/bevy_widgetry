@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="475" viewBox="0 0 1100 475" role="img" aria-label="FileDialog · 异步结果必须属于当前 Session 请求">
+<rect width="1100" height="475" fill="#f8fafc"/>
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">FileDialog · 异步结果必须属于当前 Session 请求</text>
+<rect x="26" y="74" width="1048" height="344" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="48" y="108" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">目录切换时的请求与回执</text>
+<text x="48" y="133" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">用户先打开 A，再切换到 B；A 的慢请求可能最后才完成</text>
+<rect x="128" y="145" width="186" height="56" rx="9" fill="#fff6e5" stroke="#d78c20" stroke-width="2" />
+<text x="221" y="181" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#d78c20" text-anchor="middle">请求 A</text>
+<rect x="418" y="145" width="186" height="56" rx="9" fill="#eaf0ff" stroke="#5268d8" stroke-width="2" />
+<text x="511" y="181" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#5268d8" text-anchor="middle">切换到 B</text>
+<rect x="723" y="145" width="186" height="56" rx="9" fill="#e6f7f1" stroke="#1e9b83" stroke-width="2" />
+<text x="816" y="181" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#1e9b83" text-anchor="middle">请求 B</text>
+<line x1="314" y1="173" x2="418" y2="173" stroke="#526279" stroke-width="2.3" stroke-linecap="round" />
+<path d="M 409.5,178.2 L 418,173 L 409.5,167.8" fill="none" stroke="#526279" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round" />
+<line x1="604" y1="173" x2="723" y2="173" stroke="#526279" stroke-width="2.3" stroke-linecap="round" />
+<path d="M 714.5,178.2 L 723,173 L 714.5,167.8" fill="none" stroke="#526279" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round" />
+<rect x="83" y="260" width="375" height="93" rx="10" fill="#fff0f2" stroke="#c75a6b" stroke-width="1.5" />
+<text x="109" y="295" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#c75a6b" text-anchor="start">A 的迟到结果</text>
+<text x="109" y="325" font-family="Noto Sans CJK SC, sans-serif" font-size="13" font-weight="400" fill="#c75a6b" text-anchor="start">请求身份过期 → 丢弃，不更新 UI</text>
+<rect x="586" y="260" width="385" height="93" rx="10" fill="#e6f7f1" stroke="#1e9b83" stroke-width="1.5" />
+<text x="612" y="295" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#1e9b83" text-anchor="start">B 的有效结果</text>
+<text x="612" y="325" font-family="Noto Sans CJK SC, sans-serif" font-size="13" font-weight="400" fill="#1e9b83" text-anchor="start">匹配当前请求 → 提交 Session 状态</text>
+<path d="M 208 201 L 208 242 L 257 259" fill="none" stroke="#c75a6b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 5"/>
+<path d="M 818 201 L 818 250" fill="none" stroke="#1e9b83" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 5"/>
+<text x="38" y="402" font-family="Noto Sans CJK SC, sans-serif" font-size="13" font-weight="400" fill="#526279" text-anchor="start">可见文件行只是 Session 状态的投影；收到结果不代表它仍适用于当前目录。</text>
+</svg>

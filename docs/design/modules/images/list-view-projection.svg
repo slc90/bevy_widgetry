@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="475" viewBox="0 0 1060 475" role="img" aria-label="ListView · 业务条目与可见行不是同一种身份">
+<rect width="1060" height="475" fill="#f8fafc" />
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">ListView · 业务条目与可见行不是同一种身份</text>
+<rect x="30" y="70" width="345" height="350" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="52" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">ListModel · 稳定身份</text>
+<text x="52" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">数据完整；绿色标出 View 当前选择</text>
+<rect x="56" y="147" width="293" height="36" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" />
+<text x="72" y="171" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">101  Alpha</text>
+<rect x="56" y="192" width="293" height="36" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" />
+<text x="72" y="216" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">102  Beta</text>
+<rect x="56" y="237" width="293" height="36" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" />
+<text x="72" y="261" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">103  Gamma</text>
+<rect x="56" y="282" width="293" height="36" rx="6" fill="#e6f7f1" stroke="#a8dccb" stroke-width="1.5" />
+<text x="72" y="306" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="600" fill="#1e9b83" text-anchor="start">104  Delta</text>
+<rect x="56" y="327" width="293" height="36" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" />
+<text x="72" y="351" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">105  Epsilon</text>
+<rect x="67" y="391" width="190" height="28" rx="14" fill="#eaf0ff" stroke="#eaf0ff" stroke-width="0" />
+<text x="162.0" y="411" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="650" fill="#5268d8" text-anchor="middle">View.Selected = ItemId 104</text>
+<rect x="415" y="70" width="290" height="350" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="437" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">滚动前 · 物理 Row</text>
+<text x="437" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">可见 101–103</text>
+<rect x="445" y="155" width="230" height="53" rx="7" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="463" y="186" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">Row 1 → Item 101</text>
+<rect x="445" y="225" width="230" height="53" rx="7" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="463" y="256" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">Row 2 → Item 102</text>
+<rect x="445" y="295" width="230" height="53" rx="7" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="463" y="326" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">Row 3 → Item 103</text>
+<text x="446" y="396" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Row 可以销毁、重建或复用</text>
+<rect x="738" y="70" width="290" height="350" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="760" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">滚动后 · 同一可视位置</text>
+<text x="760" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">可见 103–105</text>
+<rect x="768" y="155" width="230" height="53" rx="7" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="786" y="186" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">Row 1 → Item 103</text>
+<rect x="768" y="225" width="230" height="53" rx="7" fill="#e6f7f1" stroke="#1e9b83" stroke-width="1.5" />
+<text x="786" y="256" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="600" fill="#1e9b83" text-anchor="start">Row 2 → Item 104</text>
+<rect x="768" y="295" width="230" height="53" rx="7" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="786" y="326" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#17243d" text-anchor="start">Row 3 → Item 105</text>
+<text x="769" y="396" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">Row 可以销毁、重建或复用</text>
+</svg>

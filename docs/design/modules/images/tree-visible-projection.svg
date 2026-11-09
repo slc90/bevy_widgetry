@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="465" viewBox="0 0 1040 465" role="img" aria-label="Tree · 业务层级不等于当前可见行">
+<rect width="1040" height="465" fill="#f8fafc" />
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">Tree · 业务层级不等于当前可见行</text>
+<rect x="30" y="70" width="460" height="340" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="52" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">Tree Model · ECS 层级</text>
+<text x="52" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">折叠不会删除业务节点</text>
+<rect x="70" y="131" width="130" height="44" rx="8" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="88" y="158" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="600" fill="#17243d" text-anchor="start">Model Root</text>
+<rect x="146" y="194" width="130" height="44" rx="8" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="164" y="221" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="600" fill="#17243d" text-anchor="start">A</text>
+<rect x="146" y="257" width="130" height="44" rx="8" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="164" y="284" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="600" fill="#17243d" text-anchor="start">B</text>
+<rect x="258" y="311" width="130" height="44" rx="8" fill="#eaf0ff" stroke="#5268d8" stroke-width="1.5" />
+<text x="276" y="338" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="600" fill="#17243d" text-anchor="start">B-1</text>
+<line x1="137" y1="177" x2="137" y2="286" stroke="#526279" stroke-width="2" stroke-linecap="round" />
+<line x1="137" y1="200" x2="145" y2="200" stroke="#526279" stroke-width="2" stroke-linecap="round" />
+<line x1="137" y1="263" x2="145" y2="263" stroke="#526279" stroke-width="2" stroke-linecap="round" />
+<line x1="212" y1="284" x2="240" y2="284" stroke="#526279" stroke-width="2" stroke-linecap="round" />
+<line x1="240" y1="284" x2="240" y2="317" stroke="#526279" stroke-width="2" stroke-linecap="round" />
+<line x1="240" y1="317" x2="257" y2="317" stroke="#526279" stroke-width="2" stroke-linecap="round" />
+<rect x="520" y="70" width="490" height="340" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="542" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">TreeView · 逐视图展开状态</text>
+<text x="542" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">根容器不占一行；B 的展开只改变可见投影</text>
+<text x="553" y="155" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="700" fill="#5268d8" text-anchor="start">B 折叠</text>
+<text x="786" y="155" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="700" fill="#5268d8" text-anchor="start">B 展开</text>
+<text x="552" y="386" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="600" fill="#1e9b83" text-anchor="start">右侧多出一行，但真实业务节点没有新增或删除。</text>
+<rect x="544" y="173" width="205" height="40" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" /><text x="574" y="199" font-family="Noto Sans CJK SC, sans-serif" font-size="14" fill="#17243d">A</text><rect x="544" y="226" width="205" height="40" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" /><text x="574" y="252" font-family="Noto Sans CJK SC, sans-serif" font-size="14" fill="#17243d">B</text><path d="M 556 238 L 565 246 L 556 254 Z" fill="#5268d8" /><rect x="777" y="173" width="205" height="40" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" /><text x="807" y="199" font-family="Noto Sans CJK SC, sans-serif" font-size="14" fill="#17243d">A</text><rect x="777" y="226" width="205" height="40" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" /><text x="807" y="252" font-family="Noto Sans CJK SC, sans-serif" font-size="14" fill="#17243d">B</text><path d="M 788 240 L 798 240 L 793 249 Z" fill="#5268d8" /><rect x="777" y="279" width="205" height="40" rx="6" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" /><text x="821" y="305" font-family="Noto Sans CJK SC, sans-serif" font-size="14" fill="#17243d">B-1</text></svg>

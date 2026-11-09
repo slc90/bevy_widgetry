@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="445" viewBox="0 0 1040 445" role="img" aria-label="Tabs · 切换可见页面，不重新创建页面状态">
+<rect width="1040" height="445" fill="#f8fafc"/>
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">Tabs · 切换可见页面，不重新创建页面状态</text>
+<rect x="28" y="70" width="480" height="327" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="50" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">当前页 A</text>
+<text x="50" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">两页都保持原有实体与内部状态</text>
+<rect x="53" y="140" width="430" height="55" rx="7" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" />
+<rect x="60" y="148" width="150" height="40" rx="7" fill="#eaf0ff" stroke="#5268d8" stroke-width="1.5" />
+<text x="135" y="174" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="700" fill="#5268d8" text-anchor="middle">页面 A</text>
+<rect x="218" y="148" width="150" height="40" rx="7" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="293" y="174" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#526279" text-anchor="middle">页面 B</text>
+<rect x="53" y="206" width="430" height="143" rx="9" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="76" y="245" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#526279" text-anchor="start">页面 A 的输入状态：</text>
+<rect x="76" y="261" width="290" height="55" rx="6" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="89" y="294" font-family="Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" fill="#17243d" text-anchor="start">尚未提交的文字</text>
+<rect x="532" y="70" width="480" height="327" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="554" y="104" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">切换到页 B</text>
+<text x="554" y="129" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">两页都保持原有实体与内部状态</text>
+<rect x="557" y="140" width="430" height="55" rx="7" fill="#f0f4fa" stroke="#d7dfea" stroke-width="1.5" />
+<rect x="564" y="148" width="150" height="40" rx="7" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="639" y="174" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="400" fill="#526279" text-anchor="middle">页面 A</text>
+<rect x="722" y="148" width="150" height="40" rx="7" fill="#eaf0ff" stroke="#5268d8" stroke-width="1.5" />
+<text x="797" y="174" font-family="Noto Sans CJK SC, sans-serif" font-size="14" font-weight="700" fill="#5268d8" text-anchor="middle">页面 B</text>
+<rect x="557" y="206" width="430" height="143" rx="9" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5" />
+<text x="580" y="252" font-family="Noto Sans CJK SC, sans-serif" font-size="16" font-weight="650" fill="#17243d" text-anchor="start">页面 B 正在显示</text>
+<text x="580" y="298" font-family="Noto Sans CJK SC, sans-serif" font-size="13" font-weight="400" fill="#526279" text-anchor="start">页面 A 暂时隐藏，仍然存在</text>
+</svg>

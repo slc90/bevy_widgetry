@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1110" height="470" viewBox="0 0 1110 470" role="img" aria-label="Canvas · 模型坐标与视图变换分开">
+<rect width="1110" height="470" fill="#f8fafc"/>
+<text x="32" y="39" font-family="Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" fill="#17243d" text-anchor="start">Canvas · 模型坐标与视图变换分开</text>
+<rect x="30" y="65" width="510" height="355" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5"/>
+<text x="52" y="99" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">Document 坐标</text>
+<text x="52" y="124" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">固定的图形与 Transform</text>
+<line x1="90" y1="150" x2="90" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="155" y1="150" x2="155" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="220" y1="150" x2="220" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="285" y1="150" x2="285" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="350" y1="150" x2="350" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="415" y1="150" x2="415" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="90" y1="150" x2="450" y2="150" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="90" y1="215" x2="450" y2="215" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="90" y1="280" x2="450" y2="280" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="90" y1="345" x2="450" y2="345" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="90" y1="150" x2="455" y2="150" stroke="#526279" stroke-width="2.3" stroke-linecap="round"/>
+<path d="M 446.5,155.2 L 455,150 L 446.5,144.8" fill="none" stroke="#526279" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="90" y1="150" x2="90" y2="355" stroke="#526279" stroke-width="2.3" stroke-linecap="round"/>
+<path d="M 84.8,346.5 L 90,355 L 95.2,346.5" fill="none" stroke="#526279" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="458" y="155" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">x</text>
+<text x="82" y="377" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">y</text>
+<rect x="175" y="268" width="135" height="58" rx="7" fill="#eaf0ff" stroke="#5268d8" stroke-width="2"/>
+<circle cx="385" cy="244" r="22" fill="#e6f7f1" stroke="#1e9b83" stroke-width="2"/>
+<text x="182" y="136" font-family="Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#526279" text-anchor="start">Shape #17 / #21 仍是同一业务实体</text>
+<rect x="570" y="65" width="510" height="355" rx="16" fill="#ffffff" stroke="#d7dfea" stroke-width="1.5"/>
+<text x="592" y="99" font-family="Noto Sans CJK SC, sans-serif" font-size="17" font-weight="700" fill="#17243d" text-anchor="start">CanvasView 呈现</text>
+<text x="592" y="124" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">平移 + 缩放后的屏幕投影</text>
+<line x1="630" y1="150" x2="630" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="695" y1="150" x2="695" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="760" y1="150" x2="760" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="825" y1="150" x2="825" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="890" y1="150" x2="890" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="955" y1="150" x2="955" y2="355" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="630" y1="150" x2="990" y2="150" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="630" y1="215" x2="990" y2="215" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="630" y1="280" x2="990" y2="280" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="630" y1="345" x2="990" y2="345" stroke="#f0f4fa" stroke-width="1" stroke-linecap="round"/>
+<line x1="630" y1="150" x2="995" y2="150" stroke="#526279" stroke-width="2.3" stroke-linecap="round"/>
+<path d="M 986.5,155.2 L 995,150 L 986.5,144.8" fill="none" stroke="#526279" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="630" y1="150" x2="630" y2="355" stroke="#526279" stroke-width="2.3" stroke-linecap="round"/>
+<path d="M 624.8,346.5 L 630,355 L 635.2,346.5" fill="none" stroke="#526279" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="998" y="155" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">x</text>
+<text x="622" y="377" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="400" fill="#526279" text-anchor="start">y</text>
+<rect x="685" y="280" width="195.75" height="84.1" rx="10.15" fill="#eaf0ff" stroke="#5268d8" stroke-width="2.9"/>
+<circle cx="989.625" cy="245.2" r="31.9" fill="#e6f7f1" stroke="#1e9b83" stroke-width="2.9"/>
+<text x="722" y="136" font-family="Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#526279" text-anchor="start">Shape #17 / #21 仍是同一业务实体</text>
+<rect x="854" y="102" width="195" height="28" rx="14" fill="#eaf0ff" stroke="#eaf0ff" stroke-width="0"/>
+<text x="951.5" y="122" font-family="Noto Sans CJK SC, sans-serif" font-size="12" font-weight="650" fill="#5268d8" text-anchor="middle">View zoom = 145%</text>
+</svg>
