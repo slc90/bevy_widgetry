@@ -10,7 +10,7 @@ Widgetry 基于 Bevy 0.20 提供控件、数据视图、绘图与桌面应用基
 
 ```toml
 [dependencies]
-bevy = { version = "=0.20.0", features = ["bevy_scene", "bevy_ui_widgets", "bevy_input_focus", "ui_picking"] }
+bevy = { version = "*", features = ["bevy_scene", "bevy_ui_widgets", "bevy_input_focus", "ui_picking"] }
 bevy_widgetry = { git = "https://github.com/slc90/bevy_widgetry", default-features = false, features = ["button"] }
 ```
 

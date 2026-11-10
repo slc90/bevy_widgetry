@@ -593,7 +593,7 @@ dependencies = [
 [[package]]
 name = "bevy_brp_extras"
 version = "0.4.2"
-source = "git+https://github.com/slc90/bevy_brp?tag=0.4.2#25e014bb7a3c08b77ecf63369cb612df2ff6e5be"
+source = "git+https://github.com/slc90/bevy_brp#25e014bb7a3c08b77ecf63369cb612df2ff6e5be"
 dependencies = [
  "bevy",
  "bevy_remote",
@@ -610,7 +610,7 @@ dependencies = [
 [[package]]
 name = "bevy_brp_runtime"
 version = "0.4.2"
-source = "git+https://github.com/slc90/bevy_brp?tag=0.4.2#25e014bb7a3c08b77ecf63369cb612df2ff6e5be"
+source = "git+https://github.com/slc90/bevy_brp#25e014bb7a3c08b77ecf63369cb612df2ff6e5be"
 dependencies = [
  "async-channel",
  "async-io",
@@ -6360,7 +6360,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",

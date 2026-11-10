@@ -49,8 +49,8 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std"] }
-bevy_app = { version = "=0.20.0", default-features = false, features = ["std"] }
+bevy_ecs = { version = "*", default-features = false, features = ["std"] }
+bevy_app = { version = "*", default-features = false, features = ["std"] }
 lyon = "1.0.19"
 bevy_widgetry_job = { path = "crates/job" }
 futures-util = "0.3.34"
@@ -62,12 +62,12 @@ async-broadcast = "=0.7.2"
 tracing = "0.1.44"
 unicode-segmentation = "1.13.3"
 url = "2.5.8"
-bevy_brp_runtime = { git = "https://github.com/slc90/bevy_brp", tag = "0.4.2" }
+bevy_brp_runtime = { git = "https://github.com/slc90/bevy_brp" }
 wgpu = { version = "30", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }
 serde_json = "1.0"
-bevy_remote = "=0.20.0"
+bevy_remote = "*"
 winsafe = { version = "=0.0.29", default-features = false, features = [
   "kernel",
 ] }
@@ -98,7 +98,7 @@ time = { version = "0.3.55", features = [
 ] }
 
 [workspace.dependencies.bevy]
-version = "=0.20.0"
+version = "*"
 default-features = false
 # Bevy's ui profile also enables extra game and platform features.
 # List required features explicitly to keep the library's compilation scope bounded.
@@ -155,7 +155,5 @@ opt-level = 3
 [profile.release]
 debug = "line-tables-only"
 
-# 配合BRP使用的MCP
-# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag 0.4.2 --locked
-[workspace.metadata.tools]
-bevy_brp_mcp = "0.4.2"
+# Install BRP MCP from the Git default branch.
+# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --locked
