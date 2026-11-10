@@ -154,6 +154,3 @@ opt-level = 3
 
 [profile.release]
 debug = "line-tables-only"
-
-# Install BRP MCP from the Git default branch.
-# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --locked
