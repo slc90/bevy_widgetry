@@ -10,6 +10,8 @@ bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 time.workspace = true
+tracing.workspace = true
+tracing-log.workspace = true
 
 [lints]
 workspace = true

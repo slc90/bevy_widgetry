@@ -1871,7 +1871,9 @@ dependencies = [
  "bevy",
  "bevy_widgetry_diagnostics",
  "time",
+ "tracing",
  "tracing-appender",
+ "tracing-log",
  "tracing-subscriber",
 ]
 

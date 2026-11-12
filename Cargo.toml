@@ -60,6 +60,7 @@ futures-timer = "3.0.4"
 win-custody = "=0.1.1"
 async-broadcast = "=0.7.2"
 tracing = "0.1.44"
+tracing-log = "0.2.0"
 unicode-segmentation = "1.13.3"
 url = "2.5.8"
 bevy_brp_runtime = { git = "https://github.com/slc90/bevy_brp" }

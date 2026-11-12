@@ -142,7 +142,8 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     assert!(!contents.contains("宿主TRACE默认关闭验证"));
     assert!(!contents.contains("库TRACE默认关闭验证"));
     assert!(!contents.contains('\u{1b}'));
-    assert!(!contents.contains("bevy_widgetry"));
+    assert!(contents.contains("app_logging (app_logging.rs:"));
+    assert!(!contents.contains("crates\\app_logging\\tests\\"));
     let timestamp = contents.lines().next().ok_or("日志为空")?;
     assert_eq!(timestamp.as_bytes()[DATE_END], b' ');
     assert_eq!(timestamp.as_bytes()[SECOND_END], b'.');
