@@ -14,7 +14,7 @@ const NAMED_THREAD_MESSAGE: &str = "命名线程日志验证";
 const UNNAMED_THREAD_MESSAGE: &str = "未命名线程日志验证";
 
 use bevy::ecs::error::Severity;
-use bevy::log::{debug, error, info, trace, warn};
+use bevy::log::{debug, error, info, info_span, trace, warn};
 use bevy::prelude::*;
 use bevy_widgetry_app_logging::{AppLogging, LoggingStage, file_layer, log_plugin, terminal_layer};
 use std::fs;
@@ -107,6 +107,22 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     trace!(target: "ordinary_module", "宿主TRACE默认关闭验证");
     trace!(target: "bevy_widgetry", "库TRACE默认关闭验证");
     error!(target: "widget_gallery", error_id = "probe", phase = "unhandled", backtrace = %"frame1\nframe2", "最终报告验证");
+    error!(target: "external_dependency", error_id = "source-path-probe",
+        origin = %r"C:\private-build\crates\app_logging\src\writer.rs:12:4",
+        details = %"0: external::read\n   at C:\\builder\\.cargo\\registry\\src\\index\\dep-1.2.3\\src\\lib.rs:5:2\n1: address_only",
+        path = %r"D:\user files\config\config.ron", assets = %r"D:\assets\image.png",
+        "诊断字段安全输出验证");
+    {
+        let span = info_span!("diagnostic_span", details = tracing::field::Empty, path = %r"D:\user files\config.ron");
+        span.record(
+            "details",
+            tracing::field::display(
+                "0: external::read\n   at C:\\private-build\\generated.rs\n1: symbol_only",
+            ),
+        );
+        let _entered = span.enter();
+        info!("Span 诊断字段验证");
+    }
     let named_thread_id = std::thread::Builder::new()
         .name(PRODUCER_THREAD_NAME.into())
         .spawn(|| {
@@ -136,6 +152,14 @@ fn official_log_plugin_writes_source_and_flushes_on_guard_drop() -> Result {
     assert!(contents.contains("guard 释放前的最后一条日志"));
     assert!(contents.contains("必要处理诊断"));
     assert!(contents.contains("frame1\nframe2"));
+    assert!(contents.contains("origin=crates/app_logging/src/writer.rs:12:4"));
+    assert!(contents.contains("at dep-1.2.3/src/lib.rs:5:2"));
+    assert!(contents.contains("1: address_only"));
+    assert!(contents.contains(r"path=D:\user files\config\config.ron"));
+    assert!(contents.contains(r"assets=D:\assets\image.png"));
+    assert!(!contents.contains("private-build"));
+    assert!(!contents.contains("builder"));
+    assert!(contents.contains("diagnostic_span{path=D:\\user files\\config.ron details=0: external::read\n   at generated.rs\n1: symbol_only}"));
     assert!(contents.contains("普通模块DEBUG过滤验证"));
     assert!(contents.contains("库生命周期DEBUG验证"));
     assert!(contents.contains("宿主风险WARN验证"));

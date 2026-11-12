@@ -1,6 +1,7 @@
 const FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
 
 use crate::error::{self, LoggingError, LoggingFailure, LoggingSource, LoggingStage};
+use crate::{safe_backtrace, safe_diagnostic, safe_location};
 use bevy_widgetry_diagnostics::WidgetryFailure;
 use std::{
     io::{self, Write},
@@ -46,7 +47,7 @@ impl Health {
                 eprintln!(
                     "ERROR phase=source error_id={} error={} 日志后端失败，使用应急输出",
                     failure.origin().id(),
-                    failure
+                    safe_diagnostic(failure)
                 )
             },
         ));
@@ -171,8 +172,8 @@ impl Drop for LoggingGuard {
             eprintln!(
                 "ERROR phase=unhandled error_id={} origin={} backtrace={} 日志输出未能完整保存",
                 failure.origin().id(),
-                failure.origin().location(),
-                failure.origin().backtrace()
+                safe_location(failure.origin().location()),
+                safe_backtrace(failure.origin().backtrace())
             );
         }
     }
@@ -309,6 +310,45 @@ mod tests {
                 &failure,
                 writer.health.lock().failure.as_ref().unwrap()
             ));
+        }
+    }
+
+    #[test]
+    fn emergency_output_is_independent_and_does_not_expose_build_sources() {
+        const CHILD: &str = "WIDGETRY_LOGGING_EMERGENCY_CHILD";
+        if let Some(mode) = std::env::var_os(CHILD) {
+            let (mut writer, guard) = prepare(
+                Broken {
+                    flush: mode == "flush",
+                    zero: false,
+                },
+                Path::new(r"D:\runtime logs\broken.log"),
+                1,
+            );
+            writer.write_all(b"diagnostic\n").unwrap();
+            drop(guard);
+            return;
+        }
+        for mode in ["write", "flush"] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "writer::tests::emergency_output_is_independent_and_does_not_expose_build_sources", "--nocapture"])
+                .env(CHILD, mode)
+                .output().unwrap();
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(output.status.success(), "{stderr}");
+            assert!(stderr.contains("phase=source error_id="), "{stderr}");
+            assert!(stderr.contains("phase=unhandled error_id="), "{stderr}");
+            assert!(
+                stderr.contains(r"path=D:\runtime logs\broken.log"),
+                "{stderr}"
+            );
+            assert!(
+                stderr.contains("origin=crates/app_logging/src/writer.rs:"),
+                "{stderr}"
+            );
+            assert!(!stderr.contains(env!("CARGO_MANIFEST_DIR")), "{stderr}");
+            assert!(!stderr.contains(r".cargo\registry\src"), "{stderr}");
+            assert!(!stderr.contains(r".rustup\toolchains"), "{stderr}");
         }
     }
 

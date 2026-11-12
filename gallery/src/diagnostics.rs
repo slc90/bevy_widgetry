@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_ecs::error::{ErrorContext, Severity};
+use bevy_widgetry::app_logging::{safe_backtrace, safe_diagnostic, safe_location};
 use bevy_widgetry::diagnostics::{
     ErrorFrame, WidgetryFailure,
     bevy::{Diagnostic, dispatch_error},
@@ -44,7 +45,7 @@ impl Error for GalleryError {
 #[track_caller]
 pub(crate) fn failure(kind: GalleryError, context: ErrorFrame) -> GalleryFailure {
     WidgetryFailure::new_with_source_reporter(kind, context, |failure| {
-        error!(target: "widget_gallery", error_id = %failure.origin().id(), phase = "source", error = %failure, "Gallery 操作失败");
+        error!(target: "widget_gallery", error_id = %failure.origin().id(), phase = "source", error = %safe_diagnostic(failure), "Gallery 操作失败");
     })
 }
 
@@ -110,16 +111,16 @@ pub(crate) fn handler(error: BevyError, context: ErrorContext) {
             match error.severity() {
                 Severity::Ignore => {}
                 Severity::Trace | Severity::Debug => {
-                    debug!(target: "widget_gallery", phase = "unhandled", native_severity = ?error.severity(), error = %error, details = ?error, ecs_context = ?context, "Gallery 外来错误未被处理")
+                    debug!(target: "widget_gallery", phase = "unhandled", native_severity = ?error.severity(), error = %safe_diagnostic(&error), details = %safe_diagnostic(format_args!("{error:?}")), ecs_context = ?context, "Gallery 外来错误未被处理")
                 }
                 Severity::Info => {
-                    info!(target: "widget_gallery", phase = "unhandled", error = %error, details = ?error, ecs_context = ?context, "Gallery 外来错误未被处理")
+                    info!(target: "widget_gallery", phase = "unhandled", error = %safe_diagnostic(&error), details = %safe_diagnostic(format_args!("{error:?}")), ecs_context = ?context, "Gallery 外来错误未被处理")
                 }
                 Severity::Warning => {
-                    warn!(target: "widget_gallery", phase = "unhandled", error = %error, details = ?error, ecs_context = ?context, "Gallery 外来错误未被处理")
+                    warn!(target: "widget_gallery", phase = "unhandled", error = %safe_diagnostic(&error), details = %safe_diagnostic(format_args!("{error:?}")), ecs_context = ?context, "Gallery 外来错误未被处理")
                 }
                 Severity::Error | Severity::Panic => {
-                    error!(target: "widget_gallery", phase = "unhandled", error = %error, details = ?error, ecs_context = ?context, "Gallery 外来错误未被处理")
+                    error!(target: "widget_gallery", phase = "unhandled", error = %safe_diagnostic(&error), details = %safe_diagnostic(format_args!("{error:?}")), ecs_context = ?context, "Gallery 外来错误未被处理")
                 }
             }
             if error.severity() == Severity::Panic {
@@ -142,8 +143,8 @@ fn report(diagnostic: &dyn Diagnostic, error: &BevyError, context: &ErrorContext
         .unwrap_or_default()
         .trim();
     error!(target: "widget_gallery", error_id = %diagnostic.origin().id(), phase = "unhandled", ecs_context = ?context,
-        bevy_context,
-        origin = %diagnostic.origin().location(), backtrace = %diagnostic.origin().backtrace(),
+        bevy_context = %safe_diagnostic(bevy_context),
+        origin = %safe_location(diagnostic.origin().location()), backtrace = %safe_backtrace(diagnostic.origin().backtrace()),
         propagation = ?diagnostic.contexts().get(1..).unwrap_or_default(), "Gallery 错误最终未被处理");
 }
 
@@ -154,23 +155,25 @@ pub(crate) fn startup(error: BevyError, logging_ready: bool) {
         for diagnostic in managed.diagnostics() {
             if logging_ready {
                 error!(target: "widget_gallery", error_id = %diagnostic.origin().id(), phase = "unhandled", boundary = "startup",
-                    origin = %diagnostic.origin().location(), backtrace = %diagnostic.origin().backtrace(),
+                    origin = %safe_location(diagnostic.origin().location()), backtrace = %safe_backtrace(diagnostic.origin().backtrace()),
                     propagation = ?diagnostic.contexts().get(1..).unwrap_or_default(), "Gallery 启动终止");
             } else {
                 eprintln!(
                     "ERROR phase=unhandled boundary=startup error_id={} error={} origin={} backtrace={} Gallery 启动终止",
                     diagnostic.origin().id(),
-                    diagnostic,
-                    diagnostic.origin().location(),
-                    diagnostic.origin().backtrace()
+                    safe_diagnostic(diagnostic),
+                    safe_location(diagnostic.origin().location()),
+                    safe_backtrace(diagnostic.origin().backtrace())
                 );
             }
         }
     } else if logging_ready {
-        error!(target: "widget_gallery", phase = "unhandled", boundary = "startup", error = %error, details = ?error, "Gallery 启动终止");
+        error!(target: "widget_gallery", phase = "unhandled", boundary = "startup", error = %safe_diagnostic(&error), details = %safe_diagnostic(format_args!("{error:?}")), "Gallery 启动终止");
     } else {
         eprintln!(
-            "ERROR phase=unhandled boundary=startup error={error} details={error:?} Gallery 启动终止"
+            "ERROR phase=unhandled boundary=startup error={} details={} Gallery 启动终止",
+            safe_diagnostic(&error),
+            safe_diagnostic(format_args!("{error:?}"))
         );
     }
 }
@@ -179,8 +182,8 @@ pub(crate) fn logging_shutdown(failure: &bevy_widgetry::app_logging::LoggingFail
     eprintln!(
         "ERROR phase=unhandled boundary=logging_shutdown error_id={} origin={} backtrace={} Gallery 日志保存失败",
         failure.origin().id(),
-        failure.origin().location(),
-        failure.origin().backtrace()
+        safe_location(failure.origin().location()),
+        safe_backtrace(failure.origin().backtrace())
     );
 }
 
@@ -215,6 +218,57 @@ mod tests {
     use bevy_widgetry::diagnostics::bevy::{DiagnosticBatch, WidgetryEcsError};
     use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
     use std::io;
+
+    #[test]
+    fn emergency_startup_and_logging_shutdown_use_safe_views_without_a_subscriber() {
+        const CHILD: &str = "WIDGETRY_GALLERY_EMERGENCY_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            startup(error(io::Error::other("emergency-managed-reason")), false);
+            startup(
+                BevyError::new_with_backtrace(
+                    Severity::Error,
+                    io::Error::other("emergency-native-reason"),
+                    std::backtrace::Backtrace::force_capture(),
+                ),
+                false,
+            );
+            use bevy_widgetry::app_logging::{
+                LoggingError, LoggingFailure, LoggingSource, LoggingStage,
+            };
+            let failure = LoggingFailure::new(
+                LoggingError {
+                    stage: LoggingStage::Flush,
+                    path: PathBuf::from(r"D:\runtime logs\output.log"),
+                    source: LoggingSource::Io(std::sync::Arc::new(io::Error::other(
+                        "emergency-flush-reason",
+                    ))),
+                },
+                ErrorFrame::new("gallery.emergency_probe"),
+            );
+            logging_shutdown(&failure);
+            return;
+        }
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "diagnostics::tests::emergency_startup_and_logging_shutdown_use_safe_views_without_a_subscriber", "--nocapture"])
+            .env(CHILD, "1")
+            .output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{stderr}");
+        assert!(stderr.contains("boundary=startup error_id="), "{stderr}");
+        assert!(
+            stderr.contains("boundary=logging_shutdown error_id="),
+            "{stderr}"
+        );
+        assert!(stderr.contains("emergency-managed-reason"));
+        assert!(stderr.contains("emergency-native-reason"));
+        assert!(
+            stderr.contains("origin=gallery/src/diagnostics.rs:"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains(env!("CARGO_MANIFEST_DIR")), "{stderr}");
+        assert!(!stderr.contains(r".cargo\registry\src"), "{stderr}");
+        assert!(!stderr.contains(r".rustup\toolchains"), "{stderr}");
+    }
 
     #[test]
     fn native_trace_error_remains_diagnosable_without_a_trace_call() {

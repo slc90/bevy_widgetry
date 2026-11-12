@@ -2,7 +2,7 @@ const WRITER_QUEUE_CAPACITY: usize = 1024;
 
 use crate::{
     error::{LoggingFailure, LoggingSource, LoggingStage, failure},
-    event_format::FileEventFormat,
+    event_format::{DiagnosticFields, FileEventFormat},
     writer::{self, FileWriter, LoggingGuard},
 };
 use bevy::log::{BoxedFmtLayer, BoxedLayer};
@@ -55,6 +55,7 @@ pub fn file_layer(app: &mut App) -> Option<BoxedLayer> {
     let output = app.world().get_resource::<LogOutput>()?;
     Some(Box::new(
         tracing_subscriber::fmt::layer()
+            .fmt_fields(DiagnosticFields)
             .event_format(FileEventFormat(timer(output.offset)))
             .with_ansi(false)
             .with_writer(output.writer.clone())

@@ -1,3 +1,4 @@
+use crate::diagnostic_format::sanitize_text;
 use std::fmt;
 use tracing::{Event, Subscriber};
 use tracing_log::NormalizeEvent;
@@ -9,6 +10,21 @@ use tracing_subscriber::{
 };
 
 pub(crate) struct FileEventFormat<T>(pub T);
+
+pub(crate) struct DiagnosticFields;
+
+impl<'writer> FormatFields<'writer> for DiagnosticFields {
+    fn format_fields<R: tracing_subscriber::field::RecordFields>(
+        &self,
+        mut writer: Writer<'writer>,
+        fields: R,
+    ) -> fmt::Result {
+        let mut text = String::new();
+        tracing_subscriber::fmt::format::DefaultFields::new()
+            .format_fields(Writer::new(&mut text), fields)?;
+        writer.write_str(&sanitize_text(&text))
+    }
+}
 
 impl<S, N, T> FormatEvent<S, N> for FileEventFormat<T>
 where

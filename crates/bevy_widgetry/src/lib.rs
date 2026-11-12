@@ -36,7 +36,7 @@ pub mod power_inhibit {
 pub mod app_logging {
     pub use bevy_widgetry_app_logging::{
         AppLogging, LoggingError, LoggingFailure, LoggingGuard, LoggingSource, LoggingStage,
-        file_layer, log_plugin, terminal_layer,
+        file_layer, log_plugin, safe_backtrace, safe_diagnostic, safe_location, terminal_layer,
     };
 }
 
