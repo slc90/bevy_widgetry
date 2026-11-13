@@ -888,6 +888,7 @@ mod tests {
     #[test]
     fn owned_combo_reuses_owner_palette_and_restores_standalone_on_release() {
         let (mut app, _, roots) = fixture(1);
+        settle_indicator_images(&mut app);
         let root = roots[0];
         let (field, _, _) = parts(app.world(), root);
         let owner = app.world_mut().spawn_empty().id();
@@ -939,6 +940,7 @@ mod tests {
             @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|value: &u32| bsn_list! {Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText})} }
         }).unwrap();
         app.update();
+        settle_indicator_images(&mut app);
         clear_style_work(&mut app);
         let mut colors = crate::WidgetryComboBoxColorOverrides::default();
         colors.field.normal.background = Some(Color::srgb(0.2, 0.4, 0.6));
