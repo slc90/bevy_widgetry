@@ -31,6 +31,7 @@ use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
+use bevy_widgetry_path_display::display_path;
 use bevy_widgetry_scroll_area::{WidgetryScrollArea, WidgetryScrollAreaPlugin};
 use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry_text_field::{
@@ -38,7 +39,7 @@ use bevy_widgetry_text_field::{
 };
 use bevy_widgetry_tooltip::{TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin};
 use std::collections::BTreeMap;
-use std::path::{Component, Path, PathBuf, Prefix};
+use std::path::PathBuf;
 
 #[cfg(test)]
 thread_local! {
@@ -251,21 +252,6 @@ pub(crate) fn editor_scene(
         template(move |_| Ok(Part {root, kind}))
         template(move |_| Ok(bevy_widgetry_window::WidgetryWindowInitialFocus(if kind == PartKind::Filename {0} else {i32::MAX})))
         Node { min_width: px(0), flex_grow: 1.0, height: px(CONTROL_HEIGHT) }
-    }
-}
-
-pub(crate) fn display_path(path: &Path) -> String {
-    let text = path.to_string_lossy();
-    match path.components().next() {
-        Some(Component::Prefix(prefix)) => match prefix.kind() {
-            Prefix::VerbatimDisk(_) => text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned(),
-            Prefix::VerbatimUNC(_, _) => text
-                .strip_prefix(r"\\?\UNC\")
-                .map(|tail| format!(r"\\{tail}"))
-                .unwrap_or_else(|| text.into_owned()),
-            _ => text.into_owned(),
-        },
-        _ => text.into_owned(),
     }
 }
 

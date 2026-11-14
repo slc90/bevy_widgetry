@@ -75,6 +75,7 @@ commands.spawn_scene_with_error_handler(bsn! {
 | `power_inhibit` | 空闲息屏与自动休眠抑制 |
 | `ui_scale` | 普通窗口统一缩放 |
 | `splash` | 启动画面首帧显示与主窗交接 |
+| `path_display` | 公开 Windows 路径显示转换函数 |
 
 这些扩展默认关闭。Cargo Feature 在依赖图中合并；同一个应用的其他依赖开启能力后，不能靠某一条依赖声明将其反向关闭。
 

@@ -36,6 +36,8 @@ flowchart TD
 
 领域不完全等同于屏幕上的一个矩形。CanvasDocument、波形 Source 适配和任务控制都有自己的数据或生命周期，不能仅因为最终呈现在 UI 上就被视为视觉子部件。
 
+`crates/path_display`（`bevy_widgetry_path_display`）承载无运行时状态的 Windows 路径显示转换，只依赖标准库。FileDialog 直接依赖它生成界面文字；Facade 通过默认关闭的 `path_display` Feature 导出，Gallery 显式启用该 Feature 后复用转换，再执行自身的摘要截断。其他 Rust 库可以直接依赖它，无需引入 Bevy 或 FileDialog。文件操作及 Shell UTF-16 路径转换仍使用原始路径。
+
 ## 把共同问题交给共享机制
 
 多个控件都会遇到禁用继承、输入目标、主题配色和错误传播。如果每个模块分别解释这些语义，它们在组合时就难以保持一致。

@@ -11,6 +11,7 @@ use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::text::{EditableText, TextEdit};
 use bevy::ui::{InteractionDisabled, Pressed};
+use bevy_widgetry_path_display::display_path;
 use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -441,7 +442,7 @@ fn keyboard_job(world: &mut World, job: KeyRequest) -> Result {
             PartKind::Path => {
                 let path = state
                     .current_path()
-                    .filter(|path| crate::style::display_path(path) == text)
+                    .filter(|path| display_path(path) == text)
                     .map(ToOwned::to_owned)
                     .unwrap_or_else(|| PathBuf::from(text));
                 Some(WidgetryFileDialogAction::Navigate(

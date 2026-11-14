@@ -13,9 +13,9 @@ use crate::i18n::{Language, LocalizedText, LocalizedWindowTitle, TextKey, locali
 use bevy::{prelude::*, ui::Checked, ui_widgets::Activate, window::PrimaryWindow};
 use bevy_widgetry::{
     button::WidgetryButton, check_box::WidgetryCheckBox, file_dialog::*,
-    scene::WidgetrySceneCommandsExt,
+    path_display::display_path, scene::WidgetrySceneCommandsExt,
 };
-use std::path::{Component as PathComponent, Path, PathBuf, Prefix};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 pub(super) struct FileDialogDemoPlugin;
@@ -143,18 +143,7 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
 }
 
 fn bounded_path(path: &Path) -> String {
-    let text = path.to_string_lossy();
-    let text = match path.components().next() {
-        Some(PathComponent::Prefix(prefix)) => match prefix.kind() {
-            Prefix::VerbatimDisk(_) => text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned(),
-            Prefix::VerbatimUNC(_, _) => text
-                .strip_prefix(r"\\?\UNC\")
-                .map(|tail| format!(r"\\{tail}"))
-                .unwrap_or_else(|| text.into_owned()),
-            _ => text.into_owned(),
-        },
-        _ => text.into_owned(),
-    };
+    let text = display_path(path);
     let mut summary: String = text.chars().take(ERROR_SUMMARY_CHARACTERS).collect();
     if text.chars().nth(ERROR_SUMMARY_CHARACTERS).is_some() {
         summary.push('…');

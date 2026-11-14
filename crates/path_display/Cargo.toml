@@ -1,0 +1,8 @@
+[package]
+publish = false
+name = "bevy_widgetry_path_display"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true

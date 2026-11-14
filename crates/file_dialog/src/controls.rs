@@ -20,6 +20,7 @@ use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
+use bevy_widgetry_path_display::display_path;
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use std::ffi::OsString;
@@ -325,10 +326,7 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
 
 fn selection_summary(state: &WidgetryFileDialogState) -> String {
     if state.selected().is_empty() && state.mode() == WidgetryFileDialogMode::PickDirectory {
-        return state
-            .current_path()
-            .map(crate::style::display_path)
-            .unwrap_or_default();
+        return state.current_path().map(display_path).unwrap_or_default();
     }
     let names = state
         .selected()

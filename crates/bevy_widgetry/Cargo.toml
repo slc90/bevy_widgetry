@@ -66,8 +66,10 @@ power_inhibit = ["dep:bevy_widgetry_power_inhibit"]
 job = ["dep:bevy_widgetry_job"]
 ui_scale = ["dep:bevy_widgetry_ui_scale"]
 splash = ["dep:bevy_widgetry_splash"]
+path_display = ["dep:bevy_widgetry_path_display"]
 
 [dependencies]
+bevy_widgetry_path_display = { workspace = true, optional = true }
 bevy_widgetry_splash = { path = "../splash", optional = true }
 bevy_widgetry_ui_scale = { path = "../ui_scale", optional = true }
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }

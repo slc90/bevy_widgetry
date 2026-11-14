@@ -42,6 +42,7 @@ members = [
   "crates/power_inhibit",
   "crates/message_box",
   "crates/file_dialog",
+  "crates/path_display",
   "gallery",
 ]
 [workspace.package]
@@ -53,6 +54,7 @@ bevy_ecs = { version = "*", default-features = false, features = ["std"] }
 bevy_app = { version = "*", default-features = false, features = ["std"] }
 lyon = "1.0.19"
 bevy_widgetry_job = { path = "crates/job" }
+bevy_widgetry_path_display = { path = "crates/path_display" }
 futures-util = "0.3.34"
 futures-channel = "0.3.34"
 event-listener = "5.4.2"

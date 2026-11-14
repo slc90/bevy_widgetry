@@ -61,6 +61,7 @@
 | [Splash](splash.md) | 启动呈现与主窗交接 |
 | [Tray](tray.md) | 托盘图标、菜单与消息 |
 | [电源抑制](power_inhibit.md) | 空闲息屏与休眠请求开关 |
+| [路径显示](path_display.md) | Windows Verbatim 路径的显示文字转换 |
 
 ## 任务、诊断与工程辅助
 

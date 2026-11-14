@@ -1834,6 +1834,7 @@ dependencies = [
  "bevy_widgetry_list_view",
  "bevy_widgetry_message_box",
  "bevy_widgetry_number_input",
+ "bevy_widgetry_path_display",
  "bevy_widgetry_power_inhibit",
  "bevy_widgetry_progress_bar",
  "bevy_widgetry_radio_group",
@@ -2034,6 +2035,7 @@ dependencies = [
  "bevy_widgetry_job",
  "bevy_widgetry_list_view",
  "bevy_widgetry_message_box",
+ "bevy_widgetry_path_display",
  "bevy_widgetry_scroll_area",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
@@ -2139,6 +2141,10 @@ dependencies = [
  "bevy_widgetry_text_field",
  "bevy_widgetry_theme",
 ]
+
+[[package]]
+name = "bevy_widgetry_path_display"
+version = "0.1.0"
 
 [[package]]
 name = "bevy_widgetry_power_inhibit"
