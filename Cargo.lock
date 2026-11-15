@@ -2145,6 +2145,10 @@ dependencies = [
 [[package]]
 name = "bevy_widgetry_path_display"
 version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "bevy_widgetry_power_inhibit"

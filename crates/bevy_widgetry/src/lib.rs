@@ -7,7 +7,7 @@ pub mod diagnostics {
 
 #[cfg(feature = "path_display")]
 pub mod path_display {
-    pub use bevy_widgetry_path_display::display_path;
+    pub use bevy_widgetry_path_display::{display_path, simplify_path};
 }
 
 pub use bevy_widgetry_core::window_scale::WindowScaleExcluded;
