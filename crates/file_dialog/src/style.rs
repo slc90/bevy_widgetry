@@ -39,6 +39,7 @@ use bevy_widgetry_text_field::{
 };
 use bevy_widgetry_tooltip::{TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin};
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::path::PathBuf;
 
 #[cfg(test)]
@@ -92,6 +93,7 @@ pub(crate) enum PartKind {
     Filter,
     FolderPanel,
     OverwritePanel,
+    OverwriteTarget,
 }
 
 #[derive(Component, Clone)]
@@ -111,29 +113,42 @@ pub(crate) fn apply_input(
     root: Entity,
     action: WidgetryFileDialogAction,
 ) -> Result {
+    let Some(state) = world.get::<WidgetryFileDialogState>(root) else {
+        return Ok(());
+    };
     if world.get::<InteractionDisabled>(root).is_some()
-        || world
-            .get::<WidgetryFileDialogState>(root)
-            .is_none_or(|state| state.session_state() != WidgetryFileDialogSessionState::Open)
+        || state.session_state() != WidgetryFileDialogSessionState::Open
     {
         return Ok(());
     }
-    world.entity_mut(root).remove::<Notice>();
-    if action == WidgetryFileDialogAction::Confirm
-        && world
-            .get::<WidgetryFileDialogState>(root)
-            .is_some_and(|state| state.mode() == WidgetryFileDialogMode::PickFile)
-    {
-        let Some(text) = crate::input::pick_filename_text(world, root)? else {
+    let filename = if action == WidgetryFileDialogAction::Confirm && edits_filename(state.mode()) {
+        let Some(text) = crate::input::filename_draft(world, root) else {
             return Ok(());
         };
-        apply_action(world, root, WidgetryFileDialogAction::Filename(text.into()))?;
+        if state.mode() == WidgetryFileDialogMode::PickFile && !state.confirmation_ready() {
+            return Ok(());
+        }
+        let empty_pick_draft = text.is_empty()
+            && state.mode() == WidgetryFileDialogMode::PickFile
+            && state.explicit_filename().is_none();
+        (empty_pick_draft || text != state.filename_for_editing().to_string_lossy()).then_some(text)
+    } else {
+        None
+    };
+    world.entity_mut(root).remove::<Notice>();
+    if let Some(text) = filename {
+        apply_action(
+            world,
+            root,
+            WidgetryFileDialogAction::Filename(text.as_str().into()),
+        )?;
+        crate::input::remember_submitted_filename(world, root, &text);
     }
     apply_action(world, root, action)
 }
 
 fn apply_action(world: &mut World, root: Entity, action: WidgetryFileDialogAction) -> Result {
-    match WidgetryFileDialog::apply(world, root, action) {
+    match WidgetryFileDialogHeadless::apply(world, root, action) {
         Ok(_) => Ok(()),
         Err(error) => {
             if let Ok(mut entity) = world.get_entity_mut(root) {
@@ -146,11 +161,7 @@ fn apply_action(world: &mut World, root: Entity, action: WidgetryFileDialogActio
                         .to_owned(),
                 ));
             }
-            if let Err(wake) = crate::runtime::wake(world) {
-                return Err(bevy_widgetry_job::JobFailure::from(error)
-                    .combine(wake.into())
-                    .into_bevy_error());
-            }
+            world.write_message(bevy::window::RequestRedraw);
             Err(error.into_bevy_error())
         }
     }
@@ -248,13 +259,16 @@ pub(crate) fn editor_scene(
         Node {width:px(CONTROL_ICON_SIZE),height:px(CONTROL_ICON_SIZE),margin:UiRect::left(px(SEARCH_ICON_MARGIN)),flex_shrink:0.0}
         template(|_| Ok(Pickable::IGNORE))
     });
-    bsn! {
+    let field = bsn! {
         @WidgetryTextField { @value: value, @children: {suffix.map(|scene| Box::new(scene) as Box<dyn SceneList>)} } Name(name)
         template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryTextField>::new(root)))
         template(move |_| Ok(Part {root, kind}))
         template(move |_| Ok(bevy_widgetry_window::WidgetryWindowInitialFocus(if kind == PartKind::Filename {0} else {i32::MAX})))
         Node { min_width: px(0), flex_grow: 1.0, height: px(CONTROL_HEIGHT) }
-    }
+    };
+    let filename_input =
+        (kind == PartKind::Filename).then(|| bsn! { on(crate::input::filename_ready) });
+    (field, filename_input)
 }
 
 fn shell_scene(
@@ -325,9 +339,17 @@ fn shell_scene(
     }
 }
 
+fn edits_filename(mode: WidgetryFileDialogMode) -> bool {
+    matches!(
+        mode,
+        WidgetryFileDialogMode::PickFile | WidgetryFileDialogMode::SaveFile
+    )
+}
+
 fn confirm_available(world: &World, root: Entity, state: &WidgetryFileDialogState) -> bool {
-    if state.mode() == WidgetryFileDialogMode::PickFile {
-        state.confirmation_ready() && crate::input::filename_available(world, root)
+    if edits_filename(state.mode()) {
+        crate::input::filename_draft(world, root)
+            .is_some_and(|text| state.can_confirm_filename(OsStr::new(&text)))
     } else {
         state.can_confirm()
     }

@@ -1,6 +1,5 @@
 const TITLE_LEFT_MARGIN: f32 = 10.0;
 
-use crate::headless::ReopenPolicy;
 use crate::*;
 use bevy::prelude::*;
 use bevy::window::{CursorSystems, RequestRedraw, WindowCloseRequested, WindowClosing};
@@ -42,34 +41,35 @@ struct Installed;
 
 pub(crate) fn scene(options: Option<WidgetryFileDialogWindow>) -> impl Scene {
     let owned = options.is_some();
-    (
-        bsn! { template(move |context| {
-            if let Some(existing) = context.entity.get::<Construction>() {return Ok(existing.clone());}
-            if let Some(options) = &options
-                && context.entity.get::<WidgetryFileDialogState>()
-                    .is_some_and(|state| state.session_state() != WidgetryFileDialogSessionState::Open)
-            {
-                return Err(crate::error::internal_error(FileDialogInternalFault::Window {
-                    requirement: "open FileDialog session",
-                    parent: options.parent,
-                }));
+    let construction = bsn! { template(move |context| {
+        if let Some(existing) = context.entity.get::<Construction>() {return Ok(existing.clone());}
+        if let Some(options) = &options
+            && context.entity.get::<WidgetryFileDialogState>()
+                .is_some_and(|state| state.session_state() != WidgetryFileDialogSessionState::Open)
+        {
+            return Err(crate::error::internal_error(FileDialogInternalFault::Window {
+                requirement: "open FileDialog session",
+                parent: options.parent,
+            }));
+        }
+        context.entity.world_scope(|world| -> Result<Construction, BevyError> {
+            if let Some(options) = &options {
+                if !world.contains_resource::<Installed>() {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "FileDialogPlugin", parent: options.parent }));}
+                if options.modality == WidgetryFileDialogModality::Modal && options.parent.is_none() {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "modal parent", parent: options.parent }));}
+                if let Some(parent) = options.parent && !is_widgetry_window(world, parent) {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "valid Widgetry parent", parent: options.parent }));}
             }
-            context.entity.world_scope(|world| -> Result<Construction, BevyError> {
-                if let Some(options) = &options {
-                    if !world.contains_resource::<Installed>() {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "FileDialogPlugin", parent: options.parent }));}
-                    if options.modality == WidgetryFileDialogModality::Modal && options.parent.is_none() {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "modal parent", parent: options.parent }));}
-                    if let Some(parent) = options.parent && !is_widgetry_window(world, parent) {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "valid Widgetry parent", parent: options.parent }));}
-                }
-                Ok(Construction(options.clone()))
-            })
-        }) },
-        bsn! {
-            template(move |context| {
-                let owned = context.entity.get::<Construction>().map_or(owned, |config| config.0.is_some());
-                Ok(if owned { ReopenPolicy::Forbidden } else { ReopenPolicy::Allowed })
-            })
-        },
-    )
+            Ok(Construction(options.clone()))
+        })
+    }) };
+    let restriction = owned.then(|| {
+        WidgetryFileDialogHeadless::prevent_reopen(|context| {
+            context
+                .entity
+                .get::<Construction>()
+                .is_none_or(|config| config.0.is_some())
+        })
+    });
+    (construction, restriction)
 }
 
 fn construct(event: On<Add<Construction>>, config: Query<&Construction>, mut commands: Commands) {
@@ -172,7 +172,7 @@ fn close_requests(
         let windows = windows.clone();
         commands.queue(move |world: &mut World| -> Result {
             if widgetry_window_target(world, root).is_some_and(|native| windows.contains(&native)) {
-                WidgetryFileDialog::apply(world, root, WidgetryFileDialogAction::Cancel)?;
+                WidgetryFileDialogHeadless::apply(world, root, WidgetryFileDialogAction::Cancel)?;
             }
             Ok(())
         });
@@ -238,12 +238,12 @@ fn sync_root(
         world.entity_mut(root).despawn();
         return Ok(());
     }
-    let awaiting = matches!(
-        state.confirmation(),
-        WidgetryFileDialogConfirmation::AwaitingOverwrite { .. }
-    ) && state.session_state() == WidgetryFileDialogSessionState::Open;
+    let awaiting = match state.confirmation() {
+        WidgetryFileDialogConfirmation::AwaitingOverwrite { path, token } => Some((path, *token)),
+        _ => None,
+    };
     if let Some((child, token)) = window.overwrite {
-        if !awaiting || token != state.token() {
+        if awaiting.is_none_or(|(_, pending)| token != pending) {
             if let Ok(child) = world.get_entity_mut(child) {
                 child.despawn();
             }
@@ -256,7 +256,7 @@ fn sync_root(
                 })?
                 .overwrite = None;
         } else if world.get_entity(child).is_err() {
-            WidgetryFileDialog::apply(
+            WidgetryFileDialogHeadless::apply(
                 world,
                 root,
                 WidgetryFileDialogAction::Overwrite {
@@ -273,15 +273,17 @@ fn sync_root(
                 })?
                 .overwrite = None;
         }
-    } else if awaiting {
+    } else if let Some((path, token)) = awaiting {
         let native = widgetry_window_target(world, root).ok_or_else(|| {
             crate::error::internal_error(FileDialogInternalFault::Missing {
                 part: "native window",
             })
         })?;
-        let token = state.token();
+        let target = bevy_widgetry_path_display::display_path(path);
         let child = bevy_widgetry_core::scene::spawn_scene(world, bsn! {
-                @widgetry_message_box(native, "Replace file?", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),  bsn_list!{Text("The file already exists. Replace it?") bevy_widgetry_core::text::WidgetryText})
+                @widgetry_message_box(native, "Replace file?", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),
+                    bsn_list!{Text("The file already exists. Replace it?") bevy_widgetry_core::text::WidgetryText --
+                        Text(target) bevy_widgetry_core::text::WidgetryText TextLayout {linebreak:LineBreak::AnyCharacter}})
                 Name("FileDialogOverwriteConfirmation")
                 template(move |_| Ok(OverwriteOwner {root, token}))
                 template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<bevy_widgetry_message_box::WidgetryMessageBox>::new(root)))
@@ -315,8 +317,8 @@ fn on_overwrite(
             && world
                 .get::<WidgetryFileDialogState>(root)
                 .is_some_and(|state| {
-                    state.token() == token
-                        && state.session_state() == WidgetryFileDialogSessionState::Open
+                    matches!(state.confirmation(),
+                        WidgetryFileDialogConfirmation::AwaitingOverwrite { token: pending, .. } if *pending == token)
                 })
         {
             world
@@ -327,7 +329,7 @@ fn on_overwrite(
                     })
                 })?
                 .overwrite = None;
-            WidgetryFileDialog::apply(
+            WidgetryFileDialogHeadless::apply(
                 world,
                 root,
                 WidgetryFileDialogAction::Overwrite { token, accept },

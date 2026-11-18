@@ -8,6 +8,7 @@ const CONTROL_GAP: f32 = 8.0;
 const SELECTION_SUMMARY_ITEMS: usize = 3;
 const LOCATION_MIN_HEIGHT: f32 = 30.0;
 const LOCATION_PADDING_Y: f32 = 4.0;
+const OVERWRITE_PROMPT_HEIGHT: f32 = 44.0;
 
 use crate::style::{Part, PartKind};
 use crate::*;
@@ -21,7 +22,9 @@ use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry_path_display::display_path;
-use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
+use bevy_widgetry_scroll_area::{
+    WidgetryScrollArea, WidgetryScrollAreaContent, WidgetryScrollAreaViewport,
+};
 use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf, Prefix};
@@ -132,7 +135,13 @@ pub(crate) fn panels(root: Entity) -> impl SceneList {
             @button(root, UiAction::FolderCreate, "FileDialogFolderCreate", "Create")-- @button(root, UiAction::FolderCancel, "FileDialogFolderCancel", "Dismiss")
         ]--
         Name("FileDialogOverwritePanel") template(move |_| Ok(Part {root, kind: PartKind::OverwritePanel})) Node { display: Display::None, column_gap: px(CONTROL_GAP), width: percent(100), align_items: AlignItems::Center } Children [
-            @crate::style::text_scene("Target exists. Replace?".into(), CONTROL_FONT_SIZE)-- @button(root, UiAction::Overwrite(true), "FileDialogOverwriteYes", "Replace")-- @button(root, UiAction::Overwrite(false), "FileDialogOverwriteNo", "Keep editing")
+            @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list! {
+                @crate::style::text_scene(String::new(), CONTROL_FONT_SIZE)
+                Name("FileDialogOverwriteTarget") template(move |_| Ok(Part {root, kind: PartKind::OverwriteTarget}))
+                TextLayout { linebreak: LineBreak::AnyCharacter } Node { width: percent(100) }
+            } }
+            Node { height: px(OVERWRITE_PROMPT_HEIGHT), flex_basis: px(0), flex_grow: 1.0, min_width: px(0) }--
+            @button(root, UiAction::Overwrite(true), "FileDialogOverwriteYes", "Replace")-- @button(root, UiAction::Overwrite(false), "FileDialogOverwriteNo", "Keep editing")
         ]
     }
 }
@@ -185,10 +194,7 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
     for (entity, action) in controls {
         let available = interactive
             && match action {
-                UiAction::FolderCreate => {
-                    state.started_generation == Some(state.token().generation)
-                        && state.folder_request.is_none()
-                }
+                UiAction::FolderCreate => state.can_create_folder(),
                 UiAction::Overwrite(_) => matches!(
                     state.confirmation(),
                     WidgetryFileDialogConfirmation::AwaitingOverwrite { .. }
@@ -245,11 +251,15 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         })?;
     }
     if let Some(entity) = part(world, root, PartKind::OverwritePanel) {
-        let display = if matches!(
-            state.confirmation(),
-            WidgetryFileDialogConfirmation::AwaitingOverwrite { .. }
-        ) && world.get::<crate::window::Independent>(root).is_none()
-        {
+        let target = match state.confirmation() {
+            WidgetryFileDialogConfirmation::AwaitingOverwrite { path, .. }
+                if world.get::<crate::window::Independent>(root).is_none() =>
+            {
+                Some(path)
+            }
+            _ => None,
+        };
+        let display = if target.is_some() {
             Display::Flex
         } else {
             Display::None
@@ -261,6 +271,20 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         })?;
         if node.display != display {
             node.display = display;
+        }
+        if let Some(path) = target {
+            let text = part(world, root, PartKind::OverwriteTarget)
+                .and_then(|target| world.get_mut::<Text>(target))
+                .ok_or_else(|| {
+                    crate::error::internal_error(FileDialogInternalFault::Missing {
+                        part: "overwrite target",
+                    })
+                })?;
+            let mut text = text;
+            text.set_if_neq(Text(format!(
+                "Target exists. Replace?\n{}",
+                display_path(path)
+            )));
         }
     }
     let filename = (state.mode() == WidgetryFileDialogMode::SaveFile).then(|| {
@@ -531,7 +555,8 @@ fn close_folder(world: &mut World, root: Entity) -> Result {
             .resource_mut::<InputFocus>()
             .set(area, FocusCause::Navigated);
     }
-    crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)
+    world.write_message(bevy::window::RequestRedraw);
+    Ok(())
 }
 
 fn on_filter(
@@ -604,7 +629,7 @@ fn on_action(
                 }
             }
         }
-        crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)
+        Ok(())
     });
 }
 

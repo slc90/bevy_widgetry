@@ -446,6 +446,11 @@ impl WidgetryFileDialogState {
         self.requested_path.as_deref()
     }
 
+    /// The operation that started the current directory generation.
+    pub fn navigation(&self) -> &WidgetryFileDialogNavigation {
+        &self.navigation
+    }
+
     pub fn current_path(&self) -> Option<&Path> {
         self.current_path.as_deref()
     }
@@ -475,7 +480,28 @@ impl WidgetryFileDialogState {
     }
 
     pub fn filename(&self) -> &std::ffi::OsStr {
-        self.filename.as_deref().unwrap_or_default()
+        self.explicit_filename().unwrap_or_default()
+    }
+
+    /// Returns the submitted filename if one is set, including an explicitly empty draft.
+    pub fn explicit_filename(&self) -> Option<&std::ffi::OsStr> {
+        self.filename.as_deref()
+    }
+
+    /// The committed filename, or the selected file's name as a suggestion in PickFile mode.
+    pub fn filename_for_editing(&self) -> &std::ffi::OsStr {
+        if let Some(filename) = self.explicit_filename() {
+            return filename;
+        }
+        if self.mode == WidgetryFileDialogMode::PickFile
+            && let Some(entry) = self
+                .selected
+                .first()
+                .and_then(|id| self.snapshot()?.entry(*id))
+        {
+            return entry.name();
+        }
+        std::ffi::OsStr::new("")
     }
 
     pub fn search(&self) -> &str {
@@ -583,6 +609,13 @@ impl WidgetryFileDialogState {
 
     pub fn folder_request(&self) -> Option<WidgetryFileDialogFolderRequest> {
         self.folder_request.clone()
+    }
+
+    /// Whether the current directory has been entered and can accept a new folder request.
+    pub fn can_create_folder(&self) -> bool {
+        self.session_state == WidgetryFileDialogSessionState::Open
+            && self.started_generation == Some(self.token.generation)
+            && self.folder_request.is_none()
     }
 
     pub fn reveal_path(&self) -> Option<&Path> {

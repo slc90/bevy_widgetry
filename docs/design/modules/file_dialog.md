@@ -6,7 +6,9 @@ FileDialog 把文件选择看作一段有身份的业务会话，而不是一张
 
 每次构造创建独立 Session，保存模式、目录、选择、候选与结果。嵌入式内容和独立窗口使用同一业务状态，不因换了外壳就改变确认语义。
 
-`WidgetryFileDialogHeadless` 是 Runtime 识别的会话根。其构造参数只包含模式、目录、筛选、扩展名约束和偏好作用域。默认 `WidgetryFileDialog` 用同一入口初始化状态，再配置颜色与窗口。只安装 Headless Plugin 时，现有 Runtime 和 JobManager 负责所有文件操作，调用方通过 ECS 状态、动作和事件承接结果。
+`WidgetryFileDialogHeadless` 是 Runtime 识别的会话根。其构造参数包含模式、目录、筛选、扩展名约束和偏好作用域。默认 `WidgetryFileDialog` 用同一 BSN 入口初始化或绑定会话，再配置颜色与窗口。只安装 Headless Plugin 时，现有 Runtime 和 JobManager 负责所有文件操作，调用方通过 ECS 状态、动作和事件承接结果。
+
+默认界面从公开查询读取确认与创建文件夹的可用状态、列表位置和覆盖目标。文件名编辑框保留 UI 草稿和输入法组合态，确认时通过 `Filename` 和 `Confirm` 提交。独立窗口调用 `WidgetryFileDialogHeadless::prevent_reopen` 为会话声明一次性生命周期，接收结果后由窗口层安排原生资源回收。
 
 ```mermaid
 flowchart LR

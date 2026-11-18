@@ -223,7 +223,18 @@ impl WidgetryFileDialogState {
             }
     }
 
-    pub(crate) fn confirmation_ready(&self) -> bool {
+    /// Whether a nonempty draft can be submitted for confirmation in a filename-editing mode.
+    /// Name matching, extension rules and filesystem validation run when the actions are applied.
+    pub fn can_confirm_filename(&self, draft: &OsStr) -> bool {
+        matches!(
+            self.mode,
+            WidgetryFileDialogMode::PickFile | WidgetryFileDialogMode::SaveFile
+        ) && !draft.is_empty()
+            && self.confirmation_ready()
+    }
+
+    /// Whether the session can evaluate a confirmation request for the current directory.
+    pub fn confirmation_ready(&self) -> bool {
         self.session_state == WidgetryFileDialogSessionState::Open
             && self.confirmation == WidgetryFileDialogConfirmation::Idle
             && !self.selection_pending()

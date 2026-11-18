@@ -9,11 +9,12 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::events::{PointerCancel, PointerClick, PointerDragEnd, PointerPress};
 use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::prelude::*;
-use bevy::text::{EditableText, TextEdit};
+use bevy::text::{EditableText, EditableTextFilter, TextEdit};
 use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_path_display::display_path;
 use bevy_widgetry_text_field::WidgetryTextFieldHeadless;
 use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
@@ -40,6 +41,21 @@ struct OpenFilenameProjection {
     session: WidgetryFileDialogSessionId,
     generation: u64,
     selected: Option<WidgetryFileDialogEntryId>,
+    filename: OsString,
+    explicit: bool,
+}
+
+impl OpenFilenameProjection {
+    fn of(state: &WidgetryFileDialogState) -> Self {
+        let token = state.token();
+        Self {
+            session: token.session,
+            generation: token.generation,
+            selected: state.selected().first().copied(),
+            filename: state.filename_for_editing().to_owned(),
+            explicit: state.explicit_filename().is_some(),
+        }
+    }
 }
 
 fn editor(world: &World, root: Entity) -> Option<&EditableText> {
@@ -76,18 +92,22 @@ pub(crate) fn sync_filename(
         return Ok(());
     };
     let selected = state.selected().first().copied();
-    let projection = OpenFilenameProjection {
-        session: state.token().session,
-        generation: state.token().generation,
-        selected,
-    };
-    if world.get::<OpenFilenameProjection>(entity) == Some(&projection) {
+    let token = state.token();
+    let filename = state.filename_for_editing();
+    let explicit = state.explicit_filename().is_some();
+    if world
+        .get::<OpenFilenameProjection>(entity)
+        .is_some_and(|shown| {
+            shown.session == token.session
+                && shown.generation == token.generation
+                && shown.selected == selected
+                && shown.filename == filename
+                && shown.explicit == explicit
+        })
+    {
         return Ok(());
     }
-    let text = selected
-        .and_then(|id| state.snapshot()?.entry(id))
-        .map(|entry| entry.name().to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let text = filename.to_string_lossy();
     let edit = editor(world, entity).ok_or_else(|| {
         crate::error::internal_error(FileDialogInternalFault::Missing {
             part: "filename editor",
@@ -105,34 +125,50 @@ pub(crate) fn sync_filename(
                 .into_bevy_error()
         })?;
     }
-    world.entity_mut(entity).insert(projection);
+    world
+        .entity_mut(entity)
+        .insert(OpenFilenameProjection::of(state));
     Ok(())
 }
 
-pub(crate) fn filename_available(world: &World, root: Entity) -> bool {
-    crate::style::filename_entity(world, root)
-        .and_then(|entity| editor(world, entity))
-        .is_some_and(|edit| !composing(edit) && !edit.value().to_string().is_empty())
+pub(crate) fn remember_submitted_filename(world: &mut World, root: Entity, text: &str) {
+    let Some(state) = world.get::<WidgetryFileDialogState>(root) else {
+        return;
+    };
+    if state.mode() == WidgetryFileDialogMode::PickFile
+        && state.filename_for_editing().to_string_lossy() == text
+        && let Some(editor) = crate::style::filename_entity(world, root)
+    {
+        // The editor already displays this update. Preserve subsequent typing before the next UI sync.
+        let projection = OpenFilenameProjection::of(state);
+        if let Ok(mut editor) = world.get_entity_mut(editor) {
+            editor.insert(projection);
+        }
+    }
 }
 
-pub(crate) fn pick_filename_text(world: &World, root: Entity) -> Result<Option<String>> {
-    let state = world.get::<WidgetryFileDialogState>(root).ok_or_else(|| {
-        crate::error::internal_error(FileDialogInternalFault::Missing { part: "state" })
-    })?;
-    if !state.confirmation_ready() {
-        return Ok(None);
-    }
-    let entity = crate::style::filename_entity(world, root).ok_or_else(|| {
-        crate::error::internal_error(FileDialogInternalFault::Missing {
-            part: "filename editor",
-        })
-    })?;
-    let edit = editor(world, entity).ok_or_else(|| {
-        crate::error::internal_error(FileDialogInternalFault::Missing {
-            part: "filename editor",
-        })
-    })?;
-    Ok((!composing(edit)).then(|| edit.value().to_string()))
+pub(crate) fn filename_draft(world: &World, root: Entity) -> Option<String> {
+    crate::style::filename_entity(world, root)
+        .and_then(|entity| editor(world, entity))
+        .filter(|edit| !composing(edit))
+        .map(|edit| edit.value().to_string())
+}
+
+pub(crate) fn filename_ready(event: On<bevy::scene::Ready>, mut commands: Commands) {
+    let field = event.entity;
+    commands.queue(move |world: &mut World| -> Result {
+        if world.get_entity(field).is_ok() {
+            let editor = WidgetryTextFieldHeadless::editor_entity(world, field)
+                .map_err(|error| error.into_bevy_error())?;
+            // A key event can carry line-break text even when the editor is configured as single-line.
+            world
+                .entity_mut(editor)
+                .insert(EditableTextFilter::new(|character| {
+                    !matches!(character, '\r' | '\n')
+                }));
+        }
+        Ok(())
+    });
 }
 
 pub(crate) fn install(app: &mut App) {
@@ -397,18 +433,7 @@ fn keyboard_job(world: &mut World, job: KeyRequest) -> Result {
                     WidgetryFileDialogNavigation::Path(path),
                 ))
             }
-            PartKind::Filename => {
-                if state.mode() == WidgetryFileDialogMode::SaveFile
-                    && text != state.filename().to_string_lossy()
-                {
-                    crate::style::apply_input(
-                        world,
-                        root,
-                        WidgetryFileDialogAction::Filename(text.into()),
-                    )?;
-                }
-                Some(WidgetryFileDialogAction::Confirm)
-            }
+            PartKind::Filename => Some(WidgetryFileDialogAction::Confirm),
             PartKind::Search => Some(WidgetryFileDialogAction::Search(text)),
             PartKind::Folder => {
                 crate::controls::create_folder(world, root, text.into())?;
@@ -443,7 +468,7 @@ pub(crate) fn editor_updates(world: &mut World) -> Result {
             continue;
         }
         if part.kind == PartKind::Filename && state.mode() == WidgetryFileDialogMode::PickFile {
-            crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)?;
+            world.write_message(bevy::window::RequestRedraw);
             continue;
         }
         let action = match part.kind {

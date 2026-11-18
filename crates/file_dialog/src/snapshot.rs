@@ -337,6 +337,10 @@ impl WidgetryFileDialogSnapshot {
         &self.visible
     }
 
+    pub fn visible_index(&self, id: WidgetryFileDialogEntryId) -> Option<usize> {
+        self.positions.get(&id).copied()
+    }
+
     pub fn entry(&self, id: WidgetryFileDialogEntryId) -> Option<&WidgetryFileDialogEntry> {
         self.indices
             .get(&id)

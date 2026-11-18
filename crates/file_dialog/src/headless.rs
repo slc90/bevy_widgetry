@@ -4,7 +4,9 @@ use crate::{
     WidgetryFileDialogResult, WidgetryFileDialogSessionId, WidgetryFileDialogState,
     WidgetryFileDialogStorage,
 };
+use bevy::ecs::template::{Template, TemplateContext};
 use bevy::prelude::*;
+use bevy::scene::PatchTemplate;
 use bevy_widgetry_internal_log::widgetry_debug;
 
 #[derive(SceneComponent, FromTemplate, Default)]
@@ -12,9 +14,28 @@ use bevy_widgetry_internal_log::widgetry_debug;
 pub struct WidgetryFileDialogHeadless;
 
 #[derive(Component)]
-pub(crate) enum ReopenPolicy {
-    Allowed,
-    Forbidden,
+struct SingleUse(bool);
+
+type ReopenCondition = fn(&TemplateContext) -> bool;
+
+#[derive(Default)]
+struct ReopenRestrictions(Vec<ReopenCondition>);
+
+impl Template for ReopenRestrictions {
+    type Output = SingleUse;
+
+    fn build_template(&self, context: &mut TemplateContext) -> Result<SingleUse> {
+        let restricted = context
+            .entity
+            .get::<SingleUse>()
+            .is_some_and(|policy| policy.0)
+            || self.0.iter().any(|restrict| restrict(context));
+        Ok(SingleUse(restricted))
+    }
+
+    fn clone_template(&self) -> Self {
+        Self(self.0.clone())
+    }
 }
 
 pub struct WidgetryFileDialogHeadlessPlugin;
@@ -49,7 +70,13 @@ impl Plugin for WidgetryFileDialogHeadlessPlugin {
 }
 
 impl WidgetryFileDialogHeadless {
-    pub(crate) fn scene(props: WidgetryFileDialogHeadlessProps) -> impl Scene {
+    /// Creates a scene patch that restricts the root to a single session when the condition holds.
+    /// Multiple declarations combine, and an active restriction lasts until despawn.
+    pub fn prevent_reopen(condition: fn(&TemplateContext) -> bool) -> impl Scene {
+        ReopenRestrictions::patch_template(move |policy, _| policy.0.push(condition))
+    }
+
+    fn scene(props: WidgetryFileDialogHeadlessProps) -> impl Scene {
         bsn! {
             template(move |context| {
                 if let Some(state) = context.entity.get::<WidgetryFileDialogState>() {
@@ -84,10 +111,7 @@ impl WidgetryFileDialogHeadless {
             .into());
         }
         if action == WidgetryFileDialogAction::Reopen
-            && matches!(
-                world.get::<ReopenPolicy>(root),
-                Some(ReopenPolicy::Forbidden)
-            )
+            && world.get::<SingleUse>(root).is_some_and(|policy| policy.0)
         {
             return Err(api_failure(
                 world,

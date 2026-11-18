@@ -708,6 +708,197 @@ fn pick_filename_syncs_selection_and_enter_uses_real_identity_and_validation() {
 }
 
 #[test]
+fn default_filename_editor_projects_an_explicit_headless_draft() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
+        .unwrap()
+        .id();
+    loaded(&mut app, root, 10);
+    app.update();
+
+    let editor = named(&mut app, root, "FileDialogFilename");
+    let confirm = named(&mut app, root, "FileDialogConfirm");
+    let draft = "file_000005.txt";
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Filename(draft.into()),
+    )
+    .unwrap();
+    app.update();
+
+    assert_eq!(
+        WidgetryTextFieldHeadless::editor(app.world(), editor)
+            .unwrap()
+            .value()
+            .to_string(),
+        draft
+    );
+    assert!(app.world().get::<InteractionDisabled>(confirm).is_none());
+    app.world_mut()
+        .trigger(bevy::ui_widgets::Activate { entity: confirm });
+    app.world_mut().flush();
+    finish_selection(&mut app, root);
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(
+        state.validation_job().unwrap().prepare().unwrap().result(),
+        &WidgetryFileDialogResult::File("C:/fixture/file_000005.txt".into())
+    );
+}
+
+#[test]
+fn explicit_headless_filename_replaces_the_local_draft_even_when_it_matches_the_selection() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
+        .unwrap()
+        .id();
+    loaded(&mut app, root, 10);
+    app.update();
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    let id = state.visible()[0];
+    let token = state.token();
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Select {
+            id,
+            token,
+            operation: WidgetryFileDialogSelection::Replace,
+        },
+    )
+    .unwrap();
+    finish_selection(&mut app, root);
+    app.update();
+    let field = named(&mut app, root, "FileDialogFilename");
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "file_000005.txt")
+        .unwrap();
+    app.update();
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Filename("file_000000.txt".into()),
+    )
+    .unwrap();
+    app.update();
+    assert_eq!(
+        WidgetryTextFieldHeadless::editor(app.world(), field)
+            .unwrap()
+            .value()
+            .to_string(),
+        "file_000000.txt",
+    );
+}
+
+#[test]
+fn save_filename_enter_restarts_pending_validation_with_the_current_draft() {
+    let mut app = fixture();
+    let root = app.world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::SaveFile } Node {width:px(800),height:px(600)} })
+        .unwrap().id();
+    loaded(&mut app, root, 10);
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Filename("old.txt".into()),
+    )
+    .unwrap();
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)
+        .unwrap();
+    app.update();
+    let field = named(&mut app, root, "FileDialogFilename");
+    WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), field).unwrap();
+    WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "current.txt").unwrap();
+    press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(
+        state.validation_job().unwrap().prepare().unwrap().result(),
+        &WidgetryFileDialogResult::SavePath("C:/fixture/current.txt".into()),
+    );
+}
+
+#[test]
+fn empty_filename_enter_reaches_headless_validation_with_confirm_button_disabled() {
+    for mode in [
+        WidgetryFileDialogMode::PickFile,
+        WidgetryFileDialogMode::SaveFile,
+    ] {
+        let mut app = fixture();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryFileDialog { @mode: {mode} } Node {width:px(800),height:px(600)}
+            })
+            .unwrap()
+            .id();
+        loaded(&mut app, root, 10);
+        app.update();
+        let field = named(&mut app, root, "FileDialogFilename");
+        let confirm = named(&mut app, root, "FileDialogConfirm");
+        assert!(app.world().get::<InteractionDisabled>(confirm).is_some());
+        WidgetryTextFieldHeadless::focus_in_world(app.world_mut(), field).unwrap();
+        bevy_widgetry_test_utils::queue_key(
+            &mut app,
+            bevy::input::keyboard::KeyboardInput {
+                key_code: KeyCode::Enter,
+                logical_key: bevy::input::keyboard::Key::Unidentified(
+                    bevy::input::keyboard::NativeKey::Unidentified,
+                ),
+                state: bevy::input::ButtonState::Pressed,
+                text: Some("\n".into()),
+                repeat: false,
+                window: Entity::PLACEHOLDER,
+            },
+        );
+        app.update();
+        assert!(
+            WidgetryTextFieldHeadless::editor(app.world(), field)
+                .unwrap()
+                .value()
+                .to_string()
+                .is_empty()
+        );
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        if mode == WidgetryFileDialogMode::PickFile {
+            assert!(state.error().unwrap().contains("Enter a single file name"));
+            assert!(state.confirmation_ready(), "{:?}", state.confirmation());
+            WidgetryTextFieldHeadless::set_text_in_world(app.world_mut(), field, "file_000005.txt")
+                .unwrap();
+            assert_eq!(
+                WidgetryTextFieldHeadless::editor(app.world(), field)
+                    .unwrap()
+                    .value()
+                    .to_string(),
+                "file_000005.txt"
+            );
+            press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            assert!(
+                state.selection_pending(),
+                "filename {:?}, error {:?}, confirmation {:?}",
+                state.explicit_filename(),
+                state.error(),
+                state.confirmation(),
+            );
+            finish_selection(&mut app, root);
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            assert_eq!(
+                state.validation_job().unwrap().prepare().unwrap().result(),
+                &WidgetryFileDialogResult::File("C:/fixture/file_000005.txt".into()),
+            );
+        } else {
+            assert!(matches!(
+                state.validation_job().unwrap().prepare(),
+                Err(FileDialogRequestError::Rejected(_))
+            ));
+        }
+    }
+}
+
+#[test]
 fn clicking_the_selected_file_restores_its_name_after_a_draft_edit() {
     let mut app = fixture();
     let root = app
@@ -2148,6 +2339,66 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
 }
 
 #[test]
+fn long_inline_overwrite_path_has_a_bounded_prompt_row() {
+    const NARROW_DIALOG_SIZE: f32 = 360.0;
+    const MAX_PROMPT_HEIGHT: f32 = 48.0;
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialog { @mode: WidgetryFileDialogMode::SaveFile }
+            Node {width:px(NARROW_DIALOG_SIZE),height:px(NARROW_DIALOG_SIZE)}
+        })
+        .unwrap()
+        .id();
+    let long_directory: PathBuf = (0..8).fold(PathBuf::from("C:/fixture"), |path, index| {
+        path.join(format!("folder_{index}_{}", "x".repeat(70)))
+    });
+    loaded_at(
+        &mut app,
+        root,
+        1,
+        WidgetryFileDialogEntryKind::File,
+        long_directory,
+    );
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Filename("output.txt".into()),
+    )
+    .unwrap();
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)
+        .unwrap();
+    let candidate = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .validation_job()
+        .unwrap()
+        .prepare()
+        .unwrap();
+    WidgetryFileDialogHeadless::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::Validated {
+            candidate,
+            exists: true,
+        },
+    )
+    .unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    let panel = named(&mut app, root, "FileDialogOverwritePanel");
+    let node = app.world().get::<ComputedNode>(panel).unwrap();
+    let height = node.size().y * node.inverse_scale_factor();
+    assert!(
+        height > 0.0 && height <= MAX_PROMPT_HEIGHT,
+        "prompt row height {height}"
+    );
+}
+
+#[test]
 fn save_validation_overwrite_no_and_cancel_keep_the_session_contract() {
     let mut app = fixture();
     let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::SaveFile } Node {width: px(800), height: px(600)} }).unwrap().id();
@@ -2191,6 +2442,14 @@ fn save_validation_overwrite_no_and_cancel_keep_the_session_contract() {
     .unwrap();
     app.update();
     let panel = named(&mut app, root, "FileDialogOverwritePanel");
+    let target = named(&mut app, root, "FileDialogOverwriteTarget");
+    assert!(
+        app.world()
+            .get::<Text>(target)
+            .unwrap()
+            .0
+            .contains("output.txt")
+    );
     assert_eq!(
         app.world().get::<Node>(panel).unwrap().display,
         Display::Flex

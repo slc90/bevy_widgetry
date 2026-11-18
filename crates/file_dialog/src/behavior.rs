@@ -403,7 +403,8 @@ impl WidgetryFileDialogState {
         self.token.session == token.session && self.token.generation == token.generation
     }
 
-    pub(crate) fn matches_query(&self, token: WidgetryFileDialogToken) -> bool {
+    /// Tests session, directory generation and query revision, ignoring edits and selection revisions.
+    pub fn matches_query(&self, token: WidgetryFileDialogToken) -> bool {
         self.matches_directory(token) && self.token.query_revision == token.query_revision
     }
 

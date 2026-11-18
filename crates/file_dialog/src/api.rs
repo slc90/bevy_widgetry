@@ -82,14 +82,22 @@ impl Plugin for WidgetryFileDialogPlugin {
 
 impl WidgetryFileDialog {
     fn scene(props: WidgetryFileDialogProps) -> impl Scene {
-        let window = props.window.clone();
         let colors = props.colors.clone();
+        let window = props.window.clone();
+        let behavior = WidgetryFileDialogHeadlessProps::from(props);
         (
             bsn! {
                 template(move |_| colors.clone().initial())
                 WidgetryFileDialog
+                @WidgetryFileDialogHeadless {
+                    @mode: {behavior.mode},
+                    @initial_directory: {behavior.initial_directory},
+                    @fallback_directory: {behavior.fallback_directory},
+                    @storage_scope: {behavior.storage_scope},
+                    @filters: {behavior.filters},
+                    @allow_different_extension: {behavior.allow_different_extension},
+                }
             },
-            WidgetryFileDialogHeadless::scene(props.into()),
             crate::window::scene(window),
         )
     }

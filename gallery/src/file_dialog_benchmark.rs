@@ -21,6 +21,7 @@ use bevy::ui_render::{
 };
 use bevy_remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods};
 use bevy_widgetry::file_dialog::*;
+use bevy_widgetry::text_field::WidgetryTextFieldHeadless;
 use bevy_widgetry::window::widgetry_window_target;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -530,7 +531,15 @@ fn observe(world: &mut World) -> Result {
         }) else {
             continue;
         };
-        let glyphs = vec![title, path, status, cancel_text];
+        let path_editor =
+            WidgetryTextFieldHeadless::editor_entity(world, path).map_err(|failure| {
+                failure
+                    .with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
+                        "gallery.file_dialog_benchmark.path_editor",
+                    ))
+                    .into_bevy_error()
+            })?;
+        let glyphs = vec![title, path_editor, status, cancel_text];
         if glyphs.iter().any(|entity| {
             world
                 .get::<bevy::text::TextLayoutInfo>(*entity)

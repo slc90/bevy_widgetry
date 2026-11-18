@@ -197,6 +197,8 @@ WidgetryFileDialog::flush_preferences(world)
 
 `WidgetryFileDialogStyle` 与颜色覆盖控制布局和状态外观。修改样式不重置 Session、目录、文本光标或选择。默认文件区域独立滚动，窄空间下操作区可以换行。
 
+默认界面也通过公开 Headless 查询和动作处理文件名、文件夹、条目选择与确认。渲染和输入法组合态由默认控件管理，单文件名称匹配、保存扩展名规则及文件系统验证由会话处理。
+
 ## 无默认界面运行
 
 只安装 `WidgetryFileDialogHeadlessPlugin`，即可用 BSN 创建独立会话。会话根持有 `WidgetryFileDialogState`，默认窗口、列表和编辑框由上层界面决定。

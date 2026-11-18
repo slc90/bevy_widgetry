@@ -255,7 +255,7 @@ pub(crate) fn reconcile(
     let mut offset = required(world.get::<ScrollPosition>(view.viewport))?.0.y;
     let generation = (state.token().session, state.token().generation);
     if view.generation != Some(generation)
-        && state.navigation != WidgetryFileDialogNavigation::Refresh
+        && *state.navigation() != WidgetryFileDialogNavigation::Refresh
     {
         offset = 0.0;
     }
@@ -266,7 +266,7 @@ pub(crate) fn reconcile(
         && let Some(index) = state.active().and_then(|id| {
             state
                 .snapshot()
-                .and_then(|snapshot| snapshot.positions.get(&id).copied())
+                .and_then(|snapshot| snapshot.visible_index(id))
         })
     {
         let top = index as f32 * style.row_height;

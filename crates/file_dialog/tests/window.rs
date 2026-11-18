@@ -98,6 +98,51 @@ fn binding_an_owned_window_to_a_headless_session_preserves_state_and_forbids_reo
 }
 
 #[test]
+fn independent_window_accepts_a_second_single_use_declaration_in_the_same_scene() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialogHeadless::prevent_reopen(|_| true)
+            @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} }
+        })
+        .unwrap()
+        .id();
+    app.update();
+    assert!(widgetry_window_target(app.world(), root).is_some());
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)
+        .unwrap();
+    assert!(
+        WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)
+            .is_err()
+    );
+}
+
+#[test]
+fn failed_window_scene_keeps_the_existing_session_reopenable() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialogHeadless
+        })
+        .unwrap()
+        .id();
+    let scene = (
+        bsn! { @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} } },
+        bsn! { template(|_| -> Result<Name> { Err("fixture rejects this scene".into()) }) },
+    );
+    assert!(app.world_mut().entity_mut(root).apply_scene(scene).is_err());
+    assert!(widgetry_window_target(app.world(), root).is_none());
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)
+        .unwrap();
+    assert!(
+        WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)
+            .unwrap()
+    );
+}
+
+#[test]
 fn binding_an_owned_window_rejects_a_resolved_headless_session_without_consuming_it() {
     let mut app = fixture();
     let root = app
@@ -967,6 +1012,16 @@ fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_cl
         })
         .unwrap()
         .0;
+    let target_layout = app
+        .world_mut()
+        .query::<(Entity, &Text, &TextLayout)>()
+        .iter(app.world())
+        .find_map(|(entity, text, layout)| {
+            (text.0.ends_with("same.txt") && descendant(app.world(), entity, child))
+                .then_some(layout)
+        })
+        .unwrap();
+    assert_eq!(target_layout.linebreak, LineBreak::AnyCharacter);
     let mut ancestor = app.world().get::<ChildOf>(label).unwrap().parent();
     let body_host = loop {
         if app
