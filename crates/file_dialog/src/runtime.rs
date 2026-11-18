@@ -263,7 +263,8 @@ pub(crate) fn update(world: &mut World) -> Result {
 impl Runtime {
     fn update(&mut self, world: &mut World, options: &WidgetryFileDialogRuntimeOptions) -> Result {
         let states: Vec<_> = world
-            .query_filtered::<(Entity, &WidgetryFileDialogState), With<WidgetryFileDialog>>()
+            .query_filtered::<(Entity, &WidgetryFileDialogState), With<WidgetryFileDialogHeadless>>(
+            )
             .iter(world)
             .filter(|(_, state)| state.session_state() == WidgetryFileDialogSessionState::Open)
             .map(|(root, state)| {
@@ -300,7 +301,7 @@ impl Runtime {
                     if failed {
                         continue;
                     }
-                    if let Err(delivery) = WidgetryFileDialog::deliver(
+                    if let Err(delivery) = WidgetryFileDialogHeadless::deliver(
                         world,
                         root,
                         WidgetryFileDialogReply::Failed {
@@ -366,7 +367,7 @@ impl Runtime {
                             "file_dialog.session.admit",
                         ))
                         .into();
-                        let delivered = WidgetryFileDialog::deliver(
+                        let delivered = WidgetryFileDialogHeadless::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Failed {
@@ -399,7 +400,7 @@ impl Runtime {
                 .error = Some(message.clone());
             for (root, token, failed) in &states {
                 if !failed
-                    && let Err(delivery) = WidgetryFileDialog::deliver(
+                    && let Err(delivery) = WidgetryFileDialogHeadless::deliver(
                         world,
                         *root,
                         WidgetryFileDialogReply::Failed {
@@ -429,7 +430,7 @@ impl Runtime {
                     }
                     session.failed = true;
                 }
-                if let Err(error) = WidgetryFileDialog::deliver(
+                if let Err(error) = WidgetryFileDialogHeadless::deliver(
                     world,
                     *root,
                     WidgetryFileDialogReply::OperationsStopped {
@@ -519,7 +520,7 @@ impl Runtime {
                         session.failed = true;
                         let error = bevy_widgetry_job::JobFailure::from(error)
                             .with_context(control.frame("file_dialog.directory.submit"));
-                        let delivered = WidgetryFileDialog::deliver(
+                        let delivered = WidgetryFileDialogHeadless::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Failed {
@@ -555,7 +556,7 @@ impl Runtime {
                     }
                     Err(error) => {
                         let error = bevy_widgetry_job::JobFailure::from(error);
-                        WidgetryFileDialog::deliver(
+                        WidgetryFileDialogHeadless::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Locations {
@@ -620,7 +621,7 @@ impl Runtime {
                         if let Err(stop) = session.stop(&mut self.retired) {
                             return Err(error.combine(stop.into()).into_bevy_error());
                         }
-                        let delivered = WidgetryFileDialog::deliver(
+                        let delivered = WidgetryFileDialogHeadless::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Failed {
@@ -665,7 +666,7 @@ impl Runtime {
                         if let Err(stop) = session.stop(&mut self.retired) {
                             return Err(error.combine(stop.into()).into_bevy_error());
                         }
-                        let delivered = WidgetryFileDialog::deliver(
+                        let delivered = WidgetryFileDialogHeadless::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Failed {
@@ -717,7 +718,7 @@ impl Runtime {
                     Err(error) => {
                         let error = bevy_widgetry_job::JobFailure::from(error);
                         session.validation_submitted = Some(job.token());
-                        WidgetryFileDialog::deliver(
+                        WidgetryFileDialogHeadless::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::ValidationFailed {
@@ -758,7 +759,7 @@ impl Runtime {
                     }
                     Err(error) => {
                         let error = bevy_widgetry_job::JobFailure::from(error);
-                        WidgetryFileDialog::deliver(
+                        WidgetryFileDialogHeadless::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::FolderCreated {
@@ -979,7 +980,7 @@ impl Runtime {
                         },
                     };
                     finish_job_delivery(
-                        WidgetryFileDialog::deliver(world, root, reply)
+                        WidgetryFileDialogHeadless::deliver(world, root, reply)
                             .map(|_| ())
                             .map_err(FileDialogOperationFailure::into_bevy_error),
                         failure,
@@ -1054,7 +1055,7 @@ impl Runtime {
                         },
                     };
                     finish_job_delivery(
-                        WidgetryFileDialog::deliver(world, root, reply)
+                        WidgetryFileDialogHeadless::deliver(world, root, reply)
                             .map(|_| ())
                             .map_err(FileDialogOperationFailure::into_bevy_error),
                         failure,
@@ -1141,7 +1142,7 @@ impl Runtime {
                         },
                     };
                     finish_job_delivery(
-                        WidgetryFileDialog::deliver(world, root, reply)
+                        WidgetryFileDialogHeadless::deliver(world, root, reply)
                             .map(|_| ())
                             .map_err(FileDialogOperationFailure::into_bevy_error),
                         failure,
@@ -1300,7 +1301,7 @@ impl Runtime {
                             self.receive(world, Output::Reply(root, reply)),
                             failure,
                         )?;
-                    } else if WidgetryFileDialog::deliver(world, root, reply)?
+                    } else if WidgetryFileDialogHeadless::deliver(world, root, reply)?
                         && let Some(session) = self.sessions.get_mut(&root)
                     {
                         session.project_applied = Some(signature);
@@ -1473,7 +1474,7 @@ impl Runtime {
                         session.failed = true;
                         session.stop(&mut self.retired)?;
                     }
-                    WidgetryFileDialog::deliver(world, root, reply)?;
+                    WidgetryFileDialogHeadless::deliver(world, root, reply)?;
                 }
             }
             Output::Loaded(outcome) => {
@@ -2227,7 +2228,10 @@ mod tests {
         for _ in 0..2 {
             let state = WidgetryFileDialogState::new(Default::default()).unwrap();
             let token = state.token();
-            let root = app.world_mut().spawn((WidgetryFileDialog, state)).id();
+            let root = app
+                .world_mut()
+                .spawn((WidgetryFileDialogHeadless, state))
+                .id();
             let mut session = Session::new(root, token);
             for slot in [&mut session.folder, &mut session.locations] {
                 let (id, receiver) = manager
@@ -2290,7 +2294,9 @@ mod tests {
                     ..Default::default()
                 })
                 .unwrap();
-                app.world_mut().spawn((WidgetryFileDialog, state)).id()
+                app.world_mut()
+                    .spawn((WidgetryFileDialogHeadless, state))
+                    .id()
             })
             .collect();
         app.world()
@@ -2543,12 +2549,12 @@ mod tests {
         let selection = state
             .projection_selection_job(snapshot.clone())?
             .prepare()?;
-        WidgetryFileDialog::deliver(
+        WidgetryFileDialogHeadless::deliver(
             app.world_mut(),
             root,
             WidgetryFileDialogReply::Started { token, path },
         )?;
-        WidgetryFileDialog::deliver(
+        WidgetryFileDialogHeadless::deliver(
             app.world_mut(),
             root,
             WidgetryFileDialogReply::Snapshot {
@@ -2598,7 +2604,11 @@ mod tests {
     #[test]
     fn selection_submission_honors_manager_shutdown() -> Result {
         let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
-        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+        WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::SelectAll,
+        )?;
         let token = app
             .world()
             .get::<WidgetryFileDialogState>(root)
@@ -2630,7 +2640,7 @@ mod tests {
     fn folder_item_waits_for_finished_and_retired_session_cannot_refresh_the_new_one() -> Result {
         for reopen in [false, true] {
             let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
-            WidgetryFileDialog::apply(
+            WidgetryFileDialogHeadless::apply(
                 app.world_mut(),
                 root,
                 WidgetryFileDialogAction::NewFolder("created".into()),
@@ -2676,8 +2686,16 @@ mod tests {
                     .is_some()
             );
             if reopen {
-                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
-                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
+                WidgetryFileDialogHeadless::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Cancel,
+                )?;
+                WidgetryFileDialogHeadless::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Reopen,
+                )?;
             }
             let before = app
                 .world()
@@ -2716,7 +2734,7 @@ mod tests {
                 name: "Old".into(),
                 path: PathBuf::from("C:/old"),
             };
-            WidgetryFileDialog::deliver(
+            WidgetryFileDialogHeadless::deliver(
                 app.world_mut(),
                 root,
                 WidgetryFileDialogReply::Locations {
@@ -2771,26 +2789,26 @@ mod tests {
             );
             match change {
                 1 => {
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Search("one".into()),
                     )?;
                 }
                 2 => {
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Refresh),
                     )?;
                 }
                 3 => {
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Cancel,
                     )?;
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Reopen,
@@ -3043,7 +3061,7 @@ mod tests {
     #[test]
     fn folder_submission_honors_manager_shutdown() -> Result {
         let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
-        WidgetryFileDialog::apply(
+        WidgetryFileDialogHeadless::apply(
             app.world_mut(),
             root,
             WidgetryFileDialogAction::NewFolder("created".into()),
@@ -3069,12 +3087,16 @@ mod tests {
     fn candidate_validation_submission_honors_manager_shutdown() -> Result {
         let (mut app, mut runtime, root, _) =
             cached_projection_fixture_for(WidgetryFileDialogMode::SaveFile)?;
-        WidgetryFileDialog::apply(
+        WidgetryFileDialogHeadless::apply(
             app.world_mut(),
             root,
             WidgetryFileDialogAction::Filename("new.txt".into()),
         )?;
-        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+        WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Confirm,
+        )?;
         wait_retention_started(&runtime);
         app.world()
             .resource::<JobManager>()
@@ -3098,12 +3120,16 @@ mod tests {
         for reopen in [false, true] {
             let (mut app, mut runtime, root, _) =
                 cached_projection_fixture_for(WidgetryFileDialogMode::SaveFile)?;
-            WidgetryFileDialog::apply(
+            WidgetryFileDialogHeadless::apply(
                 app.world_mut(),
                 root,
                 WidgetryFileDialogAction::Filename("old.txt".into()),
             )?;
-            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+            WidgetryFileDialogHeadless::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Confirm,
+            )?;
             let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
             let token = state.token();
             let candidate = state.validation_job.clone().unwrap().prepare().unwrap();
@@ -3141,10 +3167,18 @@ mod tests {
                 &WidgetryFileDialogConfirmation::Validating
             );
             if reopen {
-                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
-                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
+                WidgetryFileDialogHeadless::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Cancel,
+                )?;
+                WidgetryFileDialogHeadless::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Reopen,
+                )?;
             } else {
-                WidgetryFileDialog::apply(
+                WidgetryFileDialogHeadless::apply(
                     app.world_mut(),
                     root,
                     WidgetryFileDialogAction::Filename("new.txt".into()),
@@ -3169,12 +3203,16 @@ mod tests {
         for panicked in [false, true] {
             let (mut app, mut runtime, root, _) =
                 cached_projection_fixture_for(WidgetryFileDialogMode::SaveFile)?;
-            WidgetryFileDialog::apply(
+            WidgetryFileDialogHeadless::apply(
                 app.world_mut(),
                 root,
                 WidgetryFileDialogAction::Filename("new.txt".into()),
             )?;
-            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+            WidgetryFileDialogHeadless::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Confirm,
+            )?;
             let token = app
                 .world()
                 .get::<WidgetryFileDialogState>(root)
@@ -3231,13 +3269,13 @@ mod tests {
             } else {
                 WidgetryFileDialogAction::Active(Some(id))
             };
-            WidgetryFileDialog::apply(app.world_mut(), root, action)?;
+            WidgetryFileDialogHeadless::apply(app.world_mut(), root, action)?;
             runtime.update(app.world_mut(), &Default::default())?;
             let job_id = runtime.sessions[&root].selection.as_ref().unwrap().id;
             let manager = app.world().resource::<JobManager>().clone();
             wait_job(&manager, job_id);
             assert!(runtime.poll_selection(app.world_mut())?);
-            WidgetryFileDialog::apply(
+            WidgetryFileDialogHeadless::apply(
                 app.world_mut(),
                 root,
                 WidgetryFileDialogAction::Filename("edited.txt".into()),
@@ -3252,7 +3290,7 @@ mod tests {
             assert_eq!(state.filename(), std::ffi::OsStr::new("edited.txt"));
             assert!(state.selected().is_empty());
             assert!(runtime.sessions[&root].selection.is_none());
-            assert!(WidgetryFileDialog::apply(
+            assert!(WidgetryFileDialogHeadless::apply(
                 app.world_mut(),
                 root,
                 WidgetryFileDialogAction::Confirm
@@ -3265,13 +3303,17 @@ mod tests {
     fn selection_intents_use_a_cpu_job_and_commit_in_order_after_finished() -> Result {
         let (mut app, mut runtime, root, previous) = cached_projection_fixture()?;
         let first = previous.entries()[0].id();
-        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+        WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::SelectAll,
+        )?;
         let token = app
             .world()
             .get::<WidgetryFileDialogState>(root)
             .unwrap()
             .token();
-        WidgetryFileDialog::apply(
+        WidgetryFileDialogHeadless::apply(
             app.world_mut(),
             root,
             WidgetryFileDialogAction::Select {
@@ -3311,28 +3353,32 @@ mod tests {
     fn obsolete_selection_intent_query_and_reopened_session_discard_completed_jobs() -> Result {
         for change in 0..3 {
             let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
-            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+            WidgetryFileDialogHeadless::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::SelectAll,
+            )?;
             runtime.update(app.world_mut(), &Default::default())?;
             let id = runtime.sessions[&root].selection.as_ref().unwrap().id;
             let manager = app.world().resource::<JobManager>().clone();
             wait_job(&manager, id);
             match change {
                 0 => {
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::ClearSelection,
                     )?;
                 }
                 1 => {
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Search("one".into()),
                     )?;
                 }
                 _ => {
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Cancel,
@@ -3344,7 +3390,7 @@ mod tests {
                             .session_state(),
                         WidgetryFileDialogSessionState::Resolved
                     );
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Reopen,
@@ -3370,7 +3416,7 @@ mod tests {
     #[test]
     fn cpu_projection_waits_for_finished_consumption_and_retains_its_output() -> Result {
         let (mut app, mut runtime, root, previous) = cached_projection_fixture()?;
-        WidgetryFileDialog::apply(
+        WidgetryFileDialogHeadless::apply(
             app.world_mut(),
             root,
             WidgetryFileDialogAction::Search("one".into()),
@@ -3406,7 +3452,7 @@ mod tests {
     fn completed_projection_cannot_overwrite_a_new_query_version_or_session() -> Result {
         for change in 0..3 {
             let (mut app, mut runtime, root, previous) = cached_projection_fixture()?;
-            WidgetryFileDialog::apply(
+            WidgetryFileDialogHeadless::apply(
                 app.world_mut(),
                 root,
                 WidgetryFileDialogAction::Search("one".into()),
@@ -3417,7 +3463,7 @@ mod tests {
             wait_job(&manager, id);
             match change {
                 0 => {
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Search("two".into()),
@@ -3427,12 +3473,12 @@ mod tests {
                     runtime.sessions.get_mut(&root).unwrap().version += 1;
                 }
                 _ => {
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Cancel,
                     )?;
-                    WidgetryFileDialog::apply(
+                    WidgetryFileDialogHeadless::apply(
                         app.world_mut(),
                         root,
                         WidgetryFileDialogAction::Reopen,

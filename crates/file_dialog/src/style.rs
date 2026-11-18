@@ -124,19 +124,28 @@ pub(crate) fn apply_input(
             .get::<WidgetryFileDialogState>(root)
             .is_some_and(|state| state.mode() == WidgetryFileDialogMode::PickFile)
     {
-        return crate::input::confirm_filename(world, root);
+        let Some(text) = crate::input::pick_filename_text(world, root)? else {
+            return Ok(());
+        };
+        apply_action(world, root, WidgetryFileDialogAction::Filename(text.into()))?;
     }
+    apply_action(world, root, action)
+}
+
+fn apply_action(world: &mut World, root: Entity, action: WidgetryFileDialogAction) -> Result {
     match WidgetryFileDialog::apply(world, root, action) {
         Ok(_) => Ok(()),
         Err(error) => {
-            world.entity_mut(root).insert(Notice(
-                error
-                    .to_string()
-                    .lines()
-                    .next()
-                    .unwrap_or_default()
-                    .to_owned(),
-            ));
+            if let Ok(mut entity) = world.get_entity_mut(root) {
+                entity.insert(Notice(
+                    error
+                        .to_string()
+                        .lines()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned(),
+                ));
+            }
             if let Err(wake) = crate::runtime::wake(world) {
                 return Err(bevy_widgetry_job::JobFailure::from(error)
                     .combine(wake.into())
@@ -145,13 +154,6 @@ pub(crate) fn apply_input(
             Err(error.into_bevy_error())
         }
     }
-}
-
-pub(crate) fn filename_notice(world: &mut World, root: Entity, reason: &str) -> Result {
-    world
-        .entity_mut(root)
-        .insert(Notice(format!("File name: {reason}")));
-    crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)
 }
 
 pub(crate) fn queue_input(commands: &mut Commands, root: Entity, action: WidgetryFileDialogAction) {
@@ -324,22 +326,11 @@ fn shell_scene(
 }
 
 fn confirm_available(world: &World, root: Entity, state: &WidgetryFileDialogState) -> bool {
-    state.session_state() == WidgetryFileDialogSessionState::Open
-        && !state.projection_pending()
-        && !state.selection_pending()
-        && state.confirmation() == &WidgetryFileDialogConfirmation::Idle
-        && state.current_path().is_some()
-        && state.started_generation == Some(state.token().generation)
-        && !matches!(
-            state.directory_state(),
-            WidgetryFileDialogDirectoryState::Failed(_)
-        )
-        && match state.mode() {
-            WidgetryFileDialogMode::SaveFile => !state.filename().is_empty(),
-            WidgetryFileDialogMode::PickFile => crate::input::filename_available(world, root),
-            WidgetryFileDialogMode::PickDirectory => true,
-            _ => !state.selected().is_empty(),
-        }
+    if state.mode() == WidgetryFileDialogMode::PickFile {
+        state.confirmation_ready() && crate::input::filename_available(world, root)
+    } else {
+        state.can_confirm()
+    }
 }
 
 fn status(state: &WidgetryFileDialogState) -> String {

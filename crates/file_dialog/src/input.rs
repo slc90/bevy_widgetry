@@ -115,15 +115,12 @@ pub(crate) fn filename_available(world: &World, root: Entity) -> bool {
         .is_some_and(|edit| !composing(edit) && !edit.value().to_string().is_empty())
 }
 
-pub(crate) fn confirm_filename(world: &mut World, root: Entity) -> Result {
+pub(crate) fn pick_filename_text(world: &World, root: Entity) -> Result<Option<String>> {
     let state = world.get::<WidgetryFileDialogState>(root).ok_or_else(|| {
         crate::error::internal_error(FileDialogInternalFault::Missing { part: "state" })
     })?;
-    if state.projection_pending()
-        || state.selection_pending()
-        || state.confirmation() != &WidgetryFileDialogConfirmation::Idle
-    {
-        return Ok(());
+    if !state.confirmation_ready() {
+        return Ok(None);
     }
     let entity = crate::style::filename_entity(world, root).ok_or_else(|| {
         crate::error::internal_error(FileDialogInternalFault::Missing {
@@ -135,56 +132,7 @@ pub(crate) fn confirm_filename(world: &mut World, root: Entity) -> Result {
             part: "filename editor",
         })
     })?;
-    if composing(edit) {
-        return Ok(());
-    }
-    let text = edit.value().to_string();
-    // Selected raw names may contain undisplayable UTF-16, so unchanged display text must still use the original EntryId.
-    let selected = state
-        .selected()
-        .first()
-        .and_then(|id| state.snapshot()?.entry(*id))
-        .filter(|entry| entry.name().to_string_lossy() == text);
-    let candidate = selected
-        .or_else(|| {
-            let snapshot = state.snapshot()?;
-            let path = state.current_path()?.join(&text);
-            snapshot.paths.get(&path).and_then(|id| snapshot.entry(*id))
-        })
-        .or_else(|| {
-            state.snapshot()?.entries().iter().find(|entry| {
-                entry
-                    .name()
-                    .to_str()
-                    .is_some_and(|name| name.eq_ignore_ascii_case(&text))
-            })
-        });
-    let Some(entry) = candidate.filter(|entry| {
-        state
-            .snapshot()
-            .is_some_and(|snapshot| snapshot.positions.contains_key(&entry.id()))
-    }) else {
-        return crate::style::filename_notice(
-            world,
-            root,
-            "No matching file in this folder or file type.",
-        );
-    };
-    if selected.is_none() && crate::confirmation::valid_name(std::ffi::OsStr::new(&text)).is_err() {
-        return crate::style::filename_notice(
-            world,
-            root,
-            "Enter a single file name from this folder.",
-        );
-    }
-    if !entry.kind().is_file() {
-        return crate::style::filename_notice(world, root, "Choose a file from this folder.");
-    }
-    let action = WidgetryFileDialogAction::Activate {
-        id: entry.id(),
-        token: state.token(),
-    };
-    crate::style::apply_input(world, root, action)
+    Ok((!composing(edit)).then(|| edit.value().to_string()))
 }
 
 pub(crate) fn install(app: &mut App) {

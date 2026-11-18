@@ -60,15 +60,13 @@ pub struct WidgetryFileDialogEntry {
 }
 
 #[derive(Clone, Debug)]
-pub struct WidgetryFileDialogProps {
-    pub colors: crate::WidgetryFileDialogColorOverrides,
+pub struct WidgetryFileDialogHeadlessProps {
     pub mode: WidgetryFileDialogMode,
     pub initial_directory: Option<PathBuf>,
     pub fallback_directory: Option<PathBuf>,
     pub storage_scope: Option<String>,
     pub filters: Vec<WidgetryFileDialogFilter>,
     pub allow_different_extension: bool,
-    pub window: Option<crate::WidgetryFileDialogWindow>,
 }
 
 #[derive(Component, Clone)]
@@ -90,7 +88,8 @@ pub struct WidgetryFileDialogState {
     pub(crate) active: Option<WidgetryFileDialogEntryId>,
     pub(crate) anchor: Option<WidgetryFileDialogEntryId>,
     pub(crate) confirmation: WidgetryFileDialogConfirmation,
-    pub(crate) filename: OsString,
+    pub(crate) filename: Option<OsString>,
+    pub(crate) filename_rejection: Option<&'static str>,
     pub(crate) filters: Vec<WidgetryFileDialogFilter>,
     pub(crate) search: String,
     pub(crate) preferences: WidgetryFileDialogStorageSnapshot,
@@ -307,23 +306,23 @@ impl WidgetryFileDialogReply {
     }
 }
 
-impl Default for WidgetryFileDialogProps {
+impl Default for WidgetryFileDialogHeadlessProps {
     fn default() -> Self {
         Self {
-            colors: default(),
             mode: WidgetryFileDialogMode::PickFile,
             initial_directory: None,
             fallback_directory: None,
             storage_scope: None,
             filters: vec![WidgetryFileDialogFilter::default()],
             allow_different_extension: true,
-            window: None,
         }
     }
 }
 
 impl WidgetryFileDialogState {
-    pub fn new(mut props: WidgetryFileDialogProps) -> Result<Self, FileDialogFailure> {
+    pub(crate) fn from_headless_props(
+        mut props: WidgetryFileDialogHeadlessProps,
+    ) -> Result<Self, FileDialogFailure> {
         if props
             .storage_scope
             .as_ref()
@@ -400,7 +399,8 @@ impl WidgetryFileDialogState {
             active: None,
             anchor: None,
             confirmation: WidgetryFileDialogConfirmation::Idle,
-            filename: OsString::new(),
+            filename: None,
+            filename_rejection: None,
             filters: props.filters,
             search: String::new(),
             preferences,
@@ -475,7 +475,7 @@ impl WidgetryFileDialogState {
     }
 
     pub fn filename(&self) -> &std::ffi::OsStr {
-        &self.filename
+        self.filename.as_deref().unwrap_or_default()
     }
 
     pub fn search(&self) -> &str {
@@ -503,7 +503,7 @@ impl WidgetryFileDialogState {
     }
 
     pub fn error(&self) -> Option<&str> {
-        self.error.as_deref()
+        self.filename_rejection.or(self.error.as_deref())
     }
 
     pub fn query(&self) -> crate::WidgetryFileDialogQuery {
@@ -543,6 +543,26 @@ impl WidgetryFileDialogState {
 
     pub fn history_cursor(&self) -> Option<usize> {
         self.history_cursor
+    }
+
+    pub fn can_go_back(&self) -> bool {
+        self.session_state == WidgetryFileDialogSessionState::Open
+            && self.history_cursor.is_some_and(|cursor| cursor > 0)
+    }
+
+    pub fn can_go_forward(&self) -> bool {
+        self.session_state == WidgetryFileDialogSessionState::Open
+            && self
+                .history_cursor
+                .is_some_and(|cursor| cursor + 1 < self.history.len())
+    }
+
+    pub fn can_go_up(&self) -> bool {
+        self.session_state == WidgetryFileDialogSessionState::Open
+            && self
+                .current_path()
+                .and_then(Path::parent)
+                .is_some_and(|path| !path.as_os_str().is_empty())
     }
 
     pub fn projection_pending(&self) -> bool {
@@ -594,6 +614,7 @@ impl WidgetryFileDialogState {
         self.result = Some(result);
         self.session_state = WidgetryFileDialogSessionState::Resolved;
         self.confirmation = WidgetryFileDialogConfirmation::Idle;
+        self.filename_rejection = None;
         self.selection_job = None;
         self.validation_job = None;
         self.folder_request = None;
@@ -687,8 +708,8 @@ mod tests {
 
     #[test]
     fn session_ids_are_unique_and_first_result_wins() {
-        let mut first = WidgetryFileDialogState::new(WidgetryFileDialogProps::default()).unwrap();
-        let second = WidgetryFileDialogState::new(WidgetryFileDialogProps::default()).unwrap();
+        let mut first = WidgetryFileDialogState::from_headless_props(Default::default()).unwrap();
+        let second = WidgetryFileDialogState::from_headless_props(Default::default()).unwrap();
         assert_ne!(first.token().session, second.token().session);
         assert!(first.resolve(WidgetryFileDialogResult::Cancelled));
         assert!(!first.resolve(WidgetryFileDialogResult::File("late".into())));

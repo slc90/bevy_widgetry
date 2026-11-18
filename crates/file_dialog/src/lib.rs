@@ -11,6 +11,7 @@ mod error;
 mod filesystem;
 mod filter;
 mod folder;
+mod headless;
 mod icons;
 mod input;
 mod limits;
@@ -38,21 +39,22 @@ pub use error::{
     FileDialogStateFault,
 };
 
-pub use api::{
-    WidgetryFileDialog, WidgetryFileDialogChangeEvent, WidgetryFileDialogHeadlessPlugin,
-    WidgetryFileDialogPlugin, WidgetryFileDialogResultEvent,
-};
+pub use api::{WidgetryFileDialog, WidgetryFileDialogPlugin, WidgetryFileDialogProps};
 pub use confirmation::{WidgetryFileDialogCandidate, WidgetryFileDialogValidationJob};
 pub use filesystem::{
     WidgetryFileDialogBackend, WidgetryFileDialogFileSystem, WidgetryFileDialogLocation,
     WidgetryFileDialogNativeFileSystem,
 };
 pub use filter::{WidgetryFileDialogFilter, WidgetryFileDialogFilterId};
+pub use headless::{
+    WidgetryFileDialogChangeEvent, WidgetryFileDialogHeadless, WidgetryFileDialogHeadlessPlugin,
+    WidgetryFileDialogResultEvent,
+};
 pub use model::{
     WidgetryFileDialogAction, WidgetryFileDialogConfirmation, WidgetryFileDialogDirectoryState,
     WidgetryFileDialogEntry, WidgetryFileDialogEntryId, WidgetryFileDialogEntryKind,
-    WidgetryFileDialogFolderRequest, WidgetryFileDialogMode, WidgetryFileDialogMove,
-    WidgetryFileDialogNavigation, WidgetryFileDialogProps, WidgetryFileDialogReply,
+    WidgetryFileDialogFolderRequest, WidgetryFileDialogHeadlessProps, WidgetryFileDialogMode,
+    WidgetryFileDialogMove, WidgetryFileDialogNavigation, WidgetryFileDialogReply,
     WidgetryFileDialogResult, WidgetryFileDialogSelection, WidgetryFileDialogSessionId,
     WidgetryFileDialogSessionState, WidgetryFileDialogSort, WidgetryFileDialogState,
     WidgetryFileDialogToken,

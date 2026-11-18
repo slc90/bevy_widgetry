@@ -130,6 +130,56 @@ fn stopped_operations_end_unsubmitted_work_and_repeated_stop_does_not_resolve_th
 }
 
 #[test]
+fn pick_file_filename_submits_the_named_entry_instead_of_the_previous_selection() {
+    let mut app = app();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialogHeadless })
+        .unwrap()
+        .id();
+    let snapshot = loaded(
+        &mut app,
+        root,
+        &[
+            ("first.txt", WidgetryFileDialogEntryKind::File),
+            ("second.txt", WidgetryFileDialogEntryKind::File),
+        ],
+    );
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Select {
+            id: snapshot.visible()[0],
+            operation: WidgetryFileDialogSelection::Replace,
+            token: snapshot.token(),
+        },
+    )
+    .unwrap();
+    complete_selection(&mut app, root);
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Filename("second.txt".into()),
+    )
+    .unwrap();
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)
+        .unwrap();
+    complete_selection(&mut app, root);
+    let candidate = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .validation_job()
+        .unwrap()
+        .prepare()
+        .unwrap();
+    assert_eq!(
+        candidate.result(),
+        &WidgetryFileDialogResult::File("C:/fixture/second.txt".into())
+    );
+}
+
+#[test]
 fn cancel_commits_before_notification_and_resolves_once() {
     let mut app = app();
     let root = dialog(&mut app, WidgetryFileDialogProps::default());

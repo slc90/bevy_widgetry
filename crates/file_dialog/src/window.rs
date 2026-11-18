@@ -1,5 +1,6 @@
 const TITLE_LEFT_MARGIN: f32 = 10.0;
 
+use crate::headless::ReopenPolicy;
 use crate::*;
 use bevy::prelude::*;
 use bevy::window::{CursorSystems, RequestRedraw, WindowCloseRequested, WindowClosing};
@@ -40,17 +41,35 @@ struct Construction(Option<WidgetryFileDialogWindow>);
 struct Installed;
 
 pub(crate) fn scene(options: Option<WidgetryFileDialogWindow>) -> impl Scene {
-    bsn! { template(move |context| {
-        if let Some(existing) = context.entity.get::<Construction>() {return Ok(existing.clone());}
-        context.entity.world_scope(|world| -> Result<Construction, BevyError> {
-            if let Some(options) = &options {
-                if !world.contains_resource::<Installed>() {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "FileDialogPlugin", parent: options.parent }));}
-                if options.modality == WidgetryFileDialogModality::Modal && options.parent.is_none() {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "modal parent", parent: options.parent }));}
-                if let Some(parent) = options.parent && !is_widgetry_window(world, parent) {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "valid Widgetry parent", parent: options.parent }));}
+    let owned = options.is_some();
+    (
+        bsn! { template(move |context| {
+            if let Some(existing) = context.entity.get::<Construction>() {return Ok(existing.clone());}
+            if let Some(options) = &options
+                && context.entity.get::<WidgetryFileDialogState>()
+                    .is_some_and(|state| state.session_state() != WidgetryFileDialogSessionState::Open)
+            {
+                return Err(crate::error::internal_error(FileDialogInternalFault::Window {
+                    requirement: "open FileDialog session",
+                    parent: options.parent,
+                }));
             }
-            Ok(Construction(options.clone()))
-        })
-    }) }
+            context.entity.world_scope(|world| -> Result<Construction, BevyError> {
+                if let Some(options) = &options {
+                    if !world.contains_resource::<Installed>() {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "FileDialogPlugin", parent: options.parent }));}
+                    if options.modality == WidgetryFileDialogModality::Modal && options.parent.is_none() {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "modal parent", parent: options.parent }));}
+                    if let Some(parent) = options.parent && !is_widgetry_window(world, parent) {return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "valid Widgetry parent", parent: options.parent }));}
+                }
+                Ok(Construction(options.clone()))
+            })
+        }) },
+        bsn! {
+            template(move |context| {
+                let owned = context.entity.get::<Construction>().map_or(owned, |config| config.0.is_some());
+                Ok(if owned { ReopenPolicy::Forbidden } else { ReopenPolicy::Allowed })
+            })
+        },
+    )
 }
 
 fn construct(event: On<Add<Construction>>, config: Query<&Construction>, mut commands: Commands) {
@@ -354,10 +373,4 @@ impl Default for WidgetryFileDialogWindow {
             modality: WidgetryFileDialogModality::NonModal,
         }
     }
-}
-
-pub(crate) fn is_independent(world: &World, root: Entity) -> bool {
-    world
-        .get::<Construction>(root)
-        .is_some_and(|config| config.0.is_some())
 }

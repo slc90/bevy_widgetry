@@ -57,6 +57,111 @@ fn independent_dialog_title_binds_and_preserves_the_content_tree_on_update() {
 }
 
 #[test]
+fn binding_an_owned_window_to_a_headless_session_preserves_state_and_forbids_reopen() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialogHeadless { @mode: WidgetryFileDialogMode::PickDirectories }
+        })
+        .unwrap()
+        .id();
+    let token = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    app.world_mut()
+        .entity_mut(root)
+        .apply_scene(bsn! {
+            @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} }
+        })
+        .unwrap();
+    app.update();
+    assert!(widgetry_window_target(app.world(), root).is_some());
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(state.token(), token);
+    assert_eq!(state.mode(), WidgetryFileDialogMode::PickDirectories);
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)
+        .unwrap();
+    let failure =
+        WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)
+            .unwrap_err();
+    assert!(matches!(
+        failure,
+        FileDialogOperationFailure::Domain(failure)
+            if matches!(failure.kind(), FileDialogError::Api { fault: FileDialogApiFault::IndependentReopen, .. })
+    ));
+    app.update();
+    app.update();
+    assert!(app.world().get_entity(root).is_err());
+}
+
+#[test]
+fn binding_an_owned_window_rejects_a_resolved_headless_session_without_consuming_it() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialogHeadless })
+        .unwrap()
+        .id();
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)
+        .unwrap();
+    let scene = || {
+        bsn! {
+            @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} }
+        }
+    };
+    let error = app
+        .world_mut()
+        .entity_mut(root)
+        .apply_scene(scene())
+        .unwrap_err();
+    assert!(error.to_string().contains("open FileDialog session"));
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .result(),
+        Some(&WidgetryFileDialogResult::Cancelled)
+    );
+    assert!(app.world().get::<WidgetryFileDialog>(root).is_none());
+    assert!(
+        WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)
+            .unwrap()
+    );
+    app.world_mut()
+        .entity_mut(root)
+        .apply_scene(scene())
+        .unwrap();
+    app.update();
+    assert!(widgetry_window_target(app.world(), root).is_some());
+}
+
+#[test]
+fn patching_window_props_onto_an_embedded_dialog_keeps_its_session_reopenable() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog })
+        .unwrap()
+        .id();
+    app.world_mut()
+        .entity_mut(root)
+        .apply_scene(bsn! {
+            @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} }
+        })
+        .unwrap();
+    assert!(widgetry_window_target(app.world(), root).is_none());
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)
+        .unwrap();
+    assert!(
+        WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)
+            .unwrap()
+    );
+}
+
+#[test]
 fn independent_dialog_keeps_one_business_root_and_reclaims_its_window_and_camera() {
     let mut app = fixture();
     let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} } Name("OwnedFileDialog") }).unwrap().id();

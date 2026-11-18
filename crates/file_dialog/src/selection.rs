@@ -168,12 +168,20 @@ impl WidgetryFileDialogState {
         &mut self,
         action: WidgetryFileDialogAction,
     ) -> Result<bool, FileDialogFailure> {
+        let resets_filename = self.mode == WidgetryFileDialogMode::PickFile
+            && matches!(
+                action,
+                WidgetryFileDialogAction::Select { .. } | WidgetryFileDialogAction::ClearSelection
+            );
         if self.selection_job.is_none()
             && (matches!(action, WidgetryFileDialogAction::ClearSelection)
                 && self.selected.is_empty()
                 || matches!(action, WidgetryFileDialogAction::Active(None))
                     && self.active.is_none())
         {
+            if resets_filename {
+                return self.clear_pick_filename();
+            }
             return Ok(false);
         }
         let snapshot = self
@@ -210,7 +218,7 @@ impl WidgetryFileDialogState {
                     && self.active == Some(*id)
                     && self.anchor == Some(*id)
                 {
-                    return Ok(false);
+                    return self.clear_pick_filename();
                 }
             }
             WidgetryFileDialogAction::SelectAll if !self.mode.is_multiple() => {
@@ -285,6 +293,10 @@ impl WidgetryFileDialogState {
         job.token = token;
         job.intents.push((snapshot.clone(), action));
         self.token = token;
+        if resets_filename {
+            self.filename = None;
+            self.filename_rejection = None;
+        }
         self.confirmation = WidgetryFileDialogConfirmation::Idle;
         self.candidate = None;
         self.validation_job = None;

@@ -7,7 +7,9 @@ use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_job::JobManager;
 use bevy_widgetry_test_utils::scene_app;
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::io;
+use std::os::windows::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -31,6 +33,16 @@ struct ControlledEntries {
 
 #[derive(Resource, Default)]
 struct ObserverFlushes(Vec<std::result::Result<(), String>>);
+
+#[derive(Resource, Default)]
+struct SessionEvents {
+    changes: Vec<(Entity, WidgetryFileDialogSessionId)>,
+    results: Vec<(
+        Entity,
+        WidgetryFileDialogSessionId,
+        WidgetryFileDialogResult,
+    )>,
+}
 
 #[test]
 fn cached_query_jobs_preserve_pending_snapshot_and_do_not_rescan() -> Result {
@@ -56,12 +68,16 @@ fn cached_query_jobs_preserve_pending_snapshot_and_do_not_rescan() -> Result {
         .unwrap()
         .clone();
     let search = WidgetryFileDialogAction::Search("004095".into());
-    assert!(WidgetryFileDialog::apply(
+    assert!(WidgetryFileDialogHeadless::apply(
         app.world_mut(),
         root,
         search.clone()
     )?);
-    assert!(!WidgetryFileDialog::apply(app.world_mut(), root, search)?);
+    assert!(!WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        search
+    )?);
     let pending = app.world().get::<WidgetryFileDialogState>(root).unwrap();
     assert!(pending.projection_pending());
     assert!(Arc::ptr_eq(pending.snapshot().unwrap(), &previous));
@@ -105,7 +121,12 @@ fn fixture(
         gates.insert(path(name), gate);
         releases.push(Release(Some(release)));
     }
-    let mut app = scene_app();
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+    ));
     app.insert_resource(WidgetryFileDialogBackend(Arc::new(Controlled {
         gates: Mutex::new(gates),
         calls,
@@ -116,7 +137,7 @@ fn fixture(
 }
 
 fn dialog(app: &mut App, name: &str) -> Result<Entity> {
-    Ok(app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @initial_directory: {Some(path(name))}, @mode: WidgetryFileDialogMode::PickFiles } })?.id())
+    Ok(app.world_mut().spawn_scene(bsn! { @WidgetryFileDialogHeadless { @initial_directory: {Some(path(name))}, @mode: WidgetryFileDialogMode::PickFiles } })?.id())
 }
 
 fn pump(app: &mut App, mut done: impl FnMut(&World) -> bool) -> Result {
@@ -192,14 +213,27 @@ impl WidgetryFileDialogFileSystem for Controlled {
         if let Some(gate) = gate {
             gate.recv().map_err(io::Error::other)?;
         }
+        let native_names = path.ends_with("native-names");
+        let directories = path.ends_with("directories");
         let mut entries: Vec<_> = (0..self.count)
             .rev()
             .map(|index| {
-                let name = format!("{index:06}.txt");
+                let name = if native_names {
+                    match index {
+                        0 => OsString::from_wide(&[0xd800]),
+                        _ => OsString::from("\u{fffd}"),
+                    }
+                } else {
+                    format!("{index:06}.txt").into()
+                };
                 Ok(WidgetryFileDialogEntryData {
                     path: path.join(&name),
-                    name: name.into(),
-                    kind: WidgetryFileDialogEntryKind::File,
+                    name,
+                    kind: if directories {
+                        WidgetryFileDialogEntryKind::Directory
+                    } else {
+                        WidgetryFileDialogEntryKind::File
+                    },
                     size: Some(index as u64),
                     modified: None,
                     hidden: Some(false),
@@ -220,10 +254,13 @@ impl WidgetryFileDialogFileSystem for Controlled {
 
     fn validate(&self, candidate: &WidgetryFileDialogCandidate) -> io::Result<bool> {
         self.record("validate", &path("validation"))?;
-        assert!(matches!(
-            candidate.result(),
-            WidgetryFileDialogResult::Files(_)
-        ));
+        if matches!(candidate.result(), WidgetryFileDialogResult::File(path) if path.ends_with("validation-fails/000000.txt"))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "controlled validation failure",
+            ));
+        }
         Ok(true)
     }
 
@@ -236,6 +273,12 @@ impl WidgetryFileDialogFileSystem for Controlled {
             .remove(path);
         if let Some(gate) = gate {
             gate.recv().map_err(io::Error::other)?;
+        }
+        if path.ends_with("failed-folder") {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "controlled folder creation failure",
+            ));
         }
         self.record("created", path)
     }
@@ -286,7 +329,7 @@ fn observer_flush_survives_multiple_replies_in_one_update() -> Result {
                 .is_ok_and(|state| state.current_path().is_some())
             {
                 commands.queue(|world: &mut World| {
-                    let outcome = WidgetryFileDialog::flush_preferences(world)
+                    let outcome = WidgetryFileDialogHeadless::flush_preferences(world)
                         .map_err(|error| error.to_string());
                     world.resource_mut::<ObserverFlushes>().0.push(outcome);
                 });
@@ -427,9 +470,9 @@ fn cancel_and_reopen_reject_the_old_blocked_directory_job() -> Result {
         .get::<WidgetryFileDialogState>(root)
         .unwrap()
         .token();
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
-    WidgetryFileDialog::apply(
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
+    WidgetryFileDialogHeadless::apply(
         app.world_mut(),
         root,
         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Path(path("fresh"))),
@@ -471,7 +514,7 @@ fn first_update_registers_retention_and_keeps_loading_available() -> Result {
     app.add_plugins(WidgetryFileDialogHeadlessPlugin);
     let root = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryFileDialog })?
+        .spawn_scene(bsn! { @WidgetryFileDialogHeadless })?
         .id();
     app.update();
     assert_eq!(
@@ -486,7 +529,7 @@ fn first_update_registers_retention_and_keeps_loading_available() -> Result {
             .map(WidgetryFileDialogState::directory_state),
         Some(&WidgetryFileDialogDirectoryState::Loading)
     );
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
     assert_eq!(
         app.world()
             .get::<WidgetryFileDialogState>(root)
@@ -520,7 +563,7 @@ fn one_blocked_slot_does_not_block_local_navigation_and_cancel() -> Result {
             .map(|state| state.entries().len()),
         Some(257)
     );
-    WidgetryFileDialog::apply(app.world_mut(), slow, WidgetryFileDialogAction::Cancel)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), slow, WidgetryFileDialogAction::Cancel)?;
     releases.clear();
     pump(&mut app, |world| {
         world
@@ -550,19 +593,19 @@ fn two_blocked_slots_allow_cancel_and_latest_navigation_only() -> Result {
         entered += calls.try_iter().filter(|(op, _, _)| *op == "read").count();
         entered == 2
     })?;
-    WidgetryFileDialog::apply(
+    WidgetryFileDialogHeadless::apply(
         app.world_mut(),
         a,
         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Path(path("c"))),
     )?;
     app.update();
-    WidgetryFileDialog::apply(
+    WidgetryFileDialogHeadless::apply(
         app.world_mut(),
         a,
         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Path(path("d"))),
     )?;
     app.update();
-    WidgetryFileDialog::apply(app.world_mut(), b, WidgetryFileDialogAction::Cancel)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), b, WidgetryFileDialogAction::Cancel)?;
     assert_eq!(
         app.world()
             .resource::<WidgetryFileDialogRuntimeStatus>()
@@ -593,6 +636,399 @@ fn two_blocked_slots_allow_cancel_and_latest_navigation_only() -> Result {
 }
 
 #[test]
+fn headless_sessions_emit_results_for_every_mode_without_a_ui() -> Result {
+    use WidgetryFileDialogMode::*;
+    let (mut app, _calls, _) = fixture(&[], 2);
+    app.init_resource::<SessionEvents>();
+    app.add_observer(
+        |event: On<WidgetryFileDialogChangeEvent>,
+         mut events: ResMut<SessionEvents>,
+         states: Query<&WidgetryFileDialogState>| {
+            assert_eq!(
+                states.get(event.entity).unwrap().token().session,
+                event.session
+            );
+            events.changes.push((event.entity, event.session));
+        },
+    );
+    app.add_observer(
+        |event: On<WidgetryFileDialogResultEvent>,
+         mut events: ResMut<SessionEvents>,
+         states: Query<&WidgetryFileDialogState>| {
+            assert_eq!(
+                states.get(event.entity).unwrap().result(),
+                Some(&event.result)
+            );
+            events
+                .results
+                .push((event.entity, event.session, event.result.clone()));
+        },
+    );
+    let directory = path("sessions");
+    let directories = path("directories");
+    for (mode, initial_directory, expected) in [
+        (
+            PickFile,
+            &directory,
+            WidgetryFileDialogResult::File(directory.join("000001.txt")),
+        ),
+        (
+            PickFiles,
+            &directory,
+            WidgetryFileDialogResult::Files(Arc::from([
+                directory.join("000000.txt"),
+                directory.join("000001.txt"),
+            ])),
+        ),
+        (
+            PickDirectory,
+            &directory,
+            WidgetryFileDialogResult::Directory(directory.clone()),
+        ),
+        (
+            SaveFile,
+            &directory,
+            WidgetryFileDialogResult::SavePath(directory.join("output.txt")),
+        ),
+        (
+            PickDirectories,
+            &directories,
+            WidgetryFileDialogResult::Directories(Arc::from([
+                directories.join("000000.txt"),
+                directories.join("000001.txt"),
+            ])),
+        ),
+        (PickFile, &directory, WidgetryFileDialogResult::Cancelled),
+    ] {
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryFileDialogHeadless {
+                    @mode: {mode},
+                @initial_directory: {Some(initial_directory.clone())},
+                }
+            })?
+            .id();
+        assert!(!app.is_plugin_added::<WidgetryFileDialogPlugin>());
+        let entity = app.world().entity(root);
+        assert!(!entity.contains::<WidgetryFileDialog>());
+        assert!(!entity.contains::<Node>());
+        assert!(!entity.contains::<Window>());
+        assert!(!entity.contains::<Children>());
+        pump(&mut app, |world| {
+            world
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .directory_state()
+                == &WidgetryFileDialogDirectoryState::Ready
+        })?;
+        let session = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token()
+            .session;
+        assert!(
+            app.world()
+                .resource::<SessionEvents>()
+                .changes
+                .contains(&(root, session))
+        );
+        if expected == WidgetryFileDialogResult::Cancelled {
+            WidgetryFileDialogHeadless::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Cancel,
+            )?;
+        } else {
+            match mode {
+                PickFile => {
+                    WidgetryFileDialogHeadless::queue(
+                        &mut app.world_mut().commands(),
+                        root,
+                        WidgetryFileDialogAction::Filename("000001.txt".into()),
+                    );
+                    app.world_mut().flush();
+                }
+                PickFiles | PickDirectories => {
+                    WidgetryFileDialogHeadless::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::SelectAll,
+                    )?;
+                    pump(&mut app, |world| {
+                        !world
+                            .get::<WidgetryFileDialogState>(root)
+                            .unwrap()
+                            .selection_pending()
+                    })?;
+                }
+                SaveFile => {
+                    WidgetryFileDialogHeadless::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Filename("output.txt".into()),
+                    )?;
+                }
+                PickDirectory => {}
+            }
+            assert!(
+                app.world()
+                    .get::<WidgetryFileDialogState>(root)
+                    .unwrap()
+                    .can_confirm()
+            );
+            WidgetryFileDialogHeadless::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Confirm,
+            )?;
+        }
+        if mode == SaveFile {
+            pump(&mut app, |world| {
+                matches!(
+                    world
+                        .get::<WidgetryFileDialogState>(root)
+                        .unwrap()
+                        .confirmation(),
+                    WidgetryFileDialogConfirmation::AwaitingOverwrite { .. }
+                )
+            })?;
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            let WidgetryFileDialogConfirmation::AwaitingOverwrite { path, token } =
+                state.confirmation()
+            else {
+                return Err(BevyError::error("overwrite decision missing"));
+            };
+            assert_eq!(*path, directory.join("output.txt"));
+            assert!(!state.can_confirm());
+            let token = *token;
+            let mut stale = token;
+            stale.edit_revision += 1;
+            assert!(
+                WidgetryFileDialogHeadless::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Overwrite {
+                        token: stale,
+                        accept: true
+                    },
+                )
+                .is_err()
+            );
+            WidgetryFileDialogHeadless::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Overwrite {
+                    token,
+                    accept: true,
+                },
+            )?;
+        }
+        pump(&mut app, |world| {
+            !world.resource::<SessionEvents>().results.is_empty()
+        })?;
+        assert!(!WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Confirm
+        )?);
+        assert!(!WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Cancel
+        )?);
+        let results = std::mem::take(&mut app.world_mut().resource_mut::<SessionEvents>().results);
+        assert_eq!(results, [(root, session, expected)]);
+        app.world_mut().despawn(root);
+    }
+    Ok(())
+}
+
+#[test]
+fn headless_pick_file_prefers_the_selected_native_name_to_a_lossy_collision() -> Result {
+    let (mut app, _calls, _) = fixture(&[], 2);
+    let directory = path("native-names");
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialogHeadless {
+                @initial_directory: {Some(directory.clone())},
+            }
+        })?
+        .id();
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .directory_state()
+            == &WidgetryFileDialogDirectoryState::Ready
+    })?;
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    let raw = OsString::from_wide(&[0xd800]);
+    let entry = state
+        .entries()
+        .iter()
+        .find(|entry| entry.name() == raw)
+        .unwrap();
+    let token = state.token();
+    let id = entry.id();
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Select {
+            id,
+            token,
+            operation: WidgetryFileDialogSelection::Replace,
+        },
+    )?;
+    pump(&mut app, |world| {
+        !world
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .selection_pending()
+    })?;
+    WidgetryFileDialogHeadless::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Filename(raw.to_string_lossy().into_owned().into()),
+    )?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .result()
+            .is_some()
+    })?;
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .result(),
+        Some(&WidgetryFileDialogResult::File(directory.join(raw))),
+    );
+    Ok(())
+}
+
+#[test]
+fn headless_pick_file_distinguishes_invalid_input_and_backend_validation_failure() -> Result {
+    let (mut app, calls, _) = fixture(&[], 2);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialogHeadless {
+                @initial_directory: {Some(path("validation-fails"))},
+            }
+        })?
+        .id();
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .directory_state()
+            == &WidgetryFileDialogDirectoryState::Ready
+    })?;
+    for (name, error) in [
+        ("*.txt", "Enter a single file name"),
+        ("missing.txt", "No matching file"),
+        ("000000.txt", "controlled validation failure"),
+        ("missing.txt", "No matching file"),
+    ] {
+        WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Filename(name.into()),
+        )?;
+        WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Confirm,
+        )?;
+        pump(&mut app, |world| {
+            world
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .error()
+                .is_some_and(|message| message.contains(error))
+        })?;
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
+        assert_eq!(state.session_state(), WidgetryFileDialogSessionState::Open);
+        assert!(state.result().is_none());
+    }
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    let select = WidgetryFileDialogAction::Select {
+        id: state.visible()[1],
+        token: state.token(),
+        operation: WidgetryFileDialogSelection::Replace,
+    };
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, select)?;
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert!(
+        state
+            .error()
+            .unwrap()
+            .contains("controlled validation failure")
+    );
+    assert_eq!(
+        calls
+            .try_iter()
+            .filter(|(op, _, _)| *op == "validate")
+            .count(),
+        1
+    );
+    Ok(())
+}
+
+#[test]
+fn headless_folder_failure_replaces_an_intervening_filename_rejection() -> Result {
+    let (mut app, _calls, releases) = fixture(&["files/failed-folder"], 1);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialogHeadless {
+                @initial_directory: {Some(path("files"))},
+            }
+        })?
+        .id();
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .directory_state()
+            == &WidgetryFileDialogDirectoryState::Ready
+    })?;
+    for action in [
+        WidgetryFileDialogAction::NewFolder("failed-folder".into()),
+        WidgetryFileDialogAction::Filename("missing.txt".into()),
+        WidgetryFileDialogAction::Confirm,
+    ] {
+        WidgetryFileDialogHeadless::apply(app.world_mut(), root, action)?;
+    }
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert!(state.folder_request().is_some());
+    assert!(state.error().unwrap().contains("No matching file"));
+
+    drop(releases);
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .folder_request()
+            .is_none()
+    })?;
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert!(
+        state
+            .error()
+            .unwrap()
+            .contains("controlled folder creation failure")
+    );
+    Ok(())
+}
+
+#[test]
 fn partial_stream_projection_selection_validation_and_idle_queries() -> Result {
     let (mut app, calls, _) = fixture(&[], 300);
     let root = dialog(&mut app, "partial")?;
@@ -606,7 +1042,7 @@ fn partial_stream_projection_selection_validation_and_idle_queries() -> Result {
                 ) && state.entries().len() == 300
             })
     })?;
-    WidgetryFileDialog::apply(
+    WidgetryFileDialogHeadless::apply(
         app.world_mut(),
         root,
         WidgetryFileDialogAction::Search("00000".into()),
@@ -622,7 +1058,7 @@ fn partial_stream_projection_selection_validation_and_idle_queries() -> Result {
             .map(|state| state.visible().len()),
         Some(10)
     );
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
     pump(&mut app, |world| {
         world
             .get::<WidgetryFileDialogState>(root)
@@ -634,7 +1070,7 @@ fn partial_stream_projection_selection_validation_and_idle_queries() -> Result {
             .map(|state| state.selected().len()),
         Some(10)
     );
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
     pump(&mut app, |world| {
         world
             .get::<WidgetryFileDialogState>(root)
@@ -682,7 +1118,7 @@ fn consumer_message_limit_and_session_capacity_are_explicit() -> Result {
 fn persistence_is_opt_in_and_write_failure_cannot_rollback_result() -> Result {
     let temporary = tempfile::tempdir().map_err(BevyError::error)?;
     let (mut app, calls, _) = fixture(&[], 2);
-    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @initial_directory: {Some(path("files"))}, @storage_scope: {Some("open".into())}, @mode: WidgetryFileDialogMode::PickFiles } })?.id();
+    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialogHeadless { @initial_directory: {Some(path("files"))}, @storage_scope: {Some("open".into())}, @mode: WidgetryFileDialogMode::PickFiles } })?.id();
     pump(&mut app, |world| {
         world
             .get::<WidgetryFileDialogState>(root)
@@ -698,13 +1134,13 @@ fn persistence_is_opt_in_and_write_failure_cannot_rollback_result() -> Result {
     app.insert_resource(WidgetryFileDialogPersistence {
         path: temporary.path().join("failed.json"),
     });
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
     pump(&mut app, |world| {
         world
             .get::<WidgetryFileDialogState>(root)
             .is_some_and(|state| !state.selection_pending())
     })?;
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
     pump(&mut app, |world| {
         world
             .get::<WidgetryFileDialogState>(root)
@@ -738,7 +1174,7 @@ fn persistence_restores_future_session_without_redirecting_current_session() -> 
         .map_err(BevyError::error)?;
     let (mut app, _calls, _releases) = fixture(&["explicit"], 0);
     app.insert_resource(WidgetryFileDialogPersistence { path: file });
-    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @initial_directory: {Some(path("explicit"))}, @storage_scope: {Some("open".into())} } })?.id();
+    let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialogHeadless { @initial_directory: {Some(path("explicit"))}, @storage_scope: {Some("open".into())} } })?.id();
     pump(&mut app, |world| {
         world
             .resource::<WidgetryFileDialogStorage>()
@@ -753,7 +1189,9 @@ fn persistence_restores_future_session_without_redirecting_current_session() -> 
     );
     let second = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryFileDialog { @storage_scope: {Some("open".into())} } })?
+        .spawn_scene(
+            bsn! { @WidgetryFileDialogHeadless { @storage_scope: {Some("open".into())} } },
+        )?
         .id();
     assert_eq!(
         app.world()
@@ -788,7 +1226,7 @@ fn close_releases_session_and_background_retains_large_snapshot_ownership() -> R
     assert!(Arc::strong_count(snapshot) >= 2);
     // Query projection shares entry data, so retained snapshot references must not be counted as UI owners during reclamation.
     for query in ["000", "0000", ""] {
-        WidgetryFileDialog::apply(
+        WidgetryFileDialogHeadless::apply(
             app.world_mut(),
             root,
             WidgetryFileDialogAction::Search(query.into()),
@@ -822,12 +1260,12 @@ fn locations_initialize_once_per_active_directory_session() -> Result {
             0 => first,
             1 => dialog(&mut app, "b")?,
             _ => {
-                WidgetryFileDialog::apply(
+                WidgetryFileDialogHeadless::apply(
                     app.world_mut(),
                     first,
                     WidgetryFileDialogAction::Cancel,
                 )?;
-                WidgetryFileDialog::apply(
+                WidgetryFileDialogHeadless::apply(
                     app.world_mut(),
                     first,
                     WidgetryFileDialogAction::Reopen,
@@ -872,7 +1310,7 @@ fn blocked_folder_request_is_admitted_once_and_cancel_does_not_wait_for_creation
             })
     })?;
     calls.try_iter().for_each(drop);
-    WidgetryFileDialog::apply(
+    WidgetryFileDialogHeadless::apply(
         app.world_mut(),
         root,
         WidgetryFileDialogAction::NewFolder("created".into()),
@@ -885,7 +1323,7 @@ fn blocked_folder_request_is_admitted_once_and_cancel_does_not_wait_for_creation
             .any(|(operation, _, _)| *operation == "create")
     })?;
     assert!(
-        WidgetryFileDialog::apply(
+        WidgetryFileDialogHeadless::apply(
             app.world_mut(),
             root,
             WidgetryFileDialogAction::NewFolder("created".into())
@@ -915,7 +1353,7 @@ fn blocked_folder_request_is_admitted_once_and_cancel_does_not_wait_for_creation
             .folder_request()
             .is_some()
     );
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
     app.update();
     assert_eq!(
         app.world()
@@ -923,7 +1361,7 @@ fn blocked_folder_request_is_admitted_once_and_cancel_does_not_wait_for_creation
             .active_sessions,
         0
     );
-    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
+    WidgetryFileDialogHeadless::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
     let token = app
         .world()
         .get::<WidgetryFileDialogState>(root)
@@ -973,7 +1411,7 @@ fn folder_completion_refreshes_without_reusing_previous_generation_snapshot() ->
         .ok_or_else(|| BevyError::error("state missing"))?
         .token()
         .generation;
-    WidgetryFileDialog::apply(
+    WidgetryFileDialogHeadless::apply(
         app.world_mut(),
         root,
         WidgetryFileDialogAction::NewFolder("created".into()),
@@ -1015,13 +1453,21 @@ fn result_completion_releases_session_in_the_same_update_with_or_without_root_de
                     state.directory_state() == &WidgetryFileDialogDirectoryState::Ready
                 })
         })?;
-        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+        WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::SelectAll,
+        )?;
         pump(&mut app, |world| {
             world
                 .get::<WidgetryFileDialogState>(root)
                 .is_some_and(|state| !state.selection_pending())
         })?;
-        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+        WidgetryFileDialogHeadless::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Confirm,
+        )?;
         pump(&mut app, |_| count.load(Ordering::Relaxed) == 1)?;
         assert_eq!(
             app.world()

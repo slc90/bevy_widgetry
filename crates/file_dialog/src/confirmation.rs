@@ -177,29 +177,127 @@ impl WidgetryFileDialogCandidate {
 
 impl WidgetryFileDialogState {
     pub(crate) fn set_filename(&mut self, filename: OsString) -> Result<bool, FileDialogFailure> {
-        if self.mode != WidgetryFileDialogMode::SaveFile {
+        if !matches!(
+            self.mode,
+            WidgetryFileDialogMode::PickFile | WidgetryFileDialogMode::SaveFile
+        ) {
             return Err(self.contract(FileDialogStateFault::FilenameMode));
         }
+        if self.mode == WidgetryFileDialogMode::SaveFile && self.filename() == filename {
+            return Ok(false);
+        }
+        self.update_filename(Some(filename))
+    }
+
+    pub(crate) fn clear_pick_filename(&mut self) -> Result<bool, FileDialogFailure> {
+        if self.mode != WidgetryFileDialogMode::PickFile {
+            return Ok(false);
+        }
+        self.update_filename(None)
+    }
+
+    fn update_filename(&mut self, filename: Option<OsString>) -> Result<bool, FileDialogFailure> {
         if self.filename == filename {
             return Ok(false);
         }
-        let revision = self.token.edit_revision.checked_add(1).ok_or_else(|| {
-            crate::error::failure(
-                FileDialogError::RevisionExhausted {
-                    counter: "edit_revision",
-                    value: self.token.edit_revision,
-                    token: Some(Box::new(self.token)),
-                    scope: None,
-                },
-                "file_dialog.confirmation",
-            )
-        })?;
+        self.advance_edit_revision()?;
         self.filename = filename;
-        self.token.edit_revision = revision;
+        self.filename_rejection = None;
         self.confirmation = WidgetryFileDialogConfirmation::Idle;
         self.candidate = None;
         self.validation_job = None;
+        self.activate_after_selection = false;
         Ok(true)
+    }
+
+    pub fn can_confirm(&self) -> bool {
+        self.confirmation_ready()
+            && match self.mode {
+                WidgetryFileDialogMode::PickFile => self
+                    .filename
+                    .as_ref()
+                    .map_or_else(|| !self.selected.is_empty(), |name| !name.is_empty()),
+                WidgetryFileDialogMode::SaveFile => !self.filename().is_empty(),
+                WidgetryFileDialogMode::PickDirectory => true,
+                _ => !self.selected.is_empty(),
+            }
+    }
+
+    pub(crate) fn confirmation_ready(&self) -> bool {
+        self.session_state == WidgetryFileDialogSessionState::Open
+            && self.confirmation == WidgetryFileDialogConfirmation::Idle
+            && !self.selection_pending()
+            && !self.projection_pending
+            && self.confirmation_directory().is_ok()
+    }
+
+    fn confirmation_directory(&self) -> Result<&Path, FileDialogStateFault> {
+        if self.started_generation != Some(self.token.generation)
+            || matches!(
+                self.directory_state,
+                WidgetryFileDialogDirectoryState::Failed(_)
+            )
+        {
+            return Err(FileDialogStateFault::DirectoryUnavailable);
+        }
+        self.current_path()
+            .ok_or(FileDialogStateFault::CurrentDirectoryMissing)
+    }
+
+    fn pick_filename_entry(
+        &self,
+        directory: &Path,
+        name: &OsStr,
+    ) -> Result<WidgetryFileDialogEntryId, &'static str> {
+        const INVALID: &str = "File name: Enter a single file name from this folder.";
+        const MISSING: &str = "File name: No matching file in this folder or file type.";
+        const DIRECTORY: &str = "File name: Choose a file from this folder.";
+
+        let snapshot = self.snapshot.as_ref().ok_or(MISSING)?;
+        // A selected row carries its original UTF-16 identity even when its editor displays replacement characters.
+        if let Some(entry) = self.selected.first().and_then(|id| snapshot.entry(*id))
+            && snapshot.positions.contains_key(&entry.id)
+            && entry.kind.is_file()
+            && (entry.name == name
+                || name
+                    .to_str()
+                    .is_some_and(|text| entry.name.to_string_lossy() == text))
+        {
+            return Ok(entry.id);
+        }
+        valid_name(name).map_err(|_| INVALID)?;
+        if let Some(entry) = snapshot
+            .paths
+            .get(&directory.join(name))
+            .and_then(|id| snapshot.entry(*id))
+            && entry.name == name
+        {
+            if !snapshot.positions.contains_key(&entry.id) {
+                return Err(MISSING);
+            }
+            return if entry.kind.is_file() {
+                Ok(entry.id)
+            } else {
+                Err(DIRECTORY)
+            };
+        }
+        let text = name.to_str().ok_or(MISSING)?;
+        let mut matches = snapshot.entries().iter().filter(|entry| {
+            snapshot.positions.contains_key(&entry.id)
+                && entry
+                    .name
+                    .to_str()
+                    .is_some_and(|name| name.eq_ignore_ascii_case(text))
+        });
+        let entry = matches.next().ok_or(MISSING)?;
+        if matches.next().is_some() {
+            return Err(MISSING);
+        }
+        if entry.kind.is_file() {
+            Ok(entry.id)
+        } else {
+            Err(DIRECTORY)
+        }
     }
 
     pub(crate) fn confirm(&mut self) -> Result<bool, FileDialogFailure> {
@@ -209,18 +307,33 @@ impl WidgetryFileDialogState {
         if self.selection_pending() || self.projection_pending {
             return Err(self.contract(FileDialogStateFault::ConfirmationPending));
         }
-        if self.started_generation != Some(self.token.generation)
-            || matches!(
-                self.directory_state,
-                WidgetryFileDialogDirectoryState::Failed(_)
-            )
-        {
-            return Err(self.contract(FileDialogStateFault::DirectoryUnavailable));
-        }
         let directory = self
-            .current_path
-            .clone()
-            .ok_or_else(|| self.contract(FileDialogStateFault::CurrentDirectoryMissing))?;
+            .confirmation_directory()
+            .map_err(|fault| self.contract(fault))?;
+        if self.mode == WidgetryFileDialogMode::PickFile
+            && let Some(name) = &self.filename
+        {
+            match self.pick_filename_entry(directory, name) {
+                Ok(id) if !self.selected.contains(&id) => {
+                    self.select(WidgetryFileDialogAction::Select {
+                        id,
+                        operation: WidgetryFileDialogSelection::Replace,
+                        token: self.token,
+                    })?;
+                    self.activate_after_selection = true;
+                    self.error = None;
+                    return Ok(true);
+                }
+                Ok(_) => {}
+                Err(message) => {
+                    if self.filename_rejection == Some(message) {
+                        return Ok(false);
+                    }
+                    self.filename_rejection = Some(message);
+                    return Ok(true);
+                }
+            }
+        }
         if self.selected.is_empty()
             && !matches!(
                 self.mode,
@@ -229,7 +342,26 @@ impl WidgetryFileDialogState {
         {
             return Err(self.contract(FileDialogStateFault::ConfirmationSelectionMissing));
         }
-        let revision = self.token.edit_revision.checked_add(1).ok_or_else(|| {
+        let directory = directory.to_owned();
+        self.advance_edit_revision()?;
+        self.validation_job = Some(WidgetryFileDialogValidationJob {
+            token: self.token,
+            mode: self.mode,
+            directory,
+            snapshot: self.snapshot.clone(),
+            selected: self.selected.clone(),
+            filename: self.filename.clone().unwrap_or_default(),
+            filter: self.query().filter,
+            allow_different_extension: self.allow_different_extension,
+        });
+        self.confirmation = WidgetryFileDialogConfirmation::Validating;
+        self.filename_rejection = None;
+        self.error = None;
+        Ok(true)
+    }
+
+    fn advance_edit_revision(&mut self) -> Result<(), FileDialogFailure> {
+        self.token.edit_revision = self.token.edit_revision.checked_add(1).ok_or_else(|| {
             crate::error::failure(
                 FileDialogError::RevisionExhausted {
                     counter: "edit_revision",
@@ -240,20 +372,7 @@ impl WidgetryFileDialogState {
                 "file_dialog.confirmation",
             )
         })?;
-        self.token.edit_revision = revision;
-        self.validation_job = Some(WidgetryFileDialogValidationJob {
-            token: self.token,
-            mode: self.mode,
-            directory,
-            snapshot: self.snapshot.clone(),
-            selected: self.selected.clone(),
-            filename: self.filename.clone(),
-            filter: self.query().filter,
-            allow_different_extension: self.allow_different_extension,
-        });
-        self.confirmation = WidgetryFileDialogConfirmation::Validating;
-        self.error = None;
-        Ok(true)
+        Ok(())
     }
 
     pub(crate) fn validated(

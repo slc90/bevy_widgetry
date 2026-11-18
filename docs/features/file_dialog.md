@@ -71,6 +71,8 @@ let scene = bsn! {
 
 独立 FileDialog 管理自己创建的窗口及关闭流程。嵌入式结果后可以使用 Reopen 开始新 Session；独立窗口不通过 Reopen 原地重用，重新打开应创建新实例。
 
+在已有 Headless 根上挂载独立窗口时，会话必须处于 Open。已决议的 Headless 会话可先执行 Reopen，再挂载窗口。
+
 ## 目录导航与搜索
 
 ### 发起导航和刷新
@@ -159,7 +161,7 @@ WidgetryFileDialog::queue(
 );
 ```
 
-Filename Action 用于 SaveFile。PickFile 的输入只解析当前可见文件名，并以真实 EntryId 进入确认校验；不把一段同名文本当作任意目录的文件身份。
+`Filename` 支持 SaveFile 和 PickFile。PickFile 的文件名草稿在 `Confirm` 时解析为当前可见文件的 EntryId，找不到时会在 `state.error()` 报告原因。修改草稿或重新选择条目会清除该提示。选择行时可以直接提交 `Select` 和 `Confirm`，也可以使用 `Activate`。界面可以用有损文字显示原生文件名，提交选择时仍使用原始 EntryId。已选项的原生名字优先匹配，包括提交其有损显示文字的情况。
 
 目标已存在时进入覆盖确认。覆盖回答携带原候选 Token，过期回答不会授权新路径。独立窗口复用 MessageBox 展示确认；自定义承接方式也必须保留候选身份。
 
@@ -195,8 +197,32 @@ WidgetryFileDialog::flush_preferences(world)
 
 `WidgetryFileDialogStyle` 与颜色覆盖控制布局和状态外观。修改样式不重置 Session、目录、文本光标或选择。默认文件区域独立滚动，窄空间下操作区可以换行。
 
-## 自定义后台与无默认外观运行
+## 无默认界面运行
 
-`WidgetryFileDialogHeadlessPlugin` 安装状态与后台运行能力，不安装默认 UI。`WidgetryFileDialogBackend` / `WidgetryFileDialogFileSystem` 可替换文件系统访问，`deliver` 可接收手工构造的回复。
+只安装 `WidgetryFileDialogHeadlessPlugin`，即可用 BSN 创建独立会话。会话根持有 `WidgetryFileDialogState`，默认窗口、列表和编辑框由上层界面决定。
 
-回复必须携带当前 Session 和请求 Token。旧目录、旧查询、旧选择或已结束 Session 的结果不会覆盖当前状态。应用扩展后台时应保留这种身份关系，而不是仅按路径字符串或当前行索引回写。
+```rust
+app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+
+let dialog = world.spawn_scene(bsn! {
+    @WidgetryFileDialogHeadless {
+        @mode: WidgetryFileDialogMode::PickFile,
+        @initial_directory: {Some(PathBuf::from(r"C:\Data"))},
+    }
+    on(result)
+})?.id();
+
+// Once the directory is available, submit the edited filename and confirm.
+WidgetryFileDialogHeadless::queue(
+    &mut commands,
+    dialog,
+    WidgetryFileDialogAction::Filename("report.csv".into()),
+);
+WidgetryFileDialogHeadless::queue(&mut commands, dialog, WidgetryFileDialogAction::Confirm);
+```
+
+- 查询 `directory_state()`、`snapshot()`、`visible()` 和 `selected()` 绘制列表。使用 `state.token()` 或当时用于显示行的快照 Token 提交选择，避免对旧目录或旧投影操作。
+- 用 `can_go_back()`、`can_go_forward()`、`can_go_up()` 和 `can_confirm()` 驱动按钮。可提交确认表示会话已就绪且具备必要输入，提交后仍需等待文件名匹配和后台校验。用 `projection_pending()`、`selection_pending()`、`folder_request()` 和 `confirmation()` 显示各阶段的处理状态。
+- `ChangeEvent` 在会话状态提交后发送，`ResultEvent` 每个 Session 最多发送一次。覆盖确认由调用方显示，再以 `AwaitingOverwrite` 中的 Token 提交 `Overwrite`。使用 `Reopen` 在已决议的根实体上开启新会话，或销毁根实体结束其生命周期。
+
+`WidgetryFileDialogBackend` 和 `WidgetryFileDialogFileSystem` 可替换文件系统访问。手动模式可以用 `WidgetryFileDialogHeadless::deliver` 提交回复。回复必须携带相应的 Session 和请求 Token，Runtime 会丢弃过期或目标已销毁的回复。

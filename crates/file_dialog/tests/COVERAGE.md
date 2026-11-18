@@ -7,7 +7,7 @@
 - 异步目录 Snapshot 的 Loading／Partial／Ready／Failed，Storage Scope／Prefs，Embedded／Owned Window 和 IME／Focus。
 
 ## Stimuli
-- BSN 构造、公开 World／Commands API、目录导航／批量选择、Keyboard／Pointer／IME、后台读取与校验回复。
+- 独立 Headless 与默认 UI 的 BSN 构造、公开 World／Commands API、目录导航／批量选择、Keyboard／Pointer／IME、后台读取与校验回复。
 - Streaming I/O、偏好读写、窗口关闭、Theme／Override 与 Session 重开。
 
 ## Guards
@@ -38,7 +38,7 @@
 | `contract.rs` | 公开 Session、目录、选择、确认／取消及错误契约。 |
 | `diagnostics.rs` | 请求／后台／颜色／存储失败的领域诊断、归属与宿主传播。 |
 | `folder_shutdown.rs` | 目录读取与关闭、取消、后台资源回收协作。 |
-| `runtime.rs` | 受管异步快照、Job、存储、容量、Session 隔离与迟到回复。 |
+| `runtime.rs` | 无界面会话的状态和结果、受管异步快照、Job、存储、容量、Session 隔离与迟到回复。 |
 | `style.rs` | 真实 UI／IME／Layout、动态内容和 Theme／Owner 投影。 |
 | `window.rs` | Owned Window、Modal、Focus、Overwrite、标题与生命周期。 |
 

@@ -26,17 +26,15 @@ impl WidgetryFileDialogState {
     ) -> Result<bool, FileDialogFailure> {
         if self.session_state != WidgetryFileDialogSessionState::Open {
             if action == WidgetryFileDialogAction::Reopen {
-                let props = WidgetryFileDialogProps {
-                    colors: Default::default(),
+                let props = WidgetryFileDialogHeadlessProps {
                     mode: self.mode,
                     initial_directory: self.preferences.last_visited_dir.clone(),
                     fallback_directory: self.fallback.clone(),
                     storage_scope: self.storage_scope.clone(),
                     filters: self.filters.clone(),
                     allow_different_extension: self.allow_different_extension,
-                    window: None,
                 };
-                let mut next = Self::new(props)?;
+                let mut next = Self::from_headless_props(props)?;
                 next.preferences = self.preferences.clone();
                 *self = next;
                 return Ok(true);
@@ -98,6 +96,9 @@ impl WidgetryFileDialogState {
                     return Err(self.contract(FileDialogStateFault::ActivationKind));
                 }
                 if self.selected.contains(&id) && self.selection_job.is_none() {
+                    if self.confirmation == WidgetryFileDialogConfirmation::Idle {
+                        self.clear_pick_filename()?;
+                    }
                     return self.confirm();
                 }
                 self.select(WidgetryFileDialogAction::Select {
@@ -160,6 +161,7 @@ impl WidgetryFileDialogState {
                     token: self.token,
                     path,
                 });
+                self.filename_rejection = None;
                 self.confirmation = WidgetryFileDialogConfirmation::Idle;
                 self.candidate = None;
                 self.validation_job = None;
@@ -305,7 +307,10 @@ impl WidgetryFileDialogState {
                         self.navigate(WidgetryFileDialogNavigation::Refresh)?;
                         self.reveal_path = Some(request.path);
                     }
-                    Err(error) => self.error = Some(error.to_string()),
+                    Err(error) => {
+                        self.filename_rejection = None;
+                        self.error = Some(error.to_string());
+                    }
                 }
                 Ok(true)
             }
@@ -333,6 +338,7 @@ impl WidgetryFileDialogState {
                 self.confirmation = WidgetryFileDialogConfirmation::Idle;
                 self.candidate = None;
                 self.activate_after_selection = false;
+                self.filename_rejection = None;
                 self.error = Some(error.clone());
                 self.location_error = Some(error.clone());
                 self.directory_state = WidgetryFileDialogDirectoryState::Failed(error);
@@ -465,6 +471,9 @@ impl WidgetryFileDialogState {
         self.requested_path = Some(path);
         self.directory_state = WidgetryFileDialogDirectoryState::Loading;
         self.selected = Arc::new(Default::default());
+        if self.mode == WidgetryFileDialogMode::PickFile {
+            self.filename = None;
+        }
         self.selection_job = None;
         self.activate_after_selection = false;
         self.validation_job = None;
@@ -477,6 +486,7 @@ impl WidgetryFileDialogState {
         self.snapshot = None;
         self.projection_pending = false;
         self.confirmation = WidgetryFileDialogConfirmation::Idle;
+        self.filename_rejection = None;
         self.candidate = None;
         self.error = None;
         Ok(true)
@@ -517,6 +527,7 @@ impl WidgetryFileDialogState {
         self.token.query_revision = query_revision;
         self.token.edit_revision = edit_revision;
         self.confirmation = WidgetryFileDialogConfirmation::Idle;
+        self.filename_rejection = None;
         self.candidate = None;
         self.projection_pending = self.snapshot.is_some();
         self.selection_job = None;

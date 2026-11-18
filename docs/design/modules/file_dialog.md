@@ -6,6 +6,8 @@ FileDialog 把文件选择看作一段有身份的业务会话，而不是一张
 
 每次构造创建独立 Session，保存模式、目录、选择、候选与结果。嵌入式内容和独立窗口使用同一业务状态，不因换了外壳就改变确认语义。
 
+`WidgetryFileDialogHeadless` 是 Runtime 识别的会话根。其构造参数只包含模式、目录、筛选、扩展名约束和偏好作用域。默认 `WidgetryFileDialog` 用同一入口初始化状态，再配置颜色与窗口。只安装 Headless Plugin 时，现有 Runtime 和 JobManager 负责所有文件操作，调用方通过 ECS 状态、动作和事件承接结果。
+
 ```mermaid
 flowchart LR
     Action["导航 / 选择 / 确认动作"] --> Session["独立 Session 状态"]
@@ -52,7 +54,7 @@ Selection、Active 和范围 Anchor 分开保存。Active 表示当前浏览位�
 
 ```mermaid
 flowchart LR
-    Selection["正式选择 / 保存文件名"] --> Candidate["固定候选与 Token"]
+    Selection["正式选择 / 文件名草稿"] --> Candidate["固定候选与 Token"]
     Candidate --> Validation["后台完整校验"]
     Validation --> Overwrite["必要的覆盖确认"]
     Validation --> Result["一次结果决议"]
@@ -60,6 +62,8 @@ flowchart LR
 ```
 
 覆盖回答针对固定候选，不能因为用户随后改了文件名就授权另一个目标。等待验证期间的新导航、编辑或取消会使旧候选失效，最终决议仍属于当前 Session。
+
+PickFile 的文件名草稿由会话在确认时匹配到当前投影。已选条目以其原生名字和稳定 ID 优先匹配，包括有损显示文字被原样提交的情况。其他文本需要匹配可见文件才能走选择准备和校验。默认文本编辑器只在组合态结束后提交文字，窗口和覆盖 UI 消费会话的确认阶段。
 
 ## 区分共享偏好与会话内的视觉缓存
 
