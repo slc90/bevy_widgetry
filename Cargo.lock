@@ -2027,7 +2027,6 @@ dependencies = [
  "bevy",
  "bevy_widgetry_asset",
  "bevy_widgetry_button",
- "bevy_widgetry_check_box",
  "bevy_widgetry_combo_box",
  "bevy_widgetry_core",
  "bevy_widgetry_diagnostics",
