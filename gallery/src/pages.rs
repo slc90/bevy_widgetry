@@ -47,7 +47,7 @@ pub(crate) use tree::TreeDemoPlugin;
 pub(crate) use waveform::{
     DemoSources as WaveformDemoSources, WaveformDemoPlugin, WaveformDemoState, WaveformDemoSystems,
 };
-pub(crate) use window::WindowDemoPlugin;
+pub(crate) use window::{WindowDemoPlugin, close_embedded_file_dialogs};
 
 pub(crate) use combo_box::color_examples as combo_color_examples;
 pub(crate) use list_view::color_examples as list_color_examples;

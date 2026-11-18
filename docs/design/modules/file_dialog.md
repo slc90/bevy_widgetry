@@ -10,6 +10,8 @@ FileDialog 把文件选择看作一段有身份的业务会话，而不是一张
 
 默认界面从公开查询读取确认与创建文件夹的可用状态、列表位置和覆盖目标。文件名编辑框保留 UI 草稿和输入法组合态，确认时通过 `Filename` 和 `Confirm` 提交。独立窗口调用 `WidgetryFileDialogHeadless::prevent_reopen` 为会话声明一次性生命周期，接收结果后由窗口层安排原生资源回收。
 
+Gallery 自定义示例将会话根挂在 Window 页的内嵌区域中，并使用自己的分页网格和操作区。条目按钮随目录和筛选投影绑定条目 ID 与 token。结果观察者核对会话身份后更新所属示例的结果，页面层级负责回收会话根。
+
 ```mermaid
 flowchart LR
     Action["导航 / 选择 / 确认动作"] --> Session["独立 Session 状态"]

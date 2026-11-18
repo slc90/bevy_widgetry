@@ -267,7 +267,7 @@ pub(crate) fn editor_scene(
         Node { min_width: px(0), flex_grow: 1.0, height: px(CONTROL_HEIGHT) }
     };
     let filename_input =
-        (kind == PartKind::Filename).then(|| bsn! { on(crate::input::filename_ready) });
+        (kind == PartKind::Filename).then_some(bsn! { on(crate::input::filename_ready) });
     (field, filename_input)
 }
 

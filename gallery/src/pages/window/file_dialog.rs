@@ -142,7 +142,7 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
     });
 }
 
-fn bounded_path(path: &Path) -> String {
+pub(super) fn bounded_path(path: &Path) -> String {
     let text = display_path(path);
     let mut summary: String = text.chars().take(ERROR_SUMMARY_CHARACTERS).collect();
     if text.chars().nth(ERROR_SUMMARY_CHARACTERS).is_some() {
@@ -151,7 +151,7 @@ fn bounded_path(path: &Path) -> String {
     summary
 }
 
-fn summary(result: &WidgetryFileDialogResult) -> (usize, LocalizedText) {
+pub(super) fn summary(result: &WidgetryFileDialogResult) -> (usize, LocalizedText) {
     let paths: &[PathBuf] = match result {
         WidgetryFileDialogResult::Cancelled => {
             return (

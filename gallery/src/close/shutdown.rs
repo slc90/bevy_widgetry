@@ -100,6 +100,7 @@ pub(super) fn begin(world: &mut World, intent: AppExit) -> Result {
     }
     crate::splash::begin_shutdown(world)?;
     crate::canvas_experiment::cancel_stage_exports(world)?;
+    crate::pages::close_embedded_file_dialogs(world)?;
     let timeout = world.resource::<ExitFlow>().timeout;
     let handle = world
         .resource::<JobManager>()

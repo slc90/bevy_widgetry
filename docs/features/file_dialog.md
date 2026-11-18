@@ -199,6 +199,8 @@ WidgetryFileDialog::flush_preferences(world)
 
 默认界面也通过公开 Headless 查询和动作处理文件名、文件夹、条目选择与确认。渲染和输入法组合态由默认控件管理，单文件名称匹配、保存扩展名规则及文件系统验证由会话处理。
 
+Gallery 的 Window 页在默认示例下提供“内嵌文件选择器”。可以选择单文件、多文件、单目录、多目录或保存模式，在分页网格中浏览目录并使用搜索和文件类型筛选。会话将选中的路径或取消结果显示在模式入口下方。离开 Window 页会回收内嵌界面及其会话。
+
 ## 无默认界面运行
 
 只安装 `WidgetryFileDialogHeadlessPlugin`，即可用 BSN 创建独立会话。会话根持有 `WidgetryFileDialogState`，默认窗口、列表和编辑框由上层界面决定。
