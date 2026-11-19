@@ -3,6 +3,7 @@ const PAGE_PADDING: f32 = 24.0;
 const DETAIL_GAP: f32 = 24.0;
 
 mod custom_file_dialog;
+mod custom_window;
 mod file_dialog;
 mod independent;
 mod message_box;
@@ -22,7 +23,7 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(DemoText))
         Node { width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, padding: UiRect::all(px(PAGE_PADDING)), row_gap: px(DETAIL_GAP) }
-        Children [@independent::scene()-- @message_box::scene()-- @file_dialog::scene()-- @custom_file_dialog::scene()]
+        Children [@independent::scene()-- @custom_window::scene()-- @message_box::scene()-- @file_dialog::scene()-- @custom_file_dialog::scene()]
     }
 }
 
@@ -33,6 +34,7 @@ impl Plugin for WindowDemoPlugin {
             .add_systems(OnExit(GalleryPage::Window), exit)
             .add_observer(message_box::on_message_box_result);
         custom_file_dialog::install(app);
+        custom_window::install(app);
     }
 }
 

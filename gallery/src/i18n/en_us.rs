@@ -552,6 +552,14 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         }
         TextKey::Window(WindowKey::Result) => "Result: ...",
         TextKey::Window(WindowKey::IndependentWindow) => "Independent Window",
+        TextKey::Window(WindowKey::CustomTitleBar) => "Custom Title Bar",
+        TextKey::Window(WindowKey::CustomWindowOptions) => "Options",
+        TextKey::Window(WindowKey::CustomWindowMinimize) => "Minimize",
+        TextKey::Window(WindowKey::CustomWindowMaximize) => "Maximize",
+        TextKey::Window(WindowKey::CustomWindowRestore) => "Restore",
+        TextKey::Window(WindowKey::CustomWindowClose) => "Close",
+        TextKey::Window(WindowKey::CustomWindowHint) => "Drag the empty title bar to move the window. Use the right-side buttons to change its size.",
+        TextKey::Window(WindowKey::CustomWindowOptionsContent) => "Title bar double-click switching is off in this demo.",
         TextKey::Window(WindowKey::Theme) => "Theme",
         TextKey::Window(WindowKey::ThisIsAnIndependentWidgetryWindow) => {
             "This is an independent Widgetry window."

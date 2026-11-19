@@ -126,7 +126,7 @@ pub(crate) fn install(app: &mut App) {
         );
 }
 
-fn refresh_text(
+pub(crate) fn refresh_text(
     language: Res<Language>,
     mut redraw: MessageWriter<bevy::window::RequestRedraw>,
     mut texts: ParamSet<(

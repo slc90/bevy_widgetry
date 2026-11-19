@@ -136,6 +136,8 @@ let scene = bsn! {
 
 自定义控件管理自己的视觉、命中与禁用反馈，Window 主题和配色覆盖继续管理外壳。查询 UI 根的 `WidgetryWindowMaximized` 可读取最近一次同步的原生最大化状态。自定义控件可以使用 `Changed<WidgetryWindowMaximized>` 更新还原提示。
 
+在 Gallery 的 Window 页选择「自定义标题栏」可打开演示。右侧文字按钮提供选项、最小化、最大化／还原和关闭。演示关闭了双击切换，标题栏空白仍支持原生拖动。可在同一页打开 Theme 独立窗口对照默认样式。
+
 ## 模态窗口
 
 ### 将新窗口设为 Modal Child

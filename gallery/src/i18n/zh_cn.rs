@@ -590,6 +590,16 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         }
         TextKey::Window(WindowKey::Result) => "结果：…",
         TextKey::Window(WindowKey::IndependentWindow) => "独立窗口",
+        TextKey::Window(WindowKey::CustomTitleBar) => "自定义标题栏",
+        TextKey::Window(WindowKey::CustomWindowOptions) => "选项",
+        TextKey::Window(WindowKey::CustomWindowMinimize) => "最小化",
+        TextKey::Window(WindowKey::CustomWindowMaximize) => "最大化",
+        TextKey::Window(WindowKey::CustomWindowRestore) => "还原",
+        TextKey::Window(WindowKey::CustomWindowClose) => "关闭",
+        TextKey::Window(WindowKey::CustomWindowHint) => {
+            "拖动标题栏空白处可移动窗口。使用右侧按钮切换窗口大小。"
+        }
+        TextKey::Window(WindowKey::CustomWindowOptionsContent) => "本演示已关闭标题栏双击切换。",
         TextKey::Window(WindowKey::Theme) => "Theme",
         TextKey::Window(WindowKey::ThisIsAnIndependentWidgetryWindow) => {
             "这是一个独立 Widgetry 窗口。"
