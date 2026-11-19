@@ -34,7 +34,9 @@ flowchart LR
 
 ## 窗口操作与默认按钮
 
-窗口动作通过 UI 根校验 Window / Camera 绑定，按原生 `Window.enabled_buttons` 提交操作。关闭通过 `WindowCloseRequested` 进入宿主的关闭流程。Owned、Borrowed 及默认按钮使用同一个动作入口。最大化切换和外壳样式以 Winit 报告的实际状态为准，Bevy `Window` 中的最大化请求等待原生窗口处理。
+窗口动作通过 UI 根校验 Window / Camera 绑定，按原生 `Window.enabled_buttons` 提交操作。关闭通过 `WindowCloseRequested` 进入宿主的关闭流程。Owned、Borrowed 及默认按钮使用同一个动作入口。最大化切换读取 Winit 的实际状态；外壳每帧同步 `WidgetryWindowMaximized`，供圆角、缩放手柄和两类控制区读取。Bevy `Window` 中的最大化请求等待原生窗口处理。
+
+标题栏外壳在伸缩的标题内容右侧容纳完整的控制区 Scene。默认 Style 通过内部标记管理自带三按钮的颜色、禁用状态和最大化图标。应用传入的 SceneList 负责自身布局、交互和视觉，也可读取同一个最大化状态。右侧容器让子控件参与 Picking，空白可命中下层拖动区。
 
 ## 让跨窗口输入仍有明确作用域
 

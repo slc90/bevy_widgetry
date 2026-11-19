@@ -1,5 +1,8 @@
-use crate::{WindowFailure, WindowFault, runtime_error, window_root::validate_binding};
-use bevy::{prelude::*, window::WindowCloseRequested, winit::WINIT_WINDOWS};
+use crate::{
+    WindowFailure, WindowFault, maximized::native_maximized, runtime_error,
+    window_root::validate_binding,
+};
+use bevy::{prelude::*, window::WindowCloseRequested};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetryWindowAction {
@@ -92,23 +95,4 @@ pub(crate) fn queue_toggle_maximize(commands: &mut Commands, root: Entity) {
         }
         Ok(())
     });
-}
-
-fn native_maximized(native: Entity) -> Option<bool> {
-    #[cfg(test)]
-    if let Some((window, maximized)) = TEST_NATIVE_MAXIMIZED.take()
-        && native == window
-    {
-        return Some(maximized);
-    }
-    WINIT_WINDOWS.with_borrow(|windows| {
-        windows
-            .get_window(native)
-            .map(|window| window.is_maximized())
-    })
-}
-
-#[cfg(test)]
-thread_local! {
-    pub(crate) static TEST_NATIVE_MAXIMIZED: std::cell::Cell<Option<(Entity, bool)>> = const { std::cell::Cell::new(None) };
 }

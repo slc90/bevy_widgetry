@@ -25,6 +25,7 @@
 - Cover 根据实际 Layout 居中裁剪，在资产就绪／布局恢复时更新；稳定帧不反复改写 ImageNode。
 - Disabled／Hidden／Modal 影响真实输入和 Focus，但不改变合法业务状态；IME 对可编辑、只读与静态目标的资格正确。
 - 标题绑定、颜色 Owner／Override、动态托管部件的恢复不修改正文或其他窗口；错误保留原始诊断及请求身份。
+- 原生最大化状态驱动外壳和默认图标；自定义控制区保留自己的布局、禁用反馈和图标。
 
 ## Couplings
 - Window Lifecycle × Camera／Modal Ownership；Image × Layout／Cover；Focus × IME／Disabled；Theme × 动态 Title／Body。
@@ -37,6 +38,7 @@
 |---|---|
 | `action.rs` | Headless 窗口操作的目标隔离、原生权限和关闭请求。 |
 | `background.rs` | Theme／Image 背景、Opacity、Cover 与布局时序。 |
+| `custom_controls.rs` | Owned／Borrowed 的自定义控制区组合、独立样式及公开动作。 |
 | `diagnostics.rs` | Native／Camera／标题／颜色结构故障和宿主传播。 |
 | `owned_window.rs` | Owned／Modal 生命周期、Focus／IME 与资源归属。 |
 | `title.rs` | 标题绑定、截断、动态更新与窄窗口布局。 |
@@ -49,5 +51,6 @@
 | `src/style.rs` | 托管色板、部件 Owner、Theme／Override 和故障恢复。 |
 | `src/title.rs` | 标题投影、绑定身份与动态变化。 |
 | `src/input.rs` | Focus／IME 资格及输入清理的内部规则。 |
+| `src/maximized.rs` | 原生状态同步、圆角和默认图标投影及自定义图标隔离。 |
 | `src/title_bar/double_click.rs` | 双击配对、时间与屏幕坐标容差、窗口及命中区域隔离。 |
 | `src/title_bar/drag.rs` | 拖动请求路由、命中限制与可选双击接线。 |

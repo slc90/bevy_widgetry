@@ -279,13 +279,15 @@ pub mod tooltip {
 pub mod window {
     pub use bevy_widgetry_window::{
         WidgetryModalWindow, WidgetryWindowAction, WidgetryWindowBackground,
-        WidgetryWindowButtonColorOverrides, WidgetryWindowButtonStateColorOverrides,
-        WidgetryWindowColorOverrides, WidgetryWindowControlsConfig, WidgetryWindowImageBackground,
-        WidgetryWindowImageMode, WidgetryWindowInitialFocus, WidgetryWindowPlugin,
+        WidgetryWindowBehavior, WidgetryWindowButtonColorOverrides,
+        WidgetryWindowButtonStateColorOverrides, WidgetryWindowColorOverrides,
+        WidgetryWindowControlsConfig, WidgetryWindowImageBackground, WidgetryWindowImageMode,
+        WidgetryWindowInitialFocus, WidgetryWindowMaximized, WidgetryWindowPlugin,
         WidgetryWindowStateColorOverrides, WidgetryWindowSurfaceColorOverrides,
         WidgetryWindowTitle, WindowError, WindowFailure, WindowFault, is_widgetry_window,
-        owned_widgetry_window, prepare_native_window, taskbar_icon, transparent_render_creation,
-        widgetry_window, widgetry_window_target,
+        owned_widgetry_window, owned_widgetry_window_with_controls, prepare_native_window,
+        taskbar_icon, transparent_render_creation, widgetry_window, widgetry_window_target,
+        widgetry_window_with_controls,
     };
 }
 

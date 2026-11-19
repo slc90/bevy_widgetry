@@ -1,10 +1,11 @@
+use super::bar::WindowControls;
 use crate::{
+    WidgetryWindowMaximized,
     action::queue_toggle_maximize,
     title_bar::controls::window_control_button_node,
     window_root::{WindowRoot, find_window_root},
 };
-use crate::{title_bar::bar::TitleBar, window_root::WindowContent};
-use bevy::prelude::{BorderRadius, px};
+use bevy::prelude::{DetectChanges, Ref};
 use bevy::{
     ecs::{
         component::Component,
@@ -17,7 +18,6 @@ use bevy::{
     picking::hover::Hovered,
     ui::{BackgroundColor, Node},
     ui_widgets::{Activate, Button},
-    winit::WINIT_WINDOWS,
 };
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::WidgetryIcon;
@@ -50,64 +50,37 @@ pub(super) fn on_maximize_restore(
     queue_toggle_maximize(&mut commands, root);
 }
 
-pub(super) fn sync_maximize_state(
-    _non_send_marker: NonSendMarker,
-    mut roots: Query<(Entity, &mut WindowRoot)>,
-    children: Query<&Children>,
-    buttons: Query<(), With<MaximizeButton>>,
-    bars: Query<(), With<TitleBar>>,
-    contents: Query<(), With<WindowContent>>,
-    mut nodes: Query<&mut Node>,
+pub(super) fn sync_default_maximize_icon(
+    buttons: Query<(Entity, Ref<ChildOf>, Ref<Children>), With<MaximizeButton>>,
+    controls: Query<(), With<WindowControls>>,
+    parents: Query<&ChildOf>,
+    roots: Query<(Entity, &WindowRoot)>,
+    states: Query<Ref<WidgetryWindowMaximized>>,
     icons: Query<(), With<WidgetryIcon>>,
     mut commands: Commands,
 ) {
-    WINIT_WINDOWS.with_borrow(|winit_windows| {
-        for (entity, mut root) in &mut roots {
-            let Some(window) = winit_windows.get_window(root.target_window) else {
-                continue;
-            };
-            let maximized = window.is_maximized();
-            if root.maximized == maximized {
-                continue;
-            }
-            root.maximized = maximized;
-            let radius = px(if maximized {
-                0.0
-            } else {
-                crate::window_root::WINDOW_CORNER_RADIUS
-            });
-            if let Ok(mut node) = nodes.get_mut(entity) {
-                node.border_radius = BorderRadius::all(radius);
-            }
-            for descendant in children.iter_descendants(entity) {
-                if bars.contains(descendant) {
-                    if let Ok(mut node) = nodes.get_mut(descendant) {
-                        node.border_radius = BorderRadius::top(radius);
-                    }
-                } else if contents.contains(descendant) {
-                    if let Ok(mut node) = nodes.get_mut(descendant) {
-                        node.border_radius = BorderRadius::bottom(radius);
-                    }
-                } else if buttons.contains(descendant) {
-                    let Ok(button_children) = children.get(descendant) else {
-                        continue;
-                    };
-                    for &child in button_children.iter() {
-                        if icons.contains(child) {
-                            WidgetryIcon::set_svg(
-                                &mut commands,
-                                child,
-                                if maximized {
-                                    BuiltinIcon::WindowRestore
-                                } else {
-                                    BuiltinIcon::WindowMaximize
-                                }
-                                .path(),
-                            );
-                        }
-                    }
-                }
+    for (button, parent, children) in &buttons {
+        if !controls.contains(parent.parent()) {
+            continue;
+        }
+        let Some((root, _)) = find_window_root(button, &parents, &roots) else {
+            continue;
+        };
+        let Ok(state) = states.get(root) else {
+            continue;
+        };
+        if !state.is_changed() && !parent.is_changed() && !children.is_changed() {
+            continue;
+        }
+        let icon = if state.is_maximized() {
+            BuiltinIcon::WindowRestore
+        } else {
+            BuiltinIcon::WindowMaximize
+        };
+        for &child in children.iter() {
+            if icons.contains(child) {
+                WidgetryIcon::set_svg(&mut commands, child, icon.path());
             }
         }
-    });
+    }
 }

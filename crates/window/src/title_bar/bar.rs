@@ -7,7 +7,7 @@ use crate::{
     scene::WidgetryWindowControlsConfig,
     title_bar::{close::CloseButton, maximize::MaximizeButton, minimize::MinimizeButton},
 };
-use bevy::prelude::*;
+use bevy::{prelude::*, scene::SceneScope};
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_theme::WidgetryTheme;
@@ -88,35 +88,48 @@ fn window_controls_node() -> Node {
 }
 
 pub(crate) fn title_bar(
-    controls: WidgetryWindowControlsConfig,
+    double_click_maximize: bool,
     content: impl SceneList,
+    controls: impl Scene,
 ) -> impl Scene {
     bsn! {
         template(|_| Ok(TitleBar))
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryTheme>().window.title_bar.normal.border)))
         Children [
-            @title_bar_drag_area(controls.double_click_maximize)--
+            @title_bar_drag_area(double_click_maximize)--
             template(|_| Ok(TitleBarContent)) Children [{content}]--
+            {SceneScope(controls)}
+        ]
+    }
+}
 
-                template(|_| Ok(WindowControls))
-                Children [
-                    {controls.minimize_visible.then(|| bsn! {
-                        template(|_| Ok(MinimizeButton))
-                        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-                        Children [@system_icon(BuiltinIcon::WindowMinimize)]
-                    })}--
-                    {controls.maximize_visible.then(|| bsn! {
-                        template(|_| Ok(MaximizeButton))
-                        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-                        Children [@system_icon(BuiltinIcon::WindowMaximize)]
-                    })}--
-                    {controls.close_visible.then(|| bsn! {
-                        template(|_| Ok(CloseButton))
-                        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
-                        Children [@system_icon(BuiltinIcon::WindowClose)]
-                    })}
-                ]
+pub(crate) fn custom_controls(content: impl SceneList) -> impl Scene {
+    bsn! {
+        template(|_| Ok(window_controls_node()))
+        template(|_| Ok(Pickable::IGNORE))
+        Children [{content}]
+    }
+}
 
+pub(crate) fn default_controls(controls: WidgetryWindowControlsConfig) -> impl Scene {
+    bsn! {
+        template(|_| Ok(WindowControls))
+        Children [
+            {controls.minimize_visible.then(|| bsn! {
+                template(|_| Ok(MinimizeButton))
+                template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
+                Children [@system_icon(BuiltinIcon::WindowMinimize)]
+            })}--
+            {controls.maximize_visible.then(|| bsn! {
+                template(|_| Ok(MaximizeButton))
+                template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
+                Children [@system_icon(BuiltinIcon::WindowMaximize)]
+            })}--
+            {controls.close_visible.then(|| bsn! {
+                template(|_| Ok(CloseButton))
+                template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
+                Children [@system_icon(BuiltinIcon::WindowClose)]
+            })}
         ]
     }
 }

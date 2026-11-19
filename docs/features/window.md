@@ -88,7 +88,7 @@ let controls = WidgetryWindowControlsConfig {
 };
 ```
 
-这些参数控制自绘按钮和缩放区域。原生 `Window.enabled_buttons` 仍表达系统行为权限，隐藏一个自绘按钮并不自动禁止所有同类原生操作。
+`minimize_visible`、`maximize_visible` 和 `close_visible` 控制默认三按钮的显示。`resizable` 控制外壳的边缘缩放区域。系统操作权限由原生 `Window.enabled_buttons` 决定。
 
 标题栏空白始终支持原生鼠标拖动。`double_click_maximize` 默认启用双击切换最大化／还原，设为 `false` 时只保留拖动。双击使用 Windows 的时间和位置容差，并遵循原生 `enabled_buttons.maximize`。标题栏内的交互控件接收自己的输入。
 
@@ -101,6 +101,40 @@ WidgetryWindowAction::Maximize.queue(&mut commands, root);
 `WidgetryWindowAction` 提供 `Minimize`、`Maximize`、`RestoreFromMaximized` 和 `RequestClose`。把 Owned 或 Borrowed 的 UI 根传给 `queue`，即可在 Observer 中发起操作。持有 `&mut World` 时可以调用 `apply`。动作通过现有 Window / Camera 绑定找到原生窗口，隐藏默认按钮时也能调用。
 
 `apply` 返回 `Ok(true)` 表示请求已提交，`Ok(false)` 表示 `Window.enabled_buttons` 拒绝操作。无效绑定返回 `WindowFailure`。恢复操作请求退出最大化状态；关闭操作发送 `WindowCloseRequested`，由宿主决定是否关闭。
+
+### 替换标题栏右侧控制区
+
+`owned_widgetry_window_with_controls` 和 `widgetry_window_with_controls` 在标题内容与正文参数之间接收右侧控制区的 `SceneList`。它可以为空，也可以容纳调用方定义的布局和控件。`WidgetryWindowBehavior` 负责边缘缩放与双击设置，标题栏空白仍由外壳处理原生拖动。
+
+```rust
+use bevy::ui_widgets::{Activate, Button};
+
+#[derive(Component)]
+struct PanelWindow;
+
+let scene = bsn! {
+    @owned_widgetry_window_with_controls(
+        Window { title: "数据面板".into(), ..default() },
+        WidgetryWindowBehavior { double_click_maximize: false, ..default() },
+        WidgetryWindowBackground::Theme,
+        WidgetryWindowColorOverrides::default(),
+        bsn_list! { WidgetryWindowTitle WidgetryText },
+        bsn_list! {
+            Button Node { width: px(92), justify_content: JustifyContent::Center }
+            on(|event: On<Activate>, parents: Query<&ChildOf>, windows: Query<(), With<PanelWindow>>, mut commands: Commands| {
+                if let Some(root) = parents.iter_ancestors(event.entity).find(|&entity| windows.contains(entity)) {
+                    WidgetryWindowAction::RequestClose.queue(&mut commands, root);
+                }
+            })
+            Children [Text("关闭") WidgetryText template(|_| Ok(Pickable::IGNORE))]
+        },
+        bsn_list! { Text("窗口正文") WidgetryText },
+    )
+    template(|_| Ok(PanelWindow))
+};
+```
+
+自定义控件管理自己的视觉、命中与禁用反馈，Window 主题和配色覆盖继续管理外壳。查询 UI 根的 `WidgetryWindowMaximized` 可读取最近一次同步的原生最大化状态。自定义控件可以使用 `Changed<WidgetryWindowMaximized>` 更新还原提示。
 
 ## 模态窗口
 

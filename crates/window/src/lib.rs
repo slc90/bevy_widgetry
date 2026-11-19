@@ -7,6 +7,7 @@ mod background;
 mod error;
 pub use error::{WindowError, WindowFailure, WindowFault};
 mod input;
+mod maximized;
 mod modal;
 mod native_icon;
 mod render;
@@ -19,12 +20,15 @@ mod window_root;
 pub use background::{
     WidgetryWindowBackground, WidgetryWindowImageBackground, WidgetryWindowImageMode,
 };
+pub use maximized::WidgetryWindowMaximized;
 pub use modal::WidgetryModalWindow;
 #[doc(hidden)]
 pub use native_icon::native_icon_plugin;
 pub use render::transparent_render_creation;
 pub use scene::{
-    WidgetryWindowControlsConfig, owned_widgetry_window, prepare_native_window, widgetry_window,
+    WidgetryWindowBehavior, WidgetryWindowControlsConfig, owned_widgetry_window,
+    owned_widgetry_window_with_controls, prepare_native_window, widgetry_window,
+    widgetry_window_with_controls,
 };
 pub use title::WidgetryWindowTitle;
 pub use title_bar::WidgetryWindowPlugin;

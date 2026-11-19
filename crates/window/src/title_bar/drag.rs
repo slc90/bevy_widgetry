@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn paired_native_presses_toggle_maximize_without_requesting_a_second_move() {
         use super::super::double_click::TEST_PRESS_TIME;
-        use crate::action::TEST_NATIVE_MAXIMIZED;
+        use crate::maximized::TEST_NATIVE_MAXIMIZED;
         use std::time::{Duration, Instant};
 
         let mut app = scene_app();

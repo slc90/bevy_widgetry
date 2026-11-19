@@ -233,7 +233,6 @@ mod tests {
                 .spawn((
                     WindowRoot {
                         target_window: native,
-                        maximized: false,
                     },
                     UiTargetCamera(camera),
                 ))

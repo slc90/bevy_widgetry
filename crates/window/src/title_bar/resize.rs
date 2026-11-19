@@ -1,4 +1,7 @@
-use crate::window_root::{WindowRoot, find_window_root};
+use crate::{
+    WidgetryWindowMaximized,
+    window_root::{WindowRoot, find_window_root},
+};
 use bevy::ecs::system::Commands;
 use bevy::prelude::{Children, Scene, bsn, template};
 use bevy::window::SystemCursorIcon;
@@ -132,6 +135,7 @@ pub(super) fn on_window_resize_press(
     handles: Query<&WindowResizeHandle>,
     parents: Query<&ChildOf>,
     roots: Query<(Entity, &WindowRoot)>,
+    states: Query<&WidgetryWindowMaximized>,
     mut windows: Query<&mut Window>,
     mut commands: Commands,
 ) {
@@ -143,7 +147,7 @@ pub(super) fn on_window_resize_press(
         return;
     };
 
-    let Some((_, root)) = find_window_root(event.entity, &parents, &roots) else {
+    let Some((root_entity, root)) = find_window_root(event.entity, &parents, &roots) else {
         return;
     };
 
@@ -151,7 +155,11 @@ pub(super) fn on_window_resize_press(
         return;
     };
 
-    if !window.resizable || root.maximized {
+    if !window.resizable
+        || states
+            .get(root_entity)
+            .is_ok_and(|state| state.is_maximized())
+    {
         return;
     }
 
@@ -200,17 +208,21 @@ pub(super) fn sync_resize_handles(
     handles: Query<(Entity, Option<&Pickable>), bevy::prelude::With<WindowResizeHandle>>,
     parents: Query<&ChildOf>,
     roots: Query<(Entity, &WindowRoot)>,
+    states: Query<&WidgetryWindowMaximized>,
     windows: Query<&Window>,
     mut commands: Commands,
 ) {
     for (entity, pickable) in &handles {
-        let Some((_, root)) = find_window_root(entity, &parents, &roots) else {
+        let Some((root_entity, root)) = find_window_root(entity, &parents, &roots) else {
             continue;
         };
         let Ok(window) = windows.get(root.target_window) else {
             continue;
         };
-        let enabled = window.resizable && !root.maximized;
+        let enabled = window.resizable
+            && !states
+                .get(root_entity)
+                .is_ok_and(|state| state.is_maximized());
         if pickable.is_none_or(|pickable| pickable.is_hoverable != enabled) {
             commands.entity(entity).insert(if enabled {
                 Pickable::default()

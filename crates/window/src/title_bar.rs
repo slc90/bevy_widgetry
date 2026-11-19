@@ -50,7 +50,9 @@ impl Plugin for WidgetryWindowPlugin {
                 (
                     crate::window_root::initialize_windows
                         .before(bevy::camera::CameraUpdateSystems),
-                    maximize::sync_maximize_state,
+                    crate::maximized::sync_maximized,
+                    crate::maximized::sync_corner_radii,
+                    maximize::sync_default_maximize_icon,
                     controls::sync_enabled_buttons,
                     resize::sync_resize_handles,
                     crate::window_root::cleanup_closed_windows,
