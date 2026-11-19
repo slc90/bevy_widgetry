@@ -2,6 +2,7 @@ use bevy_widgetry_theme::WidgetryThemePlugin;
 pub(crate) mod bar;
 pub(crate) mod close;
 mod controls;
+mod double_click;
 mod drag;
 pub(crate) mod maximize;
 pub(crate) mod minimize;

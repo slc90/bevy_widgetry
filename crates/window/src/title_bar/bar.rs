@@ -2,6 +2,7 @@ const TITLE_ICON_SIZE: UVec2 = UVec2::splat(16);
 
 const TITLE_BAR_HEIGHT: f32 = 36.0;
 
+use super::double_click::TitleBarDoubleClick;
 use crate::{
     scene::WidgetryWindowControlsConfig,
     title_bar::{close::CloseButton, maximize::MaximizeButton, minimize::MinimizeButton},
@@ -94,7 +95,7 @@ pub(crate) fn title_bar(
         template(|_| Ok(TitleBar))
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryTheme>().window.title_bar.normal.border)))
         Children [
-            template(|_| Ok(TitleBarDragArea)) template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))--
+            @title_bar_drag_area(controls.double_click_maximize)--
             template(|_| Ok(TitleBarContent)) Children [{content}]--
 
                 template(|_| Ok(WindowControls))
@@ -117,6 +118,18 @@ pub(crate) fn title_bar(
                 ]
 
         ]
+    }
+}
+
+fn title_bar_drag_area(double_click_maximize: bool) -> impl Scene {
+    bsn! {
+        template(move |context| {
+            if double_click_maximize {
+                context.entity.insert(TitleBarDoubleClick);
+            }
+            Ok(TitleBarDragArea)
+        })
+        template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
     }
 }
 

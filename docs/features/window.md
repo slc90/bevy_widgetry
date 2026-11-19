@@ -84,12 +84,13 @@ let controls = WidgetryWindowControlsConfig {
     maximize_visible: false,
     close_visible: true,
     resizable: false,
+    double_click_maximize: false,
 };
 ```
 
 这些参数控制自绘按钮和缩放区域。原生 `Window.enabled_buttons` 仍表达系统行为权限，隐藏一个自绘按钮并不自动禁止所有同类原生操作。
 
-标题栏空白支持原生鼠标拖动及双击最大化／还原。自定义交互子控件保留自己的输入，不应把整个标题栏都作为业务按钮使用。
+标题栏空白始终支持原生鼠标拖动。`double_click_maximize` 默认启用双击切换最大化／还原，设为 `false` 时只保留拖动。双击使用 Windows 的时间和位置容差，并遵循原生 `enabled_buttons.maximize`。标题栏内的交互控件接收自己的输入。
 
 ### 从应用发起窗口操作
 

@@ -122,6 +122,7 @@ impl MessageBoxScene {
             maximize_visible: false,
             close_visible: false,
             resizable: false,
+            ..default()
         };
         let results: &[WidgetryMessageBoxResult] = match buttons {
             WidgetryMessageBoxButtons::Ok => &[WidgetryMessageBoxResult::Ok],

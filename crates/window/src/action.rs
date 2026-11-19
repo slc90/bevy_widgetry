@@ -80,12 +80,7 @@ pub(crate) fn queue_toggle_maximize(commands: &mut Commands, root: Entity) {
                     .into_bevy_error()
             })?
             .0;
-        let maximized = WINIT_WINDOWS.with_borrow(|windows| {
-            windows
-                .get_window(native)
-                .map(|window| window.is_maximized())
-        });
-        if let Some(maximized) = maximized {
+        if let Some(maximized) = native_maximized(native) {
             let action = if maximized {
                 WidgetryWindowAction::RestoreFromMaximized
             } else {
@@ -97,4 +92,23 @@ pub(crate) fn queue_toggle_maximize(commands: &mut Commands, root: Entity) {
         }
         Ok(())
     });
+}
+
+fn native_maximized(native: Entity) -> Option<bool> {
+    #[cfg(test)]
+    if let Some((window, maximized)) = TEST_NATIVE_MAXIMIZED.take()
+        && native == window
+    {
+        return Some(maximized);
+    }
+    WINIT_WINDOWS.with_borrow(|windows| {
+        windows
+            .get_window(native)
+            .map(|window| window.is_maximized())
+    })
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_NATIVE_MAXIMIZED: std::cell::Cell<Option<(Entity, bool)>> = const { std::cell::Cell::new(None) };
 }

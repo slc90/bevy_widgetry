@@ -87,7 +87,7 @@ fn construct(event: On<Add<Construction>>, config: Query<&Construction>, mut com
             return Err(crate::error::internal_error(FileDialogInternalFault::Window { requirement: "live parent during construction", parent: options.parent }));
         }
         let scene = (bsn! {
-            @owned_widgetry_window(options.native.clone(), WidgetryWindowControlsConfig {minimize_visible:false,maximize_visible:false,close_visible:true,resizable:options.native.resizable}, WidgetryWindowBackground::Theme, Default::default(),
+            @owned_widgetry_window(options.native.clone(), WidgetryWindowControlsConfig {minimize_visible:false,maximize_visible:false,close_visible:true,resizable:options.native.resizable,..default()}, WidgetryWindowBackground::Theme, Default::default(),
                 bsn_list!{bevy_widgetry_window::WidgetryWindowTitle bevy_widgetry_core::text::WidgetryText Node {margin:UiRect::left(px(TITLE_LEFT_MARGIN))} template(|_| Ok(Pickable::IGNORE))},
                 bsn_list!{Name("FileDialogContentHost") template(|_| Ok(ContentHost)) Node {width:percent(100),flex_grow:1.0,min_height:px(0)}})
             template(move |_| Ok(Independent {parent:options.parent,overwrite:None}))

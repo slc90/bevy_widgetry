@@ -12,6 +12,7 @@ pub struct WidgetryWindowControlsConfig {
     pub maximize_visible: bool,
     pub close_visible: bool,
     pub resizable: bool,
+    pub double_click_maximize: bool,
 }
 
 // The default Windows DX12 HWND swap chain does not support transparent compositing.
@@ -94,6 +95,7 @@ impl Default for WidgetryWindowControlsConfig {
             maximize_visible: true,
             close_visible: true,
             resizable: true,
+            double_click_maximize: true,
         }
     }
 }

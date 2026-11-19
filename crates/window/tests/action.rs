@@ -19,6 +19,7 @@ fn windows(app: &mut App) -> [(Entity, Entity); 2] {
         maximize_visible: false,
         close_visible: false,
         resizable: false,
+        ..default()
     };
     let world = app.world_mut();
     let borrowed = world.spawn(prepare_native_window(Window::default())).id();

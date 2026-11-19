@@ -12,6 +12,7 @@
 ## Guards
 - Native Window／Camera 绑定必须有效且唯一；Borrowed 资源不可被 Root Cleanup 误删。
 - 原生按钮权限约束对应窗口动作；关闭请求交由宿主处理。
+- 双击切换按构造选项启用，遵循原生最大化权限，并按窗口、拖动区域及 Windows 的时间和位置容差匹配。标题栏空白始终支持原生拖动。
 - Cover 仅在图片资源和布局尺寸有效时更新；失效／重复绑定不得破坏既有健康实例。
 
 ## Transitions
@@ -48,3 +49,5 @@
 | `src/style.rs` | 托管色板、部件 Owner、Theme／Override 和故障恢复。 |
 | `src/title.rs` | 标题投影、绑定身份与动态变化。 |
 | `src/input.rs` | Focus／IME 资格及输入清理的内部规则。 |
+| `src/title_bar/double_click.rs` | 双击配对、时间与屏幕坐标容差、窗口及命中区域隔离。 |
+| `src/title_bar/drag.rs` | 拖动请求路由、命中限制与可选双击接线。 |
