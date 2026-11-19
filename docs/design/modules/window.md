@@ -32,6 +32,10 @@ flowchart LR
 
 回收依据原分配身份，而不是根据后来可能损坏的绑定猜测所有权。一个失效根不能因此删除另一个窗口的相机。
 
+## 窗口操作与默认按钮
+
+窗口动作通过 UI 根校验 Window / Camera 绑定，按原生 `Window.enabled_buttons` 提交操作。关闭通过 `WindowCloseRequested` 进入宿主的关闭流程。Owned、Borrowed 及默认按钮使用同一个动作入口。最大化切换和外壳样式以 Winit 报告的实际状态为准，Bevy `Window` 中的最大化请求等待原生窗口处理。
+
 ## 让跨窗口输入仍有明确作用域
 
 指针、Keyboard 和 IME 首先属于原生窗口，再解析到该窗口的有效 UI 输入目标。Window 不把全部键盘消息作为一个全局流消费，以免一个窗口处理另一个窗口的编辑输入。

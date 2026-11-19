@@ -6,6 +6,7 @@ pub type WindowFailure = WidgetryFailure<WindowError>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WindowFault {
+    MissingCloseRequests,
     MissingPart {
         entity: Entity,
         component: &'static str,

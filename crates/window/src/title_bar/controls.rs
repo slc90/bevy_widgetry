@@ -38,12 +38,12 @@ pub(super) fn sync_enabled_buttons(
         )>,
     >,
     parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
+    roots: Query<(Entity, &WindowRoot)>,
     windows: Query<&Window>,
     mut commands: Commands,
 ) {
     for (entity, minimize, maximize) in &buttons {
-        let Some(root) = find_window_root(entity, &parents, &roots) else {
+        let Some((_, root)) = find_window_root(entity, &parents, &roots) else {
             continue;
         };
         let Ok(window) = windows.get(root.target_window) else {

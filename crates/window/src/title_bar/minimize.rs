@@ -1,13 +1,20 @@
 use crate::{
+    WidgetryWindowAction,
     title_bar::controls::window_control_button_node,
     window_root::{WindowRoot, find_window_root},
 };
 use bevy::{
-    ecs::{component::Component, hierarchy::ChildOf, observer::On, query::With, system::Query},
+    ecs::{
+        component::Component,
+        entity::Entity,
+        hierarchy::ChildOf,
+        observer::On,
+        query::With,
+        system::{Commands, Query},
+    },
     picking::hover::Hovered,
     ui::{BackgroundColor, Node},
     ui_widgets::{Activate, Button},
-    window::Window,
 };
 
 #[derive(Component)]
@@ -23,24 +30,16 @@ pub(super) fn on_minimize(
     event: On<Activate>,
     buttons: Query<(), With<MinimizeButton>>,
     parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
-    mut windows: Query<&mut Window>,
+    roots: Query<(Entity, &WindowRoot)>,
+    mut commands: Commands,
 ) {
     let Ok(()) = buttons.get(event.entity) else {
         return;
     };
 
-    let Some(root) = find_window_root(event.entity, &parents, &roots) else {
+    let Some((root, _)) = find_window_root(event.entity, &parents, &roots) else {
         return;
     };
 
-    let Ok(mut window) = windows.get_mut(root.target_window) else {
-        return;
-    };
-
-    if !window.enabled_buttons.minimize {
-        return;
-    }
-
-    window.set_minimized(true);
+    WidgetryWindowAction::Minimize.queue(&mut commands, root);
 }

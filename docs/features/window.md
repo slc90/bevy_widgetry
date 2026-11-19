@@ -91,6 +91,16 @@ let controls = WidgetryWindowControlsConfig {
 
 标题栏空白支持原生鼠标拖动及双击最大化／还原。自定义交互子控件保留自己的输入，不应把整个标题栏都作为业务按钮使用。
 
+### 从应用发起窗口操作
+
+```rust
+WidgetryWindowAction::Maximize.queue(&mut commands, root);
+```
+
+`WidgetryWindowAction` 提供 `Minimize`、`Maximize`、`RestoreFromMaximized` 和 `RequestClose`。把 Owned 或 Borrowed 的 UI 根传给 `queue`，即可在 Observer 中发起操作。持有 `&mut World` 时可以调用 `apply`。动作通过现有 Window / Camera 绑定找到原生窗口，隐藏默认按钮时也能调用。
+
+`apply` 返回 `Ok(true)` 表示请求已提交，`Ok(false)` 表示 `Window.enabled_buttons` 拒绝操作。无效绑定返回 `WindowFailure`。恢复操作请求退出最大化状态；关闭操作发送 `WindowCloseRequested`，由宿主决定是否关闭。
+
 ## 模态窗口
 
 ### 将新窗口设为 Modal Child

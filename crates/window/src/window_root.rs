@@ -58,8 +58,8 @@ fn window_content_node() -> Node {
 pub(crate) fn find_window_root<'a>(
     entity: Entity,
     parents: &Query<&ChildOf>,
-    roots: &'a Query<&WindowRoot>,
-) -> Option<&'a WindowRoot> {
+    roots: &'a Query<(Entity, &WindowRoot)>,
+) -> Option<(Entity, &'a WindowRoot)> {
     parents
         .iter_ancestors(entity)
         .find_map(|ancestor| roots.get(ancestor).ok())

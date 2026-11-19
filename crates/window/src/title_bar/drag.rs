@@ -1,4 +1,5 @@
 use crate::{
+    action::queue_toggle_maximize,
     title_bar::bar::TitleBarDragArea,
     window_root::{WindowRoot, find_window_root},
 };
@@ -73,7 +74,7 @@ pub(super) fn on_title_bar_press(
     _non_send_marker: NonSendMarker,
     drag_areas: Query<(), With<TitleBarDragArea>>,
     parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
+    roots: Query<(Entity, &WindowRoot)>,
     mut windows: Query<&mut Window>,
     mut commands: Commands,
     mut clicks: Local<TitleBarClicks>,
@@ -93,7 +94,7 @@ pub(super) fn on_title_bar_press(
         return;
     }
 
-    let Some(root) = find_window_root(event.entity, &parents, &roots) else {
+    let Some((root_entity, root)) = find_window_root(event.entity, &parents, &roots) else {
         return;
     };
     let Some(lease) =
@@ -123,7 +124,7 @@ pub(super) fn on_title_bar_press(
                     },
                     DoubleClickSettings::system(),
                 ) {
-                    super::maximize::toggle_maximize(root.target_window, &mut window);
+                    queue_toggle_maximize(&mut commands, root_entity);
                     return;
                 }
             }

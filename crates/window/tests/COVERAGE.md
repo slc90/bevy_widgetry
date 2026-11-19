@@ -7,10 +7,11 @@
 - Theme／Image 背景、Asset Ready、Opacity、Cover 与实际 Layout。
 
 ## Stimuli
-- Native 准备、BSN Spawn／Despawn、WindowClosed、Modal Child、Theme／Override、图片加载、Focus／IME 和标题修改。
+- Native 准备、BSN Spawn／Despawn、公开窗口动作、WindowClosed、Modal Child、Theme／Override、图片加载、Focus／IME 和标题修改。
 
 ## Guards
 - Native Window／Camera 绑定必须有效且唯一；Borrowed 资源不可被 Root Cleanup 误删。
+- 原生按钮权限约束对应窗口动作；关闭请求交由宿主处理。
 - Cover 仅在图片资源和布局尺寸有效时更新；失效／重复绑定不得破坏既有健康实例。
 
 ## Transitions
@@ -33,6 +34,7 @@
 
 | 测试文件 | 主要测试职责 |
 |---|---|
+| `action.rs` | Headless 窗口操作的目标隔离、原生权限和关闭请求。 |
 | `background.rs` | Theme／Image 背景、Opacity、Cover 与布局时序。 |
 | `diagnostics.rs` | Native／Camera／标题／颜色结构故障和宿主传播。 |
 | `owned_window.rs` | Owned／Modal 生命周期、Focus／IME 与资源归属。 |

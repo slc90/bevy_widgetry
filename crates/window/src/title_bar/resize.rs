@@ -131,7 +131,7 @@ pub(super) fn on_window_resize_press(
     event: On<PointerPress>,
     handles: Query<&WindowResizeHandle>,
     parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
+    roots: Query<(Entity, &WindowRoot)>,
     mut windows: Query<&mut Window>,
     mut commands: Commands,
 ) {
@@ -143,7 +143,7 @@ pub(super) fn on_window_resize_press(
         return;
     };
 
-    let Some(root) = find_window_root(event.entity, &parents, &roots) else {
+    let Some((_, root)) = find_window_root(event.entity, &parents, &roots) else {
         return;
     };
 
@@ -199,12 +199,12 @@ fn resize_handle(direction: CompassOctant) -> impl Scene {
 pub(super) fn sync_resize_handles(
     handles: Query<(Entity, Option<&Pickable>), bevy::prelude::With<WindowResizeHandle>>,
     parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
+    roots: Query<(Entity, &WindowRoot)>,
     windows: Query<&Window>,
     mut commands: Commands,
 ) {
     for (entity, pickable) in &handles {
-        let Some(root) = find_window_root(entity, &parents, &roots) else {
+        let Some((_, root)) = find_window_root(entity, &parents, &roots) else {
             continue;
         };
         let Ok(window) = windows.get(root.target_window) else {

@@ -1,8 +1,9 @@
-use crate::{title_bar::bar::TitleBar, window_root::WindowContent};
 use crate::{
+    action::queue_toggle_maximize,
     title_bar::controls::window_control_button_node,
     window_root::{WindowRoot, find_window_root},
 };
+use crate::{title_bar::bar::TitleBar, window_root::WindowContent};
 use bevy::prelude::{BorderRadius, px};
 use bevy::{
     ecs::{
@@ -16,7 +17,6 @@ use bevy::{
     picking::hover::Hovered,
     ui::{BackgroundColor, Node},
     ui_widgets::{Activate, Button},
-    window::Window,
     winit::WINIT_WINDOWS,
 };
 use bevy_widgetry_asset::BuiltinIcon;
@@ -36,40 +36,18 @@ pub(super) fn on_maximize_restore(
     _non_send_marker: NonSendMarker,
     buttons: Query<(), With<MaximizeButton>>,
     parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
-    mut windows: Query<&mut Window>,
+    roots: Query<(Entity, &WindowRoot)>,
+    mut commands: Commands,
 ) {
     let Ok(()) = buttons.get(event.entity) else {
         return;
     };
 
-    let Some(root) = find_window_root(event.entity, &parents, &roots) else {
+    let Some((root, _)) = find_window_root(event.entity, &parents, &roots) else {
         return;
     };
 
-    let Ok(mut window) = windows.get_mut(root.target_window) else {
-        return;
-    };
-
-    toggle_maximize(root.target_window, &mut window);
-}
-
-pub(super) fn toggle_maximize(target_window: Entity, window: &mut Window) {
-    if !window.enabled_buttons.maximize {
-        return;
-    }
-
-    let actual_maximized = WINIT_WINDOWS.with_borrow(|winit_windows| {
-        winit_windows
-            .get_window(target_window)
-            .map(|window| window.is_maximized())
-    });
-
-    let Some(actual_maximized) = actual_maximized else {
-        return;
-    };
-
-    window.set_maximized(!actual_maximized);
+    queue_toggle_maximize(&mut commands, root);
 }
 
 pub(super) fn sync_maximize_state(

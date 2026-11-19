@@ -43,6 +43,7 @@ impl Plugin for WidgetryWindowPlugin {
             .add_observer(crate::modal::root_removed)
             .add_observer(crate::modal::parent_removed)
             .add_message::<bevy::window::WindowClosed>()
+            .add_message::<bevy::window::WindowCloseRequested>()
             .add_systems(
                 PostUpdate,
                 (
@@ -238,6 +239,7 @@ mod tests {
         app.update();
         assert!(app.world().get::<InteractionDisabled>(close).is_some());
         app.world_mut().trigger(Activate { entity: close });
+        app.world_mut().flush();
         assert!(
             app.world()
                 .resource::<Messages<WindowCloseRequested>>()
@@ -251,6 +253,7 @@ mod tests {
         app.update();
         assert!(app.world().get::<InteractionDisabled>(close).is_none());
         app.world_mut().trigger(Activate { entity: close });
+        app.world_mut().flush();
         assert_eq!(
             app.world()
                 .resource::<Messages<WindowCloseRequested>>()
@@ -390,6 +393,7 @@ mod tests {
         };
         for entity in [minimize, maximize, close] {
             app.world_mut().trigger(Activate { entity });
+            app.world_mut().flush();
         }
         assert!(
             app.world_mut()
@@ -425,6 +429,7 @@ mod tests {
             assert!(app.world().get::<InteractionDisabled>(entity).is_none());
         }
         app.world_mut().trigger(Activate { entity: minimize });
+        app.world_mut().flush();
         assert_eq!(
             app.world_mut()
                 .get_mut::<Window>(target)
