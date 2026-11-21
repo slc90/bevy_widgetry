@@ -23,6 +23,7 @@ COMPLETED = "Gallery 已完成独立 Splash 交接"
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 TIMEOUT_SECONDS = 60
 POLL_SECONDS = 0.05
+BRP_RENDER_PORT = 15703
 
 
 def timestamp(lines, marker):
@@ -31,13 +32,15 @@ def timestamp(lines, marker):
 
 
 def run(binary, output, index, port):
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", port))
+    for endpoint_port in (port, BRP_RENDER_PORT):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", endpoint_port))
     logs = binary.parent / "logs"
     existing = set(logs.glob("*.log"))
     env = {key: value for key, value in os.environ.items()
            if not key.startswith("GALLERY_")}
     env["BRP_EXTRAS_PORT"] = str(port)
+    env["BRP_EXTRAS_RENDER_PORT"] = str(BRP_RENDER_PORT)
     log = None
     with (output / f"run-{index}.stdio.log").open("wb") as console:
         launched = datetime.now()
@@ -103,8 +106,8 @@ def main():
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--port", type=int, default=15982)
     args = parser.parse_args()
-    if args.repeat < 1 or not 1024 <= args.port <= 65534 or args.port == 15703:
-        parser.error("repeat must be positive; port must be 1024..65534 except render port 15703")
+    if args.repeat < 1 or not 1024 <= args.port <= 65534 or args.port == BRP_RENDER_PORT:
+        parser.error(f"repeat must be positive; port must be 1024..65534 except Render BRP port {BRP_RENDER_PORT}")
     binary = args.binary.resolve(strict=True)
     args.output.mkdir(parents=True, exist_ok=True)
     report = {

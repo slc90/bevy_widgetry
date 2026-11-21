@@ -15,6 +15,8 @@ LONG_FRAME_THRESHOLD_MS = 25
 WARMUP_MS = 2000
 VIEWPORT = [1920, 1080]
 PROCESS_TIMEOUT_SECONDS = 90
+BRP_PORT = 15989
+BRP_RENDER_PORT = 15703
 
 def statistics(values):
     values = sorted(values)
@@ -115,7 +117,8 @@ def main():
             for key in tuple(env):
                 if key.startswith("GALLERY_SPLASH_") or key in ("GALLERY_WAVEFORM_BENCH_OUTPUT", "GALLERY_FILE_DIALOG_BENCH_OUTPUT", "GALLERY_PAGE_LIFECYCLE_BENCH_OUTPUT"):
                     del env[key]
-            env.update(GALLERY_SPLASH_PREVIEW=mode, GALLERY_SPLASH_BENCH_OUTPUT=str(path), BRP_EXTRAS_PORT="15989")
+            env.update(GALLERY_SPLASH_PREVIEW=mode, GALLERY_SPLASH_BENCH_OUTPUT=str(path),
+                       BRP_EXTRAS_PORT=str(BRP_PORT), BRP_EXTRAS_RENDER_PORT=str(BRP_RENDER_PORT))
             if mode == "gallery":
                 env["GALLERY_SPLASH_DISABLE"] = "1"
             with (args.output / f"{name}.log").open("w", encoding="utf-8") as log:

@@ -118,7 +118,10 @@ fn run(
             }),
     );
     if loaded.config.brp_enabled {
-        app.add_plugins(BrpRuntimePlugin::with_port(loaded.config.brp_port));
+        app.add_plugins(BrpRuntimePlugin::with_ports(
+            loaded.config.brp_port,
+            loaded.config.brp_render_port,
+        ));
     }
     app.add_plugins((
         (

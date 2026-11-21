@@ -14,6 +14,10 @@
 
 Widgetry 的 GUI 调试与验证统一使用 `bevy_brp_mcp` 操作 Widget Gallery，不以 PowerShell 截图脚本、Win32 鼠标控制或其他桌面自动化方式替代标准 BRP 验证。
 
+Gallery 从可执行文件旁的 `config/config.ron` 读取 `brp_enabled`、Main World 的 `brp_port`（默认 `15702`）和 Render World 的 `brp_render_port`（默认 `15703`）。两个端口均须在 `1024..=65534` 范围内，且不能相同。旧配置省略 `brp_render_port` 时使用默认值。`BRP_EXTRAS_PORT` 和 `BRP_EXTRAS_RENDER_PORT` 可分别覆盖对应端口。
+
+通过 `brp_launch` 启动单个 Gallery 并使用自定义配置时，将两个端口分别传为 `port` 和 `render_port`，同时设置 `ports_from_config: true`。
+
 验证时应根据实际任务选择必要的 BRP 工具和操作：
 
 1. 发现并启动 `widget_gallery`，获取初始 Screenshot 或必要的运行时 State。

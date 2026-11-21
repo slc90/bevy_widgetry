@@ -22,7 +22,7 @@ python gallery/benches/file_dialog.py --fixture C:/bench/fixture-1000 --entries 
 ## 自动化采集
 
 file_dialog_run.py 复用 file_dialog.py 的真实 BRP 输入采集流程，并管理独立 Gallery process、PresentMon、export、分析和资源检查。
---output 必须是新路径，fixture 与 PresentMon binary 必须已存在，BRP port 必须未被占用。
+--output 必须是新路径，fixture 与 PresentMon binary 必须已存在，Main 和 Render BRP 端口均须可用。
 
 ```pwsh
 python gallery/benches/file_dialog_run.py --output C:/bench/first --fixture C:/bench/fixture-1000 --presentmon C:/tools/PresentMon-2.3.1-x64.exe --runs 20 --samples 1 --frames --screenshot
@@ -32,7 +32,7 @@ python gallery/benches/file_dialog_run.py --output C:/bench/resources --fixture 
 
 每个 run 使用独立 Gallery process。重复场景的第一个 dialog 是该 process 的首开，随后100个新建 dialog 单独作为稳态样本。
 --operation 支持 Gallery 的六个 launcher，--modal 通过真实 CheckBox 输入切换 modality。
-runner 默认 --port 15881，并为启动的 Gallery 设置相同 BRP port。
+runner 将 `--port`（默认 `15881`）设为子进程的 Main BRP 端口，并将 `15703` 设为 Render BRP 端口。
 默认从 `FileDialogCancel` 的实际布局与 scale factor 取得取消点击位置；手工采集器的 `--cancel-position` 可显式覆盖。
 
 ### 严格显示预算验收
@@ -85,6 +85,7 @@ python gallery/benches/file_dialog.py --fixture target/file-dialog-fixture-1000 
 $env:GALLERY_FILE_DIALOG_BENCH_OUTPUT = "$PWD/target/file-dialog-gui-run"
 $env:GALLERY_FILE_DIALOG_BENCH_FIXTURE = "$PWD/target/file-dialog-fixture-1000"
 $env:BRP_EXTRAS_PORT = "15702"
+$env:BRP_EXTRAS_RENDER_PORT = "15703"
 ./target/release/widget_gallery.exe
 ```
 

@@ -20,6 +20,7 @@ STARTUP_TIMEOUT_SECONDS = 30
 STATE_POLL_SECONDS = 0.1
 POINTER_POLL_SECONDS = 0.05
 DEFAULT_BRP_PORT = 15881
+BRP_RENDER_PORT = 15703
 SCENARIO_SETTLE_SECONDS = 0.3
 COLLECTION_TIMEOUT_SECONDS = 30
 CLEANUP_TIMEOUT_SECONDS = 10
@@ -90,14 +91,17 @@ def parse_args(argv=None):
         parser.error("--control cannot be combined with --strict-display-budget")
     if args.runs < 1 or args.samples < 1 or args.scrolls < 0 or args.quiet_wait_ms < 0 or (args.io_delay_ms is not None and args.io_delay_ms < 0):
         parser.error("Run/sample counts must be positive and other counts nonnegative")
+    if args.port == BRP_RENDER_PORT:
+        parser.error(f"--port must differ from the Render BRP port {BRP_RENDER_PORT}")
     if not args.fixture.is_dir() or not args.presentmon.is_file():
         parser.error("Fixture and PresentMon must already exist")
     version = subprocess.run([str(args.presentmon.resolve()), "--help"], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
     if "PresentMon 2.3.1" not in version.stdout + version.stderr:
         parser.error("This adapter requires PresentMon 2.3.1")
-    with socket.socket() as check:
-        if check.connect_ex(("127.0.0.1", args.port)) == 0:
-            parser.error("BRP port is already in use")
+    for port in (args.port, BRP_RENDER_PORT):
+        with socket.socket() as check:
+            if check.connect_ex(("127.0.0.1", port)) == 0:
+                parser.error(f"BRP port {port} is already in use")
     return args
 
 
@@ -119,7 +123,8 @@ def run_processes(args, reports):
                   "collection_completed": False, "resources_passed": None, "analysis": None}
         reports.append(record)
         env = os.environ.copy()
-        env.update(BRP_EXTRAS_PORT=str(args.port), GALLERY_FILE_DIALOG_BENCH_OUTPUT=str(output),
+        env.update(BRP_EXTRAS_PORT=str(args.port), BRP_EXTRAS_RENDER_PORT=str(BRP_RENDER_PORT),
+                   GALLERY_FILE_DIALOG_BENCH_OUTPUT=str(output),
                    GALLERY_FILE_DIALOG_BENCH_FIXTURE=str(args.fixture.resolve()))
         for name in ["GALLERY_FILE_DIALOG_BENCH_FRAMES", "GALLERY_FILE_DIALOG_BENCH_IO_DELAY_MS", "GALLERY_FILE_DIALOG_BENCH_IO_GATE", "GALLERY_FILE_DIALOG_BENCH_CONTENT"]:
             env.pop(name, None)

@@ -1,4 +1,5 @@
 const BENCH_BRP_PORT: u16 = 15983;
+const BENCH_BRP_RENDER_PORT: u16 = 15703;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(60);
 const COMPLETION_TIMEOUT: Duration = Duration::from_secs(120);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
@@ -57,6 +58,7 @@ fn run() -> Result {
     }
     let port = BENCH_BRP_PORT;
     drop(TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).map_err(error)?);
+    drop(TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, BENCH_BRP_RENDER_PORT)).map_err(error)?);
     let artifact = Artifact::new(
         "waveform-gui",
         "Gallery release; desktop_app; DX12; 1920x1080; stress root 1600x640 with toolbar and time axis",
@@ -112,6 +114,7 @@ fn run() -> Result {
         Command::new(&executable)
             .current_dir(&artifact.workspace)
             .env("BRP_EXTRAS_PORT", port.to_string())
+            .env("BRP_EXTRAS_RENDER_PORT", BENCH_BRP_RENDER_PORT.to_string())
             .env("GALLERY_WAVEFORM_BENCH_OUTPUT", &output)
             .env("GALLERY_WAVEFORM_BENCH_ALGORITHM", &algorithm)
             .env("GALLERY_WAVEFORM_BENCH_SCENARIO", &scenario)

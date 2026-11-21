@@ -2,7 +2,6 @@ const DEFAULT_SCALE_FACTOR: f32 = 1.25;
 const ALLOWED_SCALE_FACTORS: [f32; 4] = [1.0, 1.25, 1.5, 2.0];
 const DEFAULT_BRP_PORT: u16 = 15702;
 const BRP_PORT_RANGE: std::ops::RangeInclusive<u16> = 1024..=65534;
-const RENDER_WORLD_BRP_PORT: u16 = 15703;
 
 use crate::theme::GalleryTheme;
 use crate::{
@@ -25,6 +24,12 @@ pub(crate) struct AppConfig {
     pub(crate) language: Language,
     pub(crate) brp_enabled: bool,
     pub(crate) brp_port: u16,
+    #[serde(default = "default_brp_render_port")]
+    pub(crate) brp_render_port: u16,
+}
+
+const fn default_brp_render_port() -> u16 {
+    15703
 }
 
 #[derive(Serialize, Deserialize)]
@@ -42,6 +47,7 @@ impl Default for AppConfig {
             language: Language::English,
             brp_enabled: true,
             brp_port: DEFAULT_BRP_PORT,
+            brp_render_port: default_brp_render_port(),
         }
     }
 }
@@ -54,10 +60,18 @@ impl AppConfig {
                 "scale_factor 必须为 1.0、1.25、1.5 或 2.0",
             ));
         }
-        if !BRP_PORT_RANGE.contains(&self.brp_port) || self.brp_port == RENDER_WORLD_BRP_PORT {
+        if !BRP_PORT_RANGE.contains(&self.brp_port)
+            || !BRP_PORT_RANGE.contains(&self.brp_render_port)
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "brp_port 必须为 1024..=65534，且不能占用 Render World 的 15703",
+                "brp_port 和 brp_render_port 必须为 1024..=65534",
+            ));
+        }
+        if self.brp_port == self.brp_render_port {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "brp_port 和 brp_render_port 不能相同",
             ));
         }
         Ok(())
@@ -167,6 +181,50 @@ pub(crate) fn load(path: PathBuf) -> LoadedConfig {
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+
+    #[test]
+    fn legacy_configuration_keeps_its_settings_and_uses_the_default_render_port() {
+        let config: AppConfig = ron::from_str(
+            "(scale_factor: 1.5, theme: Light, language: SimplifiedChinese, brp_enabled: false, brp_port: 16000)",
+        )
+        .unwrap();
+
+        assert_eq!(config.scale_factor, 1.5);
+        assert_eq!(config.theme, GalleryTheme::Light);
+        assert_eq!(config.language, Language::SimplifiedChinese);
+        assert!(!config.brp_enabled);
+        assert_eq!(config.brp_port, 16000);
+        assert_eq!(config.brp_render_port, default_brp_render_port());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn configured_ports_round_trip_and_allow_swapping_the_defaults() {
+        let config = AppConfig {
+            brp_port: default_brp_render_port(),
+            brp_render_port: DEFAULT_BRP_PORT,
+            ..default()
+        };
+        let restored: AppConfig = ron::from_str(&config.serialized().unwrap()).unwrap();
+
+        assert_eq!(restored.brp_port, config.brp_port);
+        assert_eq!(restored.brp_render_port, config.brp_render_port);
+    }
+
+    #[test]
+    fn rejects_out_of_range_or_identical_brp_ports() {
+        for (brp_port, brp_render_port) in [(1023, 15703), (15702, 65535), (15702, 15702)] {
+            let config = AppConfig {
+                brp_port,
+                brp_render_port,
+                ..default()
+            };
+            assert_eq!(
+                config.validate().unwrap_err().kind(),
+                io::ErrorKind::InvalidData
+            );
+        }
+    }
 
     #[test]
     fn malformed_configuration_is_preserved_and_fallback_is_explicitly_handled() {
