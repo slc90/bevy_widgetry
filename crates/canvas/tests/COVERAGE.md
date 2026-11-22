@@ -7,7 +7,7 @@
 - 真实 Windows／DX12 的 `png_gpu.rs` 测试需要显式执行被忽略用例；功能关闭时不编译对应 API、导出系统和 PNG 专属 Benchmark。
 
 ## States
-- Document／CanvasShape／CanvasGeometry、Paint、Transform、叠放顺序与图形身份。
+- Document 默认图层、CanvasItem／CanvasShape／CanvasGeometry、Paint、Transform 与层级叠放顺序。
 - 多 View 的 Document 绑定、Pan／Zoom／Selection、绘图／编辑工具和 Render／Mesh 资源。
 - Pointer Capture／Focus、预览草稿、矩形／椭圆／Path 参数及节点拓扑。
 - SVG／PNG 文件导出、GPU Readback、异步 Job 与导出请求生命周期。
@@ -29,7 +29,8 @@
 
 ## Invariants
 - Document 为形状、顺序与几何的业务权威；Shape Entity、CanvasGeometry、Paint／Transform 的合法提交保持一致，失败不部分更新。
-- 创建、删除和变更叠放顺序不借用 Model Z 冒充顺序；共享多 View 命中、显示及导出遵循同一 Document 顺序。
+- 新图形属于默认图层，绘图项同时满足 ECS 归属和直属顺序登记；容器内重排与删除更新同一顺序，Document 销毁后级联移除子项。
+- 图层顺序和容器直属顺序确定展平结果，Shape 查询只包含图形；共享多 View 命中、显示及导出遵循同一 Document 顺序。
 - 多个 View 可以共享 Mesh 和 Model，但 Pan、Zoom、Selection、Focus、Camera、RenderLayers 与预览互相独立；解绑／销毁按最后引用正确回收资源。
 - Renderer 在 Geometry／Paint／Transform 改变时刷新所需网格，Transform-only 不无故重建；空几何不残留旧像素或幽灵命中。
 - Pan／Zoom 使用真实 Picking 和窗口／UI 比例换算，Wheel 保持光标锚点，跨帧／同帧手势按输入顺序推进；取消只释放本手势持有的捕获。
@@ -63,7 +64,7 @@
 | `movement.rs` | 已选图形移动、捕获、Zoom 和异常取消。 |
 | `multiselection.rs` | 独立选择集合、区域／多目标操作与视图隔离。 |
 | `nodes.rs` | Path 节点选择、控制点／切线编辑和生命周期。 |
-| `order.rs` | Document 图形叠放顺序、调整与合法性。 |
+| `order.rs` | 默认图层、绘图项身份、顺序查询、容器内重排与所有权。 |
 | `parameters.rs` | 图形参数及 Paint 更新的公共语义和原子性。 |
 | `path.rs` | Path 命令、多个子路径和图形身份。 |
 | `path_append.rs` | Path 命令追加、几何验证与失败保留。 |
@@ -87,4 +88,5 @@
 | `src/geometry.rs` | 几何 AABB、Transform、描边和形状边界计算。 |
 | `src/export/png.rs` | PNG 尺寸、内存预算、异步生命周期与超时／取消。 |
 | `src/model.rs` | Document／Shape 局部语义和模型有效性。 |
+| `src/order.rs` | 多图层与嵌套容器的展平、重排、删除和祖先归属。 |
 | `src/error.rs` | 导出与模型错误的包装、原始 origin 和多失败传播。 |

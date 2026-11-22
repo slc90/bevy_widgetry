@@ -27,10 +27,10 @@ pub use export::{
     CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop, CanvasRenderIssue,
 };
 pub use model::{
-    CanvasDocument, CanvasEllipse, CanvasFillRule, CanvasGeometry, CanvasLineCap, CanvasLineJoin,
-    CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
+    CanvasDocument, CanvasEllipse, CanvasFillRule, CanvasGeometry, CanvasItem, CanvasLineCap,
+    CanvasLineJoin, CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
 };
-pub use order::CanvasOrder;
+pub use order::{CanvasContainer, CanvasLayer, CanvasLayerId, CanvasLayerStack, CanvasOrder};
 pub use path::{CanvasPath, CanvasPathCommand, CanvasPathSegment};
 pub use pen::{CanvasPenChanged, CanvasPenDraft, CanvasPenSegment};
 pub use renderer::CanvasPlugin;

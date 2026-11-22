@@ -8,7 +8,9 @@ Document 中的每个 Shape 有稳定 Entity、唯一 `CanvasGeometry`、Paint�
 
 ```mermaid
 flowchart LR
-    Document["CanvasDocument"] --> Shape["Shape Entity"]
+    Document["CanvasDocument"] --> Stack["CanvasLayerStack"]
+    Stack --> Layer["Layer 1 的绘图项顺序"]
+    Layer --> Shape["CanvasItem / CanvasShape Entity"]
     Shape --> Geometry["参数几何 / 原始命令"]
     Shape --> Paint["填充与描边"]
     Shape --> Transform["二维 Transform"]
@@ -16,7 +18,9 @@ flowchart LR
 
 整体移动、缩放和旋转改变 Transform，参数编辑才改变 Geometry。两者作用不同，所以放大一个椭圆不会把半径永久改成屏幕像素，也不会把 Path 展平成折线。
 
-Document 另有唯一叠放序列。显示与从顶向下的命中使用同一顺序，Transform.z 不再承担第二种排序权威。
+Document 的 Required Components 包含 `Transform` 和 `CanvasLayerStack`。图层数据保存在 Stack 中，图层 ID 在同一 Document 内稳定。每个图层包含直属绘图项的顺序列表，容器实体通过 `CanvasItemOrder` 记录其直属子项。 `ChildOf` 负责 ECS 所有权和级联销毁，绘图项必须同时出现在所属容器的顺序列表中。
+
+Renderer、从顶向下的命中和导出沿图层顺序遍历绘图项，共用同一个叠放依据。Document 根的 Transform 不参与文档坐标计算。
 
 ## 为每个 View 建立独立观察空间
 

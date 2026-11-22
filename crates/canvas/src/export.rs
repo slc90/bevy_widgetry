@@ -332,19 +332,26 @@ fn snapshot(
     let mut shapes = Vec::new();
     let mut bounds: Option<Rect> = None;
     let order = world
-        .get::<crate::order::ShapeOrder>(document)
+        .get::<crate::CanvasLayerStack>(document)
         .ok_or(CanvasExportError::InvalidDocument)?;
-    for &entity in &order.0 {
-        crate::model::validate_shape(world, document, entity).map_err(|error| {
-            CanvasExportError::Model(
-                error
+    crate::order::visit_draw_order(world, order, |entity, container, entry| {
+        let group = entry.is_some_and(|entry| entry.contains::<crate::order::CanvasItemOrder>());
+        if !entry.is_some_and(|entry| {
+            crate::order::is_item_child(entry, container.parent(document))
+                && (group || crate::model::has_shape_components(entry))
+        }) {
+            return Err(CanvasExportError::Model(
+                crate::model::invalid_ownership(world, entity)
                     .at("document", document)
                     .at("shape", entity)
                     .into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                         "canvas.export.model",
                     )),
-            )
-        })?;
+            ));
+        }
+        if group {
+            return Ok(true);
+        }
         let geometry = world.get::<CanvasGeometry>(entity);
         let transform = world.get::<Transform>(entity);
         let paint = world.get::<CanvasPaint>(entity);
@@ -376,7 +383,8 @@ fn snapshot(
             transform: *transform,
             paint: *paint,
         });
-    }
+        Ok(true)
+    })?;
     let bounds = bounds.ok_or(CanvasExportError::EmptyDocument)?;
     let region = region.unwrap_or(bounds);
     if !region.min.is_finite()

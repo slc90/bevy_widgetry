@@ -1,13 +1,20 @@
 use crate::error::CanvasResult as Result;
+use crate::order::{CanvasContainer, CanvasLayerStack, container_items_mut, item_container};
+use bevy::ecs::world::EntityRef;
 use bevy::prelude::*;
 
 #[derive(Component, Default, Reflect)]
 #[reflect(Component)]
-#[require(Transform, crate::order::ShapeOrder)]
+#[require(Transform, CanvasLayerStack)]
 pub struct CanvasDocument;
 
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
 #[reflect(Component)]
+pub struct CanvasItem;
+
+#[derive(Component, Clone, Copy, Debug, Default, Reflect)]
+#[reflect(Component)]
+#[require(CanvasItem)]
 pub struct CanvasShape;
 
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
@@ -334,14 +341,19 @@ impl CanvasDocument {
                 geometry._validate(&transform, &paint)
             })();
             result?;
-            let shape = world
-                .spawn((geometry, transform, paint, ChildOf(document)))
-                .id();
+            let shape = world.spawn_empty().id();
+            let registered = world
+                .get_mut::<CanvasLayerStack>(document)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::DocumentOrder))
+                .and_then(|stack| stack.into_inner().default_items_mut())
+                .map(|items| items.push(shape));
+            if let Err(error) = registered {
+                world.despawn(shape);
+                return Err(error);
+            }
             world
-                .get_mut::<crate::order::ShapeOrder>(document)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::DocumentOrder))?
-                .0
-                .push(shape);
+                .entity_mut(shape)
+                .insert((geometry, transform, paint, ChildOf(document)));
             Ok(shape)
         })()
         .map_err(|error| error.at("document", document))
@@ -483,12 +495,8 @@ impl CanvasDocument {
 
     pub(crate) fn _remove_shape(world: &mut World, document: Entity, shape: Entity) -> Result {
         (|| -> Result {
-            validate_shape(world, document, shape)?;
-            world
-                .get_mut::<crate::order::ShapeOrder>(document)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::DocumentOrder))?
-                .0
-                .retain(|entity| *entity != shape);
+            let container = validate_shape(world, document, shape)?;
+            container_items_mut(world, document, container)?.retain(|entity| *entity != shape);
             world.despawn(shape);
             Ok(())
         })()
@@ -509,7 +517,7 @@ impl CanvasDocument {
 pub(crate) fn validate_document(world: &World, document: Entity) -> Result {
     (|| -> Result {
         if world.get::<CanvasDocument>(document).is_none()
-            || world.get::<crate::order::ShapeOrder>(document).is_none()
+            || world.get::<CanvasLayerStack>(document).is_none()
         {
             return Err(crate::error::missing(crate::CanvasPart::Document));
         }
@@ -518,26 +526,40 @@ pub(crate) fn validate_document(world: &World, document: Entity) -> Result {
     .map_err(|error| error.at("document", document))
 }
 
-pub(crate) fn validate_shape(world: &World, document: Entity, shape: Entity) -> Result {
-    (|| -> Result {
+pub(crate) fn has_shape_components(shape: &EntityRef) -> bool {
+    shape.contains::<CanvasShape>()
+        && shape.contains::<CanvasGeometry>()
+        && shape.contains::<Transform>()
+        && shape.contains::<CanvasPaint>()
+}
+
+pub(crate) fn validate_shape(
+    world: &World,
+    document: Entity,
+    shape: Entity,
+) -> Result<CanvasContainer> {
+    (|| -> Result<CanvasContainer> {
         validate_document(world, document)?;
-        if world.get::<CanvasShape>(shape).is_none()
-            || world.get::<CanvasGeometry>(shape).is_none()
-            || world.get::<Transform>(shape).is_none()
-            || world.get::<CanvasPaint>(shape).is_none()
-            || world
-                .get::<ChildOf>(shape)
-                .is_none_or(|parent| parent.parent() != document)
+        if world
+            .get_entity(shape)
+            .as_ref()
+            .is_ok_and(has_shape_components)
+            && let Some(container) = item_container(world, document, shape)
         {
-            let mut error = crate::error::invalid(crate::CanvasIssue::Ownership);
-            if let Some(parent) = world.get::<ChildOf>(shape) {
-                error = error.at("actual_document", parent.parent());
-            }
-            return Err(error);
+            return Ok(container);
         }
-        Ok(())
+        Err(invalid_ownership(world, shape))
     })()
     .map_err(|error| error.at("document", document).at("shape", shape))
+}
+
+pub(crate) fn invalid_ownership(world: &World, item: Entity) -> crate::error::CanvasFault {
+    let error = crate::error::invalid(crate::CanvasIssue::Ownership);
+    if let Some(parent) = world.get::<ChildOf>(item) {
+        error.at("parent", parent.parent())
+    } else {
+        error
+    }
 }
 
 impl CanvasRectangle {

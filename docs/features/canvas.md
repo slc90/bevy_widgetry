@@ -168,7 +168,11 @@ CanvasView::set_mode(&mut commands, view, CanvasMode::PathNodeEdit);
 
 ## 图形顺序与删除
 
-Document 保存唯一的从底到顶顺序，绘制、命中、SVG 与 PNG 使用相同顺序。Transform.z 不代替该顺序。每个图形的填充后紧接它自己的描边，不把全部填充与全部描边分开排序。
+每份 Document 初始包含一个可见、未锁定的 `Layer 1`，现有图形创建接口将图形追加到该图层。每个 Shape 都具有 `CanvasItem` 身份，保留自己的 Entity、Geometry、Paint 和 Transform。创建与查询 Document 不需要安装 CanvasPlugin。
+
+`layer_order` 返回从底到顶的图层 ID，`item_order` 查询指定容器的直属绘图项，`draw_order` 依图层与容器顺序展平绘图项。`shape_order` 只返回其中的 Shape。`reorder_item` 和 `reorder_shape` 都在绘图项所属的容器内调整顺序。
+
+绘制、命中、SVG 与 PNG 使用同一套叠放顺序，图形的 `Transform.z` 不参与排序。每个图形的填充后紧接它自己的描边。
 
 ```rust
 CanvasDocument::remove_shapes(world, document, &[rectangle, ellipse])

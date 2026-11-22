@@ -678,6 +678,8 @@ impl Plugin for CanvasPlugin {
         }
         app.init_resource::<crate::mesh_cache::MeshCache>();
         app.register_type::<CanvasDocument>()
+            .register_type::<crate::CanvasItem>()
+            .register_type::<crate::CanvasLayerStack>()
             .register_type::<CanvasShape>()
             .register_type::<CanvasGeometry>()
             .register_type::<CanvasRectangle>()

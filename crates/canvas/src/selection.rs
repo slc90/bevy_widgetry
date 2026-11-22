@@ -1,5 +1,5 @@
 use crate::error::CanvasResult as Result;
-use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasShape, CanvasView};
+use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasView};
 use bevy::prelude::*;
 
 mod hit;
@@ -7,13 +7,11 @@ mod hit;
 pub(crate) fn belongs_to(world: &World, document: Option<Entity>, shape: Entity) -> bool {
     document.is_some_and(|document| {
         world.get::<CanvasDocument>(document).is_some()
-            && world.get::<CanvasShape>(shape).is_some()
-            && world.get::<CanvasGeometry>(shape).is_some()
-            && world.get::<Transform>(shape).is_some()
-            && world.get::<CanvasPaint>(shape).is_some()
             && world
-                .get::<ChildOf>(shape)
-                .is_some_and(|parent| parent.parent() == document)
+                .get_entity(shape)
+                .as_ref()
+                .is_ok_and(crate::model::has_shape_components)
+            && crate::order::item_container(world, document, shape).is_some()
     })
 }
 

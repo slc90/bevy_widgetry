@@ -2,7 +2,7 @@ use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasGeometry, CanvasPaint};
 use bevy::prelude::*;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 impl CanvasDocument {
     pub fn update_transforms(
@@ -74,19 +74,16 @@ impl CanvasDocument {
     pub(crate) fn _remove_shapes(world: &mut World, document: Entity, shapes: &[Entity]) -> Result {
         (|| -> Result {
             let shapes = shapes.iter().copied().collect::<HashSet<_>>();
-            let result: Result = (|| {
-                crate::model::validate_document(world, document)?;
-                for shape in &shapes {
-                    crate::model::validate_shape(world, document, *shape)?;
-                }
-                Ok(())
-            })();
-            result?;
-            world
-                .get_mut::<crate::order::ShapeOrder>(document)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::DocumentOrder))?
-                .0
-                .retain(|shape| !shapes.contains(shape));
+            crate::model::validate_document(world, document)?;
+            let mut by_container = HashMap::<_, HashSet<_>>::new();
+            for shape in &shapes {
+                let container = crate::model::validate_shape(world, document, *shape)?;
+                by_container.entry(container).or_default().insert(*shape);
+            }
+            for (container, removed) in by_container {
+                crate::order::container_items_mut(world, document, container)?
+                    .retain(|shape| !removed.contains(shape));
+            }
             for shape in shapes {
                 world.despawn(shape);
             }
