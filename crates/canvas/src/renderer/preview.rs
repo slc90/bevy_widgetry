@@ -41,14 +41,16 @@ pub(super) fn sync(
         }
         return Ok(None);
     };
-    let size = (end - start).abs();
+    let size = kind.extent(end - start);
     let center = start + (end - start) * 0.5;
     if !size.is_finite() || !center.is_finite() {
         return Err(crate::error::invalid(crate::CanvasIssue::PreviewBounds));
     }
     // Degenerate ellipse radii have no normal for the centered stroke tessellator.
     // Wait for a committable extent rather than passing zero radii into geometry generation.
-    if kind == crate::input::DrawingKind::Ellipse && size.min_element() < 1.0 {
+    if (kind == crate::input::DrawingKind::Ellipse && size.min_element() < 1.0)
+        || (kind == crate::input::DrawingKind::Line && size == Vec2::ZERO)
+    {
         if let Some(entity) = current {
             world.despawn(entity);
         }
@@ -57,6 +59,7 @@ pub(super) fn sync(
     let name = match kind {
         crate::input::DrawingKind::Rectangle => "CanvasRectanglePreview",
         crate::input::DrawingKind::Ellipse => "CanvasEllipsePreview",
+        crate::input::DrawingKind::Line => "CanvasLinePreview",
     };
     let transform = Transform::from_translation(center.extend(PREVIEW_DEPTH));
     if let Some(entity) = current {

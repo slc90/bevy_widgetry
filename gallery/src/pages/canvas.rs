@@ -82,6 +82,9 @@ enum Action {
     Rectangle,
     Ellipse,
     Pen,
+    DrawLine,
+    DrawPolyline,
+    DrawPolygon,
     Nodes,
     Group,
     Ungroup,
@@ -312,6 +315,9 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     let controls: Vec<_> = [
         (CanvasKey::Select, Action::Select), (CanvasKey::Rectangle, Action::Rectangle),
         (CanvasKey::Ellipse, Action::Ellipse),
+        (CanvasKey::DrawLine, Action::DrawLine),
+        (CanvasKey::DrawPolyline, Action::DrawPolyline),
+        (CanvasKey::DrawPolygon, Action::DrawPolygon),
         (CanvasKey::Pen, Action::Pen),
         (CanvasKey::Nodes, Action::Nodes),
         (CanvasKey::Group, Action::Group), (CanvasKey::Ungroup, Action::Ungroup),
@@ -541,8 +547,6 @@ fn refresh(world: &mut World) -> Result {
                 })
             })
             .unwrap_or_else(|| "—".to_owned());
-        let draft =
-            CanvasView::pen_draft(world, demo.main).map_err(|error| error.into_bevy_error())?;
         let mode =
             match CanvasView::mode(world, demo.main).map_err(|error| error.into_bevy_error())? {
                 CanvasMode::Select => CanvasKey::Select,
@@ -550,7 +554,18 @@ fn refresh(world: &mut World) -> Result {
                 CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
                 CanvasMode::Ellipse(_) => CanvasKey::Ellipse,
                 CanvasMode::Pen(_) => CanvasKey::Pen,
+                CanvasMode::Line(_) => CanvasKey::DrawLine,
+                CanvasMode::Polyline(_) => CanvasKey::DrawPolyline,
+                CanvasMode::Polygon(_) => CanvasKey::DrawPolygon,
             };
+        let (draft_label, draft) = if mode == CanvasKey::Pen {
+            let count = CanvasView::pen_draft(world, demo.main)
+                .map_err(|error| error.into_bevy_error())?
+                .map_or(0, |draft| draft.path.commands.len());
+            (CanvasKey::PenDraftLabel, count.to_string())
+        } else {
+            (CanvasKey::HiddenDraftLabel, String::new())
+        };
         let binding = LocalizedText::with_args(
             TextKey::Canvas(CanvasKey::Readout),
             vec![
@@ -588,15 +603,11 @@ fn refresh(world: &mut World) -> Result {
                         .to_string(),
                 ),
                 ("segment", segment),
-                (
-                    "draft",
-                    draft
-                        .map_or(0, |draft| draft.path.commands.len())
-                        .to_string(),
-                ),
+                ("draft", draft),
             ],
         )
         .with_key_arg("mode", TextKey::Canvas(mode))
+        .with_key_arg("draft_label", TextKey::Canvas(draft_label))
         .with_key_arg(
             "region",
             TextKey::Canvas(if demo.region.is_some() {
@@ -632,6 +643,21 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             }
             Action::Ellipse => {
                 CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Ellipse(paint()))
+                    .map_err(|error| error.into_bevy_error())?;
+            }
+            Action::DrawLine | Action::DrawPolyline | Action::DrawPolygon => {
+                let mode = match action {
+                    Action::DrawLine => CanvasMode::Line(CanvasPaint {
+                        fill: None,
+                        ..paint()
+                    }),
+                    Action::DrawPolyline => CanvasMode::Polyline(CanvasPaint {
+                        fill: None,
+                        ..paint()
+                    }),
+                    _ => CanvasMode::Polygon(paint()),
+                };
+                CanvasView::set_mode_in_world(world, demo.main, mode)
                     .map_err(|error| error.into_bevy_error())?;
             }
             Action::Pen => {

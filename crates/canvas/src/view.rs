@@ -8,7 +8,8 @@ use bevy::prelude::*;
     crate::renderer::RenderFailure,
     crate::input::DragState,
     crate::input::GroupClick,
-    crate::pen::State
+    crate::pen::State,
+    crate::basic_path::State
 )]
 pub struct CanvasView;
 
@@ -48,6 +49,9 @@ pub enum CanvasMode {
     Rectangle(crate::CanvasPaint),
     Ellipse(crate::CanvasPaint),
     Pen(crate::CanvasPaint),
+    Line(crate::CanvasPaint),
+    Polyline(crate::CanvasPaint),
+    Polygon(crate::CanvasPaint),
 }
 
 #[derive(EntityEvent)]
@@ -909,7 +913,10 @@ impl CanvasView {
                     ._validate(&Transform::default(), &paint)?,
                     CanvasMode::Ellipse(paint) => crate::CanvasEllipse { radii: Vec2::ONE }
                         ._validate(&Transform::default(), &paint)?,
-                    CanvasMode::Pen(paint) => {
+                    CanvasMode::Pen(paint)
+                    | CanvasMode::Line(paint)
+                    | CanvasMode::Polyline(paint)
+                    | CanvasMode::Polygon(paint) => {
                         crate::model::validate_transform_and_paint(&Transform::default(), &paint)
                             .map_err(|error| error.input(crate::CanvasInput::Paint(paint)))?
                     }

@@ -132,6 +132,16 @@ CanvasView::set_mode(
 
 切换为 `CanvasMode::Ellipse(paint)` 即绘制椭圆。拖动时只出现本 View 的预览；释放后尺寸有效才创建正式图形，自动选中新图形并回到 Select。取消不留下半成品。Space 平移仍优先。
 
+### 绘制直线、折线和多边形
+
+用 `CanvasView::set_mode_in_world` 或 `set_mode` 进入 `CanvasMode::Line(paint)`、`Polyline(paint)` 或 `Polygon(paint)`。Gallery 的主视图提供三个对应工具按钮。
+
+- **直线**按下确定起点，拖动预览，释放后提交开放的两点 Path。为线段配置 `CanvasPaint.stroke`。
+- **折线**单击添加顶点，移动指针时预览下一段。至少两个不同顶点后用 Enter 或在最后一个顶点双击提交。折线只使用描边。
+- **多边形**以相同方式放置至少三个不同顶点，预览回到起点的轮廓，提交时生成 `Close`。多边形支持填充和描边。
+
+触屏可连续点按放置顶点。折线和多边形只接受有效点击，拖动会打断连续双击的判定。成功提交在活动图层或当前组中创建一个可节点编辑和导出的 `CanvasPath`，选择新项并返回 Select。一次提交对应一个撤销条目。Esc、指针取消、失去焦点或切换工具清除当前 View 的草稿。草稿期间共享文档、其他 View 和导出内容保持原状。
+
 ### 使用 Pen 绘制 Path
 
 ```rust

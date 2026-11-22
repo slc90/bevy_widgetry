@@ -179,6 +179,9 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             super::CanvasKey::Rectangle => "矩形",
             super::CanvasKey::Ellipse => "椭圆",
             super::CanvasKey::Pen => "Pen",
+            super::CanvasKey::DrawLine => "直线",
+            super::CanvasKey::DrawPolyline => "折线",
+            super::CanvasKey::DrawPolygon => "多边形",
             super::CanvasKey::Add => "添加示例",
             super::CanvasKey::ZoomIn => "放大 +",
             super::CanvasKey::ZoomOut => "缩小 −",
@@ -195,8 +198,10 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             }
             super::CanvasKey::Ready => "选择 SVG 或 PNG，以透明背景导出已提交图形。",
             super::CanvasKey::Readout => {
-                "主视图：{zoom_a}× · 中心（{center_a}）· {mode} · 已选 {selection_a} · 草稿命令 {draft}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\nPath目标段：{segment} · 导出：{region} · PNG {scale}×"
+                "主视图：{zoom_a}× · 中心（{center_a}）· {mode} · 已选 {selection_a}{draft_label}{draft}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\nPath目标段：{segment} · 导出：{region} · PNG {scale}×"
             }
+            super::CanvasKey::PenDraftLabel => " · Pen 草稿命令 ",
+            super::CanvasKey::HiddenDraftLabel => "",
             super::CanvasKey::AutoRegion => "内容 AABB",
             super::CanvasKey::FixedRegion => "区域 (−100, −75) … (100, 75)",
             super::CanvasKey::Saved => "已保存 {path} · {size}",

@@ -52,7 +52,7 @@ struct PrimaryPress {
 
 #[derive(Resource, Default)]
 struct FrameInputs {
-    events: Vec<PointerInput>,
+    events: Vec<(usize, PointerInput)>,
     presses: Vec<PrimaryPress>,
     last_press: HashMap<PointerId, usize>,
 }
@@ -69,6 +69,7 @@ struct HistoryModifiers {
 pub(crate) enum DrawingKind {
     Rectangle,
     Ellipse,
+    Line,
 }
 
 impl DrawingKind {
@@ -81,6 +82,19 @@ impl DrawingKind {
             Self::Ellipse => {
                 crate::CanvasGeometry::Ellipse(crate::CanvasEllipse { radii: size * 0.5 })
             }
+            Self::Line => crate::CanvasGeometry::Path(crate::CanvasPath {
+                commands: vec![
+                    crate::CanvasPathCommand::MoveTo(-size * 0.5),
+                    crate::CanvasPathCommand::LineTo(size * 0.5),
+                ],
+            }),
+        }
+    }
+
+    pub(crate) fn extent(self, delta: Vec2) -> Vec2 {
+        match self {
+            Self::Line => delta,
+            Self::Rectangle | Self::Ellipse => delta.abs(),
         }
     }
 
@@ -88,6 +102,7 @@ impl DrawingKind {
         match self {
             Self::Rectangle => crate::CanvasMode::Rectangle(paint),
             Self::Ellipse => crate::CanvasMode::Ellipse(paint),
+            Self::Line => crate::CanvasMode::Line(paint),
         }
     }
 }
@@ -106,6 +121,7 @@ struct Drag {
 #[derive(Clone)]
 enum DragAction {
     Pan,
+    Contour,
     Scale(crate::scale::Scale),
     Rotate(crate::rotate::Rotate),
     Parameters(crate::parameters::Edit),
@@ -142,7 +158,7 @@ impl DragAction {
             Self::Scale(edit) => Some(edit.document),
             Self::Parameters(edit) => Some(edit.document),
             Self::Node(edit) => Some(edit.document),
-            Self::Pan | Self::Draw { .. } | Self::Pen { .. } => None,
+            Self::Pan | Self::Contour | Self::Draw { .. } | Self::Pen { .. } => None,
         }
     }
 }
@@ -320,6 +336,17 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     complete_pen(world, press.entity)?;
                 } else if world
                     .get::<DragState>(press.entity)
+                    .and_then(|s| s.0.as_ref())
+                    .is_some_and(|d| matches!(d.action, DragAction::Contour))
+                {
+                    if let Some(point) = preceding_contour_release(world, &press, sequence) {
+                        finish(world, press.entity, point)?;
+                    } else {
+                        release_gesture(world, press.entity);
+                        crate::basic_path::interrupt_click(world, press.entity);
+                    }
+                } else if world
+                    .get::<DragState>(press.entity)
                     .and_then(|state| state.0.as_ref())
                     .is_some_and(|drag| matches!(drag.action, DragAction::MoveSelection(_)))
                 {
@@ -332,6 +359,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 .get_resource::<ButtonInput<KeyCode>>()
                 .is_some_and(|keys| keys.pressed(KeyCode::Space));
             let action = if space {
+                crate::basic_path::interrupt_click(world, press.entity);
                 DragAction::Pan
             } else {
                 let Some(local) = inside_position(
@@ -370,11 +398,21 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 let drawing = match CanvasView::_mode(world, press.entity)? {
                     crate::CanvasMode::Select
                     | crate::CanvasMode::PathNodeEdit
-                    | crate::CanvasMode::Pen(_) => None,
+                    | crate::CanvasMode::Pen(_)
+                    | crate::CanvasMode::Polyline(_)
+                    | crate::CanvasMode::Polygon(_) => None,
                     crate::CanvasMode::Rectangle(paint) => Some((DrawingKind::Rectangle, paint)),
                     crate::CanvasMode::Ellipse(paint) => Some((DrawingKind::Ellipse, paint)),
+                    crate::CanvasMode::Line(paint) => Some((DrawingKind::Line, paint)),
                 };
-                if let crate::CanvasMode::Pen(paint) = CanvasView::_mode(world, press.entity)? {
+                if matches!(
+                    CanvasView::_mode(world, press.entity)?,
+                    crate::CanvasMode::Polyline(_) | crate::CanvasMode::Polygon(_)
+                ) {
+                    DragAction::Contour
+                } else if let crate::CanvasMode::Pen(paint) =
+                    CanvasView::_mode(world, press.entity)?
+                {
                     let (Some(document), Some(container)) = (
                         CanvasView::_document(world, press.entity)?,
                         CanvasView::drawing_target(world, press.entity)?,
@@ -529,6 +567,11 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
             let Some(local) = position(world, press.entity, press.pointer.position) else {
                 return Ok(());
             };
+            if matches!(action, DragAction::Contour)
+                && !crate::basic_path::begin_click(world, &press, local)?
+            {
+                return Ok(());
+            }
             let edit = if let Some(document) = action.edit_document() {
                 let Some(edit) = crate::history::begin_gesture(world, document)? else {
                     return Ok(());
@@ -580,6 +623,28 @@ fn group_press_sequence(world: &mut World, press: &PointerPress) -> Option<Press
         clicks.seen_press = Some(sequence.id);
     }
     sequence
+}
+
+fn preceding_contour_release(
+    world: &World,
+    press: &PointerPress,
+    sequence: Option<PressSequence>,
+) -> Option<Vec2> {
+    let sequence = sequence?;
+    let previous = sequence.previous?;
+    world
+        .resource::<FrameInputs>()
+        .events
+        .iter()
+        .rev()
+        .find_map(|(id, input)| {
+            (*id > previous
+                && *id < sequence.id
+                && input.pointer_id == press.pointer.id
+                && input.location.target == press.pointer.target
+                && matches!(input.action, PointerAction::Release(PointerButton::Primary)))
+            .then_some(input.location.position)
+        })
 }
 
 fn track_group_body_press(
@@ -770,6 +835,7 @@ fn advance_action(
     zoom: f32,
 ) -> Result {
     match drag.action.clone() {
+        DragAction::Contour => crate::basic_path::dragged(world, entity, local),
         DragAction::Pan => {
             let center = CanvasView::_center(world, entity)? - (local - drag.local) / zoom;
             if !center.is_finite() {
@@ -904,7 +970,7 @@ fn scrolled(mut event: On<PointerScroll>, mut world: bevy::ecs::world::DeferredW
     });
 }
 
-fn inside_position(
+pub(crate) fn inside_position(
     world: &World,
     entity: Entity,
     target: &NormalizedRenderTarget,
@@ -985,6 +1051,7 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
             .is_some_and(|(owner, _)| owner == entity)
         && match drag.action.clone() {
             DragAction::Pan => true,
+            DragAction::Contour => crate::basic_path::press_valid(world, entity),
             DragAction::MoveSelection(group) => group.valid(world, entity),
             DragAction::Node(edit) => {
                 world
@@ -1085,7 +1152,7 @@ fn process_input(
             frame.events.clear();
             frame.presses.clear();
             for (id, input) in &inputs {
-                frame.events.push(input.clone());
+                frame.events.push((*id, input.clone()));
                 match input.action {
                     PointerAction::Press(PointerButton::Primary) => {
                         // Raw presses have one sequence entry even when Picking emits zero or several events.
@@ -1106,6 +1173,7 @@ fn process_input(
         for (_, input) in &inputs {
             if matches!(input.action, PointerAction::Cancel) {
                 crate::pen::cancel_pointer(world, input.pointer_id, &input.location.target);
+                crate::basic_path::cancel_pointer(world, input.pointer_id, &input.location.target);
             }
         }
         let mut consumed = HashSet::new();
@@ -1234,6 +1302,7 @@ fn release_capture(capture: &mut PointerCaptureMap, entity: Entity, drag: &Drag)
 pub(crate) fn end(world: &mut World, entity: Entity) {
     release_gesture(world, entity);
     crate::pen::cancel(world, entity);
+    crate::basic_path::cancel(world, entity);
 }
 
 pub(crate) fn cancel_drawing_tools(world: &mut World, view: Entity) {
@@ -1243,13 +1312,14 @@ pub(crate) fn cancel_drawing_tools(world: &mut World, view: Entity) {
         .is_some_and(|drag| {
             matches!(
                 drag.action,
-                DragAction::Draw { .. } | DragAction::Pen { .. }
+                DragAction::Draw { .. } | DragAction::Pen { .. } | DragAction::Contour
             )
         })
     {
         release_gesture(world, view);
     }
     crate::pen::cancel(world, view);
+    crate::basic_path::cancel(world, view);
 }
 
 pub(crate) fn release_gesture(world: &mut World, entity: Entity) {
@@ -1299,6 +1369,10 @@ fn finish(world: &mut World, entity: Entity, point: Vec2) -> Result {
             return Ok(());
         }
         match drag.action {
+            DragAction::Contour => {
+                release_gesture(world, entity);
+                crate::basic_path::add_vertex(world, entity, point)
+            }
             DragAction::MoveSelection(_) => {
                 advance(world, entity, point)?;
                 complete_selection(world, entity)
@@ -1408,9 +1482,13 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         }
         CanvasView::_set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
         world.flush();
-        let size = (current - start).abs();
+        let size = kind.extent(current - start);
+        let too_small = match kind {
+            DrawingKind::Line => size == Vec2::ZERO,
+            DrawingKind::Rectangle | DrawingKind::Ellipse => size.min_element() < 1.0,
+        };
         if !size.is_finite()
-            || size.min_element() < 1.0
+            || too_small
             || world
                 .get::<crate::view::ViewState>(entity)
                 .is_none_or(|state| {
@@ -1639,7 +1717,11 @@ fn apply_escape(world: &mut World, view: Entity, window: Entity) -> bevy::prelud
             return Ok(());
         }
         match CanvasView::_mode(world, view)? {
-            crate::CanvasMode::Rectangle(_) | crate::CanvasMode::Ellipse(_) => {
+            crate::CanvasMode::Rectangle(_)
+            | crate::CanvasMode::Ellipse(_)
+            | crate::CanvasMode::Line(_)
+            | crate::CanvasMode::Polyline(_)
+            | crate::CanvasMode::Polygon(_) => {
                 CanvasView::_set_mode_in_world(world, view, crate::CanvasMode::Select)?;
             }
             crate::CanvasMode::Select | crate::CanvasMode::PathNodeEdit => {
@@ -1790,6 +1872,7 @@ fn removed(
 
 fn cancel_unavailable(world: &mut World) -> bevy::prelude::Result {
     (|| -> Result {
+        crate::basic_path::cancel_unavailable(world);
         let active = world
             .query::<(Entity, &DragState)>()
             .iter(world)
@@ -1817,7 +1900,10 @@ fn cancel_unavailable(world: &mut World) -> bevy::prelude::Result {
             if pointer == Some((false, true))
                 && matches!(
                     drag.action,
-                    DragAction::Draw { .. } | DragAction::Pen { .. } | DragAction::MoveSelection(_)
+                    DragAction::Draw { .. }
+                        | DragAction::Pen { .. }
+                        | DragAction::Contour
+                        | DragAction::MoveSelection(_)
                 )
                 && continuing(world, entity, &drag)
             {
@@ -1826,6 +1912,7 @@ fn cancel_unavailable(world: &mut World) -> bevy::prelude::Result {
                     .events
                     .iter()
                     .rev()
+                    .map(|(_, input)| input)
                     .find(|input| {
                         input.pointer_id == drag.pointer
                             && input.location.target == drag.target

@@ -253,7 +253,7 @@ impl CanvasDocument {
         shape: Entity,
         points: &[Vec2],
     ) -> Result {
-        append(world, document, shape, || polygon(points, false)).map_err(|error| {
+        append(world, document, shape, || contour(points, false)).map_err(|error| {
             error
                 .input(crate::CanvasInput::Entity {
                     field: "document",
@@ -292,7 +292,7 @@ impl CanvasDocument {
         shape: Entity,
         points: &[Vec2],
     ) -> Result {
-        append(world, document, shape, || polygon(points, true)).map_err(|error| {
+        append(world, document, shape, || contour(points, true)).map_err(|error| {
             error
                 .input(crate::CanvasInput::Entity {
                     field: "document",
@@ -310,7 +310,7 @@ impl CanvasDocument {
     }
 }
 
-fn polygon(points: &[Vec2], closed: bool) -> Result<Vec<CanvasPathCommand>> {
+pub(crate) fn contour(points: &[Vec2], closed: bool) -> Result<Vec<CanvasPathCommand>> {
     let min_polygon_points = 3;
     let min_polyline_points = 2;
     if points.len()

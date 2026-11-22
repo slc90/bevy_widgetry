@@ -77,7 +77,7 @@ pub(super) fn sync(
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
     (|| -> Result<Option<Entity>> {
-    let Some(data) = crate::pen::preview(world, view) else {
+    let Some(data) = crate::pen::preview(world, view).or_else(|| crate::basic_path::preview(world, view)) else {
         if let Some(e) = current {
             world.despawn(e);
         }
@@ -92,6 +92,9 @@ pub(super) fn sync(
             return Ok(Some(e));
         }
         let (handles, materials, nodes) = (p.meshes.clone(), p.materials.clone(), p.nodes);
+        if p.data.name != data.name {
+            world.entity_mut(e).insert(Name::new(data.name));
+        }
         for (i, mesh) in meshes(&data, zoom)?.into_iter().enumerate() {
             let visible = mesh.count_vertices() > 0;
             *world
@@ -135,11 +138,12 @@ pub(super) fn sync(
     let [fill, stroke, handles] = meshes.clone();
     let [fill_material, stroke_material, handle_material] = materials.clone();
     let [fv, sv, hv] = visibility;
+    let name = data.name;
     let result = bevy_widgetry_core::scene::spawn_scene(
         world,
         bsn! {
             Parts {fill:#Fill,stroke:#Stroke,handles:#Handles}
-            Name("CanvasPenPreview") template(move |_|Ok(ChildOf(content))) Transform::from_xyz(0.0,0.0,PREVIEW_DEPTH) Visibility::default()
+            template(move |_|Ok(Name::new(name))) template(move |_|Ok(ChildOf(content))) Transform::from_xyz(0.0,0.0,PREVIEW_DEPTH) Visibility::default()
             Children [
                 #Fill template(move |_|Ok(Mesh2d(fill.clone()))) template(move |_|Ok(MeshMaterial2d(fill_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(fv)) Transform::default() Pickable::IGNORE NoFrustumCulling
             --

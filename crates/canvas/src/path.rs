@@ -5,6 +5,7 @@ use crate::error::CanvasResult as Result;
 use bevy::math::{Affine3A, DMat2, DVec2};
 use bevy::prelude::*;
 mod append;
+pub(crate) use append::contour;
 mod edit;
 pub use edit::CanvasPathSegment;
 mod geometry;

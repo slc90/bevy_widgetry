@@ -754,6 +754,7 @@ impl Plugin for CanvasPlugin {
             app.add_plugins(WidgetryOffscreenPlugin);
         }
         crate::input::install(app);
+        crate::basic_path::install(app);
         crate::pen::install(app);
         outline::install(app);
         preview::install(app);
