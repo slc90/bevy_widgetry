@@ -1,5 +1,5 @@
 use crate::error::CanvasResult as Result;
-use crate::order::{CanvasContainer, CanvasLayerStack, container_items_mut, item_container};
+use crate::order::{CanvasContainer, CanvasLayerStack, container_items_mut, item_container, stack};
 use bevy::ecs::world::EntityRef;
 use bevy::prelude::*;
 
@@ -170,16 +170,36 @@ impl CanvasDocument {
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_rectangle(world, document, rectangle, transform, paint).map_err(|error| {
-            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
-                "canvas.CanvasDocument.create_rectangle",
-            ))
-        })
+        Self::_create_rectangle(world, document, None, rectangle, transform, paint).map_err(
+            |error| {
+                error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                    "canvas.CanvasDocument.create_rectangle",
+                ))
+            },
+        )
+    }
+
+    pub fn create_rectangle_in_layer(
+        world: &mut World,
+        document: Entity,
+        layer: crate::CanvasLayerId,
+        rectangle: CanvasRectangle,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> crate::error::PublicResult<Entity> {
+        Self::_create_rectangle(world, document, Some(layer), rectangle, transform, paint).map_err(
+            |error| {
+                error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                    "canvas.CanvasDocument.create_rectangle_in_layer",
+                ))
+            },
+        )
     }
 
     pub(crate) fn _create_rectangle(
         world: &mut World,
         document: Entity,
+        layer: Option<crate::CanvasLayerId>,
         rectangle: CanvasRectangle,
         transform: Transform,
         paint: CanvasPaint,
@@ -187,6 +207,7 @@ impl CanvasDocument {
         Self::create_shape(
             world,
             document,
+            layer,
             CanvasGeometry::Rectangle(rectangle),
             transform,
             paint,
@@ -210,16 +231,34 @@ impl CanvasDocument {
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_ellipse(world, document, ellipse, transform, paint).map_err(|error| {
+        Self::_create_ellipse(world, document, None, ellipse, transform, paint).map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.create_ellipse",
             ))
         })
     }
 
+    pub fn create_ellipse_in_layer(
+        world: &mut World,
+        document: Entity,
+        layer: crate::CanvasLayerId,
+        ellipse: CanvasEllipse,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> crate::error::PublicResult<Entity> {
+        Self::_create_ellipse(world, document, Some(layer), ellipse, transform, paint).map_err(
+            |error| {
+                error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                    "canvas.CanvasDocument.create_ellipse_in_layer",
+                ))
+            },
+        )
+    }
+
     pub(crate) fn _create_ellipse(
         world: &mut World,
         document: Entity,
+        layer: Option<crate::CanvasLayerId>,
         ellipse: CanvasEllipse,
         transform: Transform,
         paint: CanvasPaint,
@@ -227,6 +266,7 @@ impl CanvasDocument {
         Self::create_shape(
             world,
             document,
+            layer,
             CanvasGeometry::Ellipse(ellipse),
             transform,
             paint,
@@ -250,9 +290,24 @@ impl CanvasDocument {
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_path(world, document, path, transform, paint).map_err(|error| {
+        Self::_create_path(world, document, None, path, transform, paint).map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.create_path",
+            ))
+        })
+    }
+
+    pub fn create_path_in_layer(
+        world: &mut World,
+        document: Entity,
+        layer: crate::CanvasLayerId,
+        path: crate::CanvasPath,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> crate::error::PublicResult<Entity> {
+        Self::_create_path(world, document, Some(layer), path, transform, paint).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.create_path_in_layer",
             ))
         })
     }
@@ -260,6 +315,7 @@ impl CanvasDocument {
     pub(crate) fn _create_path(
         world: &mut World,
         document: Entity,
+        layer: Option<crate::CanvasLayerId>,
         path: crate::CanvasPath,
         transform: Transform,
         paint: CanvasPaint,
@@ -267,6 +323,7 @@ impl CanvasDocument {
         Self::create_shape(
             world,
             document,
+            layer,
             CanvasGeometry::Path(path),
             transform,
             paint,
@@ -331,21 +388,21 @@ impl CanvasDocument {
     fn create_shape(
         world: &mut World,
         document: Entity,
+        layer: Option<crate::CanvasLayerId>,
         geometry: CanvasGeometry,
         transform: Transform,
         paint: CanvasPaint,
     ) -> Result<Entity> {
         (|| -> Result<Entity> {
-            let result = (|| {
-                validate_document(world, document)?;
-                geometry._validate(&transform, &paint)
-            })();
-            result?;
+            let stack = stack(world, document)?;
+            let layer = layer.unwrap_or(stack.default_layer);
+            if stack.layer(layer).is_none() {
+                return Err(crate::error::invalid(crate::CanvasIssue::LayerTarget)
+                    .input(crate::CanvasInput::Layer(layer)));
+            }
+            geometry._validate(&transform, &paint)?;
             let shape = world.spawn_empty().id();
-            let registered = world
-                .get_mut::<CanvasLayerStack>(document)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::DocumentOrder))
-                .and_then(|stack| stack.into_inner().default_items_mut())
+            let registered = container_items_mut(world, document, CanvasContainer::Layer(layer))
                 .map(|items| items.push(shape));
             if let Err(error) = registered {
                 world.despawn(shape);

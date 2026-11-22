@@ -23,6 +23,7 @@ Code Review 使用 `$code-review` Skill，由独立的 Reviewer Subagent 执行�
 Reviewer 只负责静态代码审查，不修改代码、不修复 Findings，也不继续实施任务。
 
 - 每轮 Review 必须启动全新的 Reviewer Subagent，不复用上一轮 Reviewer 的上下文。
+- 启动 Reviewer Subagent 时，实施 Agent 必须在 `spawn_agent` 调用中显式设置 `fork_turns: "none"`，并通过任务消息提供本轮审查所需的上下文。
 - Reviewer 不执行测试、Cargo 命令、BRP、GUI 或其他运行时验证。
 - Review 进行期间，不得并发修改 Reviewer 正在审查的内容。
 - Reviewer 根据实际 Diff 和必要上下文判断问题，不以未验证的推测代替具体 Findings。

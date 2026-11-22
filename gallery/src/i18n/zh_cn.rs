@@ -137,6 +137,15 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         },
         TextKey::Navigation(NavigationKey::Canvas) => "画布",
         TextKey::Canvas(key) => match key {
+            super::CanvasKey::Layers => "图层",
+            super::CanvasKey::LayerMain => "在主视图使用",
+            super::CanvasKey::LayerMainActive => "主视图活动层",
+            super::CanvasKey::LayerSecondary => "在辅助视图使用",
+            super::CanvasKey::LayerSecondaryActive => "辅助视图活动层",
+            super::CanvasKey::LayerShow => "显示",
+            super::CanvasKey::LayerHide => "隐藏",
+            super::CanvasKey::LayerLock => "锁定",
+            super::CanvasKey::LayerUnlock => "解锁",
             super::CanvasKey::Description => {
                 "共享图形，独立选择与视角。Ctrl+点击多选；拖动所选成员整批移动，Delete删除当前焦点View的选择。方点缩放/镜像，圆点旋转（Shift吸附15°），内侧菱形改尺寸/半径，内侧圆点改矩形圆角。矩形/椭圆拖动一次绘制；路径节点模式拖锚点或Bezier控制点。Space+左键平移，滚轮缩放。工具栏操作主视图；SVG/PNG导出已提交矢量图形。"
             }

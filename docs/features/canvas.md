@@ -168,7 +168,7 @@ CanvasView::set_mode(&mut commands, view, CanvasMode::PathNodeEdit);
 
 ## 图形顺序与删除
 
-每份 Document 初始包含一个可见、未锁定的 `Layer 1`，现有图形创建接口将图形追加到该图层。每个 Shape 都具有 `CanvasItem` 身份，保留自己的 Entity、Geometry、Paint 和 Transform。创建与查询 Document 不需要安装 CanvasPlugin。
+每份 Document 初始包含一个可见、未锁定的 `Layer 1`。每个 Shape 都具有 `CanvasItem` 身份，保留自己的 Entity、Geometry、Paint 和 Transform。Document 支持在 Headless World 中创建与修改。
 
 `layer_order` 返回从底到顶的图层 ID，`item_order` 查询指定容器的直属绘图项，`draw_order` 依图层与容器顺序展平绘图项。`shape_order` 只返回其中的 Shape。`reorder_item` 和 `reorder_shape` 都在绘图项所属的容器内调整顺序。
 
@@ -180,6 +180,18 @@ CanvasDocument::remove_shapes(world, document, &[rectangle, ellipse])
 ```
 
 键盘 Delete 只在有效 CanvasView 根拥有焦点时删除选择，不接管内部 TextField 的删除键。删除最后一个图形后文档仍存在，可以继续绘制。
+
+## 图层管理
+
+`CanvasDocument::layers` 提供从底到顶的图层信息。`CanvasLayerId` 绑定所属文档，`get()` 返回文档内稳定的局部编号。新增图层时可指定插入位置，之后可重命名、调整顺序和移动直属绘图项。
+
+矩形、椭圆和 Path 的 `create_*_in_layer` 方法接收显式图层 ID。原有创建方法写入 `default_layer`。删除默认层时，剩余顺序中的第一层接任默认层。
+
+隐藏层的内容从视图、命中与 SVG／PNG 导出中移除，显示后按原顺序恢复。锁定层继续绘制与导出，视图选择和编辑只接受可见、未锁定的图层内容。Document 的显式 API 可修改锁定层。
+
+`CanvasView::active_layer` 查询该视图的活动图层，`set_active_layer_in_world` 可切换至可用图层。绘图草稿只能提交到开始绘制时的活动层，活动层变化会取消草稿。活动层变为不可用时，视图选择第一个可见且未锁定的图层，全部不可用时暂停提交。共享 Document 的视图可在不同图层绘图。
+
+`remove_layer` 可以用 `OnlyIfEmpty` 删除空层，用 `MoveContentsTo` 将内容追加到同一文档内可用的目标层，或用 `DeleteContents` 级联删除图层及其内容。每份 Document 至少保留一个图层。
 
 ## SVG 导出
 

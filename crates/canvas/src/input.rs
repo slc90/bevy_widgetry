@@ -1,5 +1,5 @@
 use crate::error::CanvasResult as Result;
-use crate::{CanvasDocument, CanvasDocumentChanged, CanvasView};
+use crate::{CanvasDocument, CanvasDocumentChanged, CanvasLayerId, CanvasView};
 use bevy::{
     camera::NormalizedRenderTarget,
     ecs::message::MessageCursor,
@@ -72,6 +72,7 @@ enum DragAction {
     MoveSelection(crate::move_selection::MoveSelection),
     Pen {
         document: Entity,
+        layer: CanvasLayerId,
         paint: crate::CanvasPaint,
         current: Vec2,
     },
@@ -83,6 +84,7 @@ enum DragAction {
     Draw {
         kind: DrawingKind,
         document: Entity,
+        layer: CanvasLayerId,
         start: Vec2,
         current: Vec2,
         paint: crate::CanvasPaint,
@@ -272,7 +274,10 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     crate::CanvasMode::Ellipse(paint) => Some((DrawingKind::Ellipse, paint)),
                 };
                 if let crate::CanvasMode::Pen(paint) = CanvasView::_mode(world, press.entity)? {
-                    let Some(document) = CanvasView::_document(world, press.entity)? else {
+                    let (Some(document), Some(layer)) = (
+                        CanvasView::_document(world, press.entity)?,
+                        CanvasView::_active_layer(world, press.entity)?,
+                    ) else {
                         return Ok(());
                     };
                     if !crate::pen::accepts(
@@ -285,16 +290,21 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     }
                     DragAction::Pen {
                         document,
+                        layer,
                         paint,
                         current: point,
                     }
                 } else if let Some((kind, paint)) = drawing {
-                    let Some(document) = CanvasView::_document(world, press.entity)? else {
+                    let (Some(document), Some(layer)) = (
+                        CanvasView::_document(world, press.entity)?,
+                        CanvasView::_active_layer(world, press.entity)?,
+                    ) else {
                         return Ok(());
                     };
                     DragAction::Draw {
                         kind,
                         document,
+                        layer,
                         start: point,
                         current: point,
                         paint,
@@ -746,12 +756,19 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
                     state.document == Some(document) && state.mode == kind.mode(paint)
                 }),
             DragAction::Pen {
-                document, paint, ..
-            } => world
-                .get::<crate::view::ViewState>(entity)
-                .is_some_and(|s| {
-                    s.document == Some(document) && s.mode == crate::CanvasMode::Pen(paint)
-                }),
+                document,
+                layer,
+                paint,
+                ..
+            } => {
+                world
+                    .get::<crate::view::ViewState>(entity)
+                    .is_some_and(|s| {
+                        s.document == Some(document) && s.mode == crate::CanvasMode::Pen(paint)
+                    })
+                    && CanvasView::_active_layer(world, entity)
+                        .is_ok_and(|active| active == Some(layer))
+            }
         }
 }
 
@@ -900,6 +917,22 @@ pub(crate) fn end(world: &mut World, entity: Entity) {
     crate::pen::cancel(world, entity);
 }
 
+pub(crate) fn cancel_drawing_tools(world: &mut World, view: Entity) {
+    if world
+        .get::<DragState>(view)
+        .and_then(|state| state.0.as_ref())
+        .is_some_and(|drag| {
+            matches!(
+                drag.action,
+                DragAction::Draw { .. } | DragAction::Pen { .. }
+            )
+        })
+    {
+        release_gesture(world, view);
+    }
+    crate::pen::cancel(world, view);
+}
+
 pub(crate) fn cancel_node_edits(world: &mut World, shape: Entity) {
     let views = world
         .query::<(Entity, &DragState)>()
@@ -1024,6 +1057,7 @@ fn complete_pen(world: &mut World, view: Entity) -> Result {
         };
         let DragAction::Pen {
             document,
+            layer,
             paint,
             current,
         } = drag.action
@@ -1035,6 +1069,7 @@ fn complete_pen(world: &mut World, view: Entity) -> Result {
             world,
             view,
             document,
+            layer,
             paint,
             drag.pointer,
             drag.target,
@@ -1055,6 +1090,7 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         let Some(DragAction::Draw {
             kind,
             document,
+            layer,
             start,
             current,
             paint,
@@ -1073,6 +1109,7 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
                     state.document != Some(document) || state.mode != crate::CanvasMode::Select
                 })
             || !available(world, entity)
+            || CanvasView::_active_layer(world, entity)? != Some(layer)
         {
             return Ok(());
         }
@@ -1082,6 +1119,7 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
             DrawingKind::Rectangle => CanvasDocument::_create_rectangle(
                 world,
                 document,
+                Some(layer),
                 crate::CanvasRectangle {
                     corner_radius: 0.0,
                     size,
@@ -1092,13 +1130,19 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
             DrawingKind::Ellipse => CanvasDocument::_create_ellipse(
                 world,
                 document,
+                Some(layer),
                 crate::CanvasEllipse { radii: size * 0.5 },
                 transform,
                 paint,
             )?,
         };
-        CanvasView::_set_selection_in_world(world, entity, Some(shape))?;
-        Ok(())
+        crate::selection::select_committed_shape(
+            world,
+            entity,
+            document,
+            crate::CanvasMode::Select,
+            shape,
+        )
     })()
     .map_err(|error| error.at("entity", entity))
 }

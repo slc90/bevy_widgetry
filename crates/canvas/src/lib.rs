@@ -7,6 +7,7 @@ mod error;
 mod export;
 mod geometry;
 mod input;
+mod layers;
 mod mesh_cache;
 mod model;
 mod move_selection;
@@ -26,6 +27,7 @@ pub use export::CanvasExportError;
 pub use export::{
     CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop, CanvasRenderIssue,
 };
+pub use layers::{CanvasLayerRemoval, CanvasLayersChanged};
 pub use model::{
     CanvasDocument, CanvasEllipse, CanvasFillRule, CanvasGeometry, CanvasItem, CanvasLineCap,
     CanvasLineJoin, CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
@@ -35,8 +37,8 @@ pub use path::{CanvasPath, CanvasPathCommand, CanvasPathSegment};
 pub use pen::{CanvasPenChanged, CanvasPenDraft, CanvasPenSegment};
 pub use renderer::CanvasPlugin;
 pub use view::{
-    CanvasCenterChanged, CanvasDocumentChanged, CanvasMode, CanvasModeChanged,
-    CanvasSelectionChanged, CanvasView, CanvasViewProps, CanvasZoomChanged,
+    CanvasActiveLayerChanged, CanvasCenterChanged, CanvasDocumentChanged, CanvasMode,
+    CanvasModeChanged, CanvasSelectionChanged, CanvasView, CanvasViewProps, CanvasZoomChanged,
 };
 
 pub use error::{

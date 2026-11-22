@@ -105,6 +105,15 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         },
         TextKey::Navigation(NavigationKey::Canvas) => "Canvas",
         TextKey::Canvas(key) => match key {
+            super::CanvasKey::Layers => "Layers",
+            super::CanvasKey::LayerMain => "Use in main",
+            super::CanvasKey::LayerMainActive => "Main active",
+            super::CanvasKey::LayerSecondary => "Use in secondary",
+            super::CanvasKey::LayerSecondaryActive => "Secondary active",
+            super::CanvasKey::LayerShow => "Show",
+            super::CanvasKey::LayerHide => "Hide",
+            super::CanvasKey::LayerLock => "Lock",
+            super::CanvasKey::LayerUnlock => "Unlock",
             super::CanvasKey::Description => {
                 "Shared shapes, independent selection and navigation. Ctrl+click selects multiple shapes; drag any member to move the set, Delete removes the focused view selection. Squares scale/mirror, the round handle rotates (Shift: 15°); inner diamonds edit sizes/radii, the inner round handle edits rectangle corners. Rectangle/Ellipse draw once; Path nodes drags anchors and Bezier controls. Space+left drag pans; the wheel zooms. Toolbar actions affect the main view. SVG/PNG export committed vector shapes."
             }

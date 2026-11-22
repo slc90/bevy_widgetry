@@ -20,11 +20,13 @@ flowchart LR
 
 Document 的 Required Components 包含 `Transform` 和 `CanvasLayerStack`。图层数据保存在 Stack 中，图层 ID 在同一 Document 内稳定。每个图层包含直属绘图项的顺序列表，容器实体通过 `CanvasItemOrder` 记录其直属子项。 `ChildOf` 负责 ECS 所有权和级联销毁，绘图项必须同时出现在所属容器的顺序列表中。
 
-Renderer、从顶向下的命中和导出沿图层顺序遍历绘图项，共用同一个叠放依据。Document 根的 Transform 不参与文档坐标计算。
+Renderer、从顶向下的命中和导出沿图层顺序遍历绘图项，共用同一个叠放依据。Renderer 和导出读取可见图层，命中进一步只读取未锁定的可见图层。Document 根的 Transform 不参与文档坐标计算。
 
 ## 为每个 View 建立独立观察空间
 
-View 只引用 Document，并保存自己的 center、zoom、selection 和工具模式。它把 Document 坐标映射到 UI 的局部逻辑坐标，再交给独立的离屏目标。
+View 引用 Document，并保存自己的 center、zoom、selection、活动图层和工具模式。它把 Document 坐标映射到 UI 的局部逻辑坐标，再交给独立的离屏目标。
+
+Document 提交图层更改后，已绑定视图重新验证选择与活动图层。活动图层变化会结束该视图正在进行的绘图草稿，后续绘制从新的活动图层开始。
 
 ```mermaid
 flowchart LR

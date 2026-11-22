@@ -1,5 +1,5 @@
-use crate::CanvasDocument;
 use crate::error::CanvasResult as Result;
+use crate::{CanvasDocument, CanvasLayerId};
 use bevy::prelude::*;
 
 #[derive(SceneComponent, FromTemplate)]
@@ -31,6 +31,7 @@ impl Default for CanvasViewProps {
 #[reflect(Component)]
 pub(crate) struct ViewState {
     pub(crate) document: Option<Entity>,
+    pub(crate) active_layer: Option<CanvasLayerId>,
     pub(crate) center: Vec2,
     pub(crate) zoom: f32,
     pub(crate) selection: Vec<Entity>,
@@ -60,6 +61,12 @@ pub struct CanvasDocumentChanged {
 }
 
 #[derive(EntityEvent)]
+pub struct CanvasActiveLayerChanged {
+    pub entity: Entity,
+    pub layer: Option<CanvasLayerId>,
+}
+
+#[derive(EntityEvent)]
 pub struct CanvasCenterChanged {
     pub entity: Entity,
     pub center: Vec2,
@@ -80,6 +87,77 @@ pub struct CanvasSelectionChanged {
 pub(crate) const MIN_ZOOM: f32 = 0.1;
 pub(crate) const MAX_ZOOM: f32 = 10.0;
 
+fn preferred_layer(
+    world: &World,
+    document: Option<Entity>,
+    preferred: Option<CanvasLayerId>,
+) -> Option<CanvasLayerId> {
+    let document = document?;
+    world.get::<CanvasDocument>(document)?;
+    world
+        .get::<crate::CanvasLayerStack>(document)?
+        .editable_layer(preferred)
+}
+
+pub(crate) fn repair_layers(world: &mut World, document: Entity) -> Result {
+    let views = world
+        .query::<(Entity, &ViewState)>()
+        .iter(world)
+        .filter_map(|(view, state)| (state.document == Some(document)).then_some(view))
+        .collect::<Vec<_>>();
+    for view in views {
+        if let Some(state) = world
+            .get::<ViewState>(view)
+            .filter(|state| state.document == Some(document))
+        {
+            let layer = preferred_layer(world, Some(document), state.active_layer);
+            apply_active_layer(world, view, layer)?;
+        }
+        if world
+            .get::<ViewState>(view)
+            .is_some_and(|state| state.document == Some(document))
+        {
+            crate::selection::repair(world, view)?;
+        }
+    }
+    Ok(())
+}
+
+fn apply_active_layer(
+    world: &mut World,
+    view: Entity,
+    layer: Option<CanvasLayerId>,
+) -> Result<bool> {
+    let mut state = world
+        .get_mut::<ViewState>(view)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::View).at("view", view))?;
+    if state.active_layer == layer {
+        return Ok(false);
+    }
+    let document = state.document;
+    state.active_layer = layer;
+    crate::input::cancel_drawing_tools(world, view);
+    notify_active_layer(world, view, document, layer);
+    Ok(true)
+}
+
+fn notify_active_layer(
+    world: &mut World,
+    view: Entity,
+    document: Option<Entity>,
+    layer: Option<CanvasLayerId>,
+) {
+    if world
+        .get::<ViewState>(view)
+        .is_some_and(|state| state.document == document && state.active_layer == layer)
+    {
+        world.trigger(CanvasActiveLayerChanged {
+            entity: view,
+            layer,
+        });
+    }
+}
+
 impl CanvasView {
     fn scene(props: CanvasViewProps) -> impl Scene {
         bsn! {
@@ -98,7 +176,8 @@ impl CanvasView {
                 if !(MIN_ZOOM..=MAX_ZOOM).contains(&props.zoom) {
                     return Err(crate::error::invalid(crate::CanvasIssue::ZoomTarget).input(crate::CanvasInput::Float { field: "zoom", value: props.zoom }).at("view", root).into_bevy_error(frame()));
                 }
-                Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom, selection: Vec::new(), mode: CanvasMode::Select })
+                let active_layer = preferred_layer(context.entity.world(), props.document, None);
+                Ok(ViewState { document: props.document, active_layer, center: props.center, zoom: props.zoom, selection: Vec::new(), mode: CanvasMode::Select })
             })
             Node { min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
             bevy::input_focus::tab_navigation::TabIndex(-1)
@@ -145,11 +224,14 @@ impl CanvasView {
         document: Option<Entity>,
     ) -> Result<bool> {
         (|| -> Result<bool> {
-            if world.get::<ViewState>(view).is_none()
-                || document.is_some_and(|entity| world.get::<CanvasDocument>(entity).is_none())
-            {
+            let Some(previous) = world.get::<ViewState>(view) else {
+                return Err(crate::error::invalid(crate::CanvasIssue::DocumentTarget));
+            };
+            if document.is_some_and(|entity| world.get::<CanvasDocument>(entity).is_none()) {
                 return Err(crate::error::invalid(crate::CanvasIssue::DocumentTarget));
             }
+            let layer = preferred_layer(world, document, previous.active_layer);
+            let layer_changed = previous.active_layer != layer;
             let mut state = world
                 .get_mut::<ViewState>(view)
                 .ok_or_else(|| crate::error::missing(crate::CanvasPart::View))?;
@@ -159,6 +241,7 @@ impl CanvasView {
             let cleared = !state.selection.is_empty();
             state.selection.clear();
             state.document = document;
+            state.active_layer = layer;
             crate::pen::cancel(world, view);
             world.trigger(CanvasDocumentChanged {
                 entity: view,
@@ -173,6 +256,9 @@ impl CanvasView {
                     entity: view,
                     selection: Vec::new(),
                 });
+            }
+            if layer_changed {
+                notify_active_layer(world, view, document, layer);
             }
             Ok(true)
         })()
@@ -195,6 +281,62 @@ impl CanvasView {
                 .map_err(|error| {
                     error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new(
                         "canvas.command",
+                    ))
+                })
+        });
+    }
+
+    pub fn active_layer(
+        world: &World,
+        view: Entity,
+    ) -> crate::error::PublicResult<Option<CanvasLayerId>> {
+        Self::_active_layer(world, view).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.active_layer",
+            ))
+        })
+    }
+
+    pub(crate) fn _active_layer(world: &World, view: Entity) -> Result<Option<CanvasLayerId>> {
+        let state = world
+            .get::<ViewState>(view)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::View).at("view", view))?;
+        Ok(preferred_layer(world, state.document, state.active_layer))
+    }
+
+    pub fn set_active_layer_in_world(
+        world: &mut World,
+        view: Entity,
+        layer: CanvasLayerId,
+    ) -> crate::error::PublicResult<bool> {
+        Self::_set_active_layer_in_world(world, view, layer).map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasView.set_active_layer_in_world",
+            ))
+        })
+    }
+
+    fn _set_active_layer_in_world(
+        world: &mut World,
+        view: Entity,
+        layer: CanvasLayerId,
+    ) -> Result<bool> {
+        let document = Self::_document(world, view)?;
+        if preferred_layer(world, document, Some(layer)) != Some(layer) {
+            return Err(crate::error::invalid(crate::CanvasIssue::LayerUnavailable)
+                .input(crate::CanvasInput::Layer(layer))
+                .at("view", view));
+        }
+        apply_active_layer(world, view, Some(layer))
+    }
+
+    pub fn set_active_layer(commands: &mut Commands, view: Entity, layer: CanvasLayerId) {
+        commands.queue(move |world: &mut World| {
+            Self::_set_active_layer_in_world(world, view, layer)
+                .map(|_| ())
+                .map_err(|error| {
+                    error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new(
+                        "canvas.CanvasView.set_active_layer",
                     ))
                 })
         });

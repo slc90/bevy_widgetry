@@ -1,5 +1,8 @@
 use crate::error::CanvasResult as Result;
-use crate::{CanvasDocument, CanvasMode, CanvasPaint, CanvasPath, CanvasPathCommand, CanvasView};
+use crate::{
+    CanvasDocument, CanvasLayerId, CanvasMode, CanvasPaint, CanvasPath, CanvasPathCommand,
+    CanvasView,
+};
 use bevy::{
     camera::NormalizedRenderTarget,
     input::{ButtonState, keyboard::KeyboardInput},
@@ -29,9 +32,16 @@ pub struct CanvasPenDraft {
 struct Draft {
     data: CanvasPenDraft,
     document: Entity,
+    layer: CanvasLayerId,
     pointer: PointerId,
     target: NormalizedRenderTarget,
     paint: CanvasPaint,
+}
+
+impl Draft {
+    fn matches(&self, document: Entity, layer: CanvasLayerId, paint: CanvasPaint) -> bool {
+        self.document == document && self.layer == layer && self.paint == paint
+    }
 }
 
 #[derive(Component, Default)]
@@ -171,6 +181,7 @@ pub(crate) fn append_point(
     world: &mut World,
     view: Entity,
     document: Entity,
+    layer: CanvasLayerId,
     paint: CanvasPaint,
     pointer: PointerId,
     target: NormalizedRenderTarget,
@@ -184,13 +195,23 @@ pub(crate) fn append_point(
             || !crate::input::focused(world, &target)
             || world.resource::<InputFocus>().get() != Some(view)
             || world.get::<CanvasDocument>(document).is_none()
+            || CanvasView::_active_layer(world, view)? != Some(layer)
         {
             return Ok(());
         }
         if !accepts(world, view, pointer, &target) {
             return Ok(());
         }
-        let mut draft = state(world, view)?.draft.clone().unwrap_or(Draft {
+        let pen = state(world, view)?;
+        if pen
+            .draft
+            .as_ref()
+            .is_some_and(|draft| !draft.matches(document, layer, paint))
+        {
+            crate::input::end(world, view);
+            return Ok(());
+        }
+        let mut draft = pen.draft.clone().unwrap_or(Draft {
             data: CanvasPenDraft {
                 path: CanvasPath {
                     commands: Vec::new(),
@@ -199,11 +220,12 @@ pub(crate) fn append_point(
                 active_subpath: None,
             },
             document,
+            layer,
             pointer,
             target,
             paint,
         });
-        advance(&mut draft.data, state(world, view)?.segment, point);
+        advance(&mut draft.data, pen.segment, point);
         draft.data.path._validate(&Transform::default(), &paint)?;
         world
             .get_mut::<State>(view)
@@ -410,6 +432,12 @@ impl CanvasView {
             let Some(draft) = state(world, view)?.draft.clone() else {
                 return Ok(None);
             };
+            if !CanvasView::_active_layer(world, view)?
+                .is_some_and(|layer| draft.matches(document, layer, paint))
+            {
+                crate::input::end(world, view);
+                return Ok(None);
+            }
             if !drawable(&draft.data.path) || !draft.data.pending.is_empty() {
                 crate::input::end(world, view);
                 return Ok(None);
@@ -417,18 +445,19 @@ impl CanvasView {
             let shape = CanvasDocument::_create_path(
                 world,
                 document,
+                Some(draft.layer),
                 draft.data.path,
                 Transform::default(),
                 paint,
             )?;
             crate::input::end(world, view);
-            if world
-                .get::<crate::view::ViewState>(view)
-                .is_some_and(|s| s.document == Some(document) && s.mode == CanvasMode::Pen(paint))
-                && world.get::<crate::CanvasShape>(shape).is_some()
-            {
-                Self::set_selection_in_world(world, view, Some(shape))?;
-            }
+            crate::selection::select_committed_shape(
+                world,
+                view,
+                document,
+                CanvasMode::Pen(paint),
+                shape,
+            )?;
             Ok(Some(shape))
         })()
         .map_err(|error| {

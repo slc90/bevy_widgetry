@@ -312,7 +312,7 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
     let shapes = if let Some(document) =
         document.filter(|document| world.get::<CanvasDocument>(*document).is_some())
     {
-        CanvasDocument::_shape_order(world, document)?
+        CanvasDocument::shape_order_in(world, document, crate::CanvasLayer::visible)?
             .into_iter()
             .map(|entity| {
                 let geometry = world

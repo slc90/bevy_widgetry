@@ -11,12 +11,30 @@ pub(crate) fn belongs_to(world: &World, document: Option<Entity>, shape: Entity)
                 .get_entity(shape)
                 .as_ref()
                 .is_ok_and(crate::model::has_shape_components)
-            && crate::order::item_container(world, document, shape).is_some()
+            && crate::order::item_placement(world, document, shape)
+                .is_some_and(|(_, layer)| layer.editable())
     })
 }
 
 pub(crate) fn selectable(world: &World, document: Option<Entity>, shape: Entity) -> bool {
     belongs_to(world, document, shape)
+}
+
+pub(crate) fn select_committed_shape(
+    world: &mut World,
+    view: Entity,
+    document: Entity,
+    mode: crate::CanvasMode,
+    shape: Entity,
+) -> Result {
+    if world
+        .get::<crate::view::ViewState>(view)
+        .is_some_and(|state| state.document == Some(document) && state.mode == mode)
+        && selectable(world, Some(document), shape)
+    {
+        CanvasView::_set_selection_in_world(world, view, Some(shape))?;
+    }
+    Ok(())
 }
 
 pub(crate) fn repair(world: &mut World, view: Entity) -> Result<bool> {
@@ -44,7 +62,7 @@ fn hit_shapes(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Ent
             return Ok(None);
         };
         let screen = hit::ScreenSpace::new(world, view, CanvasView::_zoom(world, view)?)?;
-        for shape in CanvasDocument::_shape_order(world, document)?
+        for shape in CanvasDocument::shape_order_in(world, document, crate::CanvasLayer::editable)?
             .into_iter()
             .rev()
         {

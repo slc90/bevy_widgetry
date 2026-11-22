@@ -334,7 +334,8 @@ fn snapshot(
     let order = world
         .get::<crate::CanvasLayerStack>(document)
         .ok_or(CanvasExportError::InvalidDocument)?;
-    crate::order::visit_draw_order(world, order, |entity, container, entry| {
+    let visible_layers = order.layers().iter().filter(|layer| layer.visible());
+    crate::order::visit_draw_order(world, visible_layers, |entity, container, entry| {
         let group = entry.is_some_and(|entry| entry.contains::<crate::order::CanvasItemOrder>());
         if !entry.is_some_and(|entry| {
             crate::order::is_item_child(entry, container.parent(document))

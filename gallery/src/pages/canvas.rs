@@ -14,6 +14,8 @@ use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::{button::WidgetryButton, canvas::*, text::WidgetryText};
 use std::path::PathBuf;
 
+mod layers;
+
 pub(crate) struct CanvasDemoPlugin;
 
 impl Plugin for CanvasDemoPlugin {
@@ -36,6 +38,12 @@ impl Plugin for CanvasDemoPlugin {
             })
             .add_observer(|_: On<CanvasModeChanged>, mut commands: Commands| {
                 commands.queue(refresh)
+            })
+            .add_observer(|_: On<CanvasLayersChanged>, mut commands: Commands| {
+                commands.queue(layers::refresh)
+            })
+            .add_observer(|_: On<CanvasActiveLayerChanged>, mut commands: Commands| {
+                commands.queue(layers::refresh)
             });
     }
 }
@@ -47,6 +55,7 @@ struct Demo {
     auxiliary: Entity,
     readout: Entity,
     result: Entity,
+    layers: Entity,
     directory: PathBuf,
     region: Option<Rect>,
     scale: f32,
@@ -156,9 +165,12 @@ fn enter(world: &mut World) -> Result {
         .id();
     let result = (|| -> Result<Entity> {
         add_rectangle(world, document)?;
-        CanvasDocument::create_ellipse(
+        let details = CanvasDocument::create_layer(world, document, 1, "Layer 2")
+            .map_err(|error| error.into_bevy_error())?;
+        CanvasDocument::create_ellipse_in_layer(
             world,
             document,
+            details,
             CanvasEllipse {
                 radii: Vec2::new(40.0, 25.0),
             },
@@ -282,6 +294,7 @@ fn enter(world: &mut World) -> Result {
     match result {
         Ok(page) => {
             world.entity_mut(document).insert(ChildOf(page));
+            layers::refresh(world)?;
             refresh(world)
         }
         Err(error) => {
@@ -319,13 +332,14 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     }).collect();
     bsn! {
         Name("CanvasDemo")
-        Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result,
+        Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers,
             directory:directory, region:None, scale:1.0, segment:0 }
         Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(SECTION_GAP), flex_shrink:0.0 }
         Children [
             @localized(TextKey::Canvas(CanvasKey::Description)) WidgetryText Node {max_width:percent(100)}--
             Node {column_gap:px(CONTROL_GAP),row_gap:px(GROUP_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
             #Readout Name("CanvasReadout") Text("") WidgetryText Node {max_width:percent(100)}--
+            #Layers @layers::panel()--
             @localized(TextKey::Canvas(CanvasKey::Editing)) WidgetryText Node {max_width:percent(100)}--
             Node {width:percent(100),column_gap:px(CONTENT_GAP)}
             Children [
@@ -877,6 +891,7 @@ mod tests {
                 auxiliary: result,
                 readout: result,
                 result,
+                layers: result,
                 directory,
                 region: None,
                 scale: 2.0,

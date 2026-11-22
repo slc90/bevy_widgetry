@@ -3,22 +3,35 @@ use crate::{
     CanvasDocument, CanvasGeometry, CanvasIssue, CanvasItem, CanvasPaint, CanvasPart, CanvasShape,
 };
 use bevy::ecs::component::ComponentId;
-use bevy::ecs::world::EntityRef;
+use bevy::ecs::lifecycle::HookContext;
+use bevy::ecs::world::{DeferredWorld, EntityRef};
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
-pub struct CanvasLayerId(u64);
+pub struct CanvasLayerId {
+    pub(crate) document: Entity,
+    pub(crate) local: u64,
+}
 
-const DEFAULT_LAYER_ID: CanvasLayerId = CanvasLayerId(0);
+impl CanvasLayerId {
+    pub fn get(self) -> u64 {
+        self.local
+    }
+}
+
+const DEFAULT_LAYER_ID: CanvasLayerId = CanvasLayerId {
+    document: Entity::PLACEHOLDER,
+    local: 0,
+};
 
 #[derive(Clone, Debug, Reflect)]
 pub struct CanvasLayer {
-    id: CanvasLayerId,
-    name: String,
-    visible: bool,
-    locked: bool,
-    items: Vec<Entity>,
+    pub(crate) id: CanvasLayerId,
+    pub(crate) name: String,
+    pub(crate) visible: bool,
+    pub(crate) locked: bool,
+    pub(crate) items: Vec<Entity>,
 }
 
 impl CanvasLayer {
@@ -40,10 +53,12 @@ impl CanvasLayer {
 }
 
 #[derive(Component, Debug, Reflect)]
+#[component(on_add = bind_layer_ids, on_insert = bind_layer_ids)]
 #[reflect(Component)]
 pub struct CanvasLayerStack {
-    layers: Vec<CanvasLayer>,
-    next_layer_id: u64,
+    pub(crate) layers: Vec<CanvasLayer>,
+    pub(crate) default_layer: CanvasLayerId,
+    pub(crate) next_layer_id: u64,
 }
 
 impl Default for CanvasLayerStack {
@@ -56,7 +71,20 @@ impl Default for CanvasLayerStack {
                 locked: false,
                 items: Vec::new(),
             }],
-            next_layer_id: DEFAULT_LAYER_ID.0 + 1,
+            default_layer: DEFAULT_LAYER_ID,
+            next_layer_id: DEFAULT_LAYER_ID.local + 1,
+        }
+    }
+}
+
+fn bind_layer_ids(mut world: DeferredWorld, context: HookContext) {
+    // Add observers can read the default layer before the insert hook runs.
+    if let Some(mut stack) = world.get_mut::<CanvasLayerStack>(context.entity)
+        && stack.default_layer.document != context.entity
+    {
+        stack.default_layer.document = context.entity;
+        for layer in &mut stack.layers {
+            layer.id.document = context.entity;
         }
     }
 }
@@ -66,10 +94,11 @@ impl CanvasLayerStack {
         &self.layers
     }
 
-    pub(crate) fn default_items_mut(&mut self) -> Result<&mut Vec<Entity>> {
+    #[cfg(test)]
+    fn default_items_mut(&mut self) -> Result<&mut Vec<Entity>> {
         self.layers
             .iter_mut()
-            .find(|layer| layer.id == DEFAULT_LAYER_ID)
+            .find(|layer| layer.id == self.default_layer)
             .map(|layer| &mut layer.items)
             .ok_or_else(|| crate::error::missing(CanvasPart::DocumentOrder))
     }
@@ -156,6 +185,14 @@ pub(crate) fn item_container(
     document: Entity,
     item: Entity,
 ) -> Option<CanvasContainer> {
+    item_placement(world, document, item).map(|(container, _)| container)
+}
+
+pub(crate) fn item_placement(
+    world: &World,
+    document: Entity,
+    item: Entity,
+) -> Option<(CanvasContainer, &CanvasLayer)> {
     let stack = world.get::<CanvasLayerStack>(document)?;
     let mut current = item;
     let mut groups = HashSet::new();
@@ -170,7 +207,7 @@ pub(crate) fn item_container(
                 .layers()
                 .iter()
                 .find(|layer| layer.items.contains(&current))
-                .map(|layer| container.unwrap_or(CanvasContainer::Layer(layer.id)));
+                .map(|layer| (container.unwrap_or(CanvasContainer::Layer(layer.id)), layer));
         }
         if !groups.insert(parent) || !world.get::<CanvasItemOrder>(parent)?.0.contains(&current) {
             return None;
@@ -180,13 +217,13 @@ pub(crate) fn item_container(
     }
 }
 
-pub(crate) fn visit_draw_order<E>(
+pub(crate) fn visit_draw_order<'a, E>(
     world: &World,
-    stack: &CanvasLayerStack,
+    layers: impl IntoIterator<Item = &'a CanvasLayer>,
     mut visit: impl FnMut(Entity, CanvasContainer, Option<&EntityRef>) -> std::result::Result<bool, E>,
 ) -> std::result::Result<(), E> {
     let mut parents = Vec::new();
-    for layer in stack.layers() {
+    for layer in layers {
         let mut container = CanvasContainer::Layer(layer.id);
         let mut items = layer.items.iter();
         loop {
@@ -227,6 +264,19 @@ fn container_items(
             .map(|order| order.0.as_slice()),
     }
     .ok_or_else(|| crate::error::invalid(CanvasIssue::OrderMembership))
+}
+
+pub(crate) fn valid_items<'a>(
+    world: &'a World,
+    parent: Entity,
+    order: &'a [Entity],
+) -> impl Iterator<Item = Entity> + 'a {
+    let components = OrderComponents::new(world);
+    order.iter().copied().filter(move |item| {
+        world
+            .get_entity(*item)
+            .is_ok_and(|item| components.is_valid(&item, parent))
+    })
 }
 
 pub(crate) fn container_items_mut(
@@ -274,17 +324,7 @@ impl CanvasDocument {
         let result = (|| {
             crate::model::validate_document(world, document)?;
             let order = container_items(world, document, container)?;
-            let parent = container.parent(document);
-            let components = OrderComponents::new(world);
-            Ok(order
-                .iter()
-                .copied()
-                .filter(|item| {
-                    world
-                        .get_entity(*item)
-                        .is_ok_and(|item| components.is_valid(&item, parent))
-                })
-                .collect())
+            Ok(valid_items(world, container.parent(document), order).collect())
         })();
         result.map_err(|error: crate::error::CanvasFault| {
             error
@@ -322,12 +362,21 @@ impl CanvasDocument {
     }
 
     pub(crate) fn _shape_order(world: &mut World, document: Entity) -> Result<Vec<Entity>> {
+        Self::shape_order_in(world, document, |_| true)
+    }
+
+    pub(crate) fn shape_order_in(
+        world: &mut World,
+        document: Entity,
+        include: impl Fn(&CanvasLayer) -> bool,
+    ) -> Result<Vec<Entity>> {
         let mut stale = HashMap::<_, HashSet<_>>::new();
         let stack = stack(world, document)?;
-        let capacity = stack.layers().iter().map(|layer| layer.items.len()).sum();
+        let layers = stack.layers().iter().filter(|layer| include(layer));
+        let capacity = layers.clone().map(|layer| layer.items.len()).sum();
         let mut shapes = Vec::with_capacity(capacity);
         let components = OrderComponents::new(world);
-        visit_draw_order(world, stack, |item, container, entity| -> Result<bool> {
+        visit_draw_order(world, layers, |item, container, entity| -> Result<bool> {
             if let Some(entry) =
                 entity.filter(|entry| components.is_attached(entry, container.parent(document)))
             {
@@ -386,7 +435,7 @@ impl CanvasDocument {
     }
 }
 
-fn stack(world: &World, document: Entity) -> Result<&CanvasLayerStack> {
+pub(crate) fn stack(world: &World, document: Entity) -> Result<&CanvasLayerStack> {
     world
         .get::<CanvasLayerStack>(document)
         .filter(|_| world.get::<CanvasDocument>(document).is_some())
@@ -400,13 +449,17 @@ fn collect_draw_order(
 ) -> Result<Vec<Entity>> {
     let stack = stack(world, document)?;
     let mut items = Vec::with_capacity(stack.layers().iter().map(|layer| layer.items.len()).sum());
-    visit_draw_order(world, stack, |item, container, entity| -> Result<bool> {
-        let valid = include(item, container, entity);
-        if valid {
-            items.push(item);
-        }
-        Ok(valid)
-    })?;
+    visit_draw_order(
+        world,
+        stack.layers(),
+        |item, container, entity| -> Result<bool> {
+            let valid = include(item, container, entity);
+            if valid {
+                items.push(item);
+            }
+            Ok(valid)
+        },
+    )?;
     Ok(items)
 }
 
@@ -497,7 +550,11 @@ mod tests {
             .push(nested);
 
         let mut stack = world.get_mut::<CanvasLayerStack>(document).unwrap();
-        let second = CanvasLayerId(stack.next_layer_id);
+        let first = stack.default_layer;
+        let second = CanvasLayerId {
+            document,
+            local: stack.next_layer_id,
+        };
         stack.next_layer_id += 1;
         *stack.default_items_mut().unwrap() = vec![group];
         stack.layers.push(CanvasLayer {
@@ -510,7 +567,7 @@ mod tests {
 
         assert_eq!(
             CanvasDocument::layer_order(&world, document).unwrap(),
-            [DEFAULT_LAYER_ID, second]
+            [first, second]
         );
         assert_eq!(
             CanvasDocument::draw_order(&world, document).unwrap(),

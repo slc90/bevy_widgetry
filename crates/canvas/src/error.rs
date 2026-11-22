@@ -102,6 +102,12 @@ pub enum CanvasIssue {
     GeometryKind,
     HitIndex,
     HitTriangle,
+    LastLayer,
+    LayerIdExhausted,
+    LayerIndex,
+    LayerNotEmpty,
+    LayerTarget,
+    LayerUnavailable,
     MeshBounds,
     MeshIndexOverflow,
     OrderMembership,
@@ -133,6 +139,7 @@ pub enum CanvasErrorKind {
 
 #[derive(Clone, Debug)]
 pub enum CanvasInput {
+    Layer(crate::CanvasLayerId),
     Entity {
         field: &'static str,
         value: Entity,
@@ -390,6 +397,7 @@ impl CanvasInput {
         const INPUT_COMMAND: u64 = 11;
         const INPUT_TRANSFORM: u64 = 12;
         const INPUT_PAINT: u64 = 13;
+        const INPUT_LAYER: u64 = 14;
 
         fn floats(values: &mut Vec<u64>, floats: impl IntoIterator<Item = f32>) {
             values.extend(floats.into_iter().map(|v| u64::from(v.to_bits())));
@@ -451,6 +459,7 @@ impl CanvasInput {
             }
         }
         match self {
+            Self::Layer(id) => values.extend([INPUT_LAYER, id.document.to_bits(), id.get()]),
             Self::Entity { value, .. } => values.extend([INPUT_ENTITY, value.to_bits()]),
             Self::Entities {
                 values: entities, ..
