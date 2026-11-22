@@ -51,7 +51,7 @@ Reviewer 提出数值精度 Finding 时，必须说明本次变更造成的问�
 
 Reviewer 应先通过 `$code-review` 获取并检查本轮 Review Target / Diff，再根据实际变更内容及影响范围读取相关规则。
 
-- Initial / Final Full Review 根据完整 Working Tree Change 选择规则。
+- Initial Full Review 根据完整 Working Tree Change 选择规则。
 - Incremental Review 根据本轮 Repair Delta，以及判断既有未解决 Findings 所需的上下文选择规则。
 - 不根据任务名称或文件路径机械加载全部规则。
 - 变更涉及某项规则的实际约束时，必须在形成对应 Review 判断前读取该规则。
@@ -66,7 +66,7 @@ Initial Full Review 必须先获取并检查 Review Target / Diff，确定本次
 
 如果本次修改依据已确认的新设计调整现有架构，Reviewer 应结合新方案判断，不得仅因实现不同于旧设计就认定存在问题。
 
-Incremental Review 和 Final Full Review 默认不再读取设计文档，仍按实际 Diff 和 Findings 读取必要的工程规则。
+Incremental Review 默认按本轮 Repair Delta 和 Findings 读取必要的工程规则。需要确认设计契约时，按涉及范围查阅设计文档。
 
 ### 专项规则选择
 
@@ -107,15 +107,7 @@ Initial Full Review
           │                                  ↑
           │                                  └─ Repeat
           │
-          └── No findings
-                ↓
-             Final Full Review
-                │
-                ├── Findings → Advance Baseline → Repair
-                │
-                └── No findings
-                      ↓
-                    Passed
+          └── No findings ──────────────────→ Passed
 ```
 
 ### Initial Full Review
@@ -130,9 +122,9 @@ Initial Full Review
 No review findings.
 ```
 
-Review 直接通过，不需要重复 Final Full Review，也不创建 Baseline。
+Review 直接通过。尚未建立 Baseline 时，无需为本轮创建。
 
-如果返回 Findings，实施 Agent 必须先将完整 Findings 记录到任务进度 Markdown，再使用 `$code-review` 的 Snapshot Helper 创建 Baseline。
+如果返回 Findings，实施 Agent 必须先将完整 Findings 记录到任务进度 Markdown，再使用 `$code-review` 的 Snapshot Helper 创建 Baseline。已有 Baseline 时按管理规则条件更新。
 
 Baseline Ref 和完整 Git Tree SHA 都必须记录完成，才能开始修复。
 
@@ -155,30 +147,17 @@ Reviewer 应逐项判断既有 Findings 是否真正解决，并检查修复引�
 
 如果 Incremental Review 仍有 Findings，实施 Agent 先记录结果，再条件更新 Baseline，之后继续修复。
 
-如果 Incremental Review 精确返回 `No review findings.`，进入 Final Full Review。
+如果 Incremental Review 精确返回 `No review findings.`，Review 通过。完成 Baseline 和进度记录清理后，可按 Git 规则提交。
+
+Review 不设轮数上限。只要仍存在 Findings，就继续执行修复、必要验证和独立审查。
 
 ### 设计审查范围发生变化
 
-如果 Findings 修复实质性改变了 Initial Full Review已经审查的架构范围，例如引入新的跨模块关系、改变模块职责或状态归属，则下一轮改用 Full Review，重新按设计上下文读取规则审查相关设计。
+如果 Findings 修复实质性改变了 Initial Full Review 已经审查的架构范围，例如引入新的跨模块关系、改变模块职责或状态归属，则下一轮重新进入 Initial Full Review，按设计上下文读取规则审查相关设计。
 
 普通 Findings 修复不触发这一例外。
 
-重新执行 Full Review 时，保留已有 Findings、任务进度及必要的 Baseline 状态，按照现有Full Review 和 Baseline 管理规则处理，不得直接丢弃尚未解决的问题。
-
-### Final Full Review
-
-启动全新的 Reviewer，重新以 Full Mode 审查完整 Working Tree Change，而不只是此前的 Repair Delta。
-
-Final Full Review 使用与 Initial Full Review 相同的完整静态审查标准。
-
-- 有 Findings：记录结果，条件更新 Baseline，重新进入 Repair 与 Incremental Review。
-- 无 Findings：Review 通过。
-
-**Incremental Review 通过不代表整个 Review 已通过。**
-
-除首次 Full Review 直接通过外，必须最终取得 Full Review 返回的 `No review findings.`。
-
-Review 不设轮数上限。只要仍存在 Findings，就继续执行修复和独立审查，不得人为限制轮数或跳过 Final Full Review。
+重新执行 Full Review 时，保留任务进度及必要的 Baseline 状态，并向 Reviewer 提供尚未解决的完整 Findings 供逐项复核。
 
 ## Baseline 管理
 
@@ -255,14 +234,11 @@ Private Ref 和 Git Tree Objects 保存在当前 Checkout 的 `.git` 中，可�
 
 Fresh Clone 不会自动包含原 Checkout 的 Private Ref 和未提交修改，不得假定能够直接恢复原有 Incremental Review 状态。
 
-中断期间保留进度记录和必要的 Baseline Ref，直到 Full Review 通过或任务明确取消。
+中断期间保留进度记录和必要的 Baseline Ref，直到本任务的 Review 通过或任务明确取消。
 
 ## 完成条件
 
-只有以下两种情况可以将独立 Code Review 标记为 `passed`：
-
-1. Initial Full Review 直接返回 `No review findings.`。
-2. 所有必要的修复与 Incremental Review 完成后，Final Full Review 返回 `No review findings.`。
+Initial Full Review 或完成必要修复与验证后的 Incremental Review 精确返回 `No review findings.` 时，独立 Code Review 即可标记为 `passed`。
 
 通过后按要求校验并清理 Baseline，更新进度记录。
 

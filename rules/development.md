@@ -45,7 +45,7 @@ Type → Red → Green → Refactor
 
 记录内容包括：
 
-- 当前 `review_phase`：`initial_full`、`repair`、`incremental_review`、`final_full` 或 `passed`。
+- 当前 `review_phase`：`initial_full`、`repair`、`incremental_review` 或 `passed`。
 - 当前 `review_round` 及执行状态，包括尚未完成的 `pending`。
 - 上一轮已完成 Review 的轮次、阶段和完整结果。
 - 每轮 findings 原文、处理情况及仍未解决的 findings。
