@@ -1,5 +1,5 @@
+use crate::CanvasDocument;
 use crate::error::CanvasResult as Result;
-use crate::{CanvasDocument, CanvasGeometry, CanvasPaint};
 use bevy::prelude::*;
 
 use std::collections::{HashMap, HashSet};
@@ -11,35 +11,13 @@ impl CanvasDocument {
         updates: &[(Entity, Transform)],
     ) -> crate::error::PublicResult {
         crate::history::apply(world, target, |world, document| {
-            Self::_update_transforms(world, document, updates)
+            update_selected_transforms(world, document, updates)
         })
         .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.update_transforms",
             ))
         })
-    }
-
-    pub(crate) fn _update_transforms(
-        world: &mut World,
-        document: Entity,
-        updates: &[(Entity, Transform)],
-    ) -> Result {
-        update_transforms(
-            world,
-            document,
-            updates,
-            |world, document, shape, transform| {
-                crate::model::validate_shape(world, document, shape)?;
-                let geometry = world
-                    .get::<CanvasGeometry>(shape)
-                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::BatchGeometry))?;
-                let paint = world
-                    .get::<CanvasPaint>(shape)
-                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::BatchPaint))?;
-                crate::groups::validate_shape_projection(world, shape, geometry, transform, paint)
-            },
-        )
     }
 
     pub fn remove_shapes(
@@ -67,23 +45,6 @@ pub(crate) fn update_selected_transforms(
     document: Entity,
     updates: &[(Entity, Transform)],
 ) -> Result {
-    update_transforms(
-        world,
-        document,
-        updates,
-        |world, document, item, transform| {
-            crate::groups::item_parent(world, document, item)?;
-            crate::groups::validate_item_transform(world, item, transform)
-        },
-    )
-}
-
-fn update_transforms(
-    world: &mut World,
-    document: Entity,
-    updates: &[(Entity, Transform)],
-    validate: impl Fn(&World, Entity, Entity, Transform) -> Result,
-) -> Result {
     (|| -> Result {
         let mut failed_shape = None;
         let result: Result = (|| {
@@ -94,7 +55,8 @@ fn update_transforms(
                 if !seen.insert(*shape) {
                     return Err(crate::error::invalid(crate::CanvasIssue::DuplicateShape));
                 }
-                validate(world, document, *shape, *transform)?;
+                crate::groups::item_parent(world, document, *shape)?;
+                crate::groups::validate_item_transform(world, *shape, *transform)?;
             }
             Ok(())
         })();
@@ -125,7 +87,7 @@ pub(crate) fn remove_selected_items(
     })
 }
 
-fn remove_items(
+pub(crate) fn remove_items(
     world: &mut World,
     document: Entity,
     shapes: &[Entity],

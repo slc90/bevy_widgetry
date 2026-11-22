@@ -36,7 +36,7 @@ flowchart TD
 
 领域不完全等同于屏幕上的一个矩形。CanvasDocument、波形 Source 适配和任务控制都有自己的数据或生命周期，不能仅因为最终呈现在 UI 上就被视为视觉子部件。
 
-CanvasDocument 持有共享的图层、嵌套组、绘图项顺序与编辑历史。CanvasView 保存各自的观察、选择、活动图层与组内编辑路径。Renderer 在每个 View 下投影组层级，命中、节点编辑与导出按同一层级合成文档坐标。
+CanvasDocument 持有共享的图层、嵌套组、绘图项顺序与编辑历史。绘图项包括矢量形状和文字；文字使用默认字体排版，每个 View 独立渲染同一份已提交内容。CanvasView 保存各自的观察、选择、活动图层与组内编辑路径。Renderer 在每个 View 下投影组层级，命中、节点编辑与导出按同一层级合成文档坐标。
 
 `crates/path_display`（`bevy_widgetry_path_display`）承载无运行时状态的 Windows 路径前缀转换，运行时代码只依赖标准库。`simplify_path` 返回保留原生编码的 `PathBuf`，供配置路径字段及其他路径消费者使用；`display_path` 返回有损 Unicode 文字，供 UI、日志、报告和文本文件使用。两者共享 VerbatimDisk / VerbatimUNC 前缀选择，不规范化正文，也不保证转换前后的 Windows 访问语义等价。FileDialog 直接依赖它生成界面文字；Facade 通过默认关闭的 `path_display` Feature 导出两个函数，Gallery 显式启用该 Feature 后复用显示转换，再执行自身的摘要截断。其他 Rust 库可以直接依赖它，无需引入 Bevy 或 FileDialog。FileDialog 文件操作及 Shell UTF-16 路径转换仍使用原始路径。
 

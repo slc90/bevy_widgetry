@@ -67,6 +67,13 @@ pub enum BuiltinFont {
 }
 
 impl BuiltinFont {
+    pub fn bytes(self) -> &'static [u8] {
+        match self {
+            Self::Default => DEFAULT_FONT.1,
+            Self::Emoji => constants::EMOJI_FONT.1,
+        }
+    }
+
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
             Self::Default => embedded_path!(DEFAULT_FONT.0),

@@ -287,3 +287,9 @@ fn exported(event: On<CanvasPngExportFinished>) -> Result {
 ```
 
 这里将真实失败交给宿主错误处理器；应用也可以在失败分支实际执行提示或放弃策略后，再记录处理结果。通过请求的 `CanvasPngExport::job_id()` 可以取得受管任务身份并发起取消。完成、取消或失败后释放请求专属资源；取消不会回滚 Document。
+
+## 放置和编辑文字
+
+在主视图选择「放置文字」，单击目标位置。Canvas 将文字中心放在点击处，加入当前组或活动图层，并选中新文字。Gallery 属性面板支持显式换行、字号、十六进制颜色和起始／居中／末尾对齐。点击「应用文字属性」后两个视图同步更新。选择框和自动导出区域包含伸出排版框的字形笔画。字号使用文档单位，拖动、变换、编组、层次移动、删除和撤销使用普通绘图项的操作。
+
+宿主可用 `CanvasDocument::create_text` 或 `create_text_in_layer` 创建文字，从 `CanvasText::style` 读取属性，通过 `update_text` 提交修改。`duplicate_text` 将副本添加到原容器，保留局部变换。`draw_order` 包含文字，`shape_order` 只返回矢量形状。每项使用一种字体、字号和颜色，长行保持单行。SVG 导出保留可编辑的文字和内置默认字体，PNG 导出将文字和其他可见项一起绘制。

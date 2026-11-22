@@ -124,7 +124,11 @@ impl CanvasDocument {
         transform: Transform,
     ) -> crate::error::PublicResult {
         crate::history::apply(world, target, |world, document| {
-            Self::_update_transform(world, document, shape, transform)
+            if world.get::<crate::CanvasText>(shape).is_some() {
+                crate::groups::update_item_transform(world, document, shape, transform)
+            } else {
+                Self::_update_transform(world, document, shape, transform)
+            }
         })
         .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
@@ -460,6 +464,16 @@ impl CanvasDocument {
         transform: Transform,
         paint: CanvasPaint,
     ) -> Result<Entity> {
+        geometry._validate(&transform, &paint)?;
+        Self::insert_item(world, document, target, (geometry, transform, paint))
+    }
+
+    pub(crate) fn insert_item(
+        world: &mut World,
+        document: Entity,
+        target: CanvasContainer,
+        bundle: impl Bundle<Effect: bevy::ecs::bundle::NoBundleEffect>,
+    ) -> Result<Entity> {
         if let CanvasContainer::Layer(layer) = target {
             if stack(world, document)?.layer(layer).is_none() {
                 return Err(crate::error::invalid(crate::CanvasIssue::LayerTarget)
@@ -468,7 +482,7 @@ impl CanvasDocument {
         } else {
             crate::order::container_items(world, document, target)?;
         }
-        geometry._validate(&transform, &paint)?;
+
         let index = container_items(world, document, target)?.len();
         let shape = world.spawn_empty().id();
         let registered = crate::history::edit_order(world, document, target, index, |items| {
@@ -480,10 +494,7 @@ impl CanvasDocument {
         }
         crate::history::record_created(world, document, shape)?;
         // Run queued Add observer commands after committing the history entry.
-        world.insert_batch([(
-            shape,
-            (geometry, transform, paint, ChildOf(target.parent(document))),
-        )]);
+        world.insert_batch([(shape, (bundle, ChildOf(target.parent(document))))]);
         Ok(shape)
     }
 

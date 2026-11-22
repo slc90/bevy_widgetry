@@ -15,6 +15,7 @@ use bevy_widgetry::{button::WidgetryButton, canvas::*, text::WidgetryText};
 use std::path::PathBuf;
 
 mod layers;
+mod text;
 
 pub(crate) struct CanvasDemoPlugin;
 
@@ -56,6 +57,7 @@ struct Demo {
     readout: Entity,
     result: Entity,
     layers: Entity,
+    editor: Entity,
     directory: PathBuf,
     region: Option<Rect>,
     scale: f32,
@@ -82,6 +84,7 @@ enum Action {
     Rectangle,
     Ellipse,
     Pen,
+    PlaceText,
     DrawLine,
     DrawPolyline,
     Flowchart(CanvasFlowchartPreset),
@@ -137,10 +140,11 @@ fn refresh_geometry(
             Or<(Changed<CanvasGeometry>, Changed<Transform>)>,
         ),
     >,
+    texts: Query<(), Changed<CanvasText>>,
     demos: Query<(), With<Demo>>,
     mut commands: Commands,
 ) {
-    if !demos.is_empty() && !shapes.is_empty() {
+    if !demos.is_empty() && (!shapes.is_empty() || !texts.is_empty()) {
         commands.queue(refresh);
     }
 }
@@ -318,7 +322,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     let path = directory.display().to_string();
     let controls: Vec<_> = [
         (CanvasKey::Select, Action::Select), (CanvasKey::Rectangle, Action::Rectangle),
-        (CanvasKey::Ellipse, Action::Ellipse),
+        (CanvasKey::Ellipse, Action::Ellipse), (CanvasKey::PlaceText,Action::PlaceText),
         (CanvasKey::DrawLine, Action::DrawLine),
         (CanvasKey::DrawPolyline, Action::DrawPolyline),
         (CanvasKey::DrawPolygon, Action::DrawPolygon),
@@ -350,7 +354,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     }).collect();
     bsn! {
         Name("CanvasDemo")
-        Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers,
+        Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers, editor:#Editor,
             directory:directory, region:None, scale:1.0, segment:0 }
         Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(SECTION_GAP), flex_shrink:0.0 }
         Children [
@@ -358,6 +362,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
             Node {column_gap:px(CONTROL_GAP),row_gap:px(GROUP_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
             #Readout Name("CanvasReadout") Text("") WidgetryText Node {max_width:percent(100)}--
             #Layers @layers::panel()--
+            #Editor @text::panel()--
             @localized(TextKey::Canvas(CanvasKey::Editing)) WidgetryText Node {max_width:percent(100)}--
             Node {width:percent(100),column_gap:px(CONTENT_GAP)}
             Children [
@@ -532,6 +537,7 @@ fn edit_path(world: &mut World, root: Entity, demo: &Demo, action: Action) -> Re
 fn refresh(world: &mut World) -> Result {
     let demos: Vec<_> = world.query::<&Demo>().iter(world).cloned().collect();
     for demo in demos {
+        text::refresh(world, &demo)?;
         let a = CanvasView::center(world, demo.main).map_err(|error| error.into_bevy_error())?;
         let b =
             CanvasView::center(world, demo.auxiliary).map_err(|error| error.into_bevy_error())?;
@@ -562,6 +568,7 @@ fn refresh(world: &mut World) -> Result {
         let current_mode =
             CanvasView::mode(world, demo.main).map_err(|error| error.into_bevy_error())?;
         let mode = match current_mode {
+            CanvasMode::Text => CanvasKey::PlaceText,
             CanvasMode::Select => CanvasKey::Select,
             CanvasMode::PathNodeEdit => CanvasKey::Nodes,
             CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
@@ -688,6 +695,10 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             .map(|(root, demo)| (root, demo.clone()))
             .map_err(|_| invalid("expected one Canvas demo"))?;
         match action {
+            Action::PlaceText => {
+                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Text)
+                    .map_err(|e| e.into_bevy_error())?;
+            }
             Action::Select => {
                 CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Select)
                     .map_err(|error| error.into_bevy_error())?;
@@ -1114,6 +1125,7 @@ mod tests {
                 readout: result,
                 result,
                 layers: result,
+                editor: result,
                 directory,
                 region: None,
                 scale: 2.0,

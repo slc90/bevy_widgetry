@@ -9,6 +9,7 @@ pub(crate) fn belongs_to(world: &World, document: Option<Entity>, shape: Entity)
         world.get::<CanvasDocument>(document).is_some()
             && world.get_entity(shape).as_ref().is_ok_and(|item| {
                 crate::model::has_shape_components(item)
+                    || item.contains::<crate::CanvasText>()
                     || crate::groups::has_group_components(item)
             })
             && crate::order::item_placement(world, document, shape)
@@ -84,13 +85,36 @@ fn hit_shapes(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Ent
             .and_then(|state| crate::view::edited_group(world, state))
             .unwrap_or(document);
         let screen = hit::ScreenSpace::new(world, view, CanvasView::_zoom(world, view)?)?;
-        for shape in CanvasDocument::shape_order_in(world, document, crate::CanvasLayer::editable)?
-            .into_iter()
-            .rev()
-        {
+        let mut items = Vec::new();
+        crate::order::visit_valid_order(
+            world,
+            document,
+            crate::CanvasLayer::editable,
+            |entry, _, group| {
+                if !group {
+                    items.push(entry.id());
+                }
+                Ok(())
+            },
+        )?;
+        for shape in items.into_iter().rev() {
             let Some(target) = target_in_scope(world, document, scope, shape) else {
                 continue;
             };
+            if let Some(text) = world.get::<crate::CanvasText>(shape) {
+                let local = crate::scale::local_point(
+                    crate::groups::document_transform(world, shape)?,
+                    point,
+                );
+                let bounds = text.local_bounds();
+                if bounds.size().min_element() > 0.0
+                    && local.cmpge(bounds.min.as_dvec2()).all()
+                    && local.cmple(bounds.max.as_dvec2()).all()
+                {
+                    return Ok(Some(target));
+                }
+                continue;
+            }
             let geometry = world
                 .get::<CanvasGeometry>(shape)
                 .ok_or_else(|| crate::error::missing(crate::CanvasPart::Geometry))?
@@ -153,6 +177,9 @@ fn target_in_scope(
 }
 
 pub(crate) fn local_bounds(world: &mut World, shape: Entity) -> Result<Rect> {
+    if let Some(text) = world.get::<crate::CanvasText>(shape) {
+        return Ok(text.local_bounds());
+    }
     if world.get::<CanvasGroup>(shape).is_some() {
         return crate::groups::local_bounds(world, shape);
     }

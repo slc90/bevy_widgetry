@@ -134,6 +134,11 @@ pub(crate) fn update_item_transform(
     item: Entity,
     transform: Transform,
 ) -> Result {
+    if world.get::<crate::CanvasText>(item).is_some() {
+        item_parent(world, document, item)?;
+        validate_item_transform(world, item, transform)?;
+        return crate::history::set_transform(world, document, item, transform);
+    }
     if world.get::<CanvasGroup>(item).is_none() {
         return CanvasDocument::_update_transform(world, document, item, transform);
     }
@@ -351,6 +356,23 @@ fn subtree_bounds(
             }
             continue;
         }
+        if let Some(text) = world.get::<crate::CanvasText>(item) {
+            let rect = text.bounds(&local, &transform)?;
+            if let Some(previous) = previous
+                && !preserves_geometry(
+                    &text.enclosing_geometry(),
+                    &CanvasPaint::default(),
+                    previous,
+                    transform,
+                )?
+            {
+                return Err(invalid(CanvasIssue::GroupTransform).at("text", item));
+            }
+            if measure {
+                bounds = Some(bounds.map_or(rect, |current| current.union(rect)));
+            }
+            continue;
+        }
         let geometry = world
             .get::<CanvasGeometry>(item)
             .ok_or_else(|| missing(CanvasPart::Geometry).at("item", item))?;
@@ -395,6 +417,13 @@ pub(crate) fn local_bounds(world: &World, group: Entity) -> Result<Rect> {
 }
 
 pub(crate) fn validate_item_transform(world: &World, item: Entity, transform: Transform) -> Result {
+    if let Some(text) = world.get::<crate::CanvasText>(item) {
+        text.bounds(
+            &transform,
+            &(parent_transform(world, item)? * transform.compute_affine()),
+        )?;
+        return Ok(());
+    }
     if world.get::<CanvasGroup>(item).is_some() {
         validate_group_transform(transform)?;
         let projected = parent_transform(world, item)? * transform.compute_affine();

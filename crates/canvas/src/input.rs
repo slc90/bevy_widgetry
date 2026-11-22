@@ -430,6 +430,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     | crate::CanvasMode::PathNodeEdit
                     | crate::CanvasMode::Pen(_)
                     | crate::CanvasMode::Polyline(_)
+                    | crate::CanvasMode::Text
                     | crate::CanvasMode::Polygon(_) => None,
                     crate::CanvasMode::Rectangle(paint) => Some((DrawingKind::Rectangle, paint)),
                     crate::CanvasMode::Ellipse(paint) => Some((DrawingKind::Ellipse, paint)),
@@ -443,7 +444,9 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 };
                 if matches!(
                     CanvasView::_mode(world, press.entity)?,
-                    crate::CanvasMode::Polyline(_) | crate::CanvasMode::Polygon(_)
+                    crate::CanvasMode::Text
+                        | crate::CanvasMode::Polyline(_)
+                        | crate::CanvasMode::Polygon(_)
                 ) {
                     DragAction::Contour
                 } else if let crate::CanvasMode::Pen(paint) =
@@ -1755,6 +1758,7 @@ fn apply_escape(world: &mut World, view: Entity, window: Entity) -> bevy::prelud
             | crate::CanvasMode::Parametric(_, _)
             | crate::CanvasMode::Line(_)
             | crate::CanvasMode::Polyline(_)
+            | crate::CanvasMode::Text
             | crate::CanvasMode::Polygon(_) => {
                 CanvasView::_set_mode_in_world(world, view, crate::CanvasMode::Select)?;
             }

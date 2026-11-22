@@ -345,7 +345,7 @@ fn delete_requires_exact_canvas_focus_and_an_available_window_and_view() {
 }
 
 #[test]
-fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape() {
+fn focused_text_field_owns_delete_and_undo_while_canvas_text_is_selected() {
     use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
     let mut app = bevy_widgetry_test_utils::text_edit_app();
     app.add_plugins((TransformPlugin, CanvasPlugin, WidgetryTextFieldPlugin));
@@ -388,6 +388,13 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
         CanvasPaint::default(),
     )
     .unwrap();
+    let text = CanvasDocument::create_text(
+        app.world_mut(),
+        document,
+        CanvasTextStyle::default(),
+        Transform::IDENTITY,
+    )
+    .unwrap();
     let view = app
         .world_mut()
         .spawn_scene(bsn! {
@@ -404,7 +411,7 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
         })
         .unwrap()
         .id();
-    CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape)).unwrap();
+    CanvasView::set_selection_in_world(app.world_mut(), view, Some(text)).unwrap();
     update(&mut app);
     app.world_mut()
         .resource_mut::<InputFocus>()
@@ -434,7 +441,38 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
     );
     assert_eq!(
         CanvasView::single_selection(app.world(), view).unwrap(),
-        Some(shape)
+        Some(text)
+    );
+    for (key_code, logical_key, state) in [
+        (KeyCode::ControlLeft, Key::Control, ButtonState::Pressed),
+        (
+            KeyCode::KeyZ,
+            Key::Character("z".into()),
+            ButtonState::Pressed,
+        ),
+        (
+            KeyCode::KeyZ,
+            Key::Character("z".into()),
+            ButtonState::Released,
+        ),
+        (KeyCode::ControlLeft, Key::Control, ButtonState::Released),
+    ] {
+        queue_key(
+            &mut app,
+            KeyboardInput {
+                key_code,
+                logical_key,
+                state,
+                text: None,
+                repeat: false,
+                window,
+            },
+        );
+        update(&mut app);
+    }
+    assert_eq!(
+        CanvasDocument::draw_order(app.world(), document).unwrap(),
+        [shape, text]
     );
 }
 

@@ -106,6 +106,7 @@ fn forget_tombstone(mut world: DeferredWorld, context: HookContext) {
 #[derive(Default)]
 struct Edit {
     transforms: EntityHashMap<Transform>,
+    text: EntityHashMap<crate::CanvasText>,
     geometry: EntityHashMap<CanvasGeometry>,
     paint: EntityHashMap<CanvasPaint>,
     parents: EntityHashMap<Option<Entity>>,
@@ -118,6 +119,7 @@ struct Edit {
 #[derive(Default)]
 struct Entry {
     transforms: Vec<Change<Transform>>,
+    text: Vec<Change<crate::CanvasText>>,
     geometry: Vec<Change<CanvasGeometry>>,
     paint: Vec<Change<CanvasPaint>>,
     parents: Vec<Change<Option<Entity>>>,
@@ -439,6 +441,25 @@ fn record_transform(
         |edit| &mut edit.transforms,
         |edit| &edit.transforms,
     )
+}
+
+pub(crate) fn set_text(
+    world: &mut World,
+    document: Entity,
+    item: Entity,
+    text: crate::CanvasText,
+) -> Result {
+    if record_component(
+        world,
+        document,
+        item,
+        &text,
+        |edit| &mut edit.text,
+        |edit| &edit.text,
+    )? {
+        world.insert_batch([(item, text)]);
+    }
+    Ok(())
 }
 
 pub(crate) fn set_geometry(
@@ -824,6 +845,11 @@ impl Edit {
                     .then(|| world.get::<Transform>(entity).copied())
                     .flatten()
             }),
+            text: changes(self.text, |entity| {
+                (!transient.contains(&entity))
+                    .then(|| world.get::<crate::CanvasText>(entity).cloned())
+                    .flatten()
+            }),
             geometry: changes(self.geometry, |entity| {
                 (!transient.contains(&entity))
                     .then(|| world.get::<CanvasGeometry>(entity).cloned())
@@ -856,6 +882,8 @@ impl Entry {
         self.references
             .extend(self.transforms.iter().map(|change| change.entity));
         self.references
+            .extend(self.text.iter().map(|change| change.entity));
+        self.references
             .extend(self.geometry.iter().map(|change| change.entity));
         self.references
             .extend(self.paint.iter().map(|change| change.entity));
@@ -871,6 +899,7 @@ impl Entry {
 
     fn is_empty(&self) -> bool {
         self.transforms.is_empty()
+            && self.text.is_empty()
             && self.geometry.is_empty()
             && self.paint.is_empty()
             && self.parents.is_empty()
@@ -1099,6 +1128,7 @@ fn restore(
         .transforms
         .iter()
         .map(|change| change.entity)
+        .chain(entry.text.iter().map(|change| change.entity))
         .chain(entry.geometry.iter().map(|change| change.entity))
         .chain(entry.paint.iter().map(|change| change.entity))
         .chain(entry.parents.iter().map(|change| change.entity))
@@ -1159,6 +1189,12 @@ fn restore(
             world.insert_batch([(item, parent)]);
         }
     }
+    world.insert_batch(entry.text.iter().map(|change| {
+        (
+            change.entity,
+            direction.value(&change.before, &change.after).clone(),
+        )
+    }));
     world.insert_batch(shapes);
     world.insert_batch(transforms);
     world.insert_batch(group_transforms);

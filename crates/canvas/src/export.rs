@@ -148,73 +148,54 @@ impl CanvasDocument {
         let result = (|| {
             let snapshot = snapshot(world, document, region)?;
             actual_region = Some(snapshot.region);
-            for shape in &snapshot.shapes {
-                for color in shape
-                    .paint
-                    .fill
-                    .into_iter()
-                    .chain(shape.paint.stroke.map(|stroke| stroke.color))
-                {
-                    let c = color.to_srgba();
-                    if [c.red, c.green, c.blue, c.alpha]
-                        .into_iter()
-                        .any(|channel| !(0.0..=1.0).contains(&channel))
-                    {
-                        return Err(CanvasExportError::UnsupportedColor {
-                            shape: shape.entity,
-                            color,
-                        });
-                    }
-                }
-            }
             let region = snapshot.region;
             let [left, top] = region.min.as_dvec2().to_array();
             let [width, height] = region.size().as_dvec2().to_array();
             let mut svg = format!(
                 "<svg xmlns=\"http://www.w3.org/2000/svg\" color-interpolation=\"linearRGB\" width=\"{width}\" height=\"{height}\" viewBox=\"{left} {top} {width} {height}\"><defs><clipPath id=\"canvas-region\"><rect x=\"{left}\" y=\"{top}\" width=\"{width}\" height=\"{height}\"/></clipPath></defs><g clip-path=\"url(#canvas-region)\">",
             );
-            let mut paints = Vec::new();
-            for shape in &snapshot.shapes {
-                if let Some(fill) = shape.paint.fill {
-                    let rule = match shape.paint.fill_rule {
-                        crate::CanvasFillRule::NonZero => "nonzero",
-                        crate::CanvasFillRule::EvenOdd => "evenodd",
-                    };
-                    paints.push((
-                        shape,
-                        format!(
-                            "{} fill-rule=\"{rule}\" stroke=\"none\"",
-                            color("fill", fill)
-                        ),
-                    ));
-                }
-                if let Some(stroke) = shape.paint.stroke {
-                    paints.push((
-                        shape,
-                        format!(
-                            "fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"{}\" stroke-miterlimit=\"4\"",
-                            color("stroke", stroke.color),
-                            f64::from(stroke.width),
-                            match stroke.cap {
-                                crate::CanvasLineCap::Butt => "butt",
-                                crate::CanvasLineCap::Round => "round",
-                                crate::CanvasLineCap::Square => "square",
-                            },
-                            match stroke.join {
-                                crate::CanvasLineJoin::Miter => "miter",
-                                crate::CanvasLineJoin::Round => "round",
-                                crate::CanvasLineJoin::Bevel => "bevel",
-                            }
-                        ),
-                    ));
-                }
+            if snapshot
+                .shapes
+                .iter()
+                .any(|shape| matches!(shape.artwork, Artwork::Text(_)))
+            {
+                use base64::{Engine, engine::general_purpose::STANDARD};
+                svg.push_str(
+                    "<style>@font-face{font-family:CanvasDefault;src:url(data:font/ttf;base64,",
+                );
+                STANDARD.encode_string(bevy_widgetry_asset::BuiltinFont::Default.bytes(), &mut svg);
+                svg.push_str(") format('truetype')}</style>");
             }
-            for (shape, style) in paints {
-                let transform = &shape.projection;
-                // SVG consumers read these coordinates at double precision.
-                let [x, y] = crate::groups::planar_axes(transform);
-                let center = transform.translation.truncate().as_dvec2();
-                let geometry = match &shape.geometry {
+            for shape in &snapshot.shapes {
+                let [x, y] = crate::groups::planar_axes(&shape.projection);
+                let center = shape.projection.translation.truncate().as_dvec2();
+                let matrix = format!(
+                    "matrix({} {} {} {} {} {})",
+                    x.x, x.y, y.x, y.y, center.x, center.y
+                );
+                let validate_color = |c: Color| {
+                    let value = c.to_srgba();
+                    if [value.red, value.green, value.blue, value.alpha]
+                        .into_iter()
+                        .all(|c| (0.0..=1.0).contains(&c))
+                    {
+                        Ok(())
+                    } else {
+                        Err(CanvasExportError::UnsupportedColor {
+                            shape: shape.entity,
+                            color: c,
+                        })
+                    }
+                };
+                let (geometry, paint) = match &shape.artwork {
+                    Artwork::Geometry(geometry, paint) => (geometry, paint),
+                    Artwork::Text(text) => {
+                        validate_color(text.style().color)?;
+                        svg.push_str(&text.svg(&matrix));
+                        continue;
+                    }
+                };
+                let geometry = match geometry {
                     CanvasGeometry::Rectangle(rectangle) => {
                         let size = rectangle.size.as_dvec2();
                         let radius = f64::from(rectangle.corner_radius);
@@ -232,10 +213,28 @@ impl CanvasDocument {
                     }
                     CanvasGeometry::Path(path) => format!("path d=\"{}\"", path_data(path)),
                 };
-                svg.push_str(&format!(
-                    "<{geometry} transform=\"matrix({} {} {} {} {} {})\" {style} />",
-                    x.x, x.y, y.x, y.y, center.x, center.y
-                ));
+                if let Some(fill) = paint.fill {
+                    validate_color(fill)?;
+                    let rule = match paint.fill_rule {
+                        crate::CanvasFillRule::NonZero => "nonzero",
+                        crate::CanvasFillRule::EvenOdd => "evenodd",
+                    };
+                    svg.push_str(&format!("<{geometry} transform=\"{matrix}\" {} fill-rule=\"{rule}\" stroke=\"none\" />",color("fill",fill)));
+                }
+                if let Some(stroke) = paint.stroke {
+                    validate_color(stroke.color)?;
+                    let cap = match stroke.cap {
+                        crate::CanvasLineCap::Butt => "butt",
+                        crate::CanvasLineCap::Round => "round",
+                        crate::CanvasLineCap::Square => "square",
+                    };
+                    let join = match stroke.join {
+                        crate::CanvasLineJoin::Miter => "miter",
+                        crate::CanvasLineJoin::Round => "round",
+                        crate::CanvasLineJoin::Bevel => "bevel",
+                    };
+                    svg.push_str(&format!("<{geometry} transform=\"{matrix}\" fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{cap}\" stroke-linejoin=\"{join}\" stroke-miterlimit=\"4\" />",color("stroke",stroke.color),f64::from(stroke.width)));
+                }
             }
             svg.push_str("</g></svg>\n");
             std::fs::write(path, svg).map_err(CanvasExportError::Io)
@@ -313,11 +312,43 @@ fn color(attribute: &str, value: Color) -> String {
     )
 }
 
+enum Artwork {
+    Geometry(CanvasGeometry, CanvasPaint),
+    Text(crate::CanvasText),
+}
+
+impl crate::CanvasText {
+    fn svg(&self, matrix: &str) -> String {
+        let size = self.size();
+        let style = self.style();
+        let (x, anchor) = match style.align {
+            crate::CanvasTextAlign::Start => (-size.x * 0.5, "start"),
+            crate::CanvasTextAlign::Center => (0.0, "middle"),
+            crate::CanvasTextAlign::End => (size.x * 0.5, "end"),
+        };
+        let mut svg = format!(
+            "<text transform=\"{matrix}\" xml:space=\"preserve\" font-family=\"CanvasDefault, Smiley Sans Oblique, sans-serif\" font-size=\"{}\" text-anchor=\"{anchor}\" {}>",
+            style.font_size,
+            color("fill", style.color)
+        );
+        for (line, baseline) in self.lines() {
+            let line = line
+                .trim_end_matches(['\n', '\r', '\u{85}', '\u{2028}', '\u{2029}'])
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;");
+            let y = baseline - size.y * 0.5;
+            svg.push_str(&format!("<tspan x=\"{x}\" y=\"{y}\">{line}</tspan>"));
+        }
+        svg.push_str("</text>");
+        svg
+    }
+}
+
 struct Shape {
     entity: Entity,
-    geometry: CanvasGeometry,
+    artwork: Artwork,
     projection: Affine3A,
-    paint: CanvasPaint,
     #[cfg(feature = "png_export")]
     container: crate::CanvasContainer,
     #[cfg(feature = "png_export")]
@@ -358,7 +389,9 @@ fn snapshot(
         let group = entry.is_some_and(crate::groups::has_group_components);
         if !entry.is_some_and(|entry| {
             crate::order::is_item_child(entry, container.parent(document))
-                && (group || crate::model::has_shape_components(entry))
+                && (group
+                    || crate::model::has_shape_components(entry)
+                    || entry.contains::<crate::CanvasText>())
         }) {
             return Err(CanvasExportError::Model(
                 crate::model::invalid_ownership(world, entity)
@@ -394,16 +427,6 @@ fn snapshot(
             });
             return Ok(true);
         }
-        let geometry = world.get::<CanvasGeometry>(entity);
-        let paint = world.get::<CanvasPaint>(entity);
-        let (Some(geometry), Some(paint)) = (geometry, paint) else {
-            return Err(CanvasExportError::Model(
-                crate::error::missing(crate::CanvasPart::Geometry)
-                    .at("document", document)
-                    .at("shape", entity)
-                    .into_failure(ErrorFrame::new("canvas.export.snapshot")),
-            ));
-        };
         let projection = crate::groups::document_transform(world, entity).map_err(|error| {
             CanvasExportError::Model(
                 error
@@ -412,27 +435,47 @@ fn snapshot(
                     .into_failure(ErrorFrame::new("canvas.export.snapshot")),
             )
         })?;
-        let b = geometry
-            .bounds_in_projection(&local_transform, &projection, paint)
-            .map_err(|error| {
+        let (artwork, b) = if let Some(text) = world.get::<crate::CanvasText>(entity) {
+            let b = text.bounds(&local_transform, &projection).map_err(|e| {
                 CanvasExportError::Model(
-                    error
-                        .at("document", document)
-                        .at("shape", entity)
-                        .into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
-                            "canvas.export.bounds",
-                        )),
+                    e.at("text", entity)
+                        .into_failure(ErrorFrame::new("canvas.export.bounds")),
                 )
             })?;
+            (Artwork::Text(text.clone()), b)
+        } else {
+            let geometry = world.get::<CanvasGeometry>(entity);
+            let paint = world.get::<CanvasPaint>(entity);
+            let (Some(geometry), Some(paint)) = (geometry, paint) else {
+                return Err(CanvasExportError::Model(
+                    crate::error::missing(crate::CanvasPart::Geometry)
+                        .at("document", document)
+                        .at("shape", entity)
+                        .into_failure(ErrorFrame::new("canvas.export.snapshot")),
+                ));
+            };
+            let b = geometry
+                .bounds_in_projection(&local_transform, &projection, paint)
+                .map_err(|error| {
+                    CanvasExportError::Model(
+                        error
+                            .at("document", document)
+                            .at("shape", entity)
+                            .into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                                "canvas.export.bounds",
+                            )),
+                    )
+                })?;
+            (Artwork::Geometry(geometry.clone(), *paint), b)
+        };
         bounds = Some(bounds.map_or(b, |old| Rect {
             min: old.min.min(b.min),
             max: old.max.max(b.max),
         }));
         shapes.push(Shape {
             entity,
-            geometry: geometry.clone(),
+            artwork,
             projection,
-            paint: *paint,
             #[cfg(feature = "png_export")]
             container,
             #[cfg(feature = "png_export")]

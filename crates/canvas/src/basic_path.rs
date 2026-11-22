@@ -73,7 +73,7 @@ pub(crate) fn install(app: &mut App) {
 pub(crate) fn begin_click(world: &mut World, press: &PointerPress, local: Vec2) -> Result<bool> {
     let view = press.entity;
     let mode = CanvasView::_mode(world, view)?;
-    if contour(mode).is_none() {
+    if mode != CanvasMode::Text && contour(mode).is_none() {
         return Ok(false);
     }
     let (Some(document), Some(container)) = (
@@ -167,6 +167,18 @@ pub(crate) fn add_vertex(world: &mut World, view: Entity, screen: Vec2) -> Resul
     if !point.is_finite() {
         return Ok(());
     }
+    if press.context.mode == CanvasMode::Text {
+        if !crate::history::is_busy(world, press.context.document) {
+            let item = CanvasDocument::place_text(
+                world,
+                press.context.document,
+                press.context.container,
+                point,
+            )?;
+            select_created(world, view, &press.context, item)?;
+        }
+        return Ok(());
+    }
     let now = world.resource::<Time<Real>>().elapsed();
     let interval = world.resource::<PickingSettings>().multi_click_interval;
     let Some(mut state) = world.get_mut::<State>(view) else {
@@ -244,6 +256,10 @@ fn finish(world: &mut World, view: Entity) -> Result {
         Transform::default(),
         paint,
     )?;
+    select_created(world, view, &context, shape)
+}
+
+fn select_created(world: &mut World, view: Entity, context: &Context, shape: Entity) -> Result {
     if world
         .get::<crate::view::ViewState>(view)
         .is_some_and(|state| state.document == Some(context.document) && state.mode == context.mode)

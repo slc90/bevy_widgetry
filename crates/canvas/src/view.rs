@@ -46,6 +46,7 @@ pub enum CanvasMode {
     #[default]
     Select,
     PathNodeEdit,
+    Text,
     Rectangle(crate::CanvasPaint),
     Ellipse(crate::CanvasPaint),
     Pen(crate::CanvasPaint),
@@ -907,7 +908,7 @@ impl CanvasView {
                     return Err(crate::error::missing(crate::CanvasPart::View));
                 }
                 match mode {
-                    CanvasMode::Select | CanvasMode::PathNodeEdit => {}
+                    CanvasMode::Select | CanvasMode::Text | CanvasMode::PathNodeEdit => {}
                     CanvasMode::Rectangle(paint) => crate::CanvasRectangle {
                         corner_radius: 0.0,
                         size: Vec2::ONE,

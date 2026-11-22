@@ -448,6 +448,7 @@ struct Probe {
     meshes: Vec<AssetId<Mesh>>,
     materials: Vec<AssetId<ColorMaterial>>,
     image: AssetId<Image>,
+    atlases: Option<Vec<AssetId<Image>>>,
     ready: Arc<AtomicBool>,
 }
 
@@ -464,7 +465,7 @@ pub(super) fn install(app: &mut App) {
         .add_plugins(ExtractComponentPlugin::<Probe>::default())
         .add_observer(release)
         .add_systems(Update, poll_jobs)
-        .add_systems(Last, redraw_exports);
+        .add_systems(Last, (text_ready, redraw_exports));
     if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
         render_app.add_systems(
             Render,
@@ -492,6 +493,10 @@ fn mark_ready(
     for (probe, pipeline, _) in &probes {
         if pipelines.get_render_pipeline(pipeline.0).is_some()
             && images.get(probe.image).is_some()
+            && probe
+                .atlases
+                .as_ref()
+                .is_some_and(|ids| ids.iter().all(|id| images.get(*id).is_some()))
             && probe.meshes.iter().all(|id| meshes.get(*id).is_some())
             && probe
                 .materials
@@ -876,7 +881,7 @@ fn prepare(
         started: Instant::now(),
         capture: None,
     });
-    geometry(world, entity, content, layer, &snapshot)?;
+    let texts = geometry(world, entity, content, layer, &snapshot)?;
     let job = world
         .get::<CanvasPngExport>(entity)
         .and_then(|job| job.resources.as_ref())
@@ -885,10 +890,49 @@ fn prepare(
         meshes: job.meshes.iter().map(Handle::id).collect(),
         materials: job.materials.iter().map(Handle::id).collect(),
         image: job.target.image().id(),
+        atlases: texts.is_empty().then(Vec::new),
         ready,
     };
     world.entity_mut(camera).insert(probe);
+    if !texts.is_empty() {
+        world.entity_mut(camera).insert(PendingText(texts));
+    }
     Ok(())
+}
+
+#[derive(Component)]
+struct PendingText(Vec<Entity>);
+
+fn text_ready(
+    mut commands: Commands,
+    mut probes: Query<(Entity, &PendingText, &mut Probe)>,
+    layouts: Query<(&bevy::text::TextLayoutInfo, &TextFont, &Text2d)>,
+    fonts: Option<Res<Assets<Font>>>,
+) {
+    let Some(fonts) = fonts else { return };
+    for (camera, pending, mut probe) in &mut probes {
+        let mut atlases = Vec::new();
+        if pending.0.iter().all(|id| {
+            let Ok((layout, font, text)) = layouts.get(*id) else {
+                return false;
+            };
+            let bevy::text::FontSource::Handle(handle) = &font.font else {
+                return false;
+            };
+            if !fonts.contains(handle.id()) || (!text.0.is_empty() && layout.size.y <= 0.0) {
+                return false;
+            }
+            for glyph in &layout.glyphs {
+                if !atlases.contains(&glyph.atlas_info.texture) {
+                    atlases.push(glyph.atlas_info.texture);
+                }
+            }
+            true
+        }) {
+            probe.atlases = Some(atlases);
+            commands.entity(camera).remove::<PendingText>();
+        }
+    }
 }
 
 fn geometry(
@@ -897,7 +941,8 @@ fn geometry(
     content: Entity,
     layer: usize,
     snapshot: &super::Snapshot,
-) -> std::result::Result<(), CanvasExportError> {
+) -> std::result::Result<Vec<Entity>, CanvasExportError> {
+    let mut texts = Vec::new();
     let mut proxies = EntityHashMap::default();
     for group in &snapshot.groups {
         let parent = export_parent(content, &proxies, group.container)?;
@@ -913,59 +958,67 @@ fn geometry(
             .id();
         proxies.insert(group.entity, proxy);
     }
-    let mut paints = Vec::new();
-    for shape in &snapshot.shapes {
-        let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&shape.geometry, shape.paint)
-            .map_err(|error| {
+    let count = snapshot.shapes.len().max(1) as f32;
+    for (index, shape) in snapshot.shapes.iter().enumerate() {
+        let depth = index as f32 / count * EXPORT_PAINT_DEPTH_RANGE;
+        let parent = export_parent(content, &proxies, shape.container)?;
+        let (geometry, paint) = match &shape.artwork {
+            super::Artwork::Geometry(geometry, paint) => (geometry, paint),
+            super::Artwork::Text(text) => {
+                texts.push(text.proxy(
+                    world,
+                    parent,
+                    layer,
+                    crate::CanvasText::projected_transform(shape.local_transform, depth),
+                ));
+                continue;
+            }
+        };
+        let (fill_mesh, stroke_mesh) =
+            crate::geometry::meshes(geometry, *paint).map_err(|error| {
                 CanvasExportError::Model(error.at("shape", shape.entity).into_failure(
                     bevy_widgetry_diagnostics::ErrorFrame::new("canvas.png.geometry"),
                 ))
             })?;
-        if let Some(color) = shape.paint.fill
-            && fill_mesh.count_vertices() > 0
-        {
-            paints.push((shape, color, fill_mesh));
-        }
-        if let Some(stroke) = shape.paint.stroke
-            && stroke_mesh.count_vertices() > 0
-        {
-            paints.push((shape, stroke.color, stroke_mesh));
+        for (color, mesh, offset) in [
+            (paint.fill, fill_mesh, 0.0),
+            (paint.stroke.map(|s| s.color), stroke_mesh, 0.5),
+        ] {
+            let Some(color) = color.filter(|_| mesh.count_vertices() > 0) else {
+                continue;
+            };
+            let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
+            let material = world
+                .resource_mut::<Assets<ColorMaterial>>()
+                .add(ColorMaterial { color, ..default() });
+            let mut export = world
+                .get_mut::<CanvasPngExport>(job)
+                .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingOperation))?;
+            let owner = export
+                .resources
+                .as_mut()
+                .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingResources))?;
+            owner.meshes.push(mesh.clone());
+            owner.materials.push(material.clone());
+            let mut transform = shape.local_transform;
+            transform.scale.z = 1.0;
+            // Map document paint order to bounded export depth independently of model Z.
+            transform.translation.z = depth + offset / count * EXPORT_PAINT_DEPTH_RANGE;
+            spawn_scene(
+                world,
+                bsn! {
+                    Name("CanvasPngPaint") template(move |_|Ok(ChildOf(parent)))
+                    template(move |_|Ok(Mesh2d(mesh.clone())))
+                    template(move |_|Ok(MeshMaterial2d(material.clone())))
+                    template(move |_|Ok(RenderLayers::none().with(layer)))
+                    template(move |_|Ok(transform)) Visibility::default() Pickable::IGNORE
+                    bevy::camera::visibility::NoFrustumCulling
+                },
+            )
+            .map_err(CanvasExportError::Scene)?;
         }
     }
-    let count = paints.len().max(1) as f32;
-    for (index, (shape, color, mesh)) in paints.into_iter().enumerate() {
-        let parent = export_parent(content, &proxies, shape.container)?;
-        let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material = world
-            .resource_mut::<Assets<ColorMaterial>>()
-            .add(ColorMaterial { color, ..default() });
-        let mut export = world
-            .get_mut::<CanvasPngExport>(job)
-            .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingOperation))?;
-        let owner = export
-            .resources
-            .as_mut()
-            .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingResources))?;
-        owner.meshes.push(mesh.clone());
-        owner.materials.push(material.clone());
-        let mut transform = shape.local_transform;
-        transform.scale.z = 1.0;
-        // Map document paint order to bounded export depth independently of model Z.
-        transform.translation.z = index as f32 / count * EXPORT_PAINT_DEPTH_RANGE;
-        spawn_scene(
-            world,
-            bsn! {
-                Name("CanvasPngPaint") template(move |_|Ok(ChildOf(parent)))
-                template(move |_|Ok(Mesh2d(mesh.clone())))
-                template(move |_|Ok(MeshMaterial2d(material.clone())))
-                template(move |_|Ok(RenderLayers::none().with(layer)))
-                template(move |_|Ok(transform)) Visibility::default() Pickable::IGNORE
-                bevy::camera::visibility::NoFrustumCulling
-            },
-        )
-        .map_err(CanvasExportError::Scene)?;
-    }
-    Ok(())
+    Ok(texts)
 }
 
 fn export_parent(

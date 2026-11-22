@@ -11,6 +11,8 @@ flowchart LR
     Document["CanvasDocument"] --> Stack["CanvasLayerStack"]
     Stack --> Layer["Layer 1 的绘图项顺序"]
     Layer --> Group["CanvasGroup / CanvasItemOrder"]
+    Layer --> Text["CanvasItem / CanvasText Entity"]
+    Group --> Text
     Layer --> Shape["CanvasItem / CanvasShape Entity"]
     Group --> Shape
     Shape --> Geometry["参数几何 / 原始命令"]
@@ -114,3 +116,7 @@ flowchart LR
 PNG 将 GPU 渲染与后台编码连接为同一次导出：逐块读回、受背压约束地编码，不把整幅巨大 RGBA 长期放进内存。完成通知以实际任务终态为准，不以“请求已分配”或“某块已渲染”冒充文件完成。
 
 正式模型、View 会话和导出快照因此各自具有明确生命期。它们共享几何解释，但不会互相夺取状态权威。
+
+## 文字项的排版和投影
+
+`CanvasText` 保存单样式文本、排版尺寸和各行基线。`create_text` 和 `update_text` 使用内置默认字体与 Bevy TextPipeline 按文档单位排版。命中和选择框使用排版矩形与字形墨迹的并集（局部原点位于排版矩形中心），然后合成组和绘图项变换。每个 View 通过独立的 `Text2d` 代理显示文字，沿绘制顺序与形状交错。宿主保存编辑草稿，属性提交进入文档历史。SVG 使用行基线生成 tspan，并附带字体；PNG 对请求快照创建文字代理，在字形图集就绪后捕获。

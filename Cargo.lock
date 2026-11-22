@@ -1907,6 +1907,7 @@ dependencies = [
 name = "bevy_widgetry_canvas"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bevy",
  "bevy_widgetry_asset",
  "bevy_widgetry_core",
@@ -1918,8 +1919,11 @@ dependencies = [
  "event-listener",
  "image",
  "lyon",
+ "parley",
  "png",
  "resvg",
+ "serde_json",
+ "skrifa",
  "tempfile",
 ]
 

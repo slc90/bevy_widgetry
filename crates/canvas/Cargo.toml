@@ -11,6 +11,9 @@ png_export = ["dep:image", "dep:png", "dep:event-listener"]
 [dependencies]
 bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 lyon.workspace = true
+base64.workspace = true
+parley.workspace = true
+skrifa.workspace = true
 bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_asset = { path = "../asset" }
@@ -21,6 +24,7 @@ png = { workspace = true, optional = true }
 event-listener = { workspace = true, optional = true }
 
 [dev-dependencies]
+serde_json.workspace = true
 bevy_widgetry_test_utils = { path = "../test_utils" }
 bevy_widgetry_text_field = { path = "../text_field" }
 tempfile.workspace = true

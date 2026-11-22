@@ -2792,3 +2792,123 @@ fn gpu_default_region_resolution_failure_keeps_attempted_dimensions() {
     );
     assert_eq!(counts(&mut app), before);
 }
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_multiline_text_exports_visible_aligned_glyphs_from_the_request_snapshot() {
+    let mut app = gpu_app();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("text.png");
+    let doc = app.world_mut().spawn(CanvasDocument).id();
+    let style = CanvasTextStyle {
+        content: "WWW\nW".into(),
+        align: CanvasTextAlign::End,
+        color: Color::srgb(1., 0., 0.),
+        font_size: 24.,
+    };
+    let text = CanvasDocument::create_text(
+        app.world_mut(),
+        doc,
+        style,
+        Transform::from_xyz(80., 56., 0.),
+    )
+    .unwrap();
+    CanvasDocument::export_png(
+        app.world_mut(),
+        doc,
+        &path,
+        CanvasPngOptions {
+            region: Some(Rect::new(0., 0., 140., 110.)),
+            scale: 1.,
+        },
+    )
+    .unwrap();
+    let measured = app.world().get::<CanvasText>(text).unwrap().size();
+    CanvasDocument::remove_text(app.world_mut(), doc, text).unwrap();
+    let deadline = Instant::now() + GPU_READY_TIMEOUT;
+    loop {
+        frame(&mut app);
+        let layout = app
+            .world_mut()
+            .query_filtered::<&bevy::text::TextLayoutInfo, With<Text2d>>()
+            .iter(app.world())
+            .find(|info| !info.glyphs.is_empty());
+        if let Some(layout) = layout {
+            assert_eq!(layout.size / layout.scale_factor, measured);
+            break;
+        }
+        assert!(Instant::now() < deadline, "text proxy was never laid out");
+    }
+    finish(&mut app, 1);
+    assert_eq!(
+        app.world().resource::<Completed>().0[0].1,
+        Ok(UVec2::new(140, 110))
+    );
+    let image = image::open(path).unwrap().to_rgba8();
+    let xs = |top, bottom| {
+        image
+            .enumerate_pixels()
+            .filter_map(|(x, y, p)| {
+                (y >= top && y < bottom && p[0] > 160 && p[1] < 30 && p[3] > 100).then_some(x)
+            })
+            .collect::<Vec<_>>()
+    };
+    let first = xs(0, 56);
+    let second = xs(56, 110);
+    assert!(first.len() > second.len() * 2 && second.len() > 20);
+    assert!(first.iter().min().unwrap() + 15 < *second.iter().min().unwrap());
+    assert!(
+        first
+            .iter()
+            .max()
+            .unwrap()
+            .abs_diff(*second.iter().max().unwrap())
+            <= 2
+    );
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_text_outside_the_export_region_does_not_block_visible_shapes() {
+    let mut app = gpu_app();
+    let doc = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_rectangle(
+        app.world_mut(),
+        doc,
+        CanvasRectangle {
+            size: Vec2::splat(20.),
+            corner_radius: 0.,
+        },
+        Transform::IDENTITY,
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    CanvasDocument::create_text(
+        app.world_mut(),
+        doc,
+        CanvasTextStyle::default(),
+        Transform::from_xyz(900., 900., 0.),
+    )
+    .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("region.png");
+    CanvasDocument::export_png(
+        app.world_mut(),
+        doc,
+        &path,
+        CanvasPngOptions {
+            region: Some(Rect::new(-16., -16., 16., 16.)),
+            scale: 1.,
+        },
+    )
+    .unwrap();
+    finish(&mut app, 1);
+    assert_eq!(
+        app.world().resource::<Completed>().0[0].1,
+        Ok(UVec2::splat(32))
+    );
+    assert_eq!(
+        image::open(path).unwrap().to_rgba8().get_pixel(16, 16).0,
+        [255; 4]
+    );
+}
