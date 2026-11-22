@@ -6,6 +6,7 @@ mod basic_path;
 mod batch;
 mod error;
 mod export;
+mod flowchart;
 mod geometry;
 mod groups;
 mod history;
@@ -31,6 +32,7 @@ pub use export::CanvasExportError;
 pub use export::{
     CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop, CanvasRenderIssue,
 };
+pub use flowchart::CanvasFlowchartPreset;
 pub use groups::CanvasGroup;
 pub use history::{CanvasEditTarget, CanvasEditToken, CanvasHistory};
 pub use layers::{CanvasLayerRemoval, CanvasLayersChanged};

@@ -52,6 +52,7 @@ pub enum CanvasMode {
     Line(crate::CanvasPaint),
     Polyline(crate::CanvasPaint),
     Polygon(crate::CanvasPaint),
+    Flowchart(crate::CanvasFlowchartPreset, crate::CanvasPaint),
     Parametric(crate::CanvasPathTool, crate::CanvasPaint),
 }
 
@@ -919,7 +920,8 @@ impl CanvasView {
                             crate::CanvasIssue::PathToolParameters,
                         ));
                     }
-                    CanvasMode::Parametric(_, paint)
+                    CanvasMode::Flowchart(_, paint)
+                    | CanvasMode::Parametric(_, paint)
                     | CanvasMode::Pen(paint)
                     | CanvasMode::Line(paint)
                     | CanvasMode::Polyline(paint)

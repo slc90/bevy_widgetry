@@ -71,6 +71,7 @@ pub(crate) enum DrawingKind {
     Ellipse,
     Line,
     Parametric(crate::CanvasPathTool),
+    Flowchart(crate::CanvasFlowchartPreset),
 }
 
 impl DrawingKind {
@@ -83,6 +84,7 @@ impl DrawingKind {
             Self::Ellipse => {
                 crate::CanvasGeometry::Ellipse(crate::CanvasEllipse { radii: size * 0.5 })
             }
+            Self::Flowchart(preset) => preset.outline(size),
             Self::Parametric(tool) => crate::CanvasGeometry::Path(tool.path(size)),
             Self::Line => crate::CanvasGeometry::Path(crate::CanvasPath {
                 commands: vec![
@@ -112,7 +114,7 @@ impl DrawingKind {
                 (start, radius)
             }
             Self::Line | Self::Parametric(_) => (midpoint, delta),
-            Self::Rectangle | Self::Ellipse => (midpoint, delta.abs()),
+            Self::Rectangle | Self::Ellipse | Self::Flowchart(_) => (midpoint, delta.abs()),
         }
     }
 
@@ -120,7 +122,7 @@ impl DrawingKind {
         match self {
             Self::Parametric(tool) => tool.accepts_drag(size),
             Self::Line => size != Vec2::ZERO,
-            Self::Rectangle | Self::Ellipse => size.min_element() >= 1.0,
+            Self::Rectangle | Self::Ellipse | Self::Flowchart(_) => size.min_element() >= 1.0,
         }
     }
 
@@ -128,6 +130,7 @@ impl DrawingKind {
         match self {
             Self::Rectangle => crate::CanvasMode::Rectangle(paint),
             Self::Ellipse => crate::CanvasMode::Ellipse(paint),
+            Self::Flowchart(preset) => crate::CanvasMode::Flowchart(preset, paint),
             Self::Parametric(tool) => crate::CanvasMode::Parametric(tool, paint),
             Self::Line => crate::CanvasMode::Line(paint),
         }
@@ -430,6 +433,9 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     | crate::CanvasMode::Polygon(_) => None,
                     crate::CanvasMode::Rectangle(paint) => Some((DrawingKind::Rectangle, paint)),
                     crate::CanvasMode::Ellipse(paint) => Some((DrawingKind::Ellipse, paint)),
+                    crate::CanvasMode::Flowchart(preset, paint) => {
+                        Some((DrawingKind::Flowchart(preset), paint))
+                    }
                     crate::CanvasMode::Parametric(tool, paint) => {
                         Some((DrawingKind::Parametric(tool), paint))
                     }
@@ -1745,6 +1751,7 @@ fn apply_escape(world: &mut World, view: Entity, window: Entity) -> bevy::prelud
         match CanvasView::_mode(world, view)? {
             crate::CanvasMode::Rectangle(_)
             | crate::CanvasMode::Ellipse(_)
+            | crate::CanvasMode::Flowchart(_, _)
             | crate::CanvasMode::Parametric(_, _)
             | crate::CanvasMode::Line(_)
             | crate::CanvasMode::Polyline(_)

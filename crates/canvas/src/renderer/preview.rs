@@ -54,6 +54,7 @@ pub(super) fn sync(
     let name = match kind {
         crate::input::DrawingKind::Rectangle => "CanvasRectanglePreview",
         crate::input::DrawingKind::Ellipse => "CanvasEllipsePreview",
+        crate::input::DrawingKind::Flowchart(_) => "CanvasFlowchartPreview",
         crate::input::DrawingKind::Parametric(_) => "CanvasParametricPreview",
         crate::input::DrawingKind::Line => "CanvasLinePreview",
     };

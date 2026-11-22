@@ -84,6 +84,7 @@ enum Action {
     Pen,
     DrawLine,
     DrawPolyline,
+    Flowchart(CanvasFlowchartPreset),
     DrawPolygon,
     RegularPolygon,
     Star,
@@ -321,6 +322,12 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::DrawLine, Action::DrawLine),
         (CanvasKey::DrawPolyline, Action::DrawPolyline),
         (CanvasKey::DrawPolygon, Action::DrawPolygon),
+        (CanvasKey::FlowTerminator, Action::Flowchart(CanvasFlowchartPreset::Terminator)),
+        (CanvasKey::FlowDecision, Action::Flowchart(CanvasFlowchartPreset::Decision)),
+        (CanvasKey::FlowInputOutput, Action::Flowchart(CanvasFlowchartPreset::InputOutput)),
+        (CanvasKey::FlowDatabase, Action::Flowchart(CanvasFlowchartPreset::Database)),
+        (CanvasKey::FlowDocument, Action::Flowchart(CanvasFlowchartPreset::Document)),
+        (CanvasKey::FlowArrow, Action::Flowchart(CanvasFlowchartPreset::Arrow)),
         (CanvasKey::RegularPolygon, Action::RegularPolygon),
         (CanvasKey::Star, Action::Star), (CanvasKey::Arc, Action::Arc),
         (CanvasKey::Pen, Action::Pen),
@@ -563,6 +570,14 @@ fn refresh(world: &mut World) -> Result {
             CanvasMode::Line(_) => CanvasKey::DrawLine,
             CanvasMode::Polyline(_) => CanvasKey::DrawPolyline,
             CanvasMode::Polygon(_) => CanvasKey::DrawPolygon,
+            CanvasMode::Flowchart(preset, _) => match preset {
+                CanvasFlowchartPreset::Terminator => CanvasKey::FlowTerminator,
+                CanvasFlowchartPreset::Decision => CanvasKey::FlowDecision,
+                CanvasFlowchartPreset::InputOutput => CanvasKey::FlowInputOutput,
+                CanvasFlowchartPreset::Database => CanvasKey::FlowDatabase,
+                CanvasFlowchartPreset::Document => CanvasKey::FlowDocument,
+                CanvasFlowchartPreset::Arrow => CanvasKey::FlowArrow,
+            },
             CanvasMode::Parametric(CanvasPathTool::RegularPolygon { .. }, _) => {
                 CanvasKey::RegularPolygon
             }
@@ -699,6 +714,14 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 };
                 CanvasView::set_mode_in_world(world, demo.main, mode)
                     .map_err(|error| error.into_bevy_error())?;
+            }
+            Action::Flowchart(preset) => {
+                CanvasView::set_mode_in_world(
+                    world,
+                    demo.main,
+                    CanvasMode::Flowchart(preset, paint()),
+                )
+                .map_err(|error| error.into_bevy_error())?;
             }
             Action::RegularPolygon | Action::Star | Action::Arc => {
                 use CanvasPathTool::*;
