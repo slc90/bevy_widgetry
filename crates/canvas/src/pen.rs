@@ -1,6 +1,6 @@
 use crate::error::CanvasResult as Result;
 use crate::{
-    CanvasDocument, CanvasLayerId, CanvasMode, CanvasPaint, CanvasPath, CanvasPathCommand,
+    CanvasContainer, CanvasDocument, CanvasMode, CanvasPaint, CanvasPath, CanvasPathCommand,
     CanvasView,
 };
 use bevy::{
@@ -32,15 +32,15 @@ pub struct CanvasPenDraft {
 struct Draft {
     data: CanvasPenDraft,
     document: Entity,
-    layer: CanvasLayerId,
+    container: CanvasContainer,
     pointer: PointerId,
     target: NormalizedRenderTarget,
     paint: CanvasPaint,
 }
 
 impl Draft {
-    fn matches(&self, document: Entity, layer: CanvasLayerId, paint: CanvasPaint) -> bool {
-        self.document == document && self.layer == layer && self.paint == paint
+    fn matches(&self, document: Entity, container: CanvasContainer, paint: CanvasPaint) -> bool {
+        self.document == document && self.container == container && self.paint == paint
     }
 }
 
@@ -181,7 +181,7 @@ pub(crate) fn append_point(
     world: &mut World,
     view: Entity,
     document: Entity,
-    layer: CanvasLayerId,
+    container: CanvasContainer,
     paint: CanvasPaint,
     pointer: PointerId,
     target: NormalizedRenderTarget,
@@ -195,7 +195,7 @@ pub(crate) fn append_point(
             || !crate::input::focused(world, &target)
             || world.resource::<InputFocus>().get() != Some(view)
             || world.get::<CanvasDocument>(document).is_none()
-            || CanvasView::_active_layer(world, view)? != Some(layer)
+            || CanvasView::drawing_target(world, view)? != Some(container)
         {
             return Ok(());
         }
@@ -206,7 +206,7 @@ pub(crate) fn append_point(
         if pen
             .draft
             .as_ref()
-            .is_some_and(|draft| !draft.matches(document, layer, paint))
+            .is_some_and(|draft| !draft.matches(document, container, paint))
         {
             crate::input::end(world, view);
             return Ok(());
@@ -220,7 +220,7 @@ pub(crate) fn append_point(
                 active_subpath: None,
             },
             document,
-            layer,
+            container,
             pointer,
             target,
             paint,
@@ -432,8 +432,8 @@ impl CanvasView {
             let Some(draft) = state(world, view)?.draft.clone() else {
                 return Ok(None);
             };
-            if !CanvasView::_active_layer(world, view)?
-                .is_some_and(|layer| draft.matches(document, layer, paint))
+            if !CanvasView::drawing_target(world, view)?
+                .is_some_and(|container| draft.matches(document, container, paint))
             {
                 crate::input::end(world, view);
                 return Ok(None);
@@ -442,11 +442,11 @@ impl CanvasView {
                 crate::input::end(world, view);
                 return Ok(None);
             }
-            let shape = CanvasDocument::_create_path(
+            let shape = CanvasDocument::create_drawing(
                 world,
                 document,
-                Some(draft.layer),
-                draft.data.path,
+                draft.container,
+                crate::CanvasGeometry::Path(draft.data.path),
                 Transform::default(),
                 paint,
             )?;
@@ -645,9 +645,7 @@ fn key(
     event.propagate(false);
     commands.queue(move |world: &mut World| -> bevy::prelude::Result {
         (|| -> Result {
-            if world.resource::<InputFocus>().get() != Some(view)
-                || !crate::input::available(world, view)
-                || !world.get::<Window>(window).is_some_and(|w| w.focused)
+            if !crate::input::keyboard_available(world, view, window)
                 || world
                     .get::<crate::view::ViewState>(view)
                     .is_none_or(|s| !matches!(s.mode, CanvasMode::Pen(_)))

@@ -1,6 +1,8 @@
+use crate::CanvasIssue;
 use crate::error::CanvasResult as Result;
 use crate::order::{CanvasContainer, CanvasLayerStack, container_items_mut, item_container, stack};
 use bevy::ecs::world::EntityRef;
+use bevy::math::{Affine3A, DVec2};
 use bevy::prelude::*;
 
 #[derive(Component, Default, Reflect)]
@@ -143,7 +145,7 @@ impl CanvasDocument {
                 let paint = world
                     .get::<CanvasPaint>(shape)
                     .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
-                geometry._validate(&transform, paint)
+                crate::groups::validate_shape_projection(world, shape, geometry, transform, paint)
             })();
             result?;
             world.entity_mut(shape).insert(transform);
@@ -396,24 +398,72 @@ impl CanvasDocument {
         (|| -> Result<Entity> {
             let stack = stack(world, document)?;
             let layer = layer.unwrap_or(stack.default_layer);
-            if stack.layer(layer).is_none() {
+            Self::insert_shape(
+                world,
+                document,
+                CanvasContainer::Layer(layer),
+                geometry,
+                transform,
+                paint,
+            )
+        })()
+        .map_err(|error| error.at("document", document))
+    }
+
+    pub(crate) fn create_drawing(
+        world: &mut World,
+        document: Entity,
+        target: CanvasContainer,
+        geometry: CanvasGeometry,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> Result<Entity> {
+        let transform = match target {
+            CanvasContainer::Layer(_) => transform,
+            CanvasContainer::Group(group) => {
+                geometry._validate(&transform, &paint)?;
+                let parent = crate::groups::document_transform(world, group)?;
+                let local =
+                    crate::groups::relative_transform(parent, transform, &geometry, &paint)?;
+                geometry.projected_bounds(&(parent * local.compute_affine()), &paint)?;
+                local
+            }
+        };
+        Self::insert_shape(world, document, target, geometry, transform, paint)
+            .map_err(|error| error.at("document", document))
+    }
+
+    fn insert_shape(
+        world: &mut World,
+        document: Entity,
+        target: CanvasContainer,
+        geometry: CanvasGeometry,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> Result<Entity> {
+        if let CanvasContainer::Layer(layer) = target {
+            if stack(world, document)?.layer(layer).is_none() {
                 return Err(crate::error::invalid(crate::CanvasIssue::LayerTarget)
                     .input(crate::CanvasInput::Layer(layer)));
             }
-            geometry._validate(&transform, &paint)?;
-            let shape = world.spawn_empty().id();
-            let registered = container_items_mut(world, document, CanvasContainer::Layer(layer))
-                .map(|items| items.push(shape));
-            if let Err(error) = registered {
-                world.despawn(shape);
-                return Err(error);
-            }
-            world
-                .entity_mut(shape)
-                .insert((geometry, transform, paint, ChildOf(document)));
-            Ok(shape)
-        })()
-        .map_err(|error| error.at("document", document))
+        } else {
+            crate::order::container_items(world, document, target)?;
+        }
+        geometry._validate(&transform, &paint)?;
+        let shape = world.spawn_empty().id();
+        let registered =
+            container_items_mut(world, document, target).map(|items| items.push(shape));
+        if let Err(error) = registered {
+            world.despawn(shape);
+            return Err(error);
+        }
+        world.entity_mut(shape).insert((
+            geometry,
+            transform,
+            paint,
+            ChildOf(target.parent(document)),
+        ));
+        Ok(shape)
     }
 
     pub fn update_rectangle(
@@ -529,7 +579,7 @@ impl CanvasDocument {
                 if std::mem::discriminant(old) != std::mem::discriminant(&geometry) {
                     return Err(crate::error::invalid(crate::CanvasIssue::GeometryKind));
                 }
-                geometry._validate(&transform, &paint)
+                crate::groups::validate_shape_projection(world, shape, &geometry, transform, &paint)
             })();
             result?;
             world.entity_mut(shape).insert((geometry, transform, paint));
@@ -555,6 +605,9 @@ impl CanvasDocument {
             let container = validate_shape(world, document, shape)?;
             container_items_mut(world, document, container)?.retain(|entity| *entity != shape);
             world.despawn(shape);
+            if let CanvasContainer::Group(group) = container {
+                crate::groups::prune_empty_groups(world, document, group)?;
+            }
             Ok(())
         })()
         .map_err(|error| {
@@ -674,13 +727,14 @@ impl CanvasRectangle {
 
     pub fn corners(&self, transform: &Transform) -> [Vec2; 4] {
         let half = self.size * 0.5;
+        let transform = transform.compute_affine();
         [
             Vec2::new(-half.x, -half.y),
             Vec2::new(half.x, -half.y),
             half,
             Vec2::new(-half.x, half.y),
         ]
-        .map(|point| transform.transform_point(point.extend(0.0)).truncate())
+        .map(|point| transform.transform_point3(point.extend(0.0)).truncate())
     }
 
     pub fn bounds(
@@ -698,39 +752,7 @@ impl CanvasRectangle {
     pub(crate) fn _bounds(&self, transform: &Transform, paint: &CanvasPaint) -> Result<Rect> {
         (|| -> Result<Rect> {
             self._validate(transform, paint)?;
-            if self.corner_radius > 0.0 {
-                let x = (transform.rotation * Vec3::X * transform.scale.x)
-                    .truncate()
-                    .as_dvec2();
-                let y = (transform.rotation * Vec3::Y * transform.scale.y)
-                    .truncate()
-                    .as_dvec2();
-                let radius = f64::from(self.corner_radius);
-                let straight = self.size.as_dvec2() * 0.5 - bevy::math::DVec2::splat(radius);
-                let radius = radius + f64::from(paint.stroke.map_or(0.0, |s| s.width)) * 0.5;
-                let extent = bevy::math::DVec2::new(
-                    x.x.abs() * straight.x + y.x.abs() * straight.y + radius * x.x.hypot(y.x),
-                    x.y.abs() * straight.x + y.y.abs() * straight.y + radius * x.y.hypot(y.y),
-                );
-                let center = transform.translation.truncate().as_dvec2();
-                return Ok(Rect {
-                    min: (center - extent).as_vec2(),
-                    max: (center + extent).as_vec2(),
-                });
-            }
-            let stroke = paint.stroke.map_or(0.0, |stroke| stroke.width);
-            let outer = CanvasRectangle {
-                corner_radius: 0.0,
-                size: self.size + Vec2::splat(stroke),
-            };
-            let corners = outer.corners(transform);
-            let min = corners
-                .into_iter()
-                .fold(Vec2::splat(f32::INFINITY), Vec2::min);
-            let max = corners
-                .into_iter()
-                .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max);
-            Ok(Rect::from_corners(min, max))
+            self.projected_bounds(&transform.compute_affine(), paint)
         })()
         .map_err(|error| {
             error
@@ -739,6 +761,41 @@ impl CanvasRectangle {
                 .input(crate::CanvasInput::Paint(*paint))
         })
     }
+
+    fn projected_bounds(&self, transform: &Affine3A, paint: &CanvasPaint) -> Result<Rect> {
+        let extent = self.projection_extent(crate::groups::planar_axes(transform), paint);
+        bounds_from_extent(transform, extent, CanvasIssue::RectangleBounds)
+    }
+
+    pub(crate) fn projection_extent(&self, [x, y]: [DVec2; 2], paint: &CanvasPaint) -> DVec2 {
+        let half = self.size.as_dvec2() * 0.5;
+        let stroke = f64::from(paint.stroke.map_or(0.0, |stroke| stroke.width)) * 0.5;
+        let radius = f64::from(self.corner_radius);
+        let round = || DVec2::new(x.x.hypot(y.x), x.y.hypot(y.y));
+        if radius > 0.0 {
+            let straight = half - DVec2::splat(radius);
+            x.abs() * straight.x + y.abs() * straight.y + round() * (radius + stroke)
+        } else {
+            let stroke_support = match paint.stroke.map(|stroke| stroke.join) {
+                Some(CanvasLineJoin::Round) => round(),
+                Some(CanvasLineJoin::Bevel) => x.abs().max(y.abs()),
+                _ => x.abs() + y.abs(),
+            };
+            x.abs() * half.x + y.abs() * half.y + stroke_support * stroke
+        }
+    }
+}
+
+fn bounds_from_extent(transform: &Affine3A, extent: DVec2, issue: CanvasIssue) -> Result<Rect> {
+    let center = transform.translation.truncate().as_dvec2();
+    let bounds = Rect {
+        min: (center - extent).as_vec2(),
+        max: (center + extent).as_vec2(),
+    };
+    if !bounds.min.is_finite() || !bounds.max.is_finite() || !bounds.size().is_finite() {
+        return Err(crate::error::invalid(issue));
+    }
+    Ok(bounds)
 }
 
 fn finite_color(color: Color) -> bool {
@@ -823,6 +880,40 @@ impl CanvasGeometry {
                 .input(crate::CanvasInput::Paint(*paint))
         })
     }
+
+    pub(crate) fn projected_bounds(
+        &self,
+        transform: &Affine3A,
+        paint: &CanvasPaint,
+    ) -> Result<Rect> {
+        let [x, y] = crate::groups::planar_axes(transform);
+        if !transform.is_finite() || x.perp_dot(y) == 0.0 {
+            return Err(crate::error::invalid(crate::CanvasIssue::Transform));
+        }
+        match self {
+            Self::Rectangle(rectangle) => rectangle.projected_bounds(transform, paint),
+            Self::Ellipse(ellipse) => ellipse.projected_bounds(transform, paint),
+            Self::Path(path) => path.projected_bounds(transform, paint),
+        }
+    }
+
+    pub(crate) fn bounds_in_projection(
+        &self,
+        local: &Transform,
+        projection: &Affine3A,
+        paint: &CanvasPaint,
+    ) -> Result<Rect> {
+        let bounds = self._bounds(local, paint)?;
+        if *projection == local.compute_affine() {
+            return Ok(bounds);
+        }
+        self.projected_bounds(projection, paint).map_err(|error| {
+            error
+                .input(crate::CanvasInput::Geometry(self.clone()))
+                .input(crate::CanvasInput::Transform(*local))
+                .input(crate::CanvasInput::Paint(*paint))
+        })
+    }
 }
 
 impl CanvasEllipse {
@@ -854,10 +945,7 @@ impl CanvasEllipse {
                     crate::CanvasIssue::EllipseLocalBounds,
                 ));
             }
-            let bounds = self.transformed_bounds(transform, paint);
-            if !bounds.min.is_finite() || !bounds.max.is_finite() || !bounds.size().is_finite() {
-                return Err(crate::error::invalid(crate::CanvasIssue::EllipseBounds));
-            }
+            self.projected_bounds(&transform.compute_affine(), paint)?;
             Ok(())
         })()
         .map_err(|error| {
@@ -883,7 +971,7 @@ impl CanvasEllipse {
     pub(crate) fn _bounds(&self, transform: &Transform, paint: &CanvasPaint) -> Result<Rect> {
         (|| -> Result<Rect> {
             self._validate(transform, paint)?;
-            Ok(self.transformed_bounds(transform, paint))
+            self.projected_bounds(&transform.compute_affine(), paint)
         })()
         .map_err(|error| {
             error
@@ -893,24 +981,18 @@ impl CanvasEllipse {
         })
     }
 
-    fn transformed_bounds(&self, transform: &Transform, paint: &CanvasPaint) -> Rect {
+    fn projected_bounds(&self, transform: &Affine3A, paint: &CanvasPaint) -> Result<Rect> {
+        let extent = self.projection_extent(crate::groups::planar_axes(transform), paint);
+        bounds_from_extent(transform, extent, CanvasIssue::EllipseBounds)
+    }
+
+    pub(crate) fn projection_extent(&self, [x, y]: [DVec2; 2], paint: &CanvasPaint) -> DVec2 {
         // f64 avoids overflow in squared support lengths for otherwise representable f32 bounds.
-        let x = (transform.rotation * Vec3::X * transform.scale.x)
-            .truncate()
-            .as_dvec2();
-        let y = (transform.rotation * Vec3::Y * transform.scale.y)
-            .truncate()
-            .as_dvec2();
         let radii = self.radii.as_dvec2();
         let half_stroke = f64::from(paint.stroke.map_or(0.0, |stroke| stroke.width)) * 0.5;
-        let extent = bevy::math::DVec2::new(
+        DVec2::new(
             (x.x * radii.x).hypot(y.x * radii.y) + half_stroke * x.x.hypot(y.x),
             (x.y * radii.x).hypot(y.y * radii.y) + half_stroke * x.y.hypot(y.y),
-        );
-        let center = transform.translation.truncate().as_dvec2();
-        Rect {
-            min: (center - extent).as_vec2(),
-            max: (center + extent).as_vec2(),
-        }
+        )
     }
 }

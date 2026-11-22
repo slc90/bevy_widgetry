@@ -6,6 +6,7 @@ mod batch;
 mod error;
 mod export;
 mod geometry;
+mod groups;
 mod input;
 mod layers;
 mod mesh_cache;
@@ -27,6 +28,7 @@ pub use export::CanvasExportError;
 pub use export::{
     CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop, CanvasRenderIssue,
 };
+pub use groups::CanvasGroup;
 pub use layers::{CanvasLayerRemoval, CanvasLayersChanged};
 pub use model::{
     CanvasDocument, CanvasEllipse, CanvasFillRule, CanvasGeometry, CanvasItem, CanvasLineCap,
@@ -37,8 +39,9 @@ pub use path::{CanvasPath, CanvasPathCommand, CanvasPathSegment};
 pub use pen::{CanvasPenChanged, CanvasPenDraft, CanvasPenSegment};
 pub use renderer::CanvasPlugin;
 pub use view::{
-    CanvasActiveLayerChanged, CanvasCenterChanged, CanvasDocumentChanged, CanvasMode,
-    CanvasModeChanged, CanvasSelectionChanged, CanvasView, CanvasViewProps, CanvasZoomChanged,
+    CanvasActiveLayerChanged, CanvasCenterChanged, CanvasDocumentChanged, CanvasGroupPathChanged,
+    CanvasMode, CanvasModeChanged, CanvasSelectionChanged, CanvasView, CanvasViewProps,
+    CanvasZoomChanged,
 };
 
 pub use error::{

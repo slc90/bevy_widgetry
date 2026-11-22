@@ -146,8 +146,14 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             super::CanvasKey::LayerHide => "隐藏",
             super::CanvasKey::LayerLock => "锁定",
             super::CanvasKey::LayerUnlock => "解锁",
+            super::CanvasKey::Group => "分组",
+            super::CanvasKey::Ungroup => "取消分组",
+            super::CanvasKey::ChooseGroupMembers => {
+                "请选择同一图层或组中画序连续的至少两个绘图项。"
+            }
+            super::CanvasKey::ChooseGroup => "请在主视图选中一个组，再取消分组。",
             super::CanvasKey::Description => {
-                "共享图形，独立选择与视角。Ctrl+点击多选；拖动所选成员整批移动，Delete删除当前焦点View的选择。方点缩放/镜像，圆点旋转（Shift吸附15°），内侧菱形改尺寸/半径，内侧圆点改矩形圆角。矩形/椭圆拖动一次绘制；路径节点模式拖锚点或Bezier控制点。Space+左键平移，滚轮缩放。工具栏操作主视图；SVG/PNG导出已提交矢量图形。"
+                "共享图形，独立选择与视角。Ctrl+点击多选，可整批移动或分组。双击组编辑子项，Esc 返回上一级，Delete 删除焦点视图中的选择。方点缩放，圆点旋转（Shift 吸附 15°），内侧手柄调整图形参数。Space+左键平移，滚轮缩放。工具栏操作主视图。"
             }
             super::CanvasKey::Raise => "上移一层",
             super::CanvasKey::Lower => "下移一层",
@@ -165,7 +171,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             super::CanvasKey::Editing => {
                 "选中一条 Path，用上一段 / 下一段定位，再转换、插点或删除；目标段坐标见状态。先转直线再插点。轮廓追加到同一 Path。Pen 需画布焦点：L/Q/B/A 选线/二次/三次/弧，C 闭合，N 新子路径，Enter 提交，Esc 取消草稿；点击工具栏会结束草稿。"
             }
-            super::CanvasKey::ChooseShape => "请在主视图恰好选中一个图形，再调整叠放顺序。",
+            super::CanvasKey::ChooseShape => "请在主视图选中一个绘图项，再调整叠放顺序。",
             super::CanvasKey::ChoosePath => "请在主视图恰好选中一条含绘制段的 Path。",
             super::CanvasKey::ChooseLine => "当前段不是直线，请先转直线再插入中点。",
             super::CanvasKey::Select => "选择",

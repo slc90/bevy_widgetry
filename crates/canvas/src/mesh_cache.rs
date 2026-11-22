@@ -1,6 +1,7 @@
 use crate::error::CanvasResult as Result;
 use crate::{CanvasFillRule, CanvasGeometry, CanvasLineCap, CanvasLineJoin, CanvasPaint};
 use bevy::camera::primitives::Aabb;
+use bevy::math::{Affine3A, DMat2};
 use bevy::prelude::*;
 use std::{
     collections::{HashMap, HashSet},
@@ -102,6 +103,53 @@ pub(crate) fn geometry(
 }
 
 fn region(mesh: &Mesh) -> Result<Option<Rect>> {
+    projected_region(mesh, |point| point)
+}
+
+pub(crate) fn painted_bounds(
+    world: &World,
+    shape: Entity,
+    source: &CanvasGeometry,
+    paint: CanvasPaint,
+    projection: &Affine3A,
+) -> Result<Option<Rect>> {
+    if paint.fill.is_none() && paint.stroke.is_none() {
+        return Ok(None);
+    }
+    let [x, y] = crate::groups::planar_axes(projection);
+    let matrix = DMat2::from_cols(x, y);
+    let offset = projection.translation.truncate().as_dvec2();
+    let project = |point: Vec2| (offset + matrix * point.as_dvec2()).as_vec2();
+    let measure = |fill: &Mesh, stroke: &Mesh| -> Result<Option<Rect>> {
+        let mut bounds: Option<Rect> = None;
+        for mesh in [paint.fill.map(|_| fill), paint.stroke.map(|_| stroke)]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(region) = projected_region(mesh, project)? {
+                bounds = Some(bounds.map_or(region, |current| current.union(region)));
+            }
+        }
+        if bounds.is_some_and(|bounds| !bounds.size().is_finite()) {
+            return Err(crate::error::invalid(crate::CanvasIssue::MeshBounds));
+        }
+        Ok(bounds)
+    };
+    if let Some(cache) = world.get_resource::<MeshCache>()
+        && let Some(current) = cache.0.get(&shape)
+        && current.source.as_ref() == source
+        && current.style == GeometryStyle::from(paint)
+        && let Some(meshes) = world.get_resource::<Assets<Mesh>>()
+        && let (Some(fill), Some(stroke)) = (meshes.get(&current.fill), meshes.get(&current.stroke))
+    {
+        return measure(fill, stroke);
+    }
+
+    let (fill, stroke) = crate::geometry::meshes(source, paint)?;
+    measure(&fill, &stroke)
+}
+
+fn projected_region(mesh: &Mesh, project: impl Fn(Vec2) -> Vec2) -> Result<Option<Rect>> {
     let Some(bevy::mesh::VertexAttributeValues::Float32x3(positions)) =
         mesh.attribute(Mesh::ATTRIBUTE_POSITION)
     else {
@@ -109,17 +157,84 @@ fn region(mesh: &Mesh) -> Result<Option<Rect>> {
             crate::CanvasPart::SharedMeshPositions,
         ));
     };
+    let indices = mesh
+        .indices()
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::SharedMeshIndices))?;
+    let invalid_bounds = || crate::error::invalid(crate::CanvasIssue::MeshBounds);
+    let position = |index| {
+        let &[x, y, _]: &[f32; 3] = positions.get(index).ok_or_else(invalid_bounds)?;
+        let point = Vec2::new(x, y);
+        if !point.is_finite() {
+            return Err(invalid_bounds());
+        }
+        Ok(point)
+    };
     let mut min = Vec2::splat(f32::INFINITY);
     let mut max = Vec2::splat(f32::NEG_INFINITY);
-    for p in positions {
-        let p = Vec2::new(p[0], p[1]);
-        if !p.is_finite() {
-            return Err(crate::error::invalid(crate::CanvasIssue::MeshBounds));
+    let mut triangles = indices.iter();
+    while let Some(first) = triangles.next() {
+        let second = triangles.next().ok_or_else(invalid_bounds)?;
+        let third = triangles.next().ok_or_else(invalid_bounds)?;
+        let [a, b, c] = [position(first)?, position(second)?, position(third)?];
+        if !triangle_has_area([a, b, c]) {
+            continue;
         }
-        min = min.min(p);
-        max = max.max(p);
+        for point in [a, b, c] {
+            let projected = project(point);
+            if !projected.is_finite() {
+                return Err(invalid_bounds());
+            }
+            min = min.min(projected);
+            max = max.max(projected);
+        }
     }
-    Ok((!positions.is_empty()).then_some(Rect { min, max }))
+    Ok(min.is_finite().then_some(Rect { min, max }))
+}
+
+fn triangle_has_area(points: [Vec2; 3]) -> bool {
+    let [a, b, c] = points.map(Vec2::as_dvec2);
+    let u = b - a;
+    let v = c - a;
+    let positive = u.x * v.y;
+    let negative = u.y * v.x;
+    let error_bound = (positive.abs() + negative.abs()) * (8.0 * f64::EPSILON);
+    if (positive - negative).abs() > error_bound {
+        return true;
+    }
+
+    // Products of f32 coordinates are exact in f64. Preserve their low parts
+    // when summing so a short edge survives cancellation between distant points.
+    let terms = [
+        a.x * b.y,
+        b.x * c.y,
+        c.x * a.y,
+        -(a.y * b.x),
+        -(b.y * c.x),
+        -(c.y * a.x),
+    ];
+    let mut partials: [f64; 6] = [0.0; 6];
+    let mut count = 0;
+    for mut term in terms {
+        let mut kept = 0;
+        for mut partial in partials.into_iter().take(count) {
+            if term.abs() < partial.abs() {
+                std::mem::swap(&mut term, &mut partial);
+            }
+            let sum = term + partial;
+            let remainder = partial - (sum - term);
+            if remainder != 0.0 {
+                partials[kept] = remainder;
+                kept += 1;
+            }
+            term = sum;
+        }
+        if term != 0.0 {
+            partials[kept] = term;
+            kept += 1;
+        }
+        count = kept;
+    }
+    count != 0
 }
 
 fn aabb(region: Option<Rect>) -> Aabb {

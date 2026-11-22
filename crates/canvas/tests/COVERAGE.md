@@ -32,6 +32,7 @@
 - 新图形属于默认图层，绘图项同时满足 ECS 归属和直属顺序登记；容器内重排与删除更新同一顺序，Document 销毁后级联移除子项。
 - 图层顺序和容器直属顺序确定展平结果，Shape 查询只包含图形；共享多 View 命中、显示及导出遵循同一 Document 顺序。
 - 图层操作保持成员身份和直属顺序。删除非空层需要明确策略，迁移必须使用可用目标层，文档始终有默认层。
+- 分组要求成员在同一容器中画序连续，拒绝非连续选择并保留成员身份及全局展平画序。组边界使用 Path 实际绘制轮廓。嵌套变换在 View 代理、命中、节点编辑和导出中一致，组内路径属于单个 View。
 - 隐藏层不参与显示与导出，锁定层保留投影；两者均清理相关选择，绘制仅提交到当前视图的有效活动层。
 - 多个 View 可以共享 Mesh 和 Model，但 Pan、Zoom、Selection、Focus、Camera、RenderLayers 与预览互相独立；解绑／销毁按最后引用正确回收资源。
 - Renderer 在 Geometry／Paint／Transform 改变时刷新所需网格，Transform-only 不无故重建；空几何不残留旧像素或幽灵命中。
@@ -63,6 +64,7 @@
 | `ellipse_drawing.rs` | 椭圆预览绘制、抓取、提交和中断。 |
 | `input.rs` | 真实 Pointer Pan／Zoom、坐标换算和同帧事件顺序。 |
 | `layers.rs` | 图层创建、排序、重命名、迁移和删除策略，双 View 的活动层、显隐、锁定、命中、导出与绘制提交。 |
+| `groups.rs` | 嵌套组、分组精度、代理树与 SVG 投影、真实等比缩放手柄、跨 View 双击、禁用 View 的 Escape 和组内节点／绘图输入。 |
 | `model.rs` | 无 View／GPU 的 Document、Transform、Paint 与生命周期。 |
 | `movement.rs` | 已选图形移动、捕获、Zoom 和异常取消。 |
 | `multiselection.rs` | 独立选择集合、区域／多目标操作与视图隔离。 |

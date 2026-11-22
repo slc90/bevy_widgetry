@@ -321,24 +321,21 @@ fn append(
     generate: impl FnOnce() -> Result<Vec<CanvasPathCommand>>,
 ) -> Result {
     (|| -> Result {
-        let result = (|| {
-            crate::model::validate_shape(world, document, shape)?;
-            let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
-                return Err(crate::error::invalid(crate::CanvasIssue::AppendKind));
-            };
-            let mut path = path.clone();
-            path.commands.extend(generate()?);
-            let transform = world
-                .get::<Transform>(shape)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::ShapeTransform))?;
-            let paint = world
-                .get::<CanvasPaint>(shape)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::ShapePaint))?;
-            path._validate(transform, paint)?;
-            Ok(path)
-        })();
-        let path = result?;
-        world.entity_mut(shape).insert(CanvasGeometry::Path(path));
+        crate::model::validate_shape(world, document, shape)?;
+        let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
+            return Err(crate::error::invalid(crate::CanvasIssue::AppendKind));
+        };
+        let mut path = path.clone();
+        path.commands.extend(generate()?);
+        let transform = *world
+            .get::<Transform>(shape)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ShapeTransform))?;
+        let paint = world
+            .get::<CanvasPaint>(shape)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ShapePaint))?;
+        let geometry = CanvasGeometry::Path(path);
+        crate::groups::validate_shape_projection(world, shape, &geometry, transform, paint)?;
+        world.entity_mut(shape).insert(geometry);
         Ok(())
     })()
     .map_err(|error| error.at("document", document).at("shape", shape))

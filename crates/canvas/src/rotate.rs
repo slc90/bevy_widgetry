@@ -1,9 +1,11 @@
 const HANDLE_HIT_MARGIN: f32 = 2.0;
 const SNAP_ANGLE_RADIANS: f64 = std::f64::consts::PI / 12.0;
 
-use crate::CanvasDocument;
 use crate::error::CanvasResult as Result;
-use bevy::{math::DVec2, prelude::*};
+use bevy::{
+    math::{Affine3A, DVec2},
+    prelude::*,
+};
 
 pub(crate) const OFFSET: f32 = 24.0;
 pub(crate) const HANDLE_SIZE: f32 = 8.0;
@@ -37,6 +39,7 @@ pub(crate) struct Rotate {
     pub(crate) document: Entity,
     pub(crate) shape: Entity,
     transform: Transform,
+    pub(crate) parent: Affine3A,
     anchor: DVec2,
     pivot: DVec2,
     direction: DVec2,
@@ -56,13 +59,17 @@ impl Rotate {
                 .ok_or_else(|| crate::error::missing(crate::CanvasPart::RotationTransform))?;
             let anchor = (bounds.min.as_dvec2() + bounds.max.as_dvec2()) * 0.5;
             let pivot = project(transform, anchor);
-            let Some(direction) = (point.as_dvec2() - pivot).try_normalize() else {
+            let parent = crate::groups::parent_transform(world, shape)?;
+            let Some(direction) =
+                (crate::scale::local_point(parent, point) - pivot).try_normalize()
+            else {
                 return Ok(None);
             };
             Ok(Some(Self {
                 document,
                 shape,
                 transform,
+                parent,
                 anchor,
                 pivot,
                 direction,
@@ -72,7 +79,9 @@ impl Rotate {
     }
 
     pub(crate) fn apply(self, world: &mut World, point: Vec2, snap: bool) -> Result {
-        let Some(direction) = (point.as_dvec2() - self.pivot).try_normalize() else {
+        let Some(direction) =
+            (crate::scale::local_point(self.parent, point) - self.pivot).try_normalize()
+        else {
             return Ok(());
         };
         let delta = self
@@ -98,16 +107,11 @@ impl Rotate {
         let translation = self.pivot - center;
         transform.translation.x = translation.x as f32;
         transform.translation.y = translation.y as f32;
-        CanvasDocument::_update_transform(world, self.document, self.shape, transform)
+        crate::groups::update_item_transform(world, self.document, self.shape, transform)
     }
 }
 
 fn project(transform: Transform, point: DVec2) -> DVec2 {
-    let x = (transform.rotation * Vec3::X * transform.scale.x)
-        .truncate()
-        .as_dvec2();
-    let y = (transform.rotation * Vec3::Y * transform.scale.y)
-        .truncate()
-        .as_dvec2();
+    let [x, y] = crate::groups::planar_axes(&transform.compute_affine());
     transform.translation.truncate().as_dvec2() + x * point.x + y * point.y
 }

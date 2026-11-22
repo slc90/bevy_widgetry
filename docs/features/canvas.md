@@ -102,7 +102,7 @@ let selected = CanvasView::selection(world, view)
     .map_err(|failure| failure.into_bevy_error())?;
 ```
 
-选择按图形 Entity 保存，与其他 View 独立。普通点击替换为单选，Ctrl+点击切换成员；空白点击清空，Ctrl+空白保持选择。首次点击未选中图形只选择，再次按下已选图形才启动移动。
+选择按绘图项 Entity 保存，与其他 View 独立。普通点击替换为单选，Ctrl+点击切换成员，空白点击清空，Ctrl+空白保持选择。首次点击未选中的绘图项只选择，再次按下已选项才启动移动。默认命中整组，进入组内后可以选择该组的直属成员。
 
 命中使用真实填充和描边，不把椭圆外接矩形角落或 Path 孔洞当作实心区域。透明填充与无填充不同：显式存在的透明填充仍参与命中。
 
@@ -192,6 +192,16 @@ CanvasDocument::remove_shapes(world, document, &[rectangle, ellipse])
 `CanvasView::active_layer` 查询该视图的活动图层，`set_active_layer_in_world` 可切换至可用图层。绘图草稿只能提交到开始绘制时的活动层，活动层变化会取消草稿。活动层变为不可用时，视图选择第一个可见且未锁定的图层，全部不可用时暂停提交。共享 Document 的视图可在不同图层绘图。
 
 `remove_layer` 可以用 `OnlyIfEmpty` 删除空层，用 `MoveContentsTo` 将内容追加到同一文档内可用的目标层，或用 `DeleteContents` 级联删除图层及其内容。每份 Document 至少保留一个图层。
+
+## 嵌套分组与组内编辑
+
+`CanvasDocument::group_items` 将同一个图层或父组中画序连续的两个以上绘图项组成有名称的 `CanvasGroup`。组原点位于所选项在父容器中的绘制边界中心。成员保留 Entity、原有视觉位置和全局叠放顺序，组占用原有的连续画序范围。`ungroup` 将组的变换组合回成员，并在该组的位置按序展开直属项。如果坐标转换无法保留成员的视觉位置，分组或取消分组会在写入前拒绝。删除组的最后一个成员时，空组也会被移除。
+
+`update_group_transform` 支持平移、绕 Z 旋转和正数等比缩放。组的缩放手柄保持宽高比。`container_of` 查询直属父容器，`document_transform` 返回从绘图项局部坐标到文档坐标的 `Affine3A`。`reorder_item` 可以在直属容器内调整整组的顺序。
+
+在选择模式下双击进入组，Esc 返回上一级。同步 API 为 `enter_group_in_world` 和 `leave_group_in_world`，对应排队入口为 `enter_group` 和 `leave_group`。`CanvasView::group_path` 查询从外到内的当前编辑路径。两个共享文档的 View 可以分别停在不同层级。进入组会激活该组所属图层，明确切换到另一图层时会退出组内编辑。组内绘制的矩形、椭圆和 Pen 按预览轮廓提交到该组。若坐标换算使轮廓偏移超出亚像素容差，提交会在写入前拒绝。所属层隐藏、锁定或组被移除时，View 回到仍可编辑的最近祖先。
+
+在 Gallery 中，先 Ctrl+点击选择同一容器中的成员，再使用分组按钮。选中整组后可拖动、旋转、等比缩放或取消分组。
 
 ## SVG 导出
 

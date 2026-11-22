@@ -52,12 +52,12 @@ pub(crate) struct Overlay {
     links: Vec<[Vec2; 2]>,
 }
 
-pub(crate) fn overlay(world: &World, shape: Entity) -> Option<Overlay> {
-    let CanvasGeometry::Path(path) = world.get::<CanvasGeometry>(shape)? else {
-        return None;
+pub(crate) fn overlay(world: &World, shape: Entity) -> Result<Option<Overlay>> {
+    let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
+        return Ok(None);
     };
-    let transform = world.get::<Transform>(shape)?;
-    let project = |p: Vec2| transform.transform_point(p.extend(0.0)).truncate();
+    let transform = crate::groups::document_transform(world, shape)?;
+    let project = |p: Vec2| transform.transform_point3(p.extend(0.0)).truncate();
     let mut output = Overlay {
         handles: Vec::new(),
         links: Vec::new(),
@@ -103,7 +103,7 @@ pub(crate) fn overlay(world: &World, shape: Entity) -> Option<Overlay> {
         }
         from = end;
     }
-    Some(output)
+    Ok(Some(output))
 }
 
 pub(crate) fn hit(world: &World, shape: Entity, point: Vec2, zoom: f32) -> Result<Option<Point>> {
@@ -114,7 +114,7 @@ pub(crate) fn hit(world: &World, shape: Entity, point: Vec2, zoom: f32) -> Resul
         {
             return Ok(None);
         }
-        Ok(overlay(world, shape).and_then(|data| {
+        Ok(overlay(world, shape)?.and_then(|data| {
             data.handles
                 .into_iter()
                 .filter_map(|(h, p)| {
@@ -164,7 +164,7 @@ pub(crate) struct Edit {
     pub(crate) shape: Entity,
     point: Point,
     commands: usize,
-    transform: Transform,
+    projection: bevy::math::Affine3A,
     start: DVec2,
     origin: Vec2,
 }
@@ -185,23 +185,22 @@ impl Edit {
                 .get(point.command)
                 .and_then(|c| point.read(*c))
                 .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodePoint))?;
-            let transform = *world
-                .get::<Transform>(shape)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodeTransform))?;
+            let projection = crate::groups::document_transform(world, shape)?;
             Ok(Self {
                 document,
                 shape,
                 point,
                 commands: path.commands.len(),
-                transform,
-                start: crate::scale::local_point(transform, at),
+                projection,
+                start: crate::scale::local_point(projection, at),
                 origin,
             })
         })()
         .map_err(|error| error.at("document", document).at("shape", shape))
     }
     pub(crate) fn valid(self, world: &World) -> bool {
-        world.get::<Transform>(self.shape) == Some(&self.transform)
+        crate::groups::document_transform(world, self.shape)
+            .is_ok_and(|transform| transform == self.projection)
             && matches!(world.get::<CanvasGeometry>(self.shape),Some(CanvasGeometry::Path(p)) if p.commands.len()==self.commands && p.commands.get(self.point.command).is_some_and(|c|self.point.read(*c).is_some()))
     }
     pub(crate) fn apply(self, world: &mut World, at: Vec2) -> Result {
@@ -209,7 +208,7 @@ impl Edit {
             return Ok(());
         };
         let mut path = path.clone();
-        let point = (self.origin.as_dvec2() + crate::scale::local_point(self.transform, at)
+        let point = (self.origin.as_dvec2() + crate::scale::local_point(self.projection, at)
             - self.start)
             .as_vec2();
         if !point.is_finite() {
@@ -226,13 +225,9 @@ impl Edit {
         let paint = *world
             .get::<crate::CanvasPaint>(self.shape)
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodePaint))?;
-        CanvasDocument::_update_path(
-            world,
-            self.document,
-            self.shape,
-            path,
-            self.transform,
-            paint,
-        )
+        let transform = *world
+            .get::<Transform>(self.shape)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodeTransform))?;
+        CanvasDocument::_update_path(world, self.document, self.shape, path, transform, paint)
     }
 }

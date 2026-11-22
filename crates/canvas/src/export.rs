@@ -1,4 +1,5 @@
 use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasPathCommand};
+use bevy::math::Affine3A;
 use bevy::prelude::*;
 use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
 use bevy_widgetry_job::JobFailure;
@@ -17,6 +18,7 @@ pub(crate) fn install(app: &mut App) {
 pub enum CanvasRenderIssue {
     MissingTileResources,
     MissingSceneParts,
+    MissingGroupProxy(Entity),
     MissingProbe,
     MissingOperation,
     MissingResources,
@@ -166,18 +168,10 @@ impl CanvasDocument {
                 }
             }
             let region = snapshot.region;
+            let [left, top] = region.min.as_dvec2().to_array();
+            let [width, height] = region.size().as_dvec2().to_array();
             let mut svg = format!(
-                "<svg xmlns=\"http://www.w3.org/2000/svg\" color-interpolation=\"linearRGB\" width=\"{}\" height=\"{}\" viewBox=\"{} {} {} {}\"><defs><clipPath id=\"canvas-region\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/></clipPath></defs><g clip-path=\"url(#canvas-region)\">",
-                region.width(),
-                region.height(),
-                region.min.x,
-                region.min.y,
-                region.width(),
-                region.height(),
-                region.min.x,
-                region.min.y,
-                region.width(),
-                region.height()
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" color-interpolation=\"linearRGB\" width=\"{width}\" height=\"{height}\" viewBox=\"{left} {top} {width} {height}\"><defs><clipPath id=\"canvas-region\"><rect x=\"{left}\" y=\"{top}\" width=\"{width}\" height=\"{height}\"/></clipPath></defs><g clip-path=\"url(#canvas-region)\">",
             );
             let mut paints = Vec::new();
             for shape in &snapshot.shapes {
@@ -200,7 +194,7 @@ impl CanvasDocument {
                         format!(
                             "fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"{}\" stroke-miterlimit=\"4\"",
                             color("stroke", stroke.color),
-                            stroke.width,
+                            f64::from(stroke.width),
                             match stroke.cap {
                                 crate::CanvasLineCap::Butt => "butt",
                                 crate::CanvasLineCap::Round => "round",
@@ -216,28 +210,31 @@ impl CanvasDocument {
                 }
             }
             for (shape, style) in paints {
-                let transform = &shape.transform;
-                let x = (transform.rotation * Vec3::X * transform.scale.x).truncate();
-                let y = (transform.rotation * Vec3::Y * transform.scale.y).truncate();
+                let transform = &shape.projection;
+                // SVG consumers read these coordinates at double precision.
+                let [x, y] = crate::groups::planar_axes(transform);
+                let center = transform.translation.truncate().as_dvec2();
                 let geometry = match &shape.geometry {
-                    CanvasGeometry::Rectangle(rectangle) => format!(
-                        "rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\"",
-                        -rectangle.size.x * 0.5,
-                        -rectangle.size.y * 0.5,
-                        rectangle.size.x,
-                        rectangle.size.y,
-                        rectangle.corner_radius,
-                        rectangle.corner_radius
-                    ),
-                    CanvasGeometry::Ellipse(ellipse) => format!(
-                        "ellipse cx=\"0\" cy=\"0\" rx=\"{}\" ry=\"{}\"",
-                        ellipse.radii.x, ellipse.radii.y
-                    ),
+                    CanvasGeometry::Rectangle(rectangle) => {
+                        let size = rectangle.size.as_dvec2();
+                        let radius = f64::from(rectangle.corner_radius);
+                        format!(
+                            "rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\" ry=\"{radius}\"",
+                            -size.x * 0.5,
+                            -size.y * 0.5,
+                            size.x,
+                            size.y
+                        )
+                    }
+                    CanvasGeometry::Ellipse(ellipse) => {
+                        let [rx, ry] = ellipse.radii.as_dvec2().to_array();
+                        format!("ellipse cx=\"0\" cy=\"0\" rx=\"{rx}\" ry=\"{ry}\"")
+                    }
                     CanvasGeometry::Path(path) => format!("path d=\"{}\"", path_data(path)),
                 };
                 svg.push_str(&format!(
                     "<{geometry} transform=\"matrix({} {} {} {} {} {})\" {style} />",
-                    x.x, x.y, y.x, y.y, transform.translation.x, transform.translation.y
+                    x.x, x.y, y.x, y.y, center.x, center.y
                 ));
             }
             svg.push_str("</g></svg>\n");
@@ -258,19 +255,29 @@ fn path_data(path: &crate::CanvasPath) -> String {
     path.commands
         .iter()
         .map(|command| match *command {
-            CanvasPathCommand::MoveTo(p) => format!("M {} {} ", p.x, p.y),
-            CanvasPathCommand::LineTo(p) => format!("L {} {} ", p.x, p.y),
+            CanvasPathCommand::MoveTo(p) => {
+                let [x, y] = p.as_dvec2().to_array();
+                format!("M {x} {y} ")
+            }
+            CanvasPathCommand::LineTo(p) => {
+                let [x, y] = p.as_dvec2().to_array();
+                format!("L {x} {y} ")
+            }
             CanvasPathCommand::QuadTo { control, to } => {
-                format!("Q {} {} {} {} ", control.x, control.y, to.x, to.y)
+                let [cx, cy] = control.as_dvec2().to_array();
+                let [x, y] = to.as_dvec2().to_array();
+                format!("Q {cx} {cy} {x} {y} ")
             }
             CanvasPathCommand::CubicTo {
                 control1,
                 control2,
                 to,
-            } => format!(
-                "C {} {} {} {} {} {} ",
-                control1.x, control1.y, control2.x, control2.y, to.x, to.y
-            ),
+            } => {
+                let [cx1, cy1] = control1.as_dvec2().to_array();
+                let [cx2, cy2] = control2.as_dvec2().to_array();
+                let [x, y] = to.as_dvec2().to_array();
+                format!("C {cx1} {cy1} {cx2} {cy2} {x} {y} ")
+            }
             CanvasPathCommand::ArcTo {
                 radii,
                 rotation,
@@ -282,15 +289,12 @@ fn path_data(path: &crate::CanvasPath) -> String {
                 // Large unreduced angles lose their axis direction in SVG consumers.
                 let (sin, cos) = f64::from(rotation).sin_cos();
                 let degrees = sin.atan2(cos).to_degrees();
+                let [rx, ry] = radii.as_dvec2().to_array();
+                let [x, y] = to.as_dvec2().to_array();
                 format!(
-                    "A {} {} {} {} {} {} {} ",
-                    radii.x,
-                    radii.y,
-                    degrees,
+                    "A {rx} {ry} {degrees} {} {} {x} {y} ",
                     u8::from(large_arc),
                     u8::from(sweep),
-                    to.x,
-                    to.y
                 )
             }
             CanvasPathCommand::Close => "Z ".to_owned(),
@@ -312,13 +316,26 @@ fn color(attribute: &str, value: Color) -> String {
 struct Shape {
     entity: Entity,
     geometry: CanvasGeometry,
-    transform: Transform,
+    projection: Affine3A,
     paint: CanvasPaint,
+    #[cfg(feature = "png_export")]
+    container: crate::CanvasContainer,
+    #[cfg(feature = "png_export")]
+    local_transform: Transform,
+}
+
+#[cfg(feature = "png_export")]
+struct Group {
+    entity: Entity,
+    container: crate::CanvasContainer,
+    local_transform: Transform,
 }
 
 struct Snapshot {
     shapes: Vec<Shape>,
     region: Rect,
+    #[cfg(feature = "png_export")]
+    groups: Vec<Group>,
 }
 
 fn snapshot(
@@ -330,13 +347,15 @@ fn snapshot(
         return Err(CanvasExportError::InvalidDocument);
     }
     let mut shapes = Vec::new();
+    #[cfg(feature = "png_export")]
+    let mut groups = Vec::new();
     let mut bounds: Option<Rect> = None;
     let order = world
         .get::<crate::CanvasLayerStack>(document)
         .ok_or(CanvasExportError::InvalidDocument)?;
     let visible_layers = order.layers().iter().filter(|layer| layer.visible());
     crate::order::visit_draw_order(world, visible_layers, |entity, container, entry| {
-        let group = entry.is_some_and(|entry| entry.contains::<crate::order::CanvasItemOrder>());
+        let group = entry.is_some_and(crate::groups::has_group_components);
         if !entry.is_some_and(|entry| {
             crate::order::is_item_child(entry, container.parent(document))
                 && (group || crate::model::has_shape_components(entry))
@@ -350,13 +369,34 @@ fn snapshot(
                     )),
             ));
         }
+        let local_transform = *world.get::<Transform>(entity).ok_or_else(|| {
+            CanvasExportError::Model(
+                crate::error::missing(crate::CanvasPart::Transform)
+                    .at("document", document)
+                    .at("item", entity)
+                    .into_failure(ErrorFrame::new("canvas.export.snapshot")),
+            )
+        })?;
         if group {
+            crate::groups::validate_group_transform(local_transform).map_err(|error| {
+                CanvasExportError::Model(
+                    error
+                        .at("document", document)
+                        .at("group", entity)
+                        .into_failure(ErrorFrame::new("canvas.export.snapshot")),
+                )
+            })?;
+            #[cfg(feature = "png_export")]
+            groups.push(Group {
+                entity,
+                container,
+                local_transform,
+            });
             return Ok(true);
         }
         let geometry = world.get::<CanvasGeometry>(entity);
-        let transform = world.get::<Transform>(entity);
         let paint = world.get::<CanvasPaint>(entity);
-        let (Some(geometry), Some(transform), Some(paint)) = (geometry, transform, paint) else {
+        let (Some(geometry), Some(paint)) = (geometry, paint) else {
             return Err(CanvasExportError::Model(
                 crate::error::missing(crate::CanvasPart::Geometry)
                     .at("document", document)
@@ -364,16 +404,26 @@ fn snapshot(
                     .into_failure(ErrorFrame::new("canvas.export.snapshot")),
             ));
         };
-        let b = geometry._bounds(transform, paint).map_err(|error| {
+        let projection = crate::groups::document_transform(world, entity).map_err(|error| {
             CanvasExportError::Model(
                 error
                     .at("document", document)
                     .at("shape", entity)
-                    .into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
-                        "canvas.export.bounds",
-                    )),
+                    .into_failure(ErrorFrame::new("canvas.export.snapshot")),
             )
         })?;
+        let b = geometry
+            .bounds_in_projection(&local_transform, &projection, paint)
+            .map_err(|error| {
+                CanvasExportError::Model(
+                    error
+                        .at("document", document)
+                        .at("shape", entity)
+                        .into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                            "canvas.export.bounds",
+                        )),
+                )
+            })?;
         bounds = Some(bounds.map_or(b, |old| Rect {
             min: old.min.min(b.min),
             max: old.max.max(b.max),
@@ -381,8 +431,12 @@ fn snapshot(
         shapes.push(Shape {
             entity,
             geometry: geometry.clone(),
-            transform: *transform,
+            projection,
             paint: *paint,
+            #[cfg(feature = "png_export")]
+            container,
+            #[cfg(feature = "png_export")]
+            local_transform,
         });
         Ok(true)
     })?;
@@ -395,7 +449,12 @@ fn snapshot(
     {
         return Err(CanvasExportError::InvalidRegion { region });
     }
-    Ok(Snapshot { shapes, region })
+    Ok(Snapshot {
+        shapes,
+        region,
+        #[cfg(feature = "png_export")]
+        groups,
+    })
 }
 
 impl CanvasExportError {

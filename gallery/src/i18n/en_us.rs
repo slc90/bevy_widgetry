@@ -114,8 +114,12 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             super::CanvasKey::LayerHide => "Hide",
             super::CanvasKey::LayerLock => "Lock",
             super::CanvasKey::LayerUnlock => "Unlock",
+            super::CanvasKey::Group => "Group",
+            super::CanvasKey::Ungroup => "Ungroup",
+            super::CanvasKey::ChooseGroupMembers => "Select at least two consecutive items in the same layer or group.",
+            super::CanvasKey::ChooseGroup => "Select one group in the main view to ungroup it.",
             super::CanvasKey::Description => {
-                "Shared shapes, independent selection and navigation. Ctrl+click selects multiple shapes; drag any member to move the set, Delete removes the focused view selection. Squares scale/mirror, the round handle rotates (Shift: 15°); inner diamonds edit sizes/radii, the inner round handle edits rectangle corners. Rectangle/Ellipse draw once; Path nodes drags anchors and Bezier controls. Space+left drag pans; the wheel zooms. Toolbar actions affect the main view. SVG/PNG export committed vector shapes."
+                "Shared shapes, independent selection and navigation. Ctrl+click to select multiple items, then drag the selection or click Group. Double-click a group to edit its children. Esc goes up one group level. Delete removes the focused view selection. Squares scale, the round handle rotates (Shift: 15°), and inset handles edit shape parameters. Space+left drag pans; the wheel zooms. The toolbar operates on the main view."
             }
             super::CanvasKey::Raise => "Raise",
             super::CanvasKey::Lower => "Lower",
@@ -131,7 +135,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             super::CanvasKey::Cubic => "Make cubic",
             super::CanvasKey::Close => "Open / close contour",
             super::CanvasKey::Editing => "Select one Path. Previous / Next chooses the segment shown with endpoint coordinates; convert, insert, or remove its endpoint. Convert to a line before inserting. Append adds a contour to the same Path. Pen needs canvas focus: L/Q/B/A selects line/quadratic/cubic/arc, C closes, N starts a contour, Enter commits, Esc cancels the draft; clicking the toolbar ends the draft.",
-            super::CanvasKey::ChooseShape => "Select exactly one shape in the main view to change its order.",
+            super::CanvasKey::ChooseShape => "Select one item in the main view to change its order.",
             super::CanvasKey::ChoosePath => "Select exactly one Path with drawing segments in the main view.",
             super::CanvasKey::ChooseLine => "Convert this segment to a line before inserting a midpoint.",
             super::CanvasKey::Select => "Select",

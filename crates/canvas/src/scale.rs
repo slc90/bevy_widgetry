@@ -1,9 +1,11 @@
 const HANDLE_HIT_MARGIN: f32 = 2.0;
 const MIN_POSITIVE_SUBNORMAL: f32 = f32::from_bits(1);
 
-use crate::CanvasDocument;
 use crate::error::CanvasResult as Result;
-use bevy::{math::DVec2, prelude::*};
+use bevy::{
+    math::{Affine3A, DVec2},
+    prelude::*,
+};
 
 pub(crate) const HANDLE_SIZE: f32 = 8.0;
 
@@ -71,7 +73,10 @@ pub(crate) fn hit(
 pub(crate) struct Scale {
     pub(crate) document: Entity,
     pub(crate) shape: Entity,
+    pub(crate) parent: Affine3A,
     transform: Transform,
+    projection: Affine3A,
+    uniform: bool,
     start: DVec2,
     bounds: Rect,
     handle: ScaleHandle,
@@ -90,11 +95,16 @@ impl Scale {
             let transform = *world
                 .get::<Transform>(shape)
                 .ok_or_else(|| crate::error::missing(crate::CanvasPart::ScalingTransform))?;
+            let parent = crate::groups::parent_transform(world, shape)?;
+            let projection = parent * transform.compute_affine();
             Ok(Self {
                 document,
                 shape,
+                parent,
                 transform,
-                start: local_point(transform, start),
+                projection,
+                uniform: world.get::<crate::CanvasGroup>(shape).is_some(),
+                start: local_point(projection, start),
                 bounds,
                 handle,
             })
@@ -103,7 +113,7 @@ impl Scale {
     }
 
     pub(crate) fn apply(self, world: &mut World, point: Vec2) -> Result {
-        let delta = local_point(self.transform, point) - self.start;
+        let delta = local_point(self.projection, point) - self.start;
         let axes = self.handle.axes();
         let size = self.bounds.max.as_dvec2() - self.bounds.min.as_dvec2();
         let mut factors = DVec2::ONE;
@@ -118,6 +128,18 @@ impl Scale {
                 };
             }
         }
+        if self.uniform {
+            let lever = size * axes;
+            let factor = if lever.length_squared() > 0.0 {
+                1.0 + delta.dot(lever) / lever.length_squared()
+            } else {
+                1.0
+            };
+            if !factor.is_finite() || factor <= 0.0 {
+                return Ok(());
+            }
+            factors = DVec2::splat(factor);
+        }
         let old = self.transform.scale.truncate().as_dvec2();
         let mut scaled = old * factors;
         for i in 0..2 {
@@ -130,8 +152,7 @@ impl Scale {
         transform.scale.x = scaled.x as f32;
         transform.scale.y = scaled.y as f32;
         let project = |t: Transform| {
-            let x = (t.rotation * Vec3::X * t.scale.x).truncate().as_dvec2();
-            let y = (t.rotation * Vec3::Y * t.scale.y).truncate().as_dvec2();
+            let [x, y] = crate::groups::planar_axes(&t.compute_affine());
             x * anchor.x + y * anchor.y
         };
         let translation = self.transform.translation.truncate().as_dvec2()
@@ -139,18 +160,13 @@ impl Scale {
             - project(transform);
         transform.translation.x = translation.x as f32;
         transform.translation.y = translation.y as f32;
-        CanvasDocument::_update_transform(world, self.document, self.shape, transform)
+        crate::groups::update_item_transform(world, self.document, self.shape, transform)
     }
 }
 
-pub(crate) fn local_point(transform: Transform, point: Vec2) -> DVec2 {
+pub(crate) fn local_point(transform: Affine3A, point: Vec2) -> DVec2 {
     let relative = point.as_dvec2() - transform.translation.truncate().as_dvec2();
-    let x = (transform.rotation * Vec3::X * transform.scale.x)
-        .truncate()
-        .as_dvec2();
-    let y = (transform.rotation * Vec3::Y * transform.scale.y)
-        .truncate()
-        .as_dvec2();
+    let [x, y] = crate::groups::planar_axes(&transform);
     let determinant = x.perp_dot(y);
     DVec2::new(
         relative.perp_dot(y) / determinant,

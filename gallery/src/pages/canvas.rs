@@ -83,6 +83,8 @@ enum Action {
     Ellipse,
     Pen,
     Nodes,
+    Group,
+    Ungroup,
     Add,
     Raise,
     Lower,
@@ -315,6 +317,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::Ellipse, Action::Ellipse),
         (CanvasKey::Pen, Action::Pen),
         (CanvasKey::Nodes, Action::Nodes),
+        (CanvasKey::Group, Action::Group), (CanvasKey::Ungroup, Action::Ungroup),
         (CanvasKey::Raise, Action::Raise), (CanvasKey::Lower, Action::Lower),
         (CanvasKey::Front, Action::Front), (CanvasKey::Back, Action::Back),
         (CanvasKey::Append, Action::Append),
@@ -643,6 +646,7 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                     .map_err(|error| error.into_bevy_error())?;
             }
             Action::Add => add_rectangle(world, demo.document)?,
+            Action::Group | Action::Ungroup => edit_groups(world, &demo, action)?,
             Action::Raise | Action::Lower | Action::Front | Action::Back => {
                 if let Some(shape) = CanvasView::single_selection(world, demo.main)
                     .map_err(|error| error.into_bevy_error())?
@@ -653,7 +657,9 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                         Action::Front => CanvasOrder::Front,
                         _ => CanvasOrder::Back,
                     };
-                    CanvasDocument::reorder_shape(world, demo.document, shape, order)
+                    let container = CanvasDocument::container_of(world, demo.document, shape)
+                        .map_err(|error| error.into_bevy_error())?;
+                    CanvasDocument::reorder_item(world, demo.document, container, shape, order)
                         .map_err(|error| error.into_bevy_error())?;
                 } else {
                     bind(
@@ -726,11 +732,90 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             }
             Action::Svg | Action::Png => export(world, &demo, action)?,
         }
-        if !matches!(action, Action::Svg | Action::Png) {
+        if !matches!(
+            action,
+            Action::Svg | Action::Png | Action::Group | Action::Ungroup
+        ) {
             info!(?action, "执行 Canvas 演示操作");
         }
         refresh(world)
     });
+}
+
+fn edit_groups(world: &mut World, demo: &Demo, action: Action) -> Result {
+    let selected =
+        CanvasView::selection(world, demo.main).map_err(|error| error.into_bevy_error())?;
+    let result = (|| -> Result<bool> {
+        let items = match (action, selected.as_slice()) {
+            (Action::Group, [_, _, ..]) => {
+                match CanvasDocument::group_items(world, demo.document, &selected, "Group") {
+                    Ok(group) => vec![group],
+                    Err(error)
+                        if error.diagnostics().any(|diagnostic| {
+                            diagnostic
+                                .source()
+                                .and_then(|source| source.downcast_ref::<CanvasError>())
+                                .is_some_and(|domain| {
+                                    domain.kind
+                                        == CanvasErrorKind::Invalid(CanvasIssue::GroupMembers)
+                                })
+                        }) =>
+                    {
+                        bind(
+                            world,
+                            demo.result,
+                            LocalizedText::new(TextKey::Canvas(CanvasKey::ChooseGroupMembers)),
+                        )?;
+                        error.record_handled("显示分组选择要求", "保留原有画序和选择");
+                        return Ok(false);
+                    }
+                    Err(error) => return Err(error.into_bevy_error()),
+                }
+            }
+            (Action::Ungroup, [group]) if world.get::<CanvasGroup>(*group).is_some() => {
+                CanvasDocument::ungroup(world, demo.document, *group)
+                    .map_err(|error| error.into_bevy_error())?
+            }
+            _ => {
+                let hint = if matches!(action, Action::Group) {
+                    CanvasKey::ChooseGroupMembers
+                } else {
+                    CanvasKey::ChooseGroup
+                };
+                bind(
+                    world,
+                    demo.result,
+                    LocalizedText::new(TextKey::Canvas(hint)),
+                )?;
+                return Ok(false);
+            }
+        };
+        CanvasView::set_selection_in_world(world, demo.main, items)
+            .map_err(|error| error.into_bevy_error())?;
+        if world
+            .get::<LocalizedText>(demo.result)
+            .is_some_and(|status| {
+                matches!(
+                    status.key(),
+                    TextKey::Canvas(CanvasKey::ChooseGroupMembers | CanvasKey::ChooseGroup)
+                )
+            })
+        {
+            bind(
+                world,
+                demo.result,
+                LocalizedText::new(TextKey::Canvas(CanvasKey::Ready)),
+            )?;
+        }
+        Ok(true)
+    })();
+    let outcome = match &result {
+        Ok(true) => "changed",
+        Ok(false) => "unchanged",
+        Err(_) => "failed",
+    };
+    info!(?action, document=?demo.document, selected=?selected, result=outcome, "执行 Canvas 分组操作");
+    result.map(|_| ())
 }
 
 fn export(world: &mut World, demo: &Demo, action: Action) -> Result {

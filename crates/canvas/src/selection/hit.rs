@@ -1,6 +1,6 @@
 use crate::error::CanvasResult as Result;
 use bevy::{
-    math::{DMat2, DVec2},
+    math::{Affine3A, DMat2, DVec2},
     mesh::VertexAttributeValues,
     prelude::*,
     ui::{ComputedUiTargetCamera, UiGlobalTransform},
@@ -40,13 +40,8 @@ impl ScreenSpace {
         .map_err(|error| error.at("view", view))
     }
 
-    pub(super) fn near_bounds(&self, bounds: Rect, transform: &Transform, point: Vec2) -> bool {
-        let x = (transform.rotation * Vec3::X * transform.scale.x)
-            .truncate()
-            .as_dvec2();
-        let y = (transform.rotation * Vec3::Y * transform.scale.y)
-            .truncate()
-            .as_dvec2();
+    pub(super) fn near_bounds(&self, bounds: Rect, transform: &Affine3A, point: Vec2) -> bool {
+        let [x, y] = crate::groups::planar_axes(transform);
         let offset = transform.translation.truncate().as_dvec2() - point.as_dvec2();
         let points = [
             bounds.min,
@@ -68,7 +63,7 @@ impl ScreenSpace {
     pub(super) fn mesh(
         &self,
         mesh: &Mesh,
-        transform: &Transform,
+        transform: &Affine3A,
         point: Vec2,
         stroke: bool,
     ) -> Result<bool> {
@@ -81,15 +76,8 @@ impl ScreenSpace {
             .indices()
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::HitMeshIndices))?;
         let mut indices = indices.iter();
-        let model = DMat2::from_cols(
-            (transform.rotation * Vec3::X * transform.scale.x)
-                .truncate()
-                .as_dvec2(),
-            (transform.rotation * Vec3::Y * transform.scale.y)
-                .truncate()
-                .as_dvec2(),
-        );
-        let linear = self.linear * model;
+        let [x, y] = crate::groups::planar_axes(transform);
+        let linear = self.linear * DMat2::from_cols(x, y);
         // Subtract translations before projecting so a distant contour does not erase local precision.
         let offset = self.linear * (transform.translation.truncate().as_dvec2() - point.as_dvec2());
         let project = |index: usize| -> Result<DVec2> {

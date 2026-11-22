@@ -5,7 +5,8 @@ use crate::error::CanvasFailureState;
 use crate::error::CanvasResult as RawResult;
 use crate::view::ViewState;
 use crate::{
-    CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape, CanvasView,
+    CanvasContainer, CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape,
+    CanvasView,
 };
 use bevy::camera::{CameraProjection, ScalingMode, primitives::Aabb, visibility::RenderLayers};
 use bevy::prelude::*;
@@ -19,7 +20,7 @@ use bevy_widgetry_diagnostics::{
     bevy::{DiagnosticBatch, WidgetryEcsError},
 };
 use bevy_widgetry_internal_log::widgetry_debug;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 mod nodes;
 mod outline;
 mod pen;
@@ -56,6 +57,7 @@ struct Renderer {
     content: Entity,
     layer: usize,
     proxies: HashMap<Entity, Entity>,
+    group_proxies: HashMap<Entity, Entity>,
     outline: Option<Entity>,
     preview: Option<Entity>,
     pen: Option<Entity>,
@@ -186,6 +188,7 @@ fn initialize_root(world: &mut World, root: Entity) -> RawResult {
             content,
             layer,
             proxies: HashMap::new(),
+            group_proxies: HashMap::new(),
             outline: None,
             preview: None,
             pen: None,
@@ -309,33 +312,41 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
         transform.translation = translation;
     }
     let document = CanvasView::_document(world, root)?;
-    let shapes = if let Some(document) =
+    let mut shapes = Vec::new();
+    let mut groups = Vec::new();
+    if let Some(document) =
         document.filter(|document| world.get::<CanvasDocument>(*document).is_some())
     {
-        CanvasDocument::shape_order_in(world, document, crate::CanvasLayer::visible)?
-            .into_iter()
-            .map(|entity| {
-                let geometry = world
-                    .get::<CanvasGeometry>(entity)
-                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::Geometry))?;
-                let transform = world
-                    .get::<Transform>(entity)
+        crate::order::visit_valid_order(
+            world,
+            document,
+            crate::CanvasLayer::visible,
+            |entry, container, group| {
+                let transform = *entry
+                    .get::<Transform>()
                     .ok_or_else(|| crate::error::missing(crate::CanvasPart::Transform))?;
-                let paint = world
-                    .get::<CanvasPaint>(entity)
-                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
-                Ok((entity, geometry.clone(), *transform, *paint))
-            })
-            .collect::<RawResult<Vec<_>>>()?
-    } else {
-        Vec::new()
-    };
+                if group {
+                    groups.push((entry.id(), container, transform));
+                } else {
+                    let geometry = entry
+                        .get::<CanvasGeometry>()
+                        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Geometry))?;
+                    let paint = entry
+                        .get::<CanvasPaint>()
+                        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
+                    shapes.push((entry.id(), container, geometry.clone(), transform, *paint));
+                }
+                Ok(())
+            },
+        )?;
+    }
+    let active: HashSet<_> = shapes.iter().map(|(shape, ..)| *shape).collect();
     let stale = world
         .get::<Renderer>(root)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
         .proxies
         .iter()
-        .filter(|(shape, _)| !shapes.iter().any(|(entity, ..)| entity == *shape))
+        .filter(|(shape, _)| !active.contains(shape))
         .map(|(shape, proxy)| (*shape, *proxy))
         .collect::<Vec<_>>();
     for (shape, proxy) in stale {
@@ -348,18 +359,20 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
     }
     let spacing = PAINT_DEPTH_RANGE / shapes.len().max(1) as f32;
     observe(world, root, Stage::Geometry, Ok(()))?;
-    let active = shapes
-        .iter()
-        .map(|(shape, ..)| *shape)
-        .collect::<std::collections::HashSet<_>>();
+    let active_groups: HashSet<_> = groups.iter().map(|(group, ..)| *group).collect();
+    for (group, container, transform) in groups {
+        let parent = projection_parent(world, root, content, container)?;
+        project_group(world, root, parent, group, transform)?;
+    }
     if let Some(mut failure) = world.get_mut::<RenderFailure>(root) {
         failure.shapes.retain(|shape, _| active.contains(shape));
     }
     let mut failure = Vec::new();
     let mut diagnostics = DiagnosticBatch::default();
-    for (index, (shape, geometry, transform, paint)) in shapes.into_iter().enumerate() {
+    for (index, (shape, container, geometry, transform, paint)) in shapes.into_iter().enumerate() {
+        let parent = projection_parent(world, root, content, container)?;
         let result = prepare_shape(
-            world, root, content, layer, index, spacing, shape, geometry, transform, paint,
+            world, root, parent, layer, index, spacing, shape, geometry, transform, paint,
         )
         .map_err(|error| {
             let error = error.at("view", root).at("shape", shape);
@@ -382,6 +395,19 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
         };
         if let Err(error) = result {
             collect_error(error, &mut failure, &mut diagnostics);
+        }
+    }
+    let mut renderer = world
+        .get_mut::<Renderer>(root)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?;
+    let stale_groups = renderer
+        .group_proxies
+        .extract_if(|group, _| !active_groups.contains(group))
+        .map(|(_, proxy)| proxy)
+        .collect::<Vec<_>>();
+    for proxy in stale_groups {
+        if world.get_entity(proxy).is_ok() {
+            world.despawn(proxy);
         }
     }
 
@@ -440,6 +466,65 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
     finish_errors(world, failure, diagnostics).map_err(crate::error::CanvasFault::from)
 }
 
+fn projection_parent(
+    world: &World,
+    root: Entity,
+    content: Entity,
+    container: CanvasContainer,
+) -> RawResult<Entity> {
+    match container {
+        CanvasContainer::Layer(_) => Ok(content),
+        CanvasContainer::Group(group) => world
+            .get::<Renderer>(root)
+            .and_then(|renderer| renderer.group_proxies.get(&group))
+            .copied()
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::GroupProxy).at("group", group)),
+    }
+}
+
+fn project_group(
+    world: &mut World,
+    root: Entity,
+    parent: Entity,
+    group: Entity,
+    mut transform: Transform,
+) -> RawResult {
+    crate::groups::validate_group_transform(transform)?;
+    transform.translation.z = 0.0;
+    let current = world
+        .get::<Renderer>(root)
+        .and_then(|renderer| renderer.group_proxies.get(&group))
+        .copied();
+    if let Some(proxy) = current.filter(|&proxy| world.get_entity(proxy).is_ok()) {
+        reparent_proxy(world, proxy, parent);
+        world
+            .get_mut::<Transform>(proxy)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyTransform))?
+            .set_if_neq(transform);
+    } else {
+        let proxy = world
+            .spawn((
+                Name::new("CanvasGroupProxy"),
+                transform,
+                Visibility::Inherited,
+                ChildOf(parent),
+            ))
+            .id();
+        world
+            .get_mut::<Renderer>(root)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
+            .group_proxies
+            .insert(group, proxy);
+    }
+    Ok(())
+}
+
+fn reparent_proxy(world: &mut World, proxy: Entity, parent: Entity) {
+    if world.get::<ChildOf>(proxy).map(ChildOf::parent) != Some(parent) {
+        world.entity_mut(proxy).insert(ChildOf(parent));
+    }
+}
+
 fn prepare_shape(
     world: &mut World,
     root: Entity,
@@ -452,12 +537,16 @@ fn prepare_shape(
     transform: Transform,
     paint: CanvasPaint,
 ) -> RawResult {
-    geometry._validate(&transform, &paint)?;
-    let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint)?;
     let proxy = world
         .get::<Renderer>(root)
         .and_then(|renderer| renderer.proxies.get(&shape))
-        .copied();
+        .copied()
+        .filter(|&proxy| world.get_entity(proxy).is_ok());
+    if let Some(proxy) = proxy {
+        reparent_proxy(world, proxy, content);
+    }
+    geometry._validate(&transform, &paint)?;
+    let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint)?;
     let proxy = if let Some(proxy) = proxy {
         proxy
     } else {
@@ -679,6 +768,7 @@ impl Plugin for CanvasPlugin {
         app.init_resource::<crate::mesh_cache::MeshCache>();
         app.register_type::<CanvasDocument>()
             .register_type::<crate::CanvasItem>()
+            .register_type::<crate::CanvasGroup>()
             .register_type::<crate::CanvasLayerStack>()
             .register_type::<CanvasShape>()
             .register_type::<CanvasGeometry>()

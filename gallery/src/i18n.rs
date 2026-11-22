@@ -23,6 +23,10 @@ pub(crate) struct LocalizedText {
 }
 
 impl LocalizedText {
+    pub(crate) fn key(&self) -> &TextKey {
+        &self.key
+    }
+
     pub(crate) fn new(key: TextKey) -> Self {
         Self {
             key,

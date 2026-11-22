@@ -1,6 +1,7 @@
 use crate::error::CanvasResult as Result;
 use crate::{
-    CanvasDocument, CanvasGeometry, CanvasIssue, CanvasItem, CanvasPaint, CanvasPart, CanvasShape,
+    CanvasDocument, CanvasGeometry, CanvasGroup, CanvasIssue, CanvasItem, CanvasPaint, CanvasPart,
+    CanvasShape,
 };
 use bevy::ecs::component::ComponentId;
 use bevy::ecs::lifecycle::HookContext;
@@ -105,7 +106,7 @@ impl CanvasLayerStack {
 }
 
 #[derive(Component, Default)]
-pub(crate) struct CanvasItemOrder(Vec<Entity>);
+pub(crate) struct CanvasItemOrder(pub(crate) Vec<Entity>);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CanvasContainer {
@@ -140,7 +141,7 @@ pub(crate) fn is_item_child(item: &EntityRef, parent: Entity) -> bool {
 struct OrderComponents {
     item: Option<ComponentId>,
     shape: Option<[ComponentId; 4]>,
-    group: Option<ComponentId>,
+    group: Option<[ComponentId; 3]>,
 }
 
 impl OrderComponents {
@@ -155,7 +156,13 @@ impl OrderComponents {
                     world.component_id::<Transform>()?,
                 ])
             })(),
-            group: world.component_id::<CanvasItemOrder>(),
+            group: (|| {
+                Some([
+                    world.component_id::<CanvasGroup>()?,
+                    world.component_id::<CanvasItemOrder>()?,
+                    world.component_id::<Transform>()?,
+                ])
+            })(),
         }
     }
 
@@ -165,7 +172,8 @@ impl OrderComponents {
     }
 
     fn is_group(&self, item: &EntityRef) -> bool {
-        self.group.is_some_and(|id| item.contains_id(id))
+        self.group
+            .is_some_and(|ids| ids.into_iter().all(|id| item.contains_id(id)))
     }
 
     fn is_attached(&self, item: &EntityRef, parent: Entity) -> bool {
@@ -209,7 +217,11 @@ pub(crate) fn item_placement(
                 .find(|layer| layer.items.contains(&current))
                 .map(|layer| (container.unwrap_or(CanvasContainer::Layer(layer.id)), layer));
         }
-        if !groups.insert(parent) || !world.get::<CanvasItemOrder>(parent)?.0.contains(&current) {
+        if !groups.insert(parent)
+            || world.get::<CanvasGroup>(parent).is_none()
+            || world.get::<Transform>(parent).is_none()
+            || !world.get::<CanvasItemOrder>(parent)?.0.contains(&current)
+        {
             return None;
         }
         container.get_or_insert(CanvasContainer::Group(parent));
@@ -248,7 +260,7 @@ pub(crate) fn visit_draw_order<'a, E>(
     Ok(())
 }
 
-fn container_items(
+pub(crate) fn container_items(
     world: &World,
     document: Entity,
     container: CanvasContainer,
@@ -370,30 +382,19 @@ impl CanvasDocument {
         document: Entity,
         include: impl Fn(&CanvasLayer) -> bool,
     ) -> Result<Vec<Entity>> {
-        let mut stale = HashMap::<_, HashSet<_>>::new();
-        let stack = stack(world, document)?;
-        let layers = stack.layers().iter().filter(|layer| include(layer));
-        let capacity = layers.clone().map(|layer| layer.items.len()).sum();
+        let capacity = stack(world, document)?
+            .layers()
+            .iter()
+            .filter(|layer| include(layer))
+            .map(|layer| layer.items.len())
+            .sum();
         let mut shapes = Vec::with_capacity(capacity);
-        let components = OrderComponents::new(world);
-        visit_draw_order(world, layers, |item, container, entity| -> Result<bool> {
-            if let Some(entry) =
-                entity.filter(|entry| components.is_attached(entry, container.parent(document)))
-            {
-                if components.is_shape(entry) {
-                    shapes.push(item);
-                    return Ok(false);
-                }
-                if components.is_group(entry) {
-                    return Ok(true);
-                }
+        visit_valid_order(world, document, include, |entry, _, is_group| {
+            if !is_group {
+                shapes.push(entry.id());
             }
-            stale.entry(container).or_default().insert(item);
-            Ok(false)
+            Ok(())
         })?;
-        for (container, removed) in stale {
-            container_items_mut(world, document, container)?.retain(|item| !removed.contains(item));
-        }
         Ok(shapes)
     }
 
@@ -433,6 +434,38 @@ impl CanvasDocument {
         let container = crate::model::validate_shape(world, document, shape)?;
         reorder(world, document, container, shape, operation)
     }
+}
+
+pub(crate) fn visit_valid_order(
+    world: &mut World,
+    document: Entity,
+    include: impl Fn(&CanvasLayer) -> bool,
+    mut visit: impl FnMut(&EntityRef, CanvasContainer, bool) -> Result,
+) -> Result {
+    let mut stale = HashMap::<_, HashSet<_>>::new();
+    let stack = stack(world, document)?;
+    let layers = stack.layers().iter().filter(|layer| include(layer));
+    let components = OrderComponents::new(world);
+    visit_draw_order(world, layers, |item, container, entity| -> Result<bool> {
+        if let Some(entry) =
+            entity.filter(|entry| components.is_attached(entry, container.parent(document)))
+        {
+            if components.is_shape(entry) {
+                visit(entry, container, false)?;
+                return Ok(false);
+            }
+            if components.is_group(entry) {
+                visit(entry, container, true)?;
+                return Ok(true);
+            }
+        }
+        stale.entry(container).or_default().insert(item);
+        Ok(false)
+    })?;
+    for (container, removed) in stale {
+        container_items_mut(world, document, container)?.retain(|item| !removed.contains(item));
+    }
+    Ok(())
 }
 
 pub(crate) fn stack(world: &World, document: Entity) -> Result<&CanvasLayerStack> {
@@ -522,10 +555,10 @@ mod tests {
         let mut world = World::new();
         let document = world.spawn(CanvasDocument).id();
         let group = world
-            .spawn((CanvasItem, CanvasItemOrder::default(), ChildOf(document)))
+            .spawn((CanvasGroup::new("Group".to_owned()), ChildOf(document)))
             .id();
         let nested = world
-            .spawn((CanvasItem, CanvasItemOrder::default(), ChildOf(group)))
+            .spawn((CanvasGroup::new("Nested".to_owned()), ChildOf(group)))
             .id();
         let [a, b, c] = std::array::from_fn(|_| {
             CanvasDocument::create_rectangle(

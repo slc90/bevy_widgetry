@@ -9,7 +9,10 @@ const HANDLE_HALF_SIZE: f32 = 4.0;
 
 use crate::error::CanvasResult as Result;
 use crate::{CanvasDocument, CanvasEllipse, CanvasGeometry, CanvasPaint, CanvasRectangle};
-use bevy::{math::DVec2, prelude::*};
+use bevy::{
+    math::{Affine3A, DVec2},
+    prelude::*,
+};
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum ParameterHandle {
@@ -48,12 +51,10 @@ pub(crate) fn controls(
         let Some(geometry) = Geometry::get(world, shape) else {
             return Ok(Vec::new());
         };
-        let transform = *world
-            .get::<Transform>(shape)
-            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ParameterTransform))?;
+        let transform = crate::groups::document_transform(world, shape)?;
         let half = geometry.size() * 0.5;
         let center = transform.translation.truncate();
-        let project = |p: Vec2| transform.transform_point(p.extend(0.0)).truncate();
+        let project = |p: Vec2| transform.transform_point3(p.extend(0.0)).truncate();
         let corners = [
             -half,
             Vec2::new(half.x, -half.y),
@@ -143,8 +144,10 @@ pub(crate) fn decorate(mesh: Mesh, handles: &[(ParameterHandle, Vec2)], zoom: f3
 pub(crate) struct Edit {
     pub(crate) document: Entity,
     pub(crate) shape: Entity,
+    pub(crate) parent: Affine3A,
     geometry: Geometry,
     transform: Transform,
+    projection: Affine3A,
     start: DVec2,
     handle: ParameterHandle,
 }
@@ -163,19 +166,23 @@ impl Edit {
             let transform = *world
                 .get::<Transform>(shape)
                 .ok_or_else(|| crate::error::missing(crate::CanvasPart::ParameterTransform))?;
+            let parent = crate::groups::parent_transform(world, shape)?;
+            let projection = parent * transform.compute_affine();
             Ok(Self {
                 document,
                 shape,
+                parent,
                 geometry,
                 transform,
-                start: crate::scale::local_point(transform, point),
+                projection,
+                start: crate::scale::local_point(projection, point),
                 handle,
             })
         })()
         .map_err(|error| error.at("document", document).at("shape", shape))
     }
     pub(crate) fn apply(self, world: &mut World, point: Vec2) -> Result {
-        let delta = crate::scale::local_point(self.transform, point) - self.start;
+        let delta = crate::scale::local_point(self.projection, point) - self.start;
         let mut geometry = self.geometry;
         let mut transform = self.transform;
         match self.handle {
@@ -192,12 +199,7 @@ impl Edit {
                     return Ok(());
                 }
                 let offset = (size - old) * axes * 0.5;
-                let x = (transform.rotation * Vec3::X * transform.scale.x)
-                    .truncate()
-                    .as_dvec2();
-                let y = (transform.rotation * Vec3::Y * transform.scale.y)
-                    .truncate()
-                    .as_dvec2();
+                let [x, y] = crate::groups::planar_axes(&transform.compute_affine());
                 let center =
                     transform.translation.truncate().as_dvec2() + x * offset.x + y * offset.y;
                 if !center.as_vec2().is_finite() {

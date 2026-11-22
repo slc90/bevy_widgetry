@@ -10,12 +10,13 @@ const MAX_TILE_EDGE_ERROR_PIXELS: f64 = 1.0 / 256.0;
 const EXPORT_RENDER_TIMEOUT: Duration = Duration::from_secs(30);
 
 use super::{CanvasExportError, CanvasRenderIssue};
-use crate::CanvasDocument;
+use crate::{CanvasContainer, CanvasDocument};
 use bevy::prelude::*;
 use bevy::{
     asset::RenderAssetUsages,
     camera::{RenderTarget, ScalingMode, visibility::RenderLayers},
     core_pipeline::fullscreen_material::FullscreenMaterialPipelineId,
+    ecs::entity::EntityHashMap,
     render::{
         Render, RenderApp, RenderSystems,
         erased_render_asset::ErasedRenderAssets,
@@ -897,6 +898,21 @@ fn geometry(
     layer: usize,
     snapshot: &super::Snapshot,
 ) -> std::result::Result<(), CanvasExportError> {
+    let mut proxies = EntityHashMap::default();
+    for group in &snapshot.groups {
+        let parent = export_parent(content, &proxies, group.container)?;
+        let mut transform = group.local_transform;
+        transform.translation.z = 0.0;
+        let proxy = world
+            .spawn((
+                Name::new("CanvasPngGroup"),
+                transform,
+                Visibility::Inherited,
+                ChildOf(parent),
+            ))
+            .id();
+        proxies.insert(group.entity, proxy);
+    }
     let mut paints = Vec::new();
     for shape in &snapshot.shapes {
         let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&shape.geometry, shape.paint)
@@ -918,6 +934,7 @@ fn geometry(
     }
     let count = paints.len().max(1) as f32;
     for (index, (shape, color, mesh)) in paints.into_iter().enumerate() {
+        let parent = export_parent(content, &proxies, shape.container)?;
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
         let material = world
             .resource_mut::<Assets<ColorMaterial>>()
@@ -931,14 +948,14 @@ fn geometry(
             .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingResources))?;
         owner.meshes.push(mesh.clone());
         owner.materials.push(material.clone());
-        let mut transform = shape.transform;
+        let mut transform = shape.local_transform;
         transform.scale.z = 1.0;
         // Map document paint order to bounded export depth independently of model Z.
         transform.translation.z = index as f32 / count * EXPORT_PAINT_DEPTH_RANGE;
         spawn_scene(
             world,
             bsn! {
-                Name("CanvasPngPaint") template(move |_|Ok(ChildOf(content)))
+                Name("CanvasPngPaint") template(move |_|Ok(ChildOf(parent)))
                 template(move |_|Ok(Mesh2d(mesh.clone())))
                 template(move |_|Ok(MeshMaterial2d(material.clone())))
                 template(move |_|Ok(RenderLayers::none().with(layer)))
@@ -949,6 +966,20 @@ fn geometry(
         .map_err(CanvasExportError::Scene)?;
     }
     Ok(())
+}
+
+fn export_parent(
+    content: Entity,
+    proxies: &EntityHashMap<Entity>,
+    container: CanvasContainer,
+) -> std::result::Result<Entity, CanvasExportError> {
+    match container {
+        CanvasContainer::Layer(_) => Ok(content),
+        CanvasContainer::Group(group) => proxies
+            .get(&group)
+            .copied()
+            .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingGroupProxy(group))),
+    }
 }
 
 fn poll_jobs(world: &mut World) -> Result {

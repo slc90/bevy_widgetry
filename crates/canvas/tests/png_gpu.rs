@@ -301,6 +301,101 @@ fn gpu_empty_paints_clear_views_and_export_transparent_regions_without_waiting_f
 
 #[test]
 #[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_nested_group_view_and_png_preserve_projected_positions_and_paints() {
+    const VIEW_SIDE: f32 = 256.0;
+    const BOX_SIDE: f32 = 14.0;
+
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let boxes = [
+        (
+            Vec2::new(-25.0, 0.0),
+            Color::srgb(1.0, 0.0, 0.0),
+            [255, 0, 0, 255],
+        ),
+        (
+            Vec2::new(25.0, 0.0),
+            Color::srgb(0.0, 1.0, 0.0),
+            [0, 255, 0, 255],
+        ),
+        (
+            Vec2::new(0.0, 40.0),
+            Color::srgb(0.0, 0.0, 1.0),
+            [0, 0, 255, 255],
+        ),
+    ];
+    let items = boxes.map(|(center, color, _)| {
+        CanvasDocument::create_rectangle(
+            app.world_mut(),
+            document,
+            CanvasRectangle {
+                size: Vec2::splat(BOX_SIDE),
+                corner_radius: 0.0,
+            },
+            Transform::from_translation(center.extend(0.0)),
+            CanvasPaint {
+                fill: Some(color),
+                ..default()
+            },
+        )
+        .unwrap()
+    });
+    let [a, b, c] = items;
+    let inner = CanvasDocument::group_items(app.world_mut(), document, &[a, b], "Inner").unwrap();
+    let outer =
+        CanvasDocument::group_items(app.world_mut(), document, &[inner, c], "Outer").unwrap();
+    let local = *app.world().get::<Transform>(inner).unwrap();
+    CanvasDocument::update_group_transform(
+        app.world_mut(),
+        document,
+        inner,
+        local.with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
+    )
+    .unwrap();
+    CanvasDocument::update_group_transform(
+        app.world_mut(),
+        document,
+        outer,
+        Transform::from_xyz(30.0, 18.0, 0.0).with_scale(Vec3::new(1.25, 1.25, 1.0)),
+    )
+    .unwrap();
+
+    let camera = view_camera(&mut app, document);
+    let view = capture(&mut app, camera);
+    let projected =
+        items.map(|item| CanvasDocument::document_transform(app.world(), document, item).unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("nested.png");
+    let region = Rect::from_center_size(Vec2::ZERO, Vec2::splat(VIEW_SIDE));
+    CanvasDocument::export_png(
+        app.world_mut(),
+        document,
+        &file,
+        CanvasPngOptions {
+            region: Some(region),
+            scale: 1.0,
+        },
+    )
+    .unwrap();
+    CanvasDocument::update_group_transform(
+        app.world_mut(),
+        document,
+        outer,
+        Transform::from_xyz(-30.0, 12.0, 0.0),
+    )
+    .unwrap();
+    finish(&mut app, 1);
+    assert!(app.world().resource::<Completed>().0[0].1.is_ok());
+    let png = image::open(file).unwrap().to_rgba8();
+    for (projected, (_, _, rgba)) in projected.into_iter().zip(boxes) {
+        let pixel = (projected.translation.truncate() - region.min).as_uvec2();
+        assert_eq!(view.get_pixel(pixel.x, pixel.y).0, rgba);
+        assert_eq!(png.get_pixel(pixel.x, pixel.y).0, rgba);
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
 fn gpu_mixed_exports_match_views_and_svg_keep_holes_and_own_their_snapshots() {
     use CanvasPathCommand::*;
     let mut app = gpu_app();

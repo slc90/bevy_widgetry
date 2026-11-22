@@ -10,7 +10,9 @@ Document 中的每个 Shape 有稳定 Entity、唯一 `CanvasGeometry`、Paint�
 flowchart LR
     Document["CanvasDocument"] --> Stack["CanvasLayerStack"]
     Stack --> Layer["Layer 1 的绘图项顺序"]
+    Layer --> Group["CanvasGroup / CanvasItemOrder"]
     Layer --> Shape["CanvasItem / CanvasShape Entity"]
+    Group --> Shape
     Shape --> Geometry["参数几何 / 原始命令"]
     Shape --> Paint["填充与描边"]
     Shape --> Transform["二维 Transform"]
@@ -20,11 +22,13 @@ flowchart LR
 
 Document 的 Required Components 包含 `Transform` 和 `CanvasLayerStack`。图层数据保存在 Stack 中，图层 ID 在同一 Document 内稳定。每个图层包含直属绘图项的顺序列表，容器实体通过 `CanvasItemOrder` 记录其直属子项。 `ChildOf` 负责 ECS 所有权和级联销毁，绘图项必须同时出现在所属容器的顺序列表中。
 
-Renderer、从顶向下的命中和导出沿图层顺序遍历绘图项，共用同一个叠放依据。Renderer 和导出读取可见图层，命中进一步只读取未锁定的可见图层。Document 根的 Transform 不参与文档坐标计算。
+Renderer、从顶向下的命中和导出沿图层顺序遍历绘图项，共用同一个叠放依据。Renderer 和导出读取可见图层，命中进一步只读取未锁定的可见图层。绘图项的 Transform 相对所属图层或父组。Group 允许平移、绕 Z 旋转和正数等比缩放，合成后仍可用 TRS 表示，取消分组因此可以保持成员的视觉位置和尺寸。Document 根的 Transform 不参与文档坐标计算。
+
+每个 Group 在展平画序中占用连续范围。分组要求所选成员在父容器内连续，以保留可见项的相对位置。组原点和选择框使用实际绘制的 Path 子路径计算边界。
 
 ## 为每个 View 建立独立观察空间
 
-View 引用 Document，并保存自己的 center、zoom、selection、活动图层和工具模式。它把 Document 坐标映射到 UI 的局部逻辑坐标，再交给独立的离屏目标。
+View 引用 Document，并保存自己的 center、zoom、selection、活动图层、组内编辑路径和工具模式。它把 Document 坐标映射到 UI 的局部逻辑坐标，再交给独立的离屏目标。编辑路径将选择限制在当前容器的直属绘图项，路径之外的对象继续显示。
 
 Document 提交图层更改后，已绑定视图重新验证选择与活动图层。活动图层变化会结束该视图正在进行的绘图草稿，后续绘制从新的活动图层开始。
 
@@ -46,6 +50,10 @@ flowchart LR
 ## 在共享几何和独立资源之间划清边界
 
 多个 View 不必对相同图形重复细分。共享缓存持有由几何和描边派生的 Mesh；View 持有自己的代理、材质与离屏资源。纯 Transform 或颜色变化不重新生成局部几何。
+
+Renderer 在每个 View 下建立与 Document 一致的组代理树，Bevy 将局部变换传播到图形代理。绘制深度仍由展平后的顺序给出。模型侧按相同的根到叶顺序相乘 Bevy 仿射矩阵，供命中、边界、编辑和 SVG 导出使用。编辑手势按需将文档坐标转回父组或图形局部坐标。
+
+分组和取消分组提交前检查每个后代的文档投影。矩形、椭圆和直线子路径按绘制轮廓计算位移范围。曲线子路径使用源命令的投影极值及描边包络，涵盖落在渲染网格顶点之间的 SVG 曲线点。只有移动命令的子路径没有绘制轮廓。
 
 ```mermaid
 flowchart LR
@@ -74,11 +82,11 @@ flowchart LR
 
 单选编辑始终保持 Shape Entity；拓扑操作在副本上修改并校验整条 Path，成功后一次替换命令。命令下标不是稳定身份，因此拓扑变化会结束引用旧节点位置的手势。
 
-多选平移保留每个成员的局部几何和顺序，用同一个 Document 位移更新所有 Transform。批量 API 在任何写入前校验全部成员，避免移动一半后才发现另一个对象已删除。它不创建额外 Group，也不改变各 View 的独立选择。
+多选平移保留每个成员的局部几何和顺序，用同一个 Document 位移更新所有 Transform。组内手势先把位移换算到父组坐标。批量 API 在任何写入前校验全部成员，避免移动一半后才发现另一个对象已删除。
 
 ## 从正式文档生成独立导出
 
-SVG 直接读取参数模型，保留几何语义；PNG 固定模型快照，再使用与 View 一致的几何管线渲染。两者都不依赖某个已有 View 的缩放、背景或控制柄。
+SVG 从参数模型写出几何和文档仿射矩阵。坐标、尺寸和矩阵按双精度格式写出，浏览器读取后保留模型的数值。PNG 固定图形和组的局部变换，在临时渲染场景中重建组层级，两条渲染路径均由 Bevy 按同一层级传播变换。导出使用文档坐标和已提交的绘图项。
 
 ```mermaid
 flowchart LR

@@ -25,7 +25,9 @@ pub(super) fn sync(
     (|| -> Result<Option<Entity>> {
     let data = if crate::CanvasView::_mode(world, view)? == crate::CanvasMode::PathNodeEdit {
         crate::CanvasView::_single_selection(world, view)?
-            .and_then(|shape| crate::nodes::overlay(world, shape))
+            .map(|shape| crate::nodes::overlay(world, shape))
+            .transpose()?
+            .flatten()
     } else {
         None
     };

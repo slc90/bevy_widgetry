@@ -21,6 +21,7 @@ struct Fixture {
     other: Entity,
     document: Entity,
     shapes: Vec<Entity>,
+    group: Option<(Entity, Vec2)>,
     pointer: PointerId,
     at: Location,
 }
@@ -34,7 +35,7 @@ fn frame(app: &mut App) -> Result {
         Err(error(format!("batch frame errors: {errors:?}")))
     }
 }
-fn fixture(count: usize) -> Result<Fixture> {
+fn fixture(count: usize, nested: bool) -> Result<Fixture> {
     let mut app = picking_app();
     app.add_plugins((TransformPlugin, CanvasPlugin));
     app.set_error_handler(ErrorCapture::handler());
@@ -97,11 +98,31 @@ fn fixture(count: usize) -> Result<Fixture> {
         };
         shapes.push(shape);
     }
+    let group = if nested {
+        let (left, right) = shapes.split_at(count / 2);
+        let left = CanvasDocument::group_items(app.world_mut(), document, left, "Left")
+            .map_err(|error| error.into_bevy_error())?;
+        let right = CanvasDocument::group_items(app.world_mut(), document, right, "Right")
+            .map_err(|error| error.into_bevy_error())?;
+        let root = CanvasDocument::group_items(app.world_mut(), document, &[left, right], "Root")
+            .map_err(|error| error.into_bevy_error())?;
+        let origin = app
+            .world()
+            .get::<Transform>(root)
+            .ok_or_else(|| error("group local transform missing"))?
+            .translation
+            .truncate();
+        Some((root, origin))
+    } else {
+        None
+    };
     let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(VIEW_MARGIN),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
     let other=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(SECONDARY_VIEW_LEFT),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
-    CanvasView::set_selection_in_world(app.world_mut(), view, shapes.clone())
+    let primary = group.map_or_else(|| shapes.clone(), |(root, _)| vec![root]);
+    let secondary = group.map_or(shapes[0], |(root, _)| root);
+    CanvasView::set_selection_in_world(app.world_mut(), view, primary)
         .map_err(|error| error.into_bevy_error())?;
-    CanvasView::set_selection_in_world(app.world_mut(), other, [shapes[0]])
+    CanvasView::set_selection_in_world(app.world_mut(), other, [secondary])
         .map_err(|error| error.into_bevy_error())?;
     let pointer = pointer_ids()[1];
     app.world_mut().spawn(pointer);
@@ -146,6 +167,7 @@ fn fixture(count: usize) -> Result<Fixture> {
         other,
         document,
         shapes,
+        group,
         pointer,
         at,
     })
@@ -154,63 +176,82 @@ fn main() -> Result {
     let mut harness = Harness::new("canvas-batch-criterion")?;
     let entity_counts = [100, 1000];
     for count in entity_counts {
-        run(
-            &mut harness,
-            &format!("canvas_batch/views2/shapes{count}/move_all_and_frame"),
-            false,
-            || fixture(count),
-            |f, index| {
-                let delta = if index % 2 == 0 {
-                    Vec2::new(3.0, 2.0)
-                } else {
-                    Vec2::new(6.0, 4.0)
-                };
-                let at = Location {
-                    position: f.at.position + delta,
-                    ..f.at.clone()
-                };
-                queue_pointer(
-                    &mut f.app,
-                    f.pointer,
-                    at,
-                    PointerAction::Move { delta: Vec2::ONE },
-                );
-                frame(&mut f.app)?;
-                for (i, shape) in f.shapes.iter().enumerate() {
-                    let expected = Vec2::new(
-                        (i % GRID_COLUMNS) as f32 * GRID_SPACING,
-                        (i / GRID_COLUMNS) as f32 * GRID_SPACING,
-                    ) + delta;
-                    if f.app
-                        .world()
-                        .get::<Transform>(*shape)
-                        .is_none_or(|t| t.translation.truncate() != expected)
+        for nested in [false, true] {
+            let scenario = if nested {
+                "move_nested_group_and_frame"
+            } else {
+                "move_all_and_frame"
+            };
+            run(
+                &mut harness,
+                &format!("canvas_batch/views2/shapes{count}/{scenario}"),
+                false,
+                || fixture(count, nested),
+                |f, index| {
+                    let delta = if index % 2 == 0 {
+                        Vec2::new(3.0, 2.0)
+                    } else {
+                        Vec2::new(6.0, 4.0)
+                    };
+                    let at = Location {
+                        position: f.at.position + delta,
+                        ..f.at.clone()
+                    };
+                    queue_pointer(
+                        &mut f.app,
+                        f.pointer,
+                        at,
+                        PointerAction::Move { delta: Vec2::ONE },
+                    );
+                    frame(&mut f.app)?;
+                    let (selection_count, secondary) = if let Some((group, origin)) = f.group {
+                        if f.app
+                            .world()
+                            .get::<Transform>(group)
+                            .is_none_or(|t| t.translation.truncate() != origin + delta)
+                        {
+                            return Err(error("each group sample must move the nested group"));
+                        }
+                        (1, group)
+                    } else {
+                        for (i, shape) in f.shapes.iter().enumerate() {
+                            let expected = Vec2::new(
+                                (i % GRID_COLUMNS) as f32 * GRID_SPACING,
+                                (i / GRID_COLUMNS) as f32 * GRID_SPACING,
+                            ) + delta;
+                            if f.app
+                                .world()
+                                .get::<Transform>(*shape)
+                                .is_none_or(|t| t.translation.truncate() != expected)
+                            {
+                                return Err(error(
+                                    "each batch sample must move every shape by the same Document delta",
+                                ));
+                            }
+                        }
+                        (count, f.shapes[0])
+                    };
+                    if CanvasView::selection(f.app.world(), f.view)
+                        .map_err(|error| error.into_bevy_error())?
+                        .len()
+                        != selection_count
+                        || CanvasView::selection(f.app.world(), f.other)
+                            .map_err(|error| error.into_bevy_error())?
+                            != [secondary]
+                        || CanvasDocument::shape_order(f.app.world_mut(), f.document)
+                            .map_err(|error| error.into_bevy_error())?
+                            != f.shapes
+                        || f.app.world().resource::<Assets<Mesh>>().len() != 2 * count + 2
                     {
                         return Err(error(
-                            "each batch sample must move every shape by the same Document delta",
+                            "batch samples must preserve selection, order and bounded shared geometry",
                         ));
                     }
-                }
-                if CanvasView::selection(f.app.world(), f.view)
-                    .map_err(|error| error.into_bevy_error())?
-                    .len()
-                    != count
-                    || CanvasView::selection(f.app.world(), f.other)
-                        .map_err(|error| error.into_bevy_error())?
-                        != [f.shapes[0]]
-                    || CanvasDocument::shape_order(f.app.world_mut(), f.document)
-                        .map_err(|error| error.into_bevy_error())?
-                        != f.shapes
-                    || f.app.world().resource::<Assets<Mesh>>().len() != 2 * count + 2
-                {
-                    return Err(error(
-                        "batch samples must preserve selection, order and bounded shared geometry",
-                    ));
-                }
-                Ok(())
-            },
-            |f| Ok(f.app.world().entities().count_spawned()),
-        )?;
+                    Ok(())
+                },
+                |f| Ok(f.app.world().entities().count_spawned()),
+            )?;
+        }
     }
     harness.finish()
 }
