@@ -108,7 +108,7 @@ let selected = CanvasView::selection(world, view)
 
 ### 移动、缩放和旋转
 
-单选时提供整体缩放与旋转控点，缩放修改 Transform 而不是局部几何；Shift 旋转按 15° 吸附。多选支持整批移动和 Delete，但不提供多选整体缩放／旋转控点。
+单选时提供整体缩放与旋转控点，缩放修改 Transform 而不是局部几何；按住 Shift 旋转时，角度吸附到文档坐标中的 15° 整数倍。多选支持整批移动和 Delete，但不提供多选整体缩放／旋转控点。
 
 ```rust
 CanvasDocument::update_transforms(world, document, &[
@@ -142,7 +142,7 @@ CanvasView::set_mode(&mut commands, view, CanvasMode::Pen(CanvasPaint {
 }));
 ```
 
-Pen 持有当前 View 的草稿。获得 Canvas 焦点后，L / Q / B / A 切换段类型，C 闭合，N 开始新子路径，Enter 完成，Esc 丢弃草稿。完成或 Esc 后仍保留 Pen 工具；模式切换才离开工具。
+Pen 持有当前 View 的草稿。获得 Canvas 焦点后，L / Q / B / A 切换段类型，C 闭合，N 开始新子路径，Enter 完成，Esc 丢弃草稿。按 Esc 取消草稿或正在放置的落点时，仍停留在当前组。Pen 空闲时按 Esc 返回上一级。完成、取消或返回上一级后，Pen 工具仍处于启用状态。
 
 草稿不进入 Document、其他 View 或导出。实际提交后才产生正式 Shape。
 
@@ -180,6 +180,18 @@ CanvasDocument::remove_shapes(world, document, &[rectangle, ellipse])
 ```
 
 键盘 Delete 只在有效 CanvasView 根拥有焦点时删除选择，不接管内部 TextField 的删除键。删除最后一个图形后文档仍存在，可以继续绘制。
+
+## 撤销与重做
+
+同一 Document 的所有 View 共享编辑历史。CanvasView 根获得焦点后，Ctrl+Z 撤销，Ctrl+Shift+Z 或 Ctrl+Y 重做。视角、工具、活动图层和草稿仍由各 View 独立维护。回到较早的 Document 状态时，View 会清理已失效的选择和组内编辑路径。
+
+`CanvasDocument::undo` 和 `redo` 在 Headless World 中也可使用。没有对应记录时返回 `Ok(false)`，可通过 `can_undo` 和 `can_redo` 查询当前可执行性。每次有效的修改产生一条记录，批量操作作为一条记录提交。拖动实时更新文档，并在释放或取消时将实际保留的修改合并为一条记录。
+
+要合并多次程序化修改，调用 `CanvasDocument::edit`，将闭包收到的 `CanvasEditToken` 传给各写入 API。闭包返回时会结束事务。若闭包返回错误，此前已成功的修改仍可作为一条记录撤销。事务打开期间，直接传入 Document Entity 的写操作以及撤销、重做均返回 `CanvasErrorKind::Busy`。另一个 View 仍可观察与调整视角。
+
+历史默认保留最近 100 条事务，可用 `set_history_capacity` 调整，也可用 `clear_history` 清空。撤销后提交新修改会丢弃重做分支。删除或撤销创建会从绘制层级分离实体，历史回放会恢复原 Entity。保留的实体带有内部 `CanvasTombstone` 标记，并在相关历史记录被清理或文档销毁后释放。
+
+回放会先检查需要改写组件或变更容器成员资格的实体的所有权。直接通过 ECS 将这些实体移到另一份 Document 后，原文档回放对应事务会返回所有权错误。
 
 ## 图层管理
 

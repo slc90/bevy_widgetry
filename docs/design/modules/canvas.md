@@ -20,7 +20,7 @@ flowchart LR
 
 整体移动、缩放和旋转改变 Transform，参数编辑才改变 Geometry。两者作用不同，所以放大一个椭圆不会把半径永久改成屏幕像素，也不会把 Path 展平成折线。
 
-Document 的 Required Components 包含 `Transform` 和 `CanvasLayerStack`。图层数据保存在 Stack 中，图层 ID 在同一 Document 内稳定。每个图层包含直属绘图项的顺序列表，容器实体通过 `CanvasItemOrder` 记录其直属子项。 `ChildOf` 负责 ECS 所有权和级联销毁，绘图项必须同时出现在所属容器的顺序列表中。
+Document 的 Required Components 包含 `Transform`、`CanvasLayerStack` 和 `CanvasHistory`。图层数据保存在 Stack 中，图层 ID 在同一 Document 内稳定。每个图层包含直属绘图项的顺序列表，容器实体通过 `CanvasItemOrder` 记录其直属子项。 `ChildOf` 负责已挂载绘图项的 ECS 所有权和级联销毁，绘图项必须同时出现在所属容器的顺序列表中。
 
 Renderer、从顶向下的命中和导出沿图层顺序遍历绘图项，共用同一个叠放依据。Renderer 和导出读取可见图层，命中进一步只读取未锁定的可见图层。绘图项的 Transform 相对所属图层或父组。Group 允许平移、绕 Z 旋转和正数等比缩放，合成后仍可用 TRS 表示，取消分组因此可以保持成员的视觉位置和尺寸。Document 根的 Transform 不参与文档坐标计算。
 
@@ -80,9 +80,17 @@ flowchart LR
 
 ## 让局部与批量修改保持同一身份语义
 
-单选编辑始终保持 Shape Entity；拓扑操作在副本上修改并校验整条 Path，成功后一次替换命令。命令下标不是稳定身份，因此拓扑变化会结束引用旧节点位置的手势。
+单选编辑始终保持 Shape Entity。拓扑操作在副本上修改并校验整条 Path，成功后一次替换命令。节点拖动持有文档写入事务，其他拓扑写入须等手势结束。
 
 多选平移保留每个成员的局部几何和顺序，用同一个 Document 位移更新所有 Transform。组内手势先把位移换算到父组坐标。批量 API 在任何写入前校验全部成员，避免移动一半后才发现另一个对象已删除。
+
+### 用文档差异回放已提交编辑
+
+`CanvasHistory` 只保存实际变更的组件值、图层属性和容器顺序区间。一次拖动为每个受影响的属性记录初始值，在结束时读取最终值。图层 ID 的分配序号持续递增，历史回放只恢复图层本身、默认图层和画序。
+
+删除从原容器移除绘图项，由文档登记并保留带 `CanvasTombstone` 标记的实体。保留的组仍拥有未被拆分的后代。回放先校验受影响的画序和实体，再恢复层级和组件。保留引用随撤销或重做条目转移，条目退出历史后释放无引用的 tombstone。Document 销毁会清理正常子项和保留实体。
+
+每份 Document 同时开放一个写入事务。手势的更新和显式复合操作都用 token 验证写入权限。Renderer 仍消费每帧实际文档组件，撤销和重做只改写正式模型，View 的无效本地状态继续走修复流程。
 
 ## 从正式文档生成独立导出
 

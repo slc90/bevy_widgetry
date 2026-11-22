@@ -138,18 +138,20 @@ fn refresh_geometry(
     }
 }
 
-fn add_rectangle(world: &mut World, document: Entity) -> Result {
+fn add_rectangle(
+    world: &mut World,
+    target: impl Into<bevy_widgetry::canvas::CanvasEditTarget>,
+) -> std::result::Result<(), bevy_widgetry::job::JobFailure> {
     CanvasDocument::create_rectangle(
         world,
-        document,
+        target,
         CanvasRectangle {
             corner_radius: 12.0,
             size: Vec2::new(120.0, 80.0),
         },
         Transform::default(),
         paint(),
-    )
-    .map_err(|error| error.into_bevy_error())?;
+    )?;
     Ok(())
 }
 
@@ -166,127 +168,122 @@ fn enter(world: &mut World) -> Result {
         .spawn((Name::new("CanvasDemoDocument"), CanvasDocument))
         .id();
     let result = (|| -> Result<Entity> {
-        add_rectangle(world, document)?;
-        let details = CanvasDocument::create_layer(world, document, 1, "Layer 2")
-            .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::create_ellipse_in_layer(
-            world,
-            document,
-            details,
-            CanvasEllipse {
-                radii: Vec2::new(40.0, 25.0),
-            },
-            Transform::from_xyz(150.0, 0.0, 0.0),
-            CanvasPaint {
-                fill: Some(Color::srgba(1.0, 0.5, 0.1, 0.7)),
-                stroke: Some(CanvasStroke {
-                    color: Color::srgb(1.0, 0.8, 0.2),
-                    width: 4.0,
+        CanvasDocument::edit(world, document, |world, edit| {
+            add_rectangle(world, edit)?;
+            let details = CanvasDocument::create_layer(world, edit, 1, "Layer 2")?;
+            CanvasDocument::create_ellipse_in_layer(
+                world,
+                edit,
+                details,
+                CanvasEllipse {
+                    radii: Vec2::new(40.0, 25.0),
+                },
+                Transform::from_xyz(150.0, 0.0, 0.0),
+                CanvasPaint {
+                    fill: Some(Color::srgba(1.0, 0.5, 0.1, 0.7)),
+                    stroke: Some(CanvasStroke {
+                        color: Color::srgb(1.0, 0.8, 0.2),
+                        width: 4.0,
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            },
-        )
-        .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::create_ellipse(
-            world,
-            document,
-            CanvasEllipse {
-                radii: Vec2::new(7.0, 5.0),
-            },
-            Transform::from_xyz(-153.0, 0.0, 0.0),
-            CanvasPaint {
-                fill: Some(Color::srgb(1.0, 0.5, 0.1)),
-                ..default()
-            },
-        )
-        .map_err(|error| error.into_bevy_error())?;
-        let path = CanvasDocument::create_path(
-            world,
-            document,
-            CanvasPath {
-                commands: vec![
-                    CanvasPathCommand::MoveTo(Vec2::new(-45.0, 25.0)),
-                    CanvasPathCommand::QuadTo {
-                        control: Vec2::new(-45.0, -35.0),
-                        to: Vec2::new(0.0, -35.0),
-                    },
-                    CanvasPathCommand::CubicTo {
-                        control1: Vec2::new(45.0, -35.0),
-                        control2: Vec2::new(45.0, 25.0),
-                        to: Vec2::new(0.0, 25.0),
-                    },
-                    CanvasPathCommand::Close,
-                    CanvasPathCommand::MoveTo(Vec2::new(-20.0, 45.0)),
-                    CanvasPathCommand::ArcTo {
-                        radii: Vec2::new(20.0, 12.0),
-                        rotation: 0.0,
-                        large_arc: false,
-                        sweep: true,
-                        to: Vec2::new(20.0, 45.0),
-                    },
+                },
+            )?;
+            CanvasDocument::create_ellipse(
+                world,
+                edit,
+                CanvasEllipse {
+                    radii: Vec2::new(7.0, 5.0),
+                },
+                Transform::from_xyz(-153.0, 0.0, 0.0),
+                CanvasPaint {
+                    fill: Some(Color::srgb(1.0, 0.5, 0.1)),
+                    ..default()
+                },
+            )?;
+            let path = CanvasDocument::create_path(
+                world,
+                edit,
+                CanvasPath {
+                    commands: vec![
+                        CanvasPathCommand::MoveTo(Vec2::new(-45.0, 25.0)),
+                        CanvasPathCommand::QuadTo {
+                            control: Vec2::new(-45.0, -35.0),
+                            to: Vec2::new(0.0, -35.0),
+                        },
+                        CanvasPathCommand::CubicTo {
+                            control1: Vec2::new(45.0, -35.0),
+                            control2: Vec2::new(45.0, 25.0),
+                            to: Vec2::new(0.0, 25.0),
+                        },
+                        CanvasPathCommand::Close,
+                        CanvasPathCommand::MoveTo(Vec2::new(-20.0, 45.0)),
+                        CanvasPathCommand::ArcTo {
+                            radii: Vec2::new(20.0, 12.0),
+                            rotation: 0.0,
+                            large_arc: false,
+                            sweep: true,
+                            to: Vec2::new(20.0, 45.0),
+                        },
+                    ],
+                },
+                Transform::from_xyz(-150.0, 0.0, 0.0),
+                CanvasPaint {
+                    fill: Some(Color::srgba(0.65, 0.3, 1.0, 0.6)),
+                    fill_rule: CanvasFillRule::EvenOdd,
+                    stroke: Some(CanvasStroke {
+                        color: Color::srgb(0.85, 0.6, 1.0),
+                        width: 6.0,
+                        cap: CanvasLineCap::Round,
+                        join: CanvasLineJoin::Round,
+                    }),
+                },
+            )?;
+            CanvasDocument::append_rectangle(
+                world,
+                edit,
+                path,
+                Rect::new(-16.0, -10.0, 10.0, 10.0),
+            )?;
+            CanvasDocument::append_circle(world, edit, path, Vec2::new(-55.0, 75.0), 8.0)?;
+            CanvasDocument::append_ellipse(
+                world,
+                edit,
+                path,
+                Vec2::new(-25.0, 75.0),
+                Vec2::new(12.0, 6.0),
+            )?;
+            CanvasDocument::append_line(
+                world,
+                edit,
+                path,
+                Vec2::new(0.0, 75.0),
+                Vec2::new(15.0, 75.0),
+            )?;
+            CanvasDocument::append_polyline(
+                world,
+                edit,
+                path,
+                &[
+                    Vec2::new(25.0, 80.0),
+                    Vec2::new(33.0, 65.0),
+                    Vec2::new(40.0, 80.0),
                 ],
-            },
-            Transform::from_xyz(-150.0, 0.0, 0.0),
-            CanvasPaint {
-                fill: Some(Color::srgba(0.65, 0.3, 1.0, 0.6)),
-                fill_rule: CanvasFillRule::EvenOdd,
-                stroke: Some(CanvasStroke {
-                    color: Color::srgb(0.85, 0.6, 1.0),
-                    width: 6.0,
-                    cap: CanvasLineCap::Round,
-                    join: CanvasLineJoin::Round,
-                }),
-            },
-        )
+            )?;
+            CanvasDocument::append_polygon(
+                world,
+                edit,
+                path,
+                &[
+                    Vec2::new(50.0, 80.0),
+                    Vec2::new(58.0, 65.0),
+                    Vec2::new(66.0, 80.0),
+                ],
+            )?;
+            Ok(())
+        })
         .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::append_rectangle(
-            world,
-            document,
-            path,
-            Rect::new(-16.0, -10.0, 10.0, 10.0),
-        )
-        .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::append_circle(world, document, path, Vec2::new(-55.0, 75.0), 8.0)
-            .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::append_ellipse(
-            world,
-            document,
-            path,
-            Vec2::new(-25.0, 75.0),
-            Vec2::new(12.0, 6.0),
-        )
-        .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::append_line(
-            world,
-            document,
-            path,
-            Vec2::new(0.0, 75.0),
-            Vec2::new(15.0, 75.0),
-        )
-        .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::append_polyline(
-            world,
-            document,
-            path,
-            &[
-                Vec2::new(25.0, 80.0),
-                Vec2::new(33.0, 65.0),
-                Vec2::new(40.0, 80.0),
-            ],
-        )
-        .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::append_polygon(
-            world,
-            document,
-            path,
-            &[
-                Vec2::new(50.0, 80.0),
-                Vec2::new(58.0, 65.0),
-                Vec2::new(66.0, 80.0),
-            ],
-        )
-        .map_err(|error| error.into_bevy_error())?;
+        CanvasDocument::clear_history(world, document).map_err(|error| error.into_bevy_error())?;
         mount_page(
             world,
             GalleryPage::Canvas,
@@ -645,7 +642,9 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 CanvasView::set_mode_in_world(world, demo.main, CanvasMode::PathNodeEdit)
                     .map_err(|error| error.into_bevy_error())?;
             }
-            Action::Add => add_rectangle(world, demo.document)?,
+            Action::Add => {
+                add_rectangle(world, demo.document).map_err(|error| error.into_bevy_error())?
+            }
             Action::Group | Action::Ungroup => edit_groups(world, &demo, action)?,
             Action::Raise | Action::Lower | Action::Front | Action::Back => {
                 if let Some(shape) = CanvasView::single_selection(world, demo.main)

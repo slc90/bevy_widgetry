@@ -205,6 +205,76 @@ fn shift_press_and_release_snap_the_current_direction_even_without_pointer_motio
 }
 
 #[test]
+fn rotation_inside_a_group_snaps_to_document_angles() {
+    let id = pointer_ids()[1];
+    let (mut app, view, _, shape, window, base) = fixture(id, 1.0, 1.0);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let rectangle = CanvasRectangle {
+        size: Vec2::splat(30.0),
+        corner_radius: 0.0,
+    };
+    let paint = CanvasPaint::default();
+    let sibling = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        rectangle,
+        Transform::from_xyz(50.0, 0.0, 0.0),
+        paint,
+    )
+    .unwrap();
+    let group =
+        CanvasDocument::group_items(app.world_mut(), document, &[shape, sibling], "Group").unwrap();
+    let parent_angle = 7.0_f32.to_radians();
+    let parent = app
+        .world()
+        .get::<Transform>(group)
+        .unwrap()
+        .with_rotation(Quat::from_rotation_z(parent_angle))
+        .with_scale(Vec3::new(1.25, 1.25, 1.0));
+    CanvasDocument::update_group_transform(app.world_mut(), document, group, parent).unwrap();
+    CanvasView::enter_group_in_world(app.world_mut(), view, group).unwrap();
+    CanvasView::set_selection_in_world(app.world_mut(), view, [shape]).unwrap();
+    update(&mut app);
+
+    let local = *app.world().get::<Transform>(shape).unwrap();
+    let start = parent.mul_transform(local);
+    let center = start.translation.truncate();
+    let handle = rotation_point(rectangle, start, paint, 1.0);
+    let mut at = at_document(&app, view, &base, handle);
+    input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ONE });
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    assert!(app.world().resource::<PointerCaptureMap>().is_captured(&id));
+
+    let offset =
+        (Quat::from_rotation_z(12.0_f32.to_radians()) * (handle - center).extend(0.0)).truncate();
+    let target = at_document(&app, view, &base, center + offset);
+    let delta = target.position - at.position;
+    moved(&mut app, id, &mut at, delta);
+    let assert_orientation = |app: &App, degrees: f32| {
+        let projection = CanvasDocument::document_transform(app.world(), document, shape).unwrap();
+        let axis = projection.transform_vector3(Vec3::X).truncate().normalize();
+        assert!(axis.abs_diff_eq(Vec2::from_angle(degrees.to_radians()), 0.001));
+        assert!(projection.translation.truncate().abs_diff_eq(center, 0.001));
+    };
+    assert_orientation(&app, 19.0);
+    key(&mut app, window, KeyCode::ShiftLeft, ButtonState::Pressed);
+    assert_orientation(&app, 15.0);
+    key(&mut app, window, KeyCode::ShiftLeft, ButtonState::Released);
+    assert_orientation(&app, 19.0);
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Release(PointerButton::Primary),
+    );
+}
+
+#[test]
 fn free_rotation_crosses_half_turn_and_cancelled_targets_stop_updating() {
     let id = pointer_ids()[1];
     let (mut app, a, _, shape, _, base) = fixture(id, 1.0, 1.0);

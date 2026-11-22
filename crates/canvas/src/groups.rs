@@ -1,7 +1,5 @@
 use crate::error::{CanvasResult as Result, PublicResult, invalid, missing};
-use crate::order::{
-    CanvasItemOrder, container_items, container_items_mut, item_container, valid_items,
-};
+use crate::order::{CanvasItemOrder, container_items, item_container, valid_items};
 use crate::{
     CanvasContainer, CanvasDocument, CanvasGeometry, CanvasIssue, CanvasItem, CanvasPaint,
     CanvasPart,
@@ -57,11 +55,16 @@ impl CanvasDocument {
 
     pub fn group_items(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         items: &[Entity],
         name: impl Into<String>,
     ) -> PublicResult<Entity> {
-        group_items(world, document, items, name.into()).map_err(|error| {
+        let target = target.into();
+        let document = target.document();
+        crate::history::apply(world, target, |world, document| {
+            group_items(world, document, items, name.into())
+        })
+        .map_err(|error| {
             error
                 .at("document", document)
                 .into_failure(ErrorFrame::new("canvas.CanvasDocument.group_items"))
@@ -70,10 +73,15 @@ impl CanvasDocument {
 
     pub fn ungroup(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         group: Entity,
     ) -> PublicResult<Vec<Entity>> {
-        ungroup(world, document, group).map_err(|error| {
+        let target = target.into();
+        let document = target.document();
+        crate::history::apply(world, target, |world, document| {
+            ungroup(world, document, group)
+        })
+        .map_err(|error| {
             error
                 .at("document", document)
                 .at("group", group)
@@ -83,14 +91,16 @@ impl CanvasDocument {
 
     pub fn update_group_transform(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         group: Entity,
         transform: Transform,
     ) -> PublicResult {
-        (|| -> Result {
+        let target = target.into();
+        let document = target.document();
+        crate::history::apply(world, target, |world, document| {
             group_container(world, document, group)?;
-            set_group_transform(world, group, transform)
-        })()
+            set_group_transform(world, document, group, transform)
+        })
         .map_err(|error| {
             error
                 .at("document", document)
@@ -128,13 +138,17 @@ pub(crate) fn update_item_transform(
         return CanvasDocument::_update_transform(world, document, item, transform);
     }
     group_container(world, document, item)?;
-    set_group_transform(world, item, transform)
+    set_group_transform(world, document, item, transform)
 }
 
-fn set_group_transform(world: &mut World, group: Entity, transform: Transform) -> Result {
+fn set_group_transform(
+    world: &mut World,
+    document: Entity,
+    group: Entity,
+    transform: Transform,
+) -> Result {
     validate_item_transform(world, group, transform)?;
-    world.entity_mut(group).insert(transform);
-    Ok(())
+    crate::history::set_transform(world, document, group, transform)
 }
 
 pub(crate) fn item_parent(
@@ -485,9 +499,11 @@ fn group_items(
         .collect::<Result<Vec<_>>>()?;
 
     let group = world.spawn_empty().id();
-    let siblings = container_items_mut(world, document, container)?;
-    siblings.retain(|item| !selected.contains(item));
-    siblings.insert(index, group);
+    crate::history::edit_order(world, document, container, index, |siblings| {
+        siblings.retain(|item| !selected.contains(item));
+        siblings.insert(index, group);
+    })?;
+    crate::history::record_created(world, document, group)?;
     world.insert_batch([(
         group,
         (
@@ -497,12 +513,7 @@ fn group_items(
             ChildOf(parent),
         ),
     )]);
-    world.insert_batch(
-        updates
-            .into_iter()
-            .map(|(item, local)| (item, (local, ChildOf(group)))),
-    );
-    world.flush();
+    crate::history::reparent_items(world, document, group, updates)?;
     Ok(group)
 }
 
@@ -540,23 +551,16 @@ fn ungroup(world: &mut World, document: Entity, group: Entity) -> Result<Vec<Ent
             Ok((item, expanded))
         })
         .collect::<Result<Vec<_>>>()?;
-    let siblings = container_items_mut(world, document, container)?;
-    let index = siblings
+    let index = container_items(world, document, container)?
         .iter()
         .position(|&item| item == group)
         .ok_or_else(|| invalid(CanvasIssue::GroupTarget))?;
-    siblings.splice(index..index + 1, members.iter().copied());
+    crate::history::edit_order(world, document, container, index, |siblings| {
+        drop(siblings.splice(index..index + 1, members.iter().copied()));
+    })?;
     let parent = container.parent(document);
-    world.insert_batch(
-        updates
-            .into_iter()
-            .map(|(item, local)| (item, (local, ChildOf(parent)))),
-    );
-    // Apply queued hierarchy maintenance while the old parent still exists.
-    world.flush();
-    if world.get_entity(group).is_ok() {
-        world.despawn(group);
-    }
+    crate::history::reparent_items(world, document, parent, updates)?;
+    crate::history::detach_item(world, document, group)?;
     Ok(members)
 }
 
@@ -572,8 +576,10 @@ pub(crate) fn prune_empty_groups(world: &mut World, document: Entity, mut group:
         let Some(parent) = item_container(world, document, group) else {
             return Ok(());
         };
-        container_items_mut(world, document, parent)?.retain(|&item| item != group);
-        world.despawn(group);
+        crate::history::edit_order(world, document, parent, 0, |siblings| {
+            siblings.retain(|&item| item != group);
+        })?;
+        crate::history::detach_item(world, document, group)?;
         let CanvasContainer::Group(ancestor) = parent else {
             return Ok(());
         };

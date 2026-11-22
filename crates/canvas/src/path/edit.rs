@@ -12,12 +12,15 @@ pub enum CanvasPathSegment {
 impl CanvasDocument {
     pub fn insert_path_anchor(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         before: usize,
         point: Vec2,
     ) -> crate::error::PublicResult<bool> {
-        Self::_insert_path_anchor(world, document, shape, before, point).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_insert_path_anchor(world, document, shape, before, point)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.insert_path_anchor",
             ))
@@ -60,11 +63,14 @@ impl CanvasDocument {
     }
     pub fn remove_path_anchor(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         command: usize,
     ) -> crate::error::PublicResult<bool> {
-        Self::_remove_path_anchor(world, document, shape, command).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_remove_path_anchor(world, document, shape, command)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.remove_path_anchor",
             ))
@@ -118,12 +124,15 @@ impl CanvasDocument {
     }
     pub fn set_path_segment(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         command: usize,
         segment: CanvasPathSegment,
     ) -> crate::error::PublicResult<bool> {
-        Self::_set_path_segment(world, document, shape, command, segment).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_set_path_segment(world, document, shape, command, segment)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.set_path_segment",
             ))
@@ -177,12 +186,15 @@ impl CanvasDocument {
     }
     pub fn set_path_subpath_closed(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         command: usize,
         closed: bool,
     ) -> crate::error::PublicResult<bool> {
-        Self::_set_path_subpath_closed(world, document, shape, command, closed).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_set_path_subpath_closed(world, document, shape, command, closed)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.set_path_subpath_closed",
             ))
@@ -319,7 +331,6 @@ fn edit(
             return Ok(false);
         };
         CanvasDocument::_update_path(world, document, shape, path, transform, paint)?;
-        crate::input::cancel_node_edits(world, shape);
         Ok(true)
     })()
     .map_err(|error| error.at("document", document).at("shape", shape))

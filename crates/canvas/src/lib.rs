@@ -7,6 +7,7 @@ mod error;
 mod export;
 mod geometry;
 mod groups;
+mod history;
 mod input;
 mod layers;
 mod mesh_cache;
@@ -29,6 +30,7 @@ pub use export::{
     CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop, CanvasRenderIssue,
 };
 pub use groups::CanvasGroup;
+pub use history::{CanvasEditTarget, CanvasEditToken, CanvasHistory};
 pub use layers::{CanvasLayerRemoval, CanvasLayersChanged};
 pub use model::{
     CanvasDocument, CanvasEllipse, CanvasFillRule, CanvasGeometry, CanvasItem, CanvasLineCap,

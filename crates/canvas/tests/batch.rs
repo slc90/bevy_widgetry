@@ -113,8 +113,8 @@ fn batch_deletion_rejects_foreign_members_then_removes_the_complete_valid_set_in
         CanvasDocument::shape_order(&mut world, document).unwrap(),
         [shapes[1]]
     );
-    assert!(world.get_entity(shapes[0]).is_err());
-    assert!(world.get_entity(shapes[2]).is_err());
+    assert!(world.get_entity(shapes[0]).is_ok() && world.get::<ChildOf>(shapes[0]).is_none());
+    assert!(world.get_entity(shapes[2]).is_ok() && world.get::<ChildOf>(shapes[2]).is_none());
 }
 
 #[test]
@@ -572,7 +572,7 @@ fn cancel_or_invalid_members_stop_the_entire_group_and_delete_cleans_all_selecte
                 CanvasView::set_document_in_world(app.world_mut(), a, None).unwrap();
             }
             8 => {
-                CanvasDocument::remove_shape(app.world_mut(), document, second).unwrap();
+                app.world_mut().despawn(second);
             }
             9 => {
                 let other = app.world_mut().spawn(CanvasDocument).id();

@@ -2,9 +2,9 @@ use crate::error::CanvasResult as Result;
 use crate::{CanvasContainer, CanvasDocument, CanvasDocumentChanged, CanvasView};
 use bevy::{
     camera::{NormalizedRenderTarget, RenderTarget},
-    ecs::message::MessageCursor,
+    ecs::message::{MessageCursor, MessageId},
     input::{ButtonState, keyboard::KeyboardInput},
-    input_focus::{FocusedInput, InputFocus},
+    input_focus::{FocusedInput, InputFocus, InputFocusSystems},
     picking::{
         PickingSystems,
         backend::HitData,
@@ -57,6 +57,14 @@ struct FrameInputs {
     last_press: HashMap<PointerId, usize>,
 }
 
+#[derive(Resource, Default)]
+struct HistoryModifiers {
+    control_left: bool,
+    control_right: bool,
+    shift_left: bool,
+    shift_right: bool,
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum DrawingKind {
     Rectangle,
@@ -91,6 +99,7 @@ struct Drag {
     local: Vec2,
     hit: HitData,
     raw_driven: bool,
+    edit: Option<crate::CanvasEditToken>,
     action: DragAction,
 }
 
@@ -124,9 +133,31 @@ enum DragAction {
     },
 }
 
+impl DragAction {
+    fn edit_document(&self) -> Option<Entity> {
+        match self {
+            Self::Move { document, .. } => Some(*document),
+            Self::MoveSelection(edit) => Some(edit.document),
+            Self::Rotate(edit) => Some(edit.document),
+            Self::Scale(edit) => Some(edit.document),
+            Self::Parameters(edit) => Some(edit.document),
+            Self::Node(edit) => Some(edit.document),
+            Self::Pan | Self::Draw { .. } | Self::Pen { .. } => None,
+        }
+    }
+}
+
+#[derive(Resource, Default)]
+struct EscapeDispatch {
+    focused: MessageCursor<KeyboardInput>,
+    handled: HashSet<MessageId<KeyboardInput>>,
+}
+
 pub(crate) fn install(app: &mut App) {
     app.init_resource::<PointerCaptureMap>()
         .init_resource::<FrameInputs>()
+        .init_resource::<EscapeDispatch>()
+        .init_resource::<HistoryModifiers>()
         .add_observer(press)
         .add_observer(enter_group_on_click)
         .add_observer(moved)
@@ -137,6 +168,12 @@ pub(crate) fn install(app: &mut App) {
         .add_observer(scrolled)
         .add_observer(removed)
         .add_observer(delete_selected)
+        .add_observer(focused_escape)
+        .add_observer(edit_history)
+        .add_systems(
+            PreUpdate,
+            history_modifiers.before(bevy::input::InputSystems),
+        )
         .add_systems(
             PreUpdate,
             process_input
@@ -145,7 +182,12 @@ pub(crate) fn install(app: &mut App) {
                 .in_set(PickingSystems::Hover),
         )
         .add_systems(PreUpdate, cancel_unavailable.after(PickingSystems::Last))
-        .add_systems(PreUpdate, escape.after(PickingSystems::Last))
+        .add_systems(
+            PreUpdate,
+            undispatched_escapes
+                .after(InputFocusSystems::Dispatch)
+                .after(PickingSystems::Last),
+        )
         .add_systems(
             PreUpdate,
             refresh_rotation
@@ -487,6 +529,14 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
             let Some(local) = position(world, press.entity, press.pointer.position) else {
                 return Ok(());
             };
+            let edit = if let Some(document) = action.edit_document() {
+                let Some(edit) = crate::history::begin_gesture(world, document)? else {
+                    return Ok(());
+                };
+                Some(edit)
+            } else {
+                None
+            };
             if let Some(mut state) = world.get_mut::<DragState>(press.entity) {
                 state.0 = Some(Drag {
                     pointer: press.pointer.id,
@@ -494,6 +544,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     local,
                     hit: press.hit.clone(),
                     raw_driven: false,
+                    edit,
                     action,
                 });
             }
@@ -696,103 +747,12 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
         {
             drag.local = local;
         }
-        match drag.action.clone() {
-            DragAction::Pan => {
-                let center = CanvasView::_center(world, entity)? - (local - drag.local) / zoom;
-                if !center.is_finite() {
-                    end(world, entity);
-                    return Ok(());
-                }
-                CanvasView::_set_center_in_world(world, entity, center)?;
-            }
-            DragAction::Move {
-                document,
-                shape,
-                offset,
-                parent,
-            } => {
-                let pointer = CanvasView::_center(world, entity)? + local / zoom;
-                let point = (crate::scale::local_point(parent, pointer) - offset).as_vec2();
-                if !point.is_finite() {
-                    end(world, entity);
-                    return Ok(());
-                }
-                let Some(mut transform) = world.get::<Transform>(shape).copied() else {
-                    end(world, entity);
-                    return Ok(());
-                };
-                transform.translation.x = point.x;
-                transform.translation.y = point.y;
-                crate::groups::update_item_transform(world, document, shape, transform)?;
-            }
-            DragAction::Scale(scale) => {
-                let point = CanvasView::_center(world, entity)? + local / zoom;
-                if !point.is_finite() {
-                    end(world, entity);
-                    return Ok(());
-                }
-                scale.apply(world, point)?;
-            }
-            DragAction::Rotate(rotate) => {
-                let point = CanvasView::_center(world, entity)? + local / zoom;
-                if !point.is_finite() {
-                    end(world, entity);
-                    return Ok(());
-                }
-                let snap = world
-                    .get_resource::<ButtonInput<KeyCode>>()
-                    .is_some_and(|keys| {
-                        keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight)
-                    });
-                rotate.apply(world, point, snap)?;
-            }
-            DragAction::Parameters(edit) => {
-                let point = CanvasView::_center(world, entity)? + local / zoom;
-                if !point.is_finite() {
-                    end(world, entity);
-                    return Ok(());
-                }
-                edit.apply(world, point)?;
-            }
-            DragAction::Node(edit) => {
-                let point = CanvasView::_center(world, entity)? + local / zoom;
-                if !point.is_finite() {
-                    end(world, entity);
-                    return Ok(());
-                }
-                edit.apply(world, point)?;
-            }
-            DragAction::MoveSelection(group) => {
-                let point = CanvasView::_center(world, entity)? + local / zoom;
-                if !point.is_finite() {
-                    end(world, entity);
-                    return Ok(());
-                }
-                let moved = group.apply(world, point)?;
-                if let Some(mut state) = world.get_mut::<DragState>(entity)
-                    && let Some(Drag {
-                        action: DragAction::MoveSelection(group),
-                        ..
-                    }) = &mut state.0
-                {
-                    group.moved |= moved;
-                }
-            }
-            DragAction::Draw { .. } | DragAction::Pen { .. } => {
-                let point = CanvasView::_center(world, entity)? + local / zoom;
-                if !point.is_finite() {
-                    end(world, entity);
-                    return Ok(());
-                }
-                if let Some(mut state) = world.get_mut::<DragState>(entity)
-                    && let Some(Drag {
-                        action: DragAction::Draw { current, .. } | DragAction::Pen { current, .. },
-                        ..
-                    }) = &mut state.0
-                {
-                    *current = point;
-                }
-            }
+        if let Some(token) = drag.edit {
+            crate::history::apply(world, token, |world, _| {
+                advance_action(world, entity, &drag, local, zoom)
+            })?;
+        } else {
+            advance_action(world, entity, &drag, local, zoom)?;
         }
         if !continuing(world, entity, &drag) {
             end(world, entity);
@@ -800,6 +760,114 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
         Ok(())
     })()
     .map_err(|error| error.at("entity", entity))
+}
+
+fn advance_action(
+    world: &mut World,
+    entity: Entity,
+    drag: &Drag,
+    local: Vec2,
+    zoom: f32,
+) -> Result {
+    match drag.action.clone() {
+        DragAction::Pan => {
+            let center = CanvasView::_center(world, entity)? - (local - drag.local) / zoom;
+            if !center.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            CanvasView::_set_center_in_world(world, entity, center)?;
+        }
+        DragAction::Move {
+            document,
+            shape,
+            offset,
+            parent,
+        } => {
+            let pointer = CanvasView::_center(world, entity)? + local / zoom;
+            let point = (crate::scale::local_point(parent, pointer) - offset).as_vec2();
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            let Some(mut transform) = world.get::<Transform>(shape).copied() else {
+                end(world, entity);
+                return Ok(());
+            };
+            transform.translation.x = point.x;
+            transform.translation.y = point.y;
+            crate::groups::update_item_transform(world, document, shape, transform)?;
+        }
+        DragAction::Scale(scale) => {
+            let point = CanvasView::_center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            scale.apply(world, point)?;
+        }
+        DragAction::Rotate(rotate) => {
+            let point = CanvasView::_center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            let snap = world
+                .get_resource::<ButtonInput<KeyCode>>()
+                .is_some_and(|keys| {
+                    keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight)
+                });
+            rotate.apply(world, point, snap)?;
+        }
+        DragAction::Parameters(edit) => {
+            let point = CanvasView::_center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            edit.apply(world, point)?;
+        }
+        DragAction::Node(edit) => {
+            let point = CanvasView::_center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            edit.apply(world, point)?;
+        }
+        DragAction::MoveSelection(group) => {
+            let point = CanvasView::_center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            let moved = group.apply(world, point)?;
+            if let Some(mut state) = world.get_mut::<DragState>(entity)
+                && let Some(Drag {
+                    action: DragAction::MoveSelection(group),
+                    ..
+                }) = &mut state.0
+            {
+                group.moved |= moved;
+            }
+        }
+        DragAction::Draw { .. } | DragAction::Pen { .. } => {
+            let point = CanvasView::_center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            if let Some(mut state) = world.get_mut::<DragState>(entity)
+                && let Some(Drag {
+                    action: DragAction::Draw { current, .. } | DragAction::Pen { current, .. },
+                    ..
+                }) = &mut state.0
+            {
+                *current = point;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn scrolled(mut event: On<PointerScroll>, mut world: bevy::ecs::world::DeferredWorld) {
@@ -1184,23 +1252,6 @@ pub(crate) fn cancel_drawing_tools(world: &mut World, view: Entity) {
     crate::pen::cancel(world, view);
 }
 
-pub(crate) fn cancel_node_edits(world: &mut World, shape: Entity) {
-    let views = world
-        .query::<(Entity, &DragState)>()
-        .iter(world)
-        .filter_map(|(view, state)| {
-            state
-                .0
-                .as_ref()
-                .filter(|drag| matches!(drag.action,DragAction::Node(edit) if edit.shape==shape))
-                .map(|_| view)
-        })
-        .collect::<Vec<_>>();
-    for view in views {
-        end(world, view);
-    }
-}
-
 pub(crate) fn release_gesture(world: &mut World, entity: Entity) {
     if let Some(drag) = world
         .get_mut::<DragState>(entity)
@@ -1211,6 +1262,9 @@ pub(crate) fn release_gesture(world: &mut World, entity: Entity) {
             entity,
             &drag,
         );
+        if let Some(edit) = drag.edit {
+            crate::history::finish_gesture(world, edit);
+        }
         bevy_widgetry_core::pointer::refresh_hover(world, drag.pointer);
     }
 }
@@ -1349,6 +1403,9 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         else {
             return Ok(());
         };
+        if crate::history::is_busy(world, document) {
+            return Ok(());
+        }
         CanvasView::_set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
         world.flush();
         let size = (current - start).abs();
@@ -1410,35 +1467,17 @@ fn delete_selected(
             let Some(document) = CanvasView::_document(world, view)? else {
                 return Ok(());
             };
-            crate::batch::remove_selected_items(world, document, &shapes)?;
-            let deleted = shapes.into_iter().collect::<HashSet<_>>();
-            let affected = world
-                .query::<(Entity, &DragState)>()
-                .iter(world)
-                .filter_map(|(view, state)| {
-                    let target = match state.0.as_ref()?.action.clone() {
-                        DragAction::MoveSelection(group) => {
-                            return group
-                                .shapes
-                                .iter()
-                                .any(|(shape, _)| deleted.contains(shape))
-                                .then_some(view);
-                        }
-                        DragAction::Move { shape, .. }
-                        | DragAction::Scale(crate::scale::Scale { shape, .. })
-                        | DragAction::Rotate(crate::rotate::Rotate { shape, .. }) => shape,
-                        DragAction::Parameters(crate::parameters::Edit { shape, .. }) => shape,
-                        DragAction::Node(crate::nodes::Edit { shape, .. }) => shape,
-                        DragAction::Pan | DragAction::Draw { .. } | DragAction::Pen { .. } => {
-                            return None;
-                        }
-                    };
-                    deleted.contains(&target).then_some(view)
-                })
-                .collect::<Vec<_>>();
-            for view in affected {
+            if world
+                .get::<DragState>(view)
+                .and_then(|state| state.0.as_ref())
+                .is_some_and(|drag| drag.edit.is_some())
+            {
                 end(world, view);
             }
+            if crate::history::is_busy(world, document) {
+                return Ok(());
+            }
+            crate::batch::remove_selected_items(world, document, &shapes)?;
             Ok(())
         })()
         .map_err(|error| {
@@ -1447,35 +1486,168 @@ fn delete_selected(
     });
 }
 
-fn escape(
+fn history_modifiers(
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    mut modifiers: ResMut<HistoryModifiers>,
+) {
+    // InputSystems has not yet applied this frame's KeyboardInput messages.
+    *modifiers = keys.map_or_else(HistoryModifiers::default, |keys| HistoryModifiers {
+        control_left: keys.pressed(KeyCode::ControlLeft),
+        control_right: keys.pressed(KeyCode::ControlRight),
+        shift_left: keys.pressed(KeyCode::ShiftLeft),
+        shift_right: keys.pressed(KeyCode::ShiftRight),
+    });
+}
+
+fn edit_history(
+    mut event: On<FocusedInput<KeyboardInput>>,
+    views: Query<(), With<CanvasView>>,
+    mut modifiers: ResMut<HistoryModifiers>,
+    mut commands: Commands,
+) {
+    if event.original_event_target() != event.focused_entity {
+        return;
+    }
+    let pressed = event.input.state == ButtonState::Pressed;
+    let modifier = match event.input.key_code {
+        KeyCode::ControlLeft => Some(&mut modifiers.control_left),
+        KeyCode::ControlRight => Some(&mut modifiers.control_right),
+        KeyCode::ShiftLeft => Some(&mut modifiers.shift_left),
+        KeyCode::ShiftRight => Some(&mut modifiers.shift_right),
+        _ => None,
+    };
+    if let Some(modifier) = modifier {
+        *modifier = pressed;
+        return;
+    }
+    if !views.contains(event.focused_entity)
+        || !pressed
+        || event.input.repeat
+        || !(modifiers.control_left || modifiers.control_right)
+    {
+        return;
+    }
+    let redo = match event.input.key_code {
+        KeyCode::KeyZ => modifiers.shift_left || modifiers.shift_right,
+        KeyCode::KeyY => true,
+        _ => return,
+    };
+    let view = event.focused_entity;
+    let window = event.input.window;
+    event.propagate(false);
+    commands.queue(move |world: &mut World| -> bevy::prelude::Result {
+        (|| -> Result {
+            if !keyboard_available(world, view, window) {
+                return Ok(());
+            }
+            let Some(document) = CanvasView::_document(world, view)? else {
+                return Ok(());
+            };
+            if !crate::history::is_busy(world, document) {
+                if redo {
+                    CanvasDocument::redo(world, document)?;
+                } else {
+                    CanvasDocument::undo(world, document)?;
+                }
+            }
+            Ok(())
+        })()
+        .map_err(|error| {
+            error.into_bevy_error(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.input.history",
+            ))
+        })
+    });
+}
+
+fn is_escape_press(input: &KeyboardInput) -> bool {
+    input.key_code == KeyCode::Escape && input.state == ButtonState::Pressed && !input.repeat
+}
+
+fn focused_escape(
+    mut event: On<FocusedInput<KeyboardInput>>,
+    views: Query<&crate::view::ViewState>,
+    messages: Option<Res<Messages<KeyboardInput>>>,
+    mut dispatch: ResMut<EscapeDispatch>,
+    mut commands: Commands,
+) {
+    let view = event.focused_entity;
+    if event.original_event_target() != view {
+        return;
+    }
+
+    // FocusedInput omits the message ID. Following each dispatched key preserves stream order.
+    let id = messages.as_deref().and_then(|messages| {
+        let mut matching = dispatch.focused.clone();
+        let id = matching
+            .read_with_id(messages)
+            .find_map(|(input, id)| (input == &event.input).then_some(id))?;
+        dispatch.focused = matching;
+        Some(id)
+    });
+    if event.input.key_code != KeyCode::Escape || event.input.state != ButtonState::Pressed {
+        return;
+    }
+    let state = views.get(view);
+    if state.is_ok_and(|state| matches!(state.mode, crate::CanvasMode::Pen(_))) {
+        event.propagate(false);
+    }
+    if !event.input.repeat && state.is_ok() && id.is_none_or(|id| dispatch.handled.insert(id)) {
+        let window = event.input.window;
+        commands.queue(move |world: &mut World| apply_escape(world, view, window));
+    }
+}
+
+fn undispatched_escapes(
     world: &mut World,
     mut cursor: Local<MessageCursor<KeyboardInput>>,
+    mut primary: Local<QueryState<Entity, With<PrimaryWindow>>>,
 ) -> bevy::prelude::Result {
+    let Some(messages) = world.get_resource::<Messages<KeyboardInput>>() else {
+        return Ok(());
+    };
+    let oldest = messages.oldest_message_count();
+    let presses = cursor
+        .read_with_id(messages)
+        .filter(|(event, _)| is_escape_press(event))
+        .map(|(event, id)| (event.window, id))
+        .collect::<Vec<_>>();
+
+    let can_dispatch = primary.single(world).is_ok();
+    {
+        let mut dispatch = world.resource_mut::<EscapeDispatch>();
+        dispatch.handled.retain(|id| id.id >= oldest);
+        if can_dispatch {
+            // Bevy drains its reader with a unique primary window. Widgetry's window dispatcher
+            // can also drain keys without emitting a FocusedInput, for example behind a modal.
+            dispatch.focused = cursor.clone();
+        }
+    }
+    for (window, id) in presses {
+        if world.resource_mut::<EscapeDispatch>().handled.insert(id)
+            && let Some(view) = world.resource::<InputFocus>().get()
+        {
+            apply_escape(world, view, window)?;
+        }
+    }
+    Ok(())
+}
+
+fn apply_escape(world: &mut World, view: Entity, window: Entity) -> bevy::prelude::Result {
     (|| -> Result {
-        let Some(messages) = world.get_resource::<Messages<KeyboardInput>>() else {
+        if !keyboard_available(world, view, window) {
             return Ok(());
-        };
-        let windows = cursor
-            .read(messages)
-            .filter(|event| {
-                event.key_code == KeyCode::Escape
-                    && event.state == ButtonState::Pressed
-                    && !event.repeat
-            })
-            .map(|event| event.window)
-            .collect::<Vec<_>>();
-        for window in windows {
-            let Some(view) = world.resource::<InputFocus>().get() else {
-                continue;
-            };
-            if !keyboard_available(world, view, window) {
-                continue;
+        }
+        match CanvasView::_mode(world, view)? {
+            crate::CanvasMode::Rectangle(_) | crate::CanvasMode::Ellipse(_) => {
+                CanvasView::_set_mode_in_world(world, view, crate::CanvasMode::Select)?;
             }
-            match CanvasView::_mode(world, view)? {
-                crate::CanvasMode::Rectangle(_) | crate::CanvasMode::Ellipse(_) => {
-                    CanvasView::_set_mode_in_world(world, view, crate::CanvasMode::Select)?;
-                }
-                _ => {
+            crate::CanvasMode::Select | crate::CanvasMode::PathNodeEdit => {
+                CanvasView::_leave_group(world, view)?;
+            }
+            crate::CanvasMode::Pen(_) => {
+                let placing_point = pen_point(world, view).is_some();
+                if !CanvasView::_cancel_pen_in_world(world, view)? && !placing_point {
                     CanvasView::_leave_group(world, view)?;
                 }
             }
@@ -1604,11 +1776,15 @@ fn removed(
     event: On<Remove<DragState>>,
     states: Query<&DragState>,
     mut capture: ResMut<PointerCaptureMap>,
+    mut commands: Commands,
 ) {
     if let Ok(state) = states.get(event.entity)
         && let Some(drag) = &state.0
     {
         release_capture(&mut capture, event.entity, drag);
+        if let Some(edit) = drag.edit {
+            commands.queue(move |world: &mut World| crate::history::finish_gesture(world, edit));
+        }
     }
 }
 

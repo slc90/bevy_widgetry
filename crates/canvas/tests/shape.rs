@@ -43,7 +43,7 @@ fn rectangle_api_uses_one_authoritative_geometry_and_common_identity() {
         Some(&CanvasGeometry::Rectangle(changed))
     );
     CanvasDocument::remove_shape(&mut world, document, shape).unwrap();
-    assert!(!world.entities().contains(shape));
+    assert!(world.get_entity(shape).is_ok() && world.get::<ChildOf>(shape).is_none());
     assert!(world.entities().contains(document));
 }
 

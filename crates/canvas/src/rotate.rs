@@ -92,8 +92,11 @@ impl Rotate {
             2.0 * f64::from(self.transform.rotation.z).atan2(f64::from(self.transform.rotation.w));
         let mut angle = base + delta;
         if snap {
+            let [parent_x, _] = crate::groups::planar_axes(&self.parent);
+            let parent_angle = parent_x.y.atan2(parent_x.x);
+            let document_angle = angle + parent_angle;
             let step = SNAP_ANGLE_RADIANS;
-            angle = (angle / step).round() * step;
+            angle = (document_angle / step).round() * step - parent_angle;
         }
         let mut transform = self.transform;
         transform.rotation = Quat::from_rotation_z(angle as f32);

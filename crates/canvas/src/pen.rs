@@ -636,7 +636,6 @@ fn key(
             | KeyCode::KeyC
             | KeyCode::KeyN
             | KeyCode::Enter
-            | KeyCode::Escape
     ) {
         return;
     }
@@ -677,9 +676,6 @@ fn key(
                 }
                 KeyCode::Enter => {
                     CanvasView::_finish_pen_in_world(world, view)?;
-                }
-                KeyCode::Escape => {
-                    CanvasView::_cancel_pen_in_world(world, view)?;
                 }
                 _ => {}
             }

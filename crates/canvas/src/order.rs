@@ -26,7 +26,7 @@ const DEFAULT_LAYER_ID: CanvasLayerId = CanvasLayerId {
     local: 0,
 };
 
-#[derive(Clone, Debug, Reflect)]
+#[derive(Clone, Debug, PartialEq, Reflect)]
 pub struct CanvasLayer {
     pub(crate) id: CanvasLayerId,
     pub(crate) name: String,
@@ -53,7 +53,7 @@ impl CanvasLayer {
     }
 }
 
-#[derive(Component, Debug, Reflect)]
+#[derive(Component, Clone, Debug, Reflect)]
 #[component(on_add = bind_layer_ids, on_insert = bind_layer_ids)]
 #[reflect(Component)]
 pub struct CanvasLayerStack {
@@ -400,12 +400,15 @@ impl CanvasDocument {
 
     pub fn reorder_item(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         container: CanvasContainer,
         item: Entity,
         operation: CanvasOrder,
     ) -> crate::error::PublicResult<bool> {
-        reorder(world, document, container, item, operation).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            reorder(world, document, container, item, operation)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.reorder_item",
             ))
@@ -414,11 +417,14 @@ impl CanvasDocument {
 
     pub fn reorder_shape(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         operation: CanvasOrder,
     ) -> crate::error::PublicResult<bool> {
-        Self::_reorder_shape(world, document, shape, operation).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_reorder_shape(world, document, shape, operation)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.reorder_shape",
             ))
@@ -463,7 +469,7 @@ pub(crate) fn visit_valid_order(
         Ok(false)
     })?;
     for (container, removed) in stale {
-        container_items_mut(world, document, container)?.retain(|item| !removed.contains(item));
+        crate::history::repair_order(world, document, container, &removed)?;
     }
     Ok(())
 }
@@ -513,8 +519,18 @@ fn reorder(
                 .get_entity(*candidate)
                 .is_ok_and(|entry| components.is_valid(&entry, parent))
         };
-        let repaired = (!order.iter().all(valid))
-            .then(|| order.iter().copied().filter(valid).collect::<Vec<_>>());
+        let stale = order
+            .iter()
+            .copied()
+            .filter(|item| !valid(item))
+            .collect::<HashSet<_>>();
+        let repaired = (!stale.is_empty()).then(|| {
+            order
+                .iter()
+                .copied()
+                .filter(|item| !stale.contains(item))
+                .collect::<Vec<_>>()
+        });
         let items = repaired.as_deref().unwrap_or(order);
         let index = items
             .iter()
@@ -528,15 +544,14 @@ fn reorder(
             CanvasOrder::Back => 0,
         };
         let changed = index != target;
-        if changed || repaired.is_some() {
-            let order = container_items_mut(world, document, container)?;
-            if let Some(repaired) = repaired {
-                *order = repaired;
-            }
-            if changed {
+        if !stale.is_empty() {
+            crate::history::repair_order(world, document, container, &stale)?;
+        }
+        if changed {
+            crate::history::edit_order(world, document, container, index.min(target), |order| {
                 order.remove(index);
                 order.insert(target, item);
-            }
+            })?;
         }
         Ok(changed)
     })()

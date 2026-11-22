@@ -35,6 +35,150 @@ fn delete(app: &mut App, window: Entity) {
 }
 
 #[test]
+fn history_shortcuts_respect_modifier_order_within_one_frame() {
+    let (mut app, view, _, shape, window, _) = fixture(pointer_ids()[1], 1.0, 1.0);
+    add_keyboard_dispatch(&mut app);
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(view, FocusCause::Navigated);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let edit = Transform::from_xyz(18.0, 0.0, 0.0);
+    CanvasDocument::update_transform(app.world_mut(), document, shape, edit).unwrap();
+
+    let tap = |app: &mut App, events: &[(KeyCode, ButtonState)]| {
+        for &(key_code, state) in events {
+            queue_key(
+                app,
+                KeyboardInput {
+                    key_code,
+                    logical_key: Key::Unidentified(bevy::input::keyboard::NativeKey::Unidentified),
+                    state,
+                    text: None,
+                    repeat: false,
+                    window,
+                },
+            );
+        }
+        update(app);
+    };
+    use ButtonState::{Pressed, Released};
+    use KeyCode::{ControlLeft as Ctrl, KeyZ as Z, ShiftLeft as Shift};
+    tap(&mut app, &[(Z, Pressed), (Ctrl, Pressed)]);
+    assert_eq!(app.world().get::<Transform>(shape), Some(&edit));
+    tap(
+        &mut app,
+        &[
+            (Shift, Pressed),
+            (Shift, Released),
+            (Z, Pressed),
+            (Ctrl, Released),
+        ],
+    );
+    assert_eq!(
+        app.world().get::<Transform>(shape),
+        Some(&Transform::default())
+    );
+    tap(
+        &mut app,
+        &[
+            (Ctrl, Pressed),
+            (Shift, Pressed),
+            (Z, Pressed),
+            (Shift, Released),
+            (Ctrl, Released),
+        ],
+    );
+    assert_eq!(app.world().get::<Transform>(shape), Some(&edit));
+}
+
+#[test]
+fn a_canvas_ancestor_preserves_history_keys_from_a_focused_child() {
+    use bevy::input_focus::FocusedInput;
+
+    #[derive(Resource, Default)]
+    struct ReceivedHistoryKeys(Vec<KeyCode>);
+
+    let (mut app, view, _, shape, window, _) = fixture(pointer_ids()[1], 1.0, 1.0);
+    add_keyboard_dispatch(&mut app);
+    let wrapper = app.world_mut().spawn_empty().id();
+    app.world_mut().entity_mut(view).insert(ChildOf(wrapper));
+    let child = app.world_mut().spawn(ChildOf(view)).id();
+    app.init_resource::<ReceivedHistoryKeys>();
+    app.world_mut().entity_mut(wrapper).observe(
+        |event: On<FocusedInput<KeyboardInput>>, mut received: ResMut<ReceivedHistoryKeys>| {
+            if matches!(event.input.key_code, KeyCode::KeyZ | KeyCode::KeyY) {
+                received.0.push(event.input.key_code);
+            }
+        },
+    );
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(child, FocusCause::Navigated);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let transform = Transform::from_xyz(8.0, 0.0, 0.0);
+    CanvasDocument::update_transform(app.world_mut(), document, shape, transform).unwrap();
+    for key in [KeyCode::ControlLeft, KeyCode::KeyZ, KeyCode::KeyY] {
+        bevy_widgetry_test_utils::press_key(&mut app, window, key);
+    }
+    assert_eq!(
+        app.world().resource::<ReceivedHistoryKeys>().0,
+        [KeyCode::KeyZ, KeyCode::KeyY]
+    );
+    assert_eq!(app.world().get::<Transform>(shape), Some(&transform));
+}
+
+#[test]
+fn focused_view_replays_a_shared_drag_as_one_edit_after_release_or_cancel() {
+    let id = pointer_ids()[1];
+    for finish in [
+        PointerAction::Release(PointerButton::Primary),
+        PointerAction::Cancel,
+    ] {
+        let (mut app, first, second, shape, window, mut at) = fixture(id, 1.0, 1.0);
+        add_keyboard_dispatch(&mut app);
+        let document = CanvasView::document(app.world(), first).unwrap().unwrap();
+        CanvasDocument::clear_history(app.world_mut(), document).unwrap();
+        CanvasView::set_selection_in_world(app.world_mut(), first, [shape]).unwrap();
+        CanvasView::set_selection_in_world(app.world_mut(), second, [shape]).unwrap();
+        let center = Vec2::splat(10.0);
+        CanvasView::set_center_in_world(app.world_mut(), second, center).unwrap();
+        let zoom = 0.5;
+        CanvasView::set_zoom_in_world(app.world_mut(), second, zoom).unwrap();
+        input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ONE });
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Press(PointerButton::Primary),
+        );
+        moved(&mut app, id, &mut at, Vec2::new(8.0, 5.0));
+        moved(&mut app, id, &mut at, Vec2::new(7.0, -2.0));
+        assert!(!CanvasDocument::can_undo(app.world(), document).unwrap());
+        input(&mut app, id, &at, finish);
+        let edited = *app.world().get::<Transform>(shape).unwrap();
+        assert_eq!(edited.translation.truncate(), Vec2::new(15.0, 3.0));
+        assert!(CanvasDocument::can_undo(app.world(), document).unwrap());
+
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(second, FocusCause::Navigated);
+        bevy_widgetry_test_utils::press_key(&mut app, window, KeyCode::ControlLeft);
+        bevy_widgetry_test_utils::press_key(&mut app, window, KeyCode::KeyZ);
+        assert_eq!(
+            app.world().get::<Transform>(shape),
+            Some(&Transform::default())
+        );
+        assert!(!CanvasDocument::can_undo(app.world(), document).unwrap());
+        bevy_widgetry_test_utils::press_key(&mut app, window, KeyCode::ShiftLeft);
+        bevy_widgetry_test_utils::press_key(&mut app, window, KeyCode::KeyZ);
+        assert_eq!(app.world().get::<Transform>(shape), Some(&edited));
+        assert_eq!(CanvasView::center(app.world(), second).unwrap(), center);
+        assert_eq!(CanvasView::zoom(app.world(), second).unwrap(), zoom);
+        assert_eq!(CanvasView::selection(app.world(), second).unwrap(), [shape]);
+    }
+}
+
+#[test]
 fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_assets() {
     for id in pointer_ids() {
         let (mut app, a, b, shape, window, at) = fixture(id, 1.0, 1.0);
@@ -65,7 +209,7 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
                 if !e.selection.is_empty() {
                     return;
                 }
-                assert!(world.get_entity(shape).is_err());
+                assert!(world.get_entity(shape).is_ok() && world.get::<ChildOf>(shape).is_none());
                 assert!(e.selection.is_empty());
                 assert_eq!(
                     CanvasView::single_selection(&world, e.entity).unwrap(),
@@ -83,7 +227,9 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
         );
         assert!(app.world().resource::<PointerCaptureMap>().is_captured(&id));
         delete(&mut app, window);
-        assert!(app.world().get_entity(shape).is_err());
+        assert!(
+            app.world().get_entity(shape).is_ok() && app.world().get::<ChildOf>(shape).is_none()
+        );
         assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
         for view in [a, b] {
             assert_eq!(
@@ -110,12 +256,10 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
         delete(&mut app, window);
         assert!(app.world().get::<CanvasDocument>(document).is_some());
         assert!(app.world().get::<CanvasView>(a).is_some());
-        assert_eq!(
-            app.world_mut()
-                .query::<&CanvasGeometry>()
-                .iter(app.world())
-                .count(),
-            0
+        assert!(
+            CanvasDocument::draw_order(app.world(), document)
+                .unwrap()
+                .is_empty()
         );
         input(
             &mut app,
@@ -147,10 +291,9 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
             PointerAction::Release(PointerButton::Primary),
         );
         assert_eq!(
-            app.world_mut()
-                .query::<&CanvasGeometry>()
-                .iter(app.world())
-                .count(),
+            CanvasDocument::draw_order(app.world(), document)
+                .unwrap()
+                .len(),
             1
         );
     }
@@ -198,7 +341,7 @@ fn delete_requires_exact_canvas_focus_and_an_available_window_and_view() {
     );
     app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
     delete(&mut app, window);
-    assert!(app.world().get_entity(shape).is_err());
+    assert!(app.world().get_entity(shape).is_ok() && app.world().get::<ChildOf>(shape).is_none());
 }
 
 #[test]
@@ -348,7 +491,10 @@ fn same_frame_delete_does_not_cancel_pan_final_motion_or_rectangle_completion() 
                 },
             );
             update(&mut app);
-            assert!(app.world().get_entity(shape).is_err());
+            assert!(
+                app.world().get_entity(shape).is_ok()
+                    && app.world().get::<ChildOf>(shape).is_none()
+            );
             assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
             if drawing {
                 let selected = CanvasView::single_selection(app.world(), a)

@@ -251,31 +251,21 @@ fn node_gestures_ignore_other_pointers_and_stop_on_lifecycle_changes_without_rol
             }
             9 => app.world_mut().get_mut::<Node>(a).unwrap().display = Display::None,
             10 => {
-                CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
+                app.world_mut().despawn(shape);
             }
             11 => {
-                CanvasDocument::update_transform(
-                    app.world_mut(),
-                    document,
-                    shape,
-                    Transform::from_xyz(3.0, 2.0, 0.0),
-                )
-                .unwrap();
+                app.world_mut()
+                    .entity_mut(shape)
+                    .insert(Transform::from_xyz(3.0, 2.0, 0.0));
             }
             _ => {
                 let mut new_path = path();
                 new_path
                     .commands
                     .push(CanvasPathCommand::LineTo(Vec2::new(30.0, 40.0)));
-                CanvasDocument::update_path(
-                    app.world_mut(),
-                    document,
-                    shape,
-                    new_path,
-                    Transform::default(),
-                    CanvasPaint::default(),
-                )
-                .unwrap();
+                app.world_mut()
+                    .entity_mut(shape)
+                    .insert(CanvasGeometry::Path(new_path));
             }
         }
         update(&mut app);

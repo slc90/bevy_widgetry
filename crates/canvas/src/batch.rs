@@ -7,10 +7,13 @@ use std::collections::{HashMap, HashSet};
 impl CanvasDocument {
     pub fn update_transforms(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         updates: &[(Entity, Transform)],
     ) -> crate::error::PublicResult {
-        Self::_update_transforms(world, document, updates).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_update_transforms(world, document, updates)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.update_transforms",
             ))
@@ -41,10 +44,13 @@ impl CanvasDocument {
 
     pub fn remove_shapes(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shapes: &[Entity],
     ) -> crate::error::PublicResult {
-        Self::_remove_shapes(world, document, shapes).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_remove_shapes(world, document, shapes)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.remove_shapes",
             ))
@@ -97,7 +103,7 @@ fn update_transforms(
             None => error,
         })?;
         for (shape, transform) in updates {
-            world.entity_mut(*shape).insert(*transform);
+            crate::history::set_transform(world, document, *shape, *transform)?;
         }
         Ok(())
     })()
@@ -114,7 +120,9 @@ pub(crate) fn remove_selected_items(
     document: Entity,
     items: &[Entity],
 ) -> Result {
-    remove_items(world, document, items, crate::groups::item_parent)
+    crate::history::apply(world, document, |world, document| {
+        remove_items(world, document, items, crate::groups::item_parent)
+    })
 }
 
 fn remove_items(
@@ -132,11 +140,12 @@ fn remove_items(
             by_container.entry(container).or_default().insert(*shape);
         }
         for (&container, removed) in &by_container {
-            crate::order::container_items_mut(world, document, container)?
-                .retain(|shape| !removed.contains(shape));
+            crate::history::edit_order(world, document, container, 0, |items| {
+                items.retain(|shape| !removed.contains(shape));
+            })?;
         }
         for shape in shapes {
-            world.despawn(shape);
+            crate::history::detach_item(world, document, shape)?;
         }
         for container in by_container.into_keys() {
             if let crate::CanvasContainer::Group(group) = container {

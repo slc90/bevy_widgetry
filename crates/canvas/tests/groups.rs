@@ -1083,13 +1083,13 @@ fn deleting_last_group_members_removes_the_empty_groups_and_frees_the_layer() {
     let outer = CanvasDocument::group_items(&mut world, doc, &[inner, c], "Outer").unwrap();
     CanvasDocument::create_layer(&mut world, doc, 1, "Other").unwrap();
     CanvasDocument::remove_shapes(&mut world, doc, &[a, b]).unwrap();
-    assert!(world.get_entity(inner).is_err());
+    assert!(world.get_entity(inner).is_ok() && world.get::<ChildOf>(inner).is_none());
     assert_eq!(
         CanvasDocument::item_order(&world, doc, CanvasContainer::Group(outer)).unwrap(),
         [c]
     );
     CanvasDocument::remove_shape(&mut world, doc, c).unwrap();
-    assert!(world.get_entity(outer).is_err());
+    assert!(world.get_entity(outer).is_ok() && world.get::<ChildOf>(outer).is_none());
     CanvasDocument::remove_layer(&mut world, doc, source, CanvasLayerRemoval::OnlyIfEmpty).unwrap();
 }
 
@@ -1183,7 +1183,7 @@ fn resizing_a_child_stops_when_a_parent_transform_changes() {
         .get::<Transform>(group)
         .unwrap()
         .with_scale(Vec3::new(2.0, 2.0, 1.0));
-    CanvasDocument::update_group_transform(app.world_mut(), doc, group, transform).unwrap();
+    app.world_mut().entity_mut(group).insert(transform);
     moved(&mut app, pointer, &mut at, Vec2::splat(15.0));
     input(
         &mut app,

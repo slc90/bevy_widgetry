@@ -106,8 +106,8 @@ fn layer_lifecycle_preserves_ids_members_and_explicit_removal_policy() {
         CanvasLayerRemoval::DeleteContents,
     )
     .unwrap();
-    assert!(world.get_entity(a).is_err());
-    assert!(world.get_entity(b).is_err());
+    assert!(world.get_entity(a).is_ok() && world.get::<ChildOf>(a).is_none());
+    assert!(world.get_entity(b).is_ok() && world.get::<ChildOf>(b).is_none());
     assert!(
         logs.run(|| CanvasDocument::remove_layer(
             &mut world,
@@ -383,12 +383,99 @@ fn showing_a_layer_prepares_its_surviving_items_for_immediate_export() {
 }
 
 #[test]
+fn undo_restores_an_empty_layer_whose_stale_item_already_belonged_elsewhere() {
+    let mut world = World::new();
+    let doc = world.spawn(CanvasDocument).id();
+    let other = world.spawn(CanvasDocument).id();
+    let base = CanvasDocument::default_layer(&world, doc).unwrap();
+    let keep = rectangle(&mut world, doc, base);
+    let layer = CanvasDocument::create_layer(&mut world, doc, 1, "Details").unwrap();
+    let stale = rectangle(&mut world, doc, layer);
+    world.entity_mut(stale).insert(ChildOf(other));
+
+    CanvasDocument::remove_layer(&mut world, doc, layer, CanvasLayerRemoval::OnlyIfEmpty).unwrap();
+    assert!(CanvasDocument::undo(&mut world, doc).unwrap());
+    assert_eq!(
+        CanvasDocument::layer_order(&world, doc).unwrap(),
+        [base, layer]
+    );
+    assert_eq!(CanvasDocument::draw_order(&world, doc).unwrap(), [keep]);
+    assert_eq!(world.get::<ChildOf>(stale).unwrap().parent(), other);
+    assert!(CanvasDocument::redo(&mut world, doc).unwrap());
+    assert_eq!(CanvasDocument::layer_order(&world, doc).unwrap(), [base]);
+}
+
+#[test]
+fn replay_showing_a_layer_prepares_its_surviving_items_for_immediate_export() {
+    for redo in [false, true] {
+        let mut world = World::new();
+        let doc = world.spawn(CanvasDocument).id();
+        let layer = CanvasDocument::create_layer(&mut world, doc, 1, "Details").unwrap();
+        let stale = rectangle(&mut world, doc, layer);
+        let keep = rectangle(&mut world, doc, layer);
+        CanvasDocument::set_layer_visible(&mut world, doc, layer, false).unwrap();
+        if redo {
+            CanvasDocument::set_layer_visible(&mut world, doc, layer, true).unwrap();
+            assert!(CanvasDocument::undo(&mut world, doc).unwrap());
+        }
+        world.despawn(stale);
+        if redo {
+            assert!(CanvasDocument::redo(&mut world, doc).unwrap());
+        } else {
+            assert!(CanvasDocument::undo(&mut world, doc).unwrap());
+        }
+        let svg = tempfile::NamedTempFile::new().unwrap();
+        CanvasDocument::export_svg(&mut world, doc, svg.path(), None).unwrap();
+        assert_eq!(CanvasDocument::draw_order(&world, doc).unwrap(), [keep]);
+    }
+}
+
+#[test]
+fn replay_cleans_layer_order_before_and_after_queued_transform_observers() {
+    let mut world = World::new();
+    let doc = world.spawn(CanvasDocument).id();
+    let layer = CanvasDocument::default_layer(&world, doc).unwrap();
+    let stale_before = rectangle(&mut world, doc, layer);
+    let stale_during = rectangle(&mut world, doc, layer);
+    let keep = rectangle(&mut world, doc, layer);
+    CanvasDocument::edit(&mut world, doc, |world, token| {
+        CanvasDocument::set_layer_visible(world, token, layer, false)?;
+        CanvasDocument::update_transform(world, token, keep, Transform::from_xyz(30.0, 0.0, 0.0))
+    })
+    .unwrap();
+    world.despawn(stale_before);
+    let observer_svg = tempfile::NamedTempFile::new().unwrap();
+    let observer_path = observer_svg.path().to_owned();
+    world.add_observer(
+        move |event: On<Insert<Transform>>, mut commands: Commands| {
+            if event.entity == keep {
+                let path = observer_path.clone();
+                commands.queue(move |world: &mut World| {
+                    CanvasDocument::export_svg(world, doc, &path, None).unwrap();
+                });
+                commands.entity(stale_during).despawn();
+            }
+        },
+    );
+
+    assert!(CanvasDocument::undo(&mut world, doc).unwrap());
+    assert!(!std::fs::read(observer_svg.path()).unwrap().is_empty());
+    assert!(world.get_entity(stale_during).is_err());
+    let svg = tempfile::NamedTempFile::new().unwrap();
+    CanvasDocument::export_svg(&mut world, doc, svg.path(), None).unwrap();
+    assert_eq!(CanvasDocument::draw_order(&world, doc).unwrap(), [keep]);
+}
+
+#[test]
 fn deleting_the_draft_layer_cannot_commit_pen_to_the_fallback_layer() {
+    #[derive(Resource, Default)]
+    struct CheckedLiveDraft(bool);
+
     let pointer = pointer_ids()[0];
     let (mut app, view, _, original, _, mut at) = fixture(pointer, 1.0, 1.0);
     let document = CanvasView::document(app.world(), view).unwrap().unwrap();
     let removed = CanvasDocument::create_layer(app.world_mut(), document, 1, "Draft").unwrap();
-    let trigger = rectangle(app.world_mut(), document, removed);
+    let shape = rectangle(app.world_mut(), document, removed);
     CanvasView::set_active_layer_in_world(app.world_mut(), view, removed).unwrap();
     CanvasView::set_mode_in_world(
         app.world_mut(),
@@ -418,17 +505,19 @@ fn deleting_the_draft_layer_cannot_commit_pen_to_the_fallback_layer() {
         moved(&mut app, pointer, &mut at, Vec2::splat(20.0));
     }
     assert!(CanvasView::pen_draft(app.world(), view).unwrap().is_some());
-    app.add_observer(
-        move |event: On<Remove<CanvasGeometry>>, mut commands: Commands| {
-            if event.entity == trigger {
-                commands.queue(move |world: &mut World| -> bevy::prelude::Result {
-                    CanvasView::finish_pen_in_world(world, view)
-                        .map(|_| ())
-                        .map_err(|failure| failure.into_bevy_error())
-                });
-            }
-        },
-    );
+    app.init_resource::<CheckedLiveDraft>();
+    app.add_observer(move |event: On<Remove<ChildOf>>, mut commands: Commands| {
+        if event.entity == shape {
+            commands.queue(move |world: &mut World| {
+                assert!(CanvasView::pen_draft(world, view).unwrap().is_some());
+                assert!(matches!(
+                    CanvasView::finish_pen_in_world(world, view),
+                    Ok(None)
+                ));
+                world.resource_mut::<CheckedLiveDraft>().0 = true;
+            });
+        }
+    });
 
     CanvasDocument::remove_layer(
         app.world_mut(),
@@ -437,6 +526,7 @@ fn deleting_the_draft_layer_cannot_commit_pen_to_the_fallback_layer() {
         CanvasLayerRemoval::DeleteContents,
     )
     .unwrap();
+    assert!(app.world().resource::<CheckedLiveDraft>().0);
     assert_eq!(
         CanvasDocument::draw_order(app.world(), document).unwrap(),
         [original]

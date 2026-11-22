@@ -1,13 +1,13 @@
 use crate::CanvasIssue;
 use crate::error::CanvasResult as Result;
-use crate::order::{CanvasContainer, CanvasLayerStack, container_items_mut, item_container, stack};
+use crate::order::{CanvasContainer, CanvasLayerStack, container_items, item_container, stack};
 use bevy::ecs::world::EntityRef;
 use bevy::math::{Affine3A, DVec2};
 use bevy::prelude::*;
 
 #[derive(Component, Default, Reflect)]
 #[reflect(Component)]
-#[require(Transform, CanvasLayerStack)]
+#[require(Transform, CanvasLayerStack, crate::CanvasHistory)]
 pub struct CanvasDocument;
 
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
@@ -119,11 +119,14 @@ impl Default for CanvasPaint {
 impl CanvasDocument {
     pub fn update_transform(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         transform: Transform,
     ) -> crate::error::PublicResult {
-        Self::_update_transform(world, document, shape, transform).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_update_transform(world, document, shape, transform)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.update_transform",
             ))
@@ -148,8 +151,7 @@ impl CanvasDocument {
                 crate::groups::validate_shape_projection(world, shape, geometry, transform, paint)
             })();
             result?;
-            world.entity_mut(shape).insert(transform);
-            Ok(())
+            crate::history::set_transform(world, document, shape, transform)
         })()
         .map_err(|error| {
             error
@@ -167,35 +169,37 @@ impl CanvasDocument {
 
     pub fn create_rectangle(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         rectangle: CanvasRectangle,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_rectangle(world, document, None, rectangle, transform, paint).map_err(
-            |error| {
-                error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
-                    "canvas.CanvasDocument.create_rectangle",
-                ))
-            },
-        )
+        crate::history::apply(world, target, |world, document| {
+            Self::_create_rectangle(world, document, None, rectangle, transform, paint)
+        })
+        .map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.create_rectangle",
+            ))
+        })
     }
 
     pub fn create_rectangle_in_layer(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         layer: crate::CanvasLayerId,
         rectangle: CanvasRectangle,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_rectangle(world, document, Some(layer), rectangle, transform, paint).map_err(
-            |error| {
-                error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
-                    "canvas.CanvasDocument.create_rectangle_in_layer",
-                ))
-            },
-        )
+        crate::history::apply(world, target, |world, document| {
+            Self::_create_rectangle(world, document, Some(layer), rectangle, transform, paint)
+        })
+        .map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.create_rectangle_in_layer",
+            ))
+        })
     }
 
     pub(crate) fn _create_rectangle(
@@ -228,12 +232,15 @@ impl CanvasDocument {
 
     pub fn create_ellipse(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         ellipse: CanvasEllipse,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_ellipse(world, document, None, ellipse, transform, paint).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_create_ellipse(world, document, None, ellipse, transform, paint)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.create_ellipse",
             ))
@@ -242,19 +249,20 @@ impl CanvasDocument {
 
     pub fn create_ellipse_in_layer(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         layer: crate::CanvasLayerId,
         ellipse: CanvasEllipse,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_ellipse(world, document, Some(layer), ellipse, transform, paint).map_err(
-            |error| {
-                error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
-                    "canvas.CanvasDocument.create_ellipse_in_layer",
-                ))
-            },
-        )
+        crate::history::apply(world, target, |world, document| {
+            Self::_create_ellipse(world, document, Some(layer), ellipse, transform, paint)
+        })
+        .map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.create_ellipse_in_layer",
+            ))
+        })
     }
 
     pub(crate) fn _create_ellipse(
@@ -287,12 +295,15 @@ impl CanvasDocument {
 
     pub fn create_path(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         path: crate::CanvasPath,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_path(world, document, None, path, transform, paint).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_create_path(world, document, None, path, transform, paint)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.create_path",
             ))
@@ -301,13 +312,16 @@ impl CanvasDocument {
 
     pub fn create_path_in_layer(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         layer: crate::CanvasLayerId,
         path: crate::CanvasPath,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult<Entity> {
-        Self::_create_path(world, document, Some(layer), path, transform, paint).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_create_path(world, document, Some(layer), path, transform, paint)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.create_path_in_layer",
             ))
@@ -343,13 +357,16 @@ impl CanvasDocument {
 
     pub fn update_path(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         path: crate::CanvasPath,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult {
-        Self::_update_path(world, document, shape, path, transform, paint).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_update_path(world, document, shape, path, transform, paint)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.update_path",
             ))
@@ -429,8 +446,10 @@ impl CanvasDocument {
                 local
             }
         };
-        Self::insert_shape(world, document, target, geometry, transform, paint)
-            .map_err(|error| error.at("document", document))
+        crate::history::apply(world, document, |world, document| {
+            Self::insert_shape(world, document, target, geometry, transform, paint)
+        })
+        .map_err(|error| error.at("document", document))
     }
 
     fn insert_shape(
@@ -450,37 +469,40 @@ impl CanvasDocument {
             crate::order::container_items(world, document, target)?;
         }
         geometry._validate(&transform, &paint)?;
+        let index = container_items(world, document, target)?.len();
         let shape = world.spawn_empty().id();
-        let registered =
-            container_items_mut(world, document, target).map(|items| items.push(shape));
+        let registered = crate::history::edit_order(world, document, target, index, |items| {
+            items.push(shape);
+        });
         if let Err(error) = registered {
             world.despawn(shape);
             return Err(error);
         }
-        world.entity_mut(shape).insert((
-            geometry,
-            transform,
-            paint,
-            ChildOf(target.parent(document)),
-        ));
+        crate::history::record_created(world, document, shape)?;
+        // Run queued Add observer commands after committing the history entry.
+        world.insert_batch([(
+            shape,
+            (geometry, transform, paint, ChildOf(target.parent(document))),
+        )]);
         Ok(shape)
     }
 
     pub fn update_rectangle(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         rectangle: CanvasRectangle,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult {
-        Self::_update_rectangle(world, document, shape, rectangle, transform, paint).map_err(
-            |error| {
-                error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
-                    "canvas.CanvasDocument.update_rectangle",
-                ))
-            },
-        )
+        crate::history::apply(world, target, |world, document| {
+            Self::_update_rectangle(world, document, shape, rectangle, transform, paint)
+        })
+        .map_err(|error| {
+            error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
+                "canvas.CanvasDocument.update_rectangle",
+            ))
+        })
     }
 
     pub(crate) fn _update_rectangle(
@@ -517,13 +539,16 @@ impl CanvasDocument {
 
     pub fn update_ellipse(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         ellipse: CanvasEllipse,
         transform: Transform,
         paint: CanvasPaint,
     ) -> crate::error::PublicResult {
-        Self::_update_ellipse(world, document, shape, ellipse, transform, paint).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_update_ellipse(world, document, shape, ellipse, transform, paint)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.update_ellipse",
             ))
@@ -582,18 +607,20 @@ impl CanvasDocument {
                 crate::groups::validate_shape_projection(world, shape, &geometry, transform, &paint)
             })();
             result?;
-            world.entity_mut(shape).insert((geometry, transform, paint));
-            Ok(())
+            crate::history::set_shape(world, document, shape, geometry, transform, paint)
         })()
         .map_err(|error| error.at("document", document).at("shape", shape))
     }
 
     pub fn remove_shape(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
     ) -> crate::error::PublicResult {
-        Self::_remove_shape(world, document, shape).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_remove_shape(world, document, shape)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.remove_shape",
             ))
@@ -603,8 +630,14 @@ impl CanvasDocument {
     pub(crate) fn _remove_shape(world: &mut World, document: Entity, shape: Entity) -> Result {
         (|| -> Result {
             let container = validate_shape(world, document, shape)?;
-            container_items_mut(world, document, container)?.retain(|entity| *entity != shape);
-            world.despawn(shape);
+            let index = container_items(world, document, container)?
+                .iter()
+                .position(|item| *item == shape)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::DocumentOrder))?;
+            crate::history::edit_order(world, document, container, index, |items| {
+                items.remove(index);
+            })?;
+            crate::history::detach_item(world, document, shape)?;
             if let CanvasContainer::Group(group) = container {
                 crate::groups::prune_empty_groups(world, document, group)?;
             }

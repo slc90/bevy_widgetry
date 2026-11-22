@@ -1,11 +1,18 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 use bevy::{
+    input::{
+        ButtonState,
+        keyboard::{Key, KeyboardInput},
+    },
+    input_focus::{FocusCause, FocusedInput, InputFocus, InputFocusSystems},
     picking::{hover::PointerCaptureMap, pointer::*},
     prelude::*,
+    window::PrimaryWindow,
 };
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::{
-    ErrorCapture, LogCapture, add_keyboard_dispatch, pointer_ids, press_key, queue_pointer,
+    ErrorCapture, LogCapture, add_keyboard_dispatch, pointer_ids, press_key, queue_key,
+    queue_pointer,
 };
 #[allow(dead_code)]
 mod common;
@@ -27,6 +34,255 @@ fn click(app: &mut App, id: PointerId, view: Entity, base: &Location, point: Vec
     input(app, id, &at, PointerAction::Move { delta: Vec2::ONE });
     input(app, id, &at, PointerAction::Press(PointerButton::Primary));
     input(app, id, &at, PointerAction::Release(PointerButton::Primary));
+}
+
+#[test]
+fn escape_cancels_a_pen_draft_before_leaving_its_group() {
+    let id = pointer_ids()[1];
+    let (mut app, view, _, first, window, base) = fixture(id, 1.0, 1.0);
+    add_keyboard_dispatch(&mut app);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let paint = CanvasPaint {
+        stroke: Some(CanvasStroke::default()),
+        ..default()
+    };
+    let second = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(20.0),
+            corner_radius: 0.0,
+        },
+        Transform::from_xyz(40.0, 0.0, 0.0),
+        paint,
+    )
+    .unwrap();
+    let group =
+        CanvasDocument::group_items(app.world_mut(), document, &[first, second], "Group").unwrap();
+    CanvasView::enter_group_in_world(app.world_mut(), view, group).unwrap();
+    let mode = CanvasMode::Pen(paint);
+    CanvasView::set_mode_in_world(app.world_mut(), view, mode).unwrap();
+
+    let start = Vec2::new(-20.0, -30.0);
+    let end = Vec2::new(20.0, -30.0);
+    click(&mut app, id, view, &base, start);
+    click(&mut app, id, view, &base, end);
+    assert!(CanvasView::pen_draft(app.world(), view).unwrap().is_some());
+
+    let queue = |app: &mut App, key_code, logical_key, state, repeat| {
+        queue_key(
+            app,
+            KeyboardInput {
+                key_code,
+                logical_key,
+                state,
+                text: None,
+                repeat,
+                window,
+            },
+        );
+    };
+    let escape = |app: &mut App, state, repeat| {
+        queue(app, KeyCode::Escape, Key::Escape, state, repeat);
+        update(app);
+    };
+    escape(&mut app, ButtonState::Pressed, false);
+    assert!(CanvasView::pen_draft(app.world(), view).unwrap().is_none());
+    assert_eq!(CanvasView::group_path(app.world(), view).unwrap(), [group]);
+    assert_eq!(CanvasView::mode(app.world(), view).unwrap(), mode);
+
+    escape(&mut app, ButtonState::Pressed, true);
+    assert_eq!(CanvasView::group_path(app.world(), view).unwrap(), [group]);
+    escape(&mut app, ButtonState::Released, false);
+
+    let at = at_document(&app, view, &base, start);
+    input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ONE });
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    assert!(app.world().resource::<PointerCaptureMap>().is_captured(&id));
+    assert!(CanvasView::pen_draft(app.world(), view).unwrap().is_none());
+    escape(&mut app, ButtonState::Pressed, false);
+    assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
+    assert_eq!(CanvasView::group_path(app.world(), view).unwrap(), [group]);
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Release(PointerButton::Primary),
+    );
+    assert!(CanvasView::pen_draft(app.world(), view).unwrap().is_none());
+    escape(&mut app, ButtonState::Released, false);
+
+    click(&mut app, id, view, &base, start);
+    click(&mut app, id, view, &base, end);
+    press_key(&mut app, window, KeyCode::Enter);
+    let path = CanvasView::single_selection(app.world(), view)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        CanvasDocument::container_of(app.world(), document, path).unwrap(),
+        CanvasContainer::Group(group)
+    );
+
+    let queue_press = |app: &mut App, (code, key)| {
+        queue(app, code, key, ButtonState::Pressed, false);
+    };
+    let enter_key = (KeyCode::Enter, Key::Enter);
+    let escape_key = (KeyCode::Escape, Key::Escape);
+    for (keys, expected_path, expected_children) in [
+        ([escape_key.clone(), enter_key.clone()], &[group][..], 3),
+        ([enter_key, escape_key], &[][..], 4),
+    ] {
+        click(&mut app, id, view, &base, start);
+        click(&mut app, id, view, &base, end);
+        for key in keys {
+            queue_press(&mut app, key);
+        }
+        update(&mut app);
+        assert_eq!(
+            CanvasView::group_path(app.world(), view).unwrap(),
+            expected_path
+        );
+        assert_eq!(
+            CanvasDocument::item_order(app.world(), document, CanvasContainer::Group(group))
+                .unwrap()
+                .len(),
+            expected_children
+        );
+        assert!(CanvasView::pen_draft(app.world(), view).unwrap().is_none());
+        escape(&mut app, ButtonState::Released, false);
+    }
+
+    CanvasView::enter_group_in_world(app.world_mut(), view, group).unwrap();
+    click(&mut app, id, view, &base, start);
+    click(&mut app, id, view, &base, end);
+    app.world_mut().entity_mut(window).remove::<PrimaryWindow>();
+    app.add_systems(
+        PreUpdate,
+        (move |mut keys: MessageWriter<KeyboardInput>| {
+            keys.write(KeyboardInput {
+                key_code: KeyCode::Escape,
+                logical_key: Key::Escape,
+                state: ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window,
+            });
+        })
+        .run_if(bevy::ecs::schedule::common_conditions::run_once)
+        .before(bevy::input_focus::InputFocusSystems::Dispatch),
+    );
+    update(&mut app);
+    assert!(CanvasView::pen_draft(app.world(), view).unwrap().is_none());
+    assert_eq!(CanvasView::group_path(app.world(), view).unwrap(), [group]);
+
+    app.world_mut().entity_mut(window).insert(PrimaryWindow);
+    update(&mut app);
+    assert_eq!(CanvasView::group_path(app.world(), view).unwrap(), [group]);
+    escape(&mut app, ButtonState::Released, false);
+
+    app.world_mut().entity_mut(window).remove::<PrimaryWindow>();
+    escape(&mut app, ButtonState::Pressed, false);
+    assert!(
+        CanvasView::group_path(app.world(), view)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(CanvasView::mode(app.world(), view).unwrap(), mode);
+}
+
+#[test]
+fn escape_after_a_discarded_key_runs_before_focus_moves_to_another_window() {
+    let id = pointer_ids()[1];
+    let (mut app, view, _, first, window, _) = fixture(id, 1.0, 1.0);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let paint = CanvasPaint::default();
+    let second = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(20.0),
+            corner_radius: 0.0,
+        },
+        Transform::from_xyz(40.0, 0.0, 0.0),
+        paint,
+    )
+    .unwrap();
+    let group =
+        CanvasDocument::group_items(app.world_mut(), document, &[first, second], "Group").unwrap();
+    CanvasView::enter_group_in_world(app.world_mut(), view, group).unwrap();
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Pen(paint)).unwrap();
+
+    let escape = KeyboardInput {
+        key_code: KeyCode::Escape,
+        logical_key: Key::Escape,
+        state: ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window,
+    };
+    let blocked = escape.clone();
+    app.add_systems(
+        PreUpdate,
+        (move |mut keys: MessageWriter<KeyboardInput>| {
+            keys.write(blocked.clone());
+        })
+        .run_if(bevy::ecs::schedule::common_conditions::run_once)
+        .before(InputFocusSystems::Dispatch),
+    );
+    app.add_systems(
+        PreUpdate,
+        (move |mut keys: MessageReader<KeyboardInput>,
+               mut discarded: Local<bool>,
+               mut commands: Commands| {
+            for input in keys.read() {
+                // The modal dispatcher consumes the blocked key without triggering FocusedInput.
+                if !*discarded {
+                    *discarded = true;
+                    continue;
+                }
+                let input = input.clone();
+                let target = if input.window == window {
+                    view
+                } else {
+                    input.window
+                };
+                commands.queue(move |world: &mut World| {
+                    world
+                        .resource_mut::<InputFocus>()
+                        .set(target, FocusCause::Navigated);
+                    world.trigger(FocusedInput::new(target, input.clone(), input.window));
+                    world.flush();
+                });
+            }
+        })
+        .in_set(InputFocusSystems::Dispatch),
+    );
+    update(&mut app);
+    assert_eq!(CanvasView::group_path(app.world(), view).unwrap(), [group]);
+
+    let other = app.world_mut().spawn(Window::default()).id();
+    queue_key(&mut app, escape.clone());
+    queue_key(
+        &mut app,
+        KeyboardInput {
+            key_code: KeyCode::Enter,
+            logical_key: Key::Enter,
+            window: other,
+            ..escape
+        },
+    );
+    update(&mut app);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(other));
+    assert!(
+        CanvasView::group_path(app.world(), view)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

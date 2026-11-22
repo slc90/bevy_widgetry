@@ -8,17 +8,20 @@
 
 ## States
 - Document 默认图层、图层显隐与锁定、CanvasItem／CanvasShape／CanvasGeometry、Paint、Transform 与层级叠放顺序。
+- Document 编辑事务、撤销和重做位置、有容量限制的保留实体。
 - 多 View 的 Document 绑定、Pan／Zoom／Selection、绘图／编辑工具和 Render／Mesh 资源。
 - Pointer Capture／Focus、预览草稿、矩形／椭圆／Path 参数及节点拓扑。
 - SVG／PNG 文件导出、GPU Readback、异步 Job 与导出请求生命周期。
 
 ## Stimuli
 - 公共 World／Commands 模型更新、Shape 新增／删除／重排、Renderer／View 创建与销毁。
+- 带 token 的复合修改、撤销／重做、容量调整与提交后的重做分支丢弃。
 - 真实 Pointer／Keyboard／Wheel、选取／拖动／缩放／旋转、矩形／椭圆／Path 绘制和节点编辑。
 - Theme／Paint／Fill Rule／Stroke 样式、窗口比例／UiScale、Model／View 变化及异步导出结果。
 
 ## Guards
 - Document、图形身份、几何参数、Paint、Transform 和操作目标必须合法；无效／跨 Document 请求原子拒绝。
+- 同一 Document 的编辑事务排斥普通写入及历史回放，过期 token 无法提交或修改。
 - 绘图／移动／旋转／缩放的输入守卫由当前工具、Selection、Focus、Disabled 和 Pointer Capture 决定；不完整草稿不可提交。
 - 导出前验证文档内容、输出区域、颜色和倍率；缺少 Renderer／GPU 或失效 Job 时不得创建错误文件或部分资源。
 
@@ -33,6 +36,7 @@
 - 图层顺序和容器直属顺序确定展平结果，Shape 查询只包含图形；共享多 View 命中、显示及导出遵循同一 Document 顺序。
 - 图层操作保持成员身份和直属顺序。删除非空层需要明确策略，迁移必须使用可用目标层，文档始终有默认层。
 - 分组要求成员在同一容器中画序连续，拒绝非连续选择并保留成员身份及全局展平画序。组边界使用 Path 实际绘制轮廓。嵌套变换在 View 代理、命中、节点编辑和导出中一致，组内路径属于单个 View。
+- 历史回放恢复同一实体及其绘图层级，清理最后的历史引用或销毁 Document 后释放保留实体。共享历史不回退 View 的视角和仍有效的选择。
 - 隐藏层不参与显示与导出，锁定层保留投影；两者均清理相关选择，绘制仅提交到当前视图的有效活动层。
 - 多个 View 可以共享 Mesh 和 Model，但 Pan、Zoom、Selection、Focus、Camera、RenderLayers 与预览互相独立；解绑／销毁按最后引用正确回收资源。
 - Renderer 在 Geometry／Paint／Transform 改变时刷新所需网格，Transform-only 不无故重建；空几何不残留旧像素或幽灵命中。
@@ -57,7 +61,7 @@
 | 测试文件 | 主要测试职责 |
 |---|---|
 | `batch.rs` | 多形状批量移动／删除、顺序和提交原子性。 |
-| `deletion.rs` | 真实键盘删除、Focus 归属和双 View 清理。 |
+| `deletion.rs` | 真实键盘删除与历史回放、Focus 归属、手势合并和双 View 修复。 |
 | `diagnostics.rs` | 模型、输入、渲染、导出与颜色错误的来源和宿主传播。 |
 | `drawing.rs` | 矩形预览绘制、提交／取消和多 View 隔离。 |
 | `ellipse.rs` | 参数椭圆创建、几何边界、更新及失败拒绝。 |
@@ -65,6 +69,7 @@
 | `input.rs` | 真实 Pointer Pan／Zoom、坐标换算和同帧事件顺序。 |
 | `layers.rs` | 图层创建、排序、重命名、迁移和删除策略，双 View 的活动层、显隐、锁定、命中、导出与绘制提交。 |
 | `groups.rs` | 嵌套组、分组精度、代理树与 SVG 投影、真实等比缩放手柄、跨 View 双击、禁用 View 的 Escape 和组内节点／绘图输入。 |
+| `history.rs` | Headless 事务隔离、层级和组件差异回放、回放时观察者读取的父级与局部变换、容量与保留实体生命周期。 |
 | `model.rs` | 无 View／GPU 的 Document、Transform、Paint 与生命周期。 |
 | `movement.rs` | 已选图形移动、捕获、Zoom 和异常取消。 |
 | `multiselection.rs` | 独立选择集合、区域／多目标操作与视图隔离。 |

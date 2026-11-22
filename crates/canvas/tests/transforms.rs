@@ -381,7 +381,6 @@ fn every_shape_gesture_releases_capture_on_invalidation_and_preserves_submitted_
         for action in 0..3 {
             for cause in 0..10 {
                 let (mut app, a, b, shape, base) = fixture_shape(kind, id);
-                let document = CanvasView::document(app.world(), a).unwrap().unwrap();
                 CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)).unwrap();
                 update(&mut app);
                 let points = outline(&mut app);
@@ -427,7 +426,7 @@ fn every_shape_gesture_releases_capture_on_invalidation_and_preserves_submitted_
                         CanvasView::set_document_in_world(app.world_mut(), a, None).unwrap();
                     }
                     5 => {
-                        CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
+                        app.world_mut().despawn(shape);
                     }
                     6 => {
                         CanvasView::set_selection_in_world(app.world_mut(), a, None).unwrap();

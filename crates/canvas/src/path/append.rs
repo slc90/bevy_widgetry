@@ -5,11 +5,14 @@ use bevy::prelude::*;
 impl CanvasDocument {
     pub fn append_rectangle(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         rect: Rect,
     ) -> crate::error::PublicResult {
-        Self::_append_rectangle(world, document, shape, rect).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_append_rectangle(world, document, shape, rect)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.append_rectangle",
             ))
@@ -58,12 +61,15 @@ impl CanvasDocument {
 
     pub fn append_circle(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         center: Vec2,
         radius: f32,
     ) -> crate::error::PublicResult {
-        Self::_append_circle(world, document, shape, center, radius).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_append_circle(world, document, shape, center, radius)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.append_circle",
             ))
@@ -102,12 +108,15 @@ impl CanvasDocument {
 
     pub fn append_ellipse(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         center: Vec2,
         radii: Vec2,
     ) -> crate::error::PublicResult {
-        Self::_append_ellipse(world, document, shape, center, radii).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_append_ellipse(world, document, shape, center, radii)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.append_ellipse",
             ))
@@ -179,12 +188,15 @@ impl CanvasDocument {
 
     pub fn append_line(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         from: Vec2,
         to: Vec2,
     ) -> crate::error::PublicResult {
-        Self::_append_line(world, document, shape, from, to).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_append_line(world, document, shape, from, to)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.append_line",
             ))
@@ -221,11 +233,14 @@ impl CanvasDocument {
 
     pub fn append_polyline(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         points: &[Vec2],
     ) -> crate::error::PublicResult {
-        Self::_append_polyline(world, document, shape, points).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_append_polyline(world, document, shape, points)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.append_polyline",
             ))
@@ -257,11 +272,14 @@ impl CanvasDocument {
 
     pub fn append_polygon(
         world: &mut World,
-        document: Entity,
+        target: impl Into<crate::CanvasEditTarget>,
         shape: Entity,
         points: &[Vec2],
     ) -> crate::error::PublicResult {
-        Self::_append_polygon(world, document, shape, points).map_err(|error| {
+        crate::history::apply(world, target, |world, document| {
+            Self::_append_polygon(world, document, shape, points)
+        })
+        .map_err(|error| {
             error.into_failure(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.CanvasDocument.append_polygon",
             ))
@@ -335,8 +353,7 @@ fn append(
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::ShapePaint))?;
         let geometry = CanvasGeometry::Path(path);
         crate::groups::validate_shape_projection(world, shape, &geometry, transform, paint)?;
-        world.entity_mut(shape).insert(geometry);
-        Ok(())
+        crate::history::set_geometry(world, document, shape, geometry)
     })()
     .map_err(|error| error.at("document", document).at("shape", shape))
 }

@@ -18,6 +18,7 @@ pub enum CanvasPart {
     DocumentOrder,
     Geometry,
     GroupProxy,
+    History,
     HitFillMesh,
     HitLayout,
     HitMeshIndices,
@@ -94,6 +95,8 @@ pub enum CanvasIssue {
     CornerRadius,
     DocumentTarget,
     DuplicateShape,
+    EditToken,
+    EditTokenExhausted,
     EllipseBounds,
     EllipseEndpoints,
     EllipseLocalBounds,
@@ -136,6 +139,7 @@ pub enum CanvasIssue {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CanvasErrorKind {
+    Busy,
     Structure(CanvasPart),
     Invalid(CanvasIssue),
     Tessellation,
@@ -332,6 +336,9 @@ pub(crate) fn missing(part: CanvasPart) -> CanvasFault {
 }
 pub(crate) fn invalid(issue: CanvasIssue) -> CanvasFault {
     fault(CanvasErrorKind::Invalid(issue), None)
+}
+pub(crate) fn busy() -> CanvasFault {
+    fault(CanvasErrorKind::Busy, None)
 }
 fn fault(kind: CanvasErrorKind, source: Option<CanvasErrorSource>) -> CanvasFault {
     CanvasFault::Domain(

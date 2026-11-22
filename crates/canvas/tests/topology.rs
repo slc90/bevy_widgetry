@@ -189,7 +189,7 @@ mod common;
 #[path = "common/coordinates.rs"]
 mod coordinates;
 #[test]
-fn topology_updates_refresh_node_picking_and_both_views_and_cancel_stale_node_capture() {
+fn topology_updates_refresh_node_picking_and_wait_for_an_active_node_gesture() {
     use bevy::picking::{hover::PointerCaptureMap, pointer::*};
     use bevy_widgetry_test_utils::pointer_ids;
     use common::*;
@@ -245,20 +245,28 @@ fn topology_updates_refresh_node_picking_and_both_views_and_cancel_stale_node_ca
     assert!(
         matches!(read(app.world(),shape).commands[1],CanvasPathCommand::QuadTo {control,..} if control.distance(Vec2::new(-7.0,-36.0))<0.001)
     );
-    let CanvasPathCommand::QuadTo { control, .. } = read(app.world(), shape).commands[1] else {
-        panic!("Quad expected")
-    };
-    assert!(
-        !CanvasDocument::set_path_segment(
-            app.world_mut(),
-            document,
-            shape,
-            1,
-            CanvasPathSegment::Quadratic { control }
-        )
-        .unwrap()
+    let refused = CanvasDocument::set_path_segment(
+        app.world_mut(),
+        document,
+        shape,
+        1,
+        CanvasPathSegment::Line,
+    )
+    .unwrap_err();
+    assert_eq!(
+        refused
+            .diagnostics()
+            .next()
+            .unwrap()
+            .source()
+            .unwrap()
+            .downcast_ref::<CanvasError>()
+            .unwrap()
+            .kind,
+        CanvasErrorKind::Busy,
     );
     assert!(app.world().resource::<PointerCaptureMap>().is_captured(&id));
+    input(&mut app, id, &at, PointerAction::Cancel);
     CanvasDocument::set_path_segment(
         app.world_mut(),
         document,
