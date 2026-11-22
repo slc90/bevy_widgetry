@@ -119,7 +119,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             super::CanvasKey::ChooseGroupMembers => "Select at least two consecutive items in the same layer or group.",
             super::CanvasKey::ChooseGroup => "Select one group in the main view to ungroup it.",
             super::CanvasKey::Description => {
-                "Shared shapes, independent selection and navigation. Ctrl+click to select multiple items, then drag the selection or click Group. Double-click a group to edit its children. Esc goes up one group level. Delete removes the focused view selection. Squares scale, the round handle rotates (Shift: 15°), and inset handles edit shape parameters. Space+left drag pans; the wheel zooms. The toolbar operates on the main view."
+                "Shared shapes, independent selection and navigation. Ctrl+click to select multiple items, then drag the selection or click Group. Double-click a group to edit its children. Esc goes up one group level. Delete removes the focused view selection. Squares scale, the round handle rotates (Shift: 15°), and inset handles edit shape parameters. Space+left drag pans; the wheel zooms. The toolbar operates on the main view. Click a regular polygon, star or arc tool again to switch its parameters. Drag from center to tip for polygons and stars, or between endpoints for arcs."
             }
             super::CanvasKey::Raise => "Raise",
             super::CanvasKey::Lower => "Lower",
@@ -145,6 +145,9 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             super::CanvasKey::Pen => "Pen",
             super::CanvasKey::DrawLine => "Draw line",
             super::CanvasKey::DrawPolyline => "Polyline",
+            super::CanvasKey::RegularPolygon => "Regular polygon",
+            super::CanvasKey::Star => "Star",
+            super::CanvasKey::Arc => "Arc",
             super::CanvasKey::DrawPolygon => "Polygon",
             super::CanvasKey::Add => "Add sample",
             super::CanvasKey::ZoomIn => "Zoom +",
@@ -164,7 +167,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
                 "Choose SVG or PNG to export the committed shapes with a transparent background."
             }
             super::CanvasKey::Readout => {
-                "Main: {zoom_a}× · center ({center_a}) · {mode} · selected {selection_a}{draft_label}{draft}\nSecondary: {zoom_b}× · center ({center_b}) · selected {selection_b}\nPath segment: {segment} · Export: {region} · PNG {scale}×"
+                "Main: {zoom_a}× · center ({center_a}) · {mode}{parameters} · selected {selection_a}{draft_label}{draft}\nSecondary: {zoom_b}× · center ({center_b}) · selected {selection_b}\nPath segment: {segment} · Export: {region} · PNG {scale}×"
             }
             super::CanvasKey::PenDraftLabel => " · Pen draft commands ",
             super::CanvasKey::HiddenDraftLabel => "",

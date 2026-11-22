@@ -70,6 +70,7 @@ pub(crate) enum DrawingKind {
     Rectangle,
     Ellipse,
     Line,
+    Parametric(crate::CanvasPathTool),
 }
 
 impl DrawingKind {
@@ -82,6 +83,7 @@ impl DrawingKind {
             Self::Ellipse => {
                 crate::CanvasGeometry::Ellipse(crate::CanvasEllipse { radii: size * 0.5 })
             }
+            Self::Parametric(tool) => crate::CanvasGeometry::Path(tool.path(size)),
             Self::Line => crate::CanvasGeometry::Path(crate::CanvasPath {
                 commands: vec![
                     crate::CanvasPathCommand::MoveTo(-size * 0.5),
@@ -91,10 +93,34 @@ impl DrawingKind {
         }
     }
 
-    pub(crate) fn extent(self, delta: Vec2) -> Vec2 {
+    pub(crate) fn placement(self, world: &World, start: Vec2, end: Vec2) -> (Vec2, Vec2) {
+        let delta = end - start;
+        let midpoint = start + delta * 0.5;
         match self {
-            Self::Line => delta,
-            Self::Rectangle | Self::Ellipse => delta.abs(),
+            Self::Parametric(tool) if tool.radial() => {
+                let snap = world
+                    .get_resource::<ButtonInput<KeyCode>>()
+                    .is_some_and(|keys| {
+                        keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight])
+                    });
+                let radius = if snap {
+                    let step = crate::rotate::SNAP_ANGLE_RADIANS as f32;
+                    Vec2::from_angle((delta.to_angle() / step).round() * step) * delta.length()
+                } else {
+                    delta
+                };
+                (start, radius)
+            }
+            Self::Line | Self::Parametric(_) => (midpoint, delta),
+            Self::Rectangle | Self::Ellipse => (midpoint, delta.abs()),
+        }
+    }
+
+    pub(crate) fn committable(self, size: Vec2) -> bool {
+        match self {
+            Self::Parametric(tool) => tool.accepts_drag(size),
+            Self::Line => size != Vec2::ZERO,
+            Self::Rectangle | Self::Ellipse => size.min_element() >= 1.0,
         }
     }
 
@@ -102,6 +128,7 @@ impl DrawingKind {
         match self {
             Self::Rectangle => crate::CanvasMode::Rectangle(paint),
             Self::Ellipse => crate::CanvasMode::Ellipse(paint),
+            Self::Parametric(tool) => crate::CanvasMode::Parametric(tool, paint),
             Self::Line => crate::CanvasMode::Line(paint),
         }
     }
@@ -403,6 +430,9 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     | crate::CanvasMode::Polygon(_) => None,
                     crate::CanvasMode::Rectangle(paint) => Some((DrawingKind::Rectangle, paint)),
                     crate::CanvasMode::Ellipse(paint) => Some((DrawingKind::Ellipse, paint)),
+                    crate::CanvasMode::Parametric(tool, paint) => {
+                        Some((DrawingKind::Parametric(tool), paint))
+                    }
                     crate::CanvasMode::Line(paint) => Some((DrawingKind::Line, paint)),
                 };
                 if matches!(
@@ -1482,13 +1512,10 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         }
         CanvasView::_set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
         world.flush();
-        let size = kind.extent(current - start);
-        let too_small = match kind {
-            DrawingKind::Line => size == Vec2::ZERO,
-            DrawingKind::Rectangle | DrawingKind::Ellipse => size.min_element() < 1.0,
-        };
-        if !size.is_finite()
-            || too_small
+        let (center, size) = kind.placement(world, start, current);
+        if !center.is_finite()
+            || !size.is_finite()
+            || !kind.committable(size)
             || world
                 .get::<crate::view::ViewState>(entity)
                 .is_none_or(|state| {
@@ -1499,7 +1526,6 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         {
             return Ok(());
         }
-        let center = start + (current - start) * 0.5;
         let transform = Transform::from_translation(center.extend(0.0));
         let shape = CanvasDocument::create_drawing(
             world,
@@ -1719,6 +1745,7 @@ fn apply_escape(world: &mut World, view: Entity, window: Entity) -> bevy::prelud
         match CanvasView::_mode(world, view)? {
             crate::CanvasMode::Rectangle(_)
             | crate::CanvasMode::Ellipse(_)
+            | crate::CanvasMode::Parametric(_, _)
             | crate::CanvasMode::Line(_)
             | crate::CanvasMode::Polyline(_)
             | crate::CanvasMode::Polygon(_) => {

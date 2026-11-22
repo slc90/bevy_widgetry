@@ -133,6 +133,275 @@ fn line_release_creates_one_open_path_and_one_history_entry() {
 }
 
 #[test]
+fn parametric_drag_validates_parameters_and_commits_one_editable_path() {
+    use CanvasPathTool::*;
+    let id = pointer_ids()[1];
+    let (mut app, view, _, original, _, mut at) = fixture(id, 1.0, 1.0);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let arc = |radii, rotation| Arc {
+        radii,
+        rotation,
+        large_arc: true,
+        sweep: false,
+    };
+    for tool in [
+        RegularPolygon { sides: 2 },
+        Star {
+            points: 2,
+            inner_ratio: 0.5,
+        },
+        Star {
+            points: 3,
+            inner_ratio: 0.0,
+        },
+        Star {
+            points: 3,
+            inner_ratio: 1.0,
+        },
+        Star {
+            points: 3,
+            inner_ratio: f32::NAN,
+        },
+        arc(Vec2::new(-1.0, 2.0), 0.0),
+        arc(Vec2::ZERO, 0.0),
+        arc(Vec2::ONE, f32::INFINITY),
+    ] {
+        assert!(
+            CanvasView::set_mode_in_world(
+                app.world_mut(),
+                view,
+                CanvasMode::Parametric(tool, paint())
+            )
+            .is_err()
+        );
+    }
+    let radii = Vec2::new(35.0, 22.0);
+    for tool in [
+        RegularPolygon { sides: 3 },
+        Star {
+            points: 5,
+            inner_ratio: 0.4,
+        },
+        arc(radii, 0.7),
+    ] {
+        let mode = CanvasMode::Parametric(tool, paint());
+        CanvasDocument::clear_history(app.world_mut(), document).unwrap();
+        let delta = Vec2::new(12.0, 16.0);
+        for cancel in [true, false] {
+            CanvasView::set_mode_in_world(app.world_mut(), view, mode).unwrap();
+            moved(&mut app, id, &mut at, Vec2::new(1.0, 1.0));
+            input(
+                &mut app,
+                id,
+                &at,
+                PointerAction::Press(PointerButton::Primary),
+            );
+            moved(&mut app, id, &mut at, delta);
+            assert_eq!(previews(&mut app, "CanvasParametricPreview"), 1);
+            assert!(!CanvasDocument::can_undo(app.world(), document).unwrap());
+            input(
+                &mut app,
+                id,
+                &at,
+                if cancel {
+                    PointerAction::Cancel
+                } else {
+                    PointerAction::Release(PointerButton::Primary)
+                },
+            );
+            assert_eq!(previews(&mut app, "CanvasParametricPreview"), 0);
+            if cancel {
+                assert_eq!(
+                    CanvasDocument::draw_order(app.world(), document).unwrap(),
+                    [original]
+                );
+                moved(&mut app, id, &mut at, -delta);
+            }
+        }
+        let path = commands(&app, view);
+        if matches!(tool, Arc { .. }) {
+            assert_eq!(
+                path,
+                [
+                    CanvasPathCommand::MoveTo(-delta * 0.5),
+                    CanvasPathCommand::ArcTo {
+                        radii,
+                        rotation: 0.7,
+                        large_arc: true,
+                        sweep: false,
+                        to: delta * 0.5
+                    }
+                ]
+            );
+        } else {
+            let star = matches!(tool, Star { .. });
+            let count = if star { 10 } else { 3 };
+            assert_eq!(path.len(), count + 1);
+            assert_eq!(path.last(), Some(&CanvasPathCommand::Close));
+            for (i, command) in path[..count].iter().enumerate() {
+                let direction = Vec2::from_angle(std::f32::consts::TAU * i as f32 / count as f32);
+                let expected = direction.rotate(delta) * if star && i % 2 == 1 { 0.4 } else { 1.0 };
+                let point = match command {
+                    CanvasPathCommand::MoveTo(p) if i == 0 => p,
+                    CanvasPathCommand::LineTo(p) if i > 0 => p,
+                    _ => panic!("unexpected vertex"),
+                };
+                assert!(point.abs_diff_eq(expected, 0.001));
+            }
+        }
+        assert!(CanvasDocument::undo(app.world_mut(), document).unwrap());
+        assert!(!CanvasDocument::can_undo(app.world(), document).unwrap());
+        assert!(CanvasDocument::redo(app.world_mut(), document).unwrap());
+        let item = *CanvasDocument::draw_order(app.world(), document)
+            .unwrap()
+            .last()
+            .unwrap();
+        let Some(CanvasGeometry::Path(path)) = app.world().get::<CanvasGeometry>(item).cloned()
+        else {
+            panic!("redo must restore the path");
+        };
+        let transform =
+            Transform::from_xyz(18.0, -24.0, 0.0).with_rotation(Quat::from_rotation_z(0.3));
+        CanvasDocument::update_transform(app.world_mut(), document, item, transform).unwrap();
+        let copy = CanvasDocument::create_path(app.world_mut(), document, path, transform, paint())
+            .unwrap();
+        assert!(
+            CanvasDocument::set_path_segment(
+                app.world_mut(),
+                document,
+                copy,
+                1,
+                CanvasPathSegment::Quadratic { control: Vec2::Y }
+            )
+            .unwrap()
+        );
+        let directory = tempfile::tempdir().unwrap();
+        let svg = directory.path().join("paths.svg");
+        CanvasDocument::export_svg(app.world_mut(), document, &svg, None).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(svg)
+                .unwrap()
+                .matches("<path")
+                .count(),
+            2
+        );
+        while CanvasDocument::undo(app.world_mut(), document).unwrap() {}
+        moved(&mut app, id, &mut at, -delta);
+    }
+}
+
+#[test]
+fn impossible_arc_drags_leave_no_item_and_shift_only_snaps_radial_direction() {
+    let id = pointer_ids()[1];
+    let (mut app, view, _, original, _, mut at) = fixture(id, 1.0, 1.0);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    CanvasDocument::clear_history(app.world_mut(), document).unwrap();
+    let arc = CanvasPathTool::Arc {
+        radii: Vec2::new(40.0, 4.0),
+        rotation: std::f32::consts::FRAC_PI_2,
+        large_arc: false,
+        sweep: true,
+    };
+    for delta in [Vec2::ZERO, Vec2::X * 10.0] {
+        CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Parametric(arc, paint()))
+            .unwrap();
+        moved(&mut app, id, &mut at, Vec2::ONE);
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Press(PointerButton::Primary),
+        );
+        moved(&mut app, id, &mut at, delta);
+        assert_eq!(previews(&mut app, "CanvasParametricPreview"), 0);
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Release(PointerButton::Primary),
+        );
+        assert_eq!(
+            CanvasDocument::draw_order(app.world(), document).unwrap(),
+            [original]
+        );
+        assert!(!CanvasDocument::can_undo(app.world(), document).unwrap());
+    }
+    let polygon = CanvasPathTool::RegularPolygon { sides: 4 };
+    CanvasView::set_mode_in_world(
+        app.world_mut(),
+        view,
+        CanvasMode::Parametric(polygon, paint()),
+    )
+    .unwrap();
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    let delta = Vec2::new(-15.0, -20.0);
+    moved(&mut app, id, &mut at, delta);
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ShiftRight);
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Release(PointerButton::Primary),
+    );
+    let CanvasPathCommand::MoveTo(first) = commands(&app, view)[0] else {
+        panic!("expected vertex")
+    };
+    assert!(first.abs_diff_eq(Vec2::from_angle((-120.0_f32).to_radians()) * 25.0, 0.001));
+}
+
+#[test]
+fn quarter_turned_arc_accepts_a_drag_across_its_full_major_diameter() {
+    let id = pointer_ids()[1];
+    let (mut app, view, _, _, _, mut at) = fixture(id, 1.0, 1.0);
+    let radii = Vec2::new(40.0, 4.0);
+    let rotation = std::f32::consts::FRAC_PI_2;
+    let tool = CanvasPathTool::Arc {
+        radii,
+        rotation,
+        large_arc: false,
+        sweep: true,
+    };
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Parametric(tool, paint()))
+        .unwrap();
+    let half_chord = Vec2::Y * radii.x;
+    moved(&mut app, id, &mut at, -half_chord);
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    moved(&mut app, id, &mut at, half_chord * 2.0);
+    assert_eq!(previews(&mut app, "CanvasParametricPreview"), 1);
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Release(PointerButton::Primary),
+    );
+    assert_eq!(
+        commands(&app, view),
+        [
+            CanvasPathCommand::MoveTo(-half_chord),
+            CanvasPathCommand::ArcTo {
+                radii,
+                rotation,
+                large_arc: false,
+                sweep: true,
+                to: half_chord
+            }
+        ]
+    );
+}
+
+#[test]
 fn contours_preview_in_one_view_and_finish_with_enter_or_double_click() {
     for (mode, closed) in [
         (CanvasMode::Polyline(paint()), false),

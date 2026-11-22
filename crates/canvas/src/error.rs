@@ -121,6 +121,7 @@ pub enum CanvasIssue {
     OrderMembership,
     Ownership,
     Paint,
+    PathToolParameters,
     PathBounds,
     PathClose,
     PathDerivedGeometry,

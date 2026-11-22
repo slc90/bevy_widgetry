@@ -52,6 +52,7 @@ pub enum CanvasMode {
     Line(crate::CanvasPaint),
     Polyline(crate::CanvasPaint),
     Polygon(crate::CanvasPaint),
+    Parametric(crate::CanvasPathTool, crate::CanvasPaint),
 }
 
 #[derive(EntityEvent)]
@@ -913,7 +914,13 @@ impl CanvasView {
                     ._validate(&Transform::default(), &paint)?,
                     CanvasMode::Ellipse(paint) => crate::CanvasEllipse { radii: Vec2::ONE }
                         ._validate(&Transform::default(), &paint)?,
-                    CanvasMode::Pen(paint)
+                    CanvasMode::Parametric(tool, _) if !tool.valid() => {
+                        return Err(crate::error::invalid(
+                            crate::CanvasIssue::PathToolParameters,
+                        ));
+                    }
+                    CanvasMode::Parametric(_, paint)
+                    | CanvasMode::Pen(paint)
                     | CanvasMode::Line(paint)
                     | CanvasMode::Polyline(paint)
                     | CanvasMode::Polygon(paint) => {

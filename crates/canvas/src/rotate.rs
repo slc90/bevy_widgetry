@@ -1,5 +1,5 @@
 const HANDLE_HIT_MARGIN: f32 = 2.0;
-const SNAP_ANGLE_RADIANS: f64 = std::f64::consts::PI / 12.0;
+pub(crate) const SNAP_ANGLE_RADIANS: f64 = std::f64::consts::PI / 12.0;
 
 use crate::error::CanvasResult as Result;
 use bevy::{

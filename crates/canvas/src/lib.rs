@@ -17,6 +17,7 @@ mod move_selection;
 mod nodes;
 mod order;
 mod parameters;
+mod parametric;
 mod path;
 mod pen;
 mod renderer;
@@ -38,6 +39,7 @@ pub use model::{
     CanvasLineJoin, CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
 };
 pub use order::{CanvasContainer, CanvasLayer, CanvasLayerId, CanvasLayerStack, CanvasOrder};
+pub use parametric::CanvasPathTool;
 pub use path::{CanvasPath, CanvasPathCommand, CanvasPathSegment};
 pub use pen::{CanvasPenChanged, CanvasPenDraft, CanvasPenSegment};
 pub use renderer::CanvasPlugin;

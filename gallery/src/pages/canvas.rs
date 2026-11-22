@@ -85,6 +85,9 @@ enum Action {
     DrawLine,
     DrawPolyline,
     DrawPolygon,
+    RegularPolygon,
+    Star,
+    Arc,
     Nodes,
     Group,
     Ungroup,
@@ -318,6 +321,8 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::DrawLine, Action::DrawLine),
         (CanvasKey::DrawPolyline, Action::DrawPolyline),
         (CanvasKey::DrawPolygon, Action::DrawPolygon),
+        (CanvasKey::RegularPolygon, Action::RegularPolygon),
+        (CanvasKey::Star, Action::Star), (CanvasKey::Arc, Action::Arc),
         (CanvasKey::Pen, Action::Pen),
         (CanvasKey::Nodes, Action::Nodes),
         (CanvasKey::Group, Action::Group), (CanvasKey::Ungroup, Action::Ungroup),
@@ -547,17 +552,23 @@ fn refresh(world: &mut World) -> Result {
                 })
             })
             .unwrap_or_else(|| "—".to_owned());
-        let mode =
-            match CanvasView::mode(world, demo.main).map_err(|error| error.into_bevy_error())? {
-                CanvasMode::Select => CanvasKey::Select,
-                CanvasMode::PathNodeEdit => CanvasKey::Nodes,
-                CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
-                CanvasMode::Ellipse(_) => CanvasKey::Ellipse,
-                CanvasMode::Pen(_) => CanvasKey::Pen,
-                CanvasMode::Line(_) => CanvasKey::DrawLine,
-                CanvasMode::Polyline(_) => CanvasKey::DrawPolyline,
-                CanvasMode::Polygon(_) => CanvasKey::DrawPolygon,
-            };
+        let current_mode =
+            CanvasView::mode(world, demo.main).map_err(|error| error.into_bevy_error())?;
+        let mode = match current_mode {
+            CanvasMode::Select => CanvasKey::Select,
+            CanvasMode::PathNodeEdit => CanvasKey::Nodes,
+            CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
+            CanvasMode::Ellipse(_) => CanvasKey::Ellipse,
+            CanvasMode::Pen(_) => CanvasKey::Pen,
+            CanvasMode::Line(_) => CanvasKey::DrawLine,
+            CanvasMode::Polyline(_) => CanvasKey::DrawPolyline,
+            CanvasMode::Polygon(_) => CanvasKey::DrawPolygon,
+            CanvasMode::Parametric(CanvasPathTool::RegularPolygon { .. }, _) => {
+                CanvasKey::RegularPolygon
+            }
+            CanvasMode::Parametric(CanvasPathTool::Star { .. }, _) => CanvasKey::Star,
+            CanvasMode::Parametric(CanvasPathTool::Arc { .. }, _) => CanvasKey::Arc,
+        };
         let (draft_label, draft) = if mode == CanvasKey::Pen {
             let count = CanvasView::pen_draft(world, demo.main)
                 .map_err(|error| error.into_bevy_error())?
@@ -603,6 +614,35 @@ fn refresh(world: &mut World) -> Result {
                         .to_string(),
                 ),
                 ("segment", segment),
+                (
+                    "parameters",
+                    match current_mode {
+                        CanvasMode::Parametric(tool, _) => match tool {
+                            CanvasPathTool::RegularPolygon { sides } => format!(" ({sides})"),
+                            CanvasPathTool::Star {
+                                points,
+                                inner_ratio,
+                            } => format!(
+                                " ({points}, {inner_ratio:.0}%)",
+                                inner_ratio = inner_ratio * 100.0
+                            ),
+                            CanvasPathTool::Arc {
+                                radii,
+                                rotation,
+                                large_arc,
+                                sweep,
+                            } => format!(
+                                " ({}×{}, {:.0}°, A {} {})",
+                                radii.x,
+                                radii.y,
+                                rotation.to_degrees(),
+                                u8::from(large_arc),
+                                u8::from(sweep)
+                            ),
+                        },
+                        _ => String::new(),
+                    },
+                ),
                 ("draft", draft),
             ],
         )
@@ -659,6 +699,55 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 };
                 CanvasView::set_mode_in_world(world, demo.main, mode)
                     .map_err(|error| error.into_bevy_error())?;
+            }
+            Action::RegularPolygon | Action::Star | Action::Arc => {
+                use CanvasPathTool::*;
+                let (first, second) = match action {
+                    Action::RegularPolygon => {
+                        (RegularPolygon { sides: 5 }, RegularPolygon { sides: 8 })
+                    }
+                    Action::Star => (
+                        Star {
+                            points: 5,
+                            inner_ratio: 0.4,
+                        },
+                        Star {
+                            points: 7,
+                            inner_ratio: 0.6,
+                        },
+                    ),
+                    _ => (
+                        Arc {
+                            radii: Vec2::splat(60.0),
+                            rotation: 0.0,
+                            large_arc: false,
+                            sweep: true,
+                        },
+                        Arc {
+                            radii: Vec2::new(90.0, 60.0),
+                            rotation: std::f32::consts::FRAC_PI_4,
+                            large_arc: true,
+                            sweep: false,
+                        },
+                    ),
+                };
+                let current =
+                    CanvasView::mode(world, demo.main).map_err(|error| error.into_bevy_error())?;
+                let tool = if matches!(current, CanvasMode::Parametric(tool, _) if tool == first) {
+                    second
+                } else {
+                    first
+                };
+                let mut style = paint();
+                if matches!(tool, Arc { .. }) {
+                    style.fill = None;
+                }
+                CanvasView::set_mode_in_world(
+                    world,
+                    demo.main,
+                    CanvasMode::Parametric(tool, style),
+                )
+                .map_err(|error| error.into_bevy_error())?;
             }
             Action::Pen => {
                 CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Pen(paint()))

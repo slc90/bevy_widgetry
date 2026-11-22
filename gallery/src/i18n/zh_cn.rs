@@ -153,7 +153,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             }
             super::CanvasKey::ChooseGroup => "请在主视图选中一个组，再取消分组。",
             super::CanvasKey::Description => {
-                "共享图形，独立选择与视角。Ctrl+点击多选，可整批移动或分组。双击组编辑子项，Esc 返回上一级，Delete 删除焦点视图中的选择。方点缩放，圆点旋转（Shift 吸附 15°），内侧手柄调整图形参数。Space+左键平移，滚轮缩放。工具栏操作主视图。"
+                "共享图形，独立选择与视角。Ctrl+点击多选，可整批移动或分组。双击组编辑子项，Esc 返回上一级，Delete 删除焦点视图中的选择。方点缩放，圆点旋转（Shift 吸附 15°），内侧手柄调整图形参数。Space+左键平移，滚轮缩放。工具栏操作主视图。再次点选正多边形、星形或圆弧可切换参数。前两者从中心拖到外顶点，圆弧从起点拖到终点。"
             }
             super::CanvasKey::Raise => "上移一层",
             super::CanvasKey::Lower => "下移一层",
@@ -181,6 +181,9 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             super::CanvasKey::Pen => "Pen",
             super::CanvasKey::DrawLine => "直线",
             super::CanvasKey::DrawPolyline => "折线",
+            super::CanvasKey::RegularPolygon => "正多边形",
+            super::CanvasKey::Star => "星形",
+            super::CanvasKey::Arc => "圆弧",
             super::CanvasKey::DrawPolygon => "多边形",
             super::CanvasKey::Add => "添加示例",
             super::CanvasKey::ZoomIn => "放大 +",
@@ -198,7 +201,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             }
             super::CanvasKey::Ready => "选择 SVG 或 PNG，以透明背景导出已提交图形。",
             super::CanvasKey::Readout => {
-                "主视图：{zoom_a}× · 中心（{center_a}）· {mode} · 已选 {selection_a}{draft_label}{draft}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\nPath目标段：{segment} · 导出：{region} · PNG {scale}×"
+                "主视图：{zoom_a}× · 中心（{center_a}）· {mode}{parameters} · 已选 {selection_a}{draft_label}{draft}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\nPath目标段：{segment} · 导出：{region} · PNG {scale}×"
             }
             super::CanvasKey::PenDraftLabel => " · Pen 草稿命令 ",
             super::CanvasKey::HiddenDraftLabel => "",
