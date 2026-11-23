@@ -382,13 +382,14 @@ impl CanvasDocument {
         item: Entity,
         index: usize,
         point: Vec2,
-    ) -> CanvasResult {
+    ) -> CanvasResult<bool> {
         let mut value = connector(world, item)?.clone();
         value.route.set_point(index, point);
         if !value.route.drawable() {
-            return Ok(());
+            return Ok(false);
         }
-        Self::set_connector(world, document, item, value)
+        Self::set_connector(world, document, item, value)?;
+        Ok(true)
     }
 
     fn set_connector(

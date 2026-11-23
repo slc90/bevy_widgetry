@@ -1,5 +1,7 @@
 const GRID_COLUMNS: usize = 50;
 const GRID_SPACING: f32 = 14.0;
+const SNAP_ZOOM: f32 = 3.0;
+const SNAP_POSITION_TOLERANCE: f32 = 0.001;
 const BENCH_VIEWPORT: UVec2 = UVec2::new(800, 600);
 const VIEW_MARGIN: f32 = 40.0;
 const VIEW_SIZE: Vec2 = Vec2::new(200.0, 160.0);
@@ -35,7 +37,7 @@ fn frame(app: &mut App) -> Result {
         Err(error(format!("batch frame errors: {errors:?}")))
     }
 }
-fn fixture(count: usize, nested: bool) -> Result<Fixture> {
+fn fixture(count: usize, nested: bool, snapping: bool) -> Result<Fixture> {
     let mut app = picking_app();
     app.add_plugins((TransformPlugin, CanvasPlugin));
     app.set_error_handler(ErrorCapture::handler());
@@ -118,7 +120,23 @@ fn fixture(count: usize, nested: bool) -> Result<Fixture> {
     };
     let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(VIEW_MARGIN),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
     let other=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {position_type:PositionType::Absolute,left:px(SECONDARY_VIEW_LEFT),top:px(VIEW_MARGIN),width:px(VIEW_SIZE.x),height:px(VIEW_SIZE.y)}}).map_err(BevyError::error)?.id();
-    let primary = group.map_or_else(|| shapes.clone(), |(root, _)| vec![root]);
+    let primary = if snapping {
+        CanvasView::set_zoom_in_world(app.world_mut(), view, SNAP_ZOOM)
+            .map_err(|error| error.into_bevy_error())?;
+        CanvasView::set_object_snap_in_world(
+            app.world_mut(),
+            view,
+            CanvasObjectSnap {
+                edges: true,
+                path_nodes: true,
+                tolerance_px: 0.25,
+            },
+        )
+        .map_err(|error| error.into_bevy_error())?;
+        vec![shapes[0]]
+    } else {
+        group.map_or_else(|| shapes.clone(), |(root, _)| vec![root])
+    };
     let secondary = group.map_or(shapes[0], |(root, _)| root);
     CanvasView::set_selection_in_world(app.world_mut(), view, primary)
         .map_err(|error| error.into_bevy_error())?;
@@ -186,7 +204,7 @@ fn main() -> Result {
                 &mut harness,
                 &format!("canvas_batch/views2/shapes{count}/{scenario}"),
                 false,
-                || fixture(count, nested),
+                || fixture(count, nested, false),
                 |f, index| {
                     let delta = if index % 2 == 0 {
                         Vec2::new(3.0, 2.0)
@@ -252,6 +270,40 @@ fn main() -> Result {
                 |f| Ok(f.app.world().entities().count_spawned()),
             )?;
         }
+        run(
+            &mut harness,
+            &format!("canvas_batch/views2/shapes{count}/object_snap_and_frame"),
+            false,
+            || fixture(count, false, true),
+            |f, index| {
+                let expected = if index % 2 == 0 { 4.0 } else { GRID_SPACING };
+                let at = Location {
+                    position: f.at.position + Vec2::new(expected + 0.05, 7.0) * SNAP_ZOOM,
+                    ..f.at.clone()
+                };
+                queue_pointer(
+                    &mut f.app,
+                    f.pointer,
+                    at,
+                    PointerAction::Move { delta: Vec2::ONE },
+                );
+                frame(&mut f.app)?;
+                let actual = f
+                    .app
+                    .world()
+                    .get::<Transform>(f.shapes[0])
+                    .ok_or_else(|| error("snap benchmark item is missing"))?
+                    .translation
+                    .x;
+                if (actual - expected).abs() > SNAP_POSITION_TOLERANCE {
+                    return Err(error(format!(
+                        "snap benchmark expected {expected}, got {actual}"
+                    )));
+                }
+                Ok(())
+            },
+            |f| Ok(f.app.world().entities().count_spawned()),
+        )?;
     }
     harness.finish()
 }

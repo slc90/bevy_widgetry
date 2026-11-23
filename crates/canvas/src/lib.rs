@@ -27,6 +27,7 @@ mod renderer;
 mod rotate;
 mod scale;
 mod selection;
+mod snapping;
 mod text;
 mod view;
 
@@ -52,6 +53,7 @@ pub use parametric::CanvasPathTool;
 pub use path::{CanvasPath, CanvasPathCommand, CanvasPathSegment};
 pub use pen::{CanvasPenChanged, CanvasPenDraft, CanvasPenSegment};
 pub use renderer::CanvasPlugin;
+pub use snapping::{CanvasObjectSnap, CanvasObjectSnapChanged};
 pub use text::{CanvasText, CanvasTextAlign, CanvasTextStyle};
 pub use view::{
     CanvasActiveLayerChanged, CanvasCenterChanged, CanvasDocumentChanged, CanvasGroupPathChanged,

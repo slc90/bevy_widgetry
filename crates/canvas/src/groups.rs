@@ -472,6 +472,16 @@ pub(crate) fn local_bounds(world: &World, group: Entity) -> Result<Rect> {
     .unwrap_or_else(|| Rect::from_corners(Vec2::ZERO, Vec2::ZERO)))
 }
 
+pub(crate) fn document_bounds(world: &World, item: Entity) -> Result<Option<Rect>> {
+    subtree_bounds(
+        world,
+        item,
+        local_transform(world, item)?,
+        document_transform(world, item)?,
+        ProjectionCheck::Measure,
+    )
+}
+
 pub(crate) fn validate_item_transform(world: &World, item: Entity, transform: Transform) -> Result {
     if let Some(connector) = world.get::<crate::CanvasConnector>(item) {
         connector.bounds(

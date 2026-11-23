@@ -66,14 +66,14 @@ fn is_near(a: Vec2, b: Vec2) -> bool {
     a.distance_squared(b) <= CLICK_RADIUS * CLICK_RADIUS
 }
 
-fn draw_point(world: &World, view: Entity, mode: CanvasMode, point: Vec2) -> Vec2 {
+fn draw_point(world: &World, view: Entity, mode: CanvasMode, point: Vec2) -> Result<Vec2> {
     use crate::grid::SnapTarget;
     let target = if matches!(mode, CanvasMode::Connector(_)) {
         SnapTarget::ConnectorPoint
     } else {
         SnapTarget::Drawing
     };
-    crate::grid::point(world, view, target, point).unwrap_or(point)
+    Ok(crate::grid::point(world, view, target, point)?.unwrap_or(point))
 }
 
 pub(crate) fn install(app: &mut App) {
@@ -178,7 +178,7 @@ pub(crate) fn add_vertex(world: &mut World, view: Entity, screen: Vec2) -> Resul
         view,
         press.context.mode,
         CanvasView::_center(world, view)? + local / CanvasView::_zoom(world, view)?,
-    );
+    )?;
     if !point.is_finite() {
         return Ok(());
     }
@@ -408,9 +408,13 @@ fn pointer_position(
     (&location.target == target && location.position.is_finite()).then_some(location.position)
 }
 
-pub(crate) fn preview(world: &World, view: Entity) -> Option<crate::pen::Preview> {
-    let state = world.get::<State>(view)?;
-    let draft = state.draft.as_ref()?;
+pub(crate) fn preview(world: &World, view: Entity) -> Result<Option<crate::pen::Preview>> {
+    let Some(state) = world.get::<State>(view) else {
+        return Ok(None);
+    };
+    let Some(draft) = state.draft.as_ref() else {
+        return Ok(None);
+    };
     let pointer = state
         .press
         .as_ref()
@@ -424,8 +428,8 @@ pub(crate) fn preview(world: &World, view: Entity) -> Option<crate::pen::Preview
             world,
             view,
             draft.context.mode,
-            CanvasView::_center(world, view).ok()? + local / CanvasView::_zoom(world, view).ok()?,
-        );
+            CanvasView::_center(world, view)? + local / CanvasView::_zoom(world, view)?,
+        )?;
         if point.is_finite() && vertices.last() != Some(&point) {
             vertices.push(point);
         }
@@ -446,19 +450,21 @@ pub(crate) fn preview(world: &World, view: Entity) -> Option<crate::pen::Preview
                 },
                 |route| route.paths(style),
             );
-        return Some(crate::pen::Preview {
+        return Ok(Some(crate::pen::Preview {
             name: "CanvasConnectorPreview",
             path,
             arrows: Some(arrows),
             points: draft.vertices.clone(),
             paint: style.paint(),
-        });
+        }));
     }
-    let (paint, closed) = contour(draft.context.mode)?;
+    let Some((paint, closed)) = contour(draft.context.mode) else {
+        return Ok(None);
+    };
     let vertices = effective_vertices(&vertices, closed);
     let closed = closed && has_three_vertices(vertices);
     let commands = crate::path::contour(vertices, closed).unwrap_or_default();
-    Some(crate::pen::Preview {
+    Ok(Some(crate::pen::Preview {
         name: "CanvasContourPreview",
         path: CanvasPath { commands },
         arrows: None,
@@ -471,5 +477,5 @@ pub(crate) fn preview(world: &World, view: Entity) -> Option<crate::pen::Preview
                 ..paint
             }
         },
-    })
+    }))
 }

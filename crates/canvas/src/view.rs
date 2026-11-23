@@ -8,6 +8,7 @@ use bevy::prelude::*;
     crate::renderer::RenderFailure,
     crate::input::DragState,
     crate::input::GroupClick,
+    crate::snapping::DragSnap,
     crate::pen::State,
     crate::basic_path::State
 )]
@@ -18,6 +19,7 @@ pub struct CanvasViewProps {
     pub center: Vec2,
     pub zoom: f32,
     pub grid: crate::CanvasGrid,
+    pub object_snap: crate::CanvasObjectSnap,
 }
 
 impl Default for CanvasViewProps {
@@ -27,6 +29,7 @@ impl Default for CanvasViewProps {
             center: Vec2::ZERO,
             zoom: 1.0,
             grid: default(),
+            object_snap: default(),
         }
     }
 }
@@ -40,6 +43,7 @@ pub(crate) struct ViewState {
     pub(crate) center: Vec2,
     pub(crate) zoom: f32,
     pub(crate) grid: crate::CanvasGrid,
+    pub(crate) object_snap: crate::CanvasObjectSnap,
     pub(crate) selection: Vec<Entity>,
     pub(crate) mode: CanvasMode,
 }
@@ -305,8 +309,9 @@ impl CanvasView {
                     return Err(crate::error::invalid(crate::CanvasIssue::ZoomTarget).input(crate::CanvasInput::Float { field: "zoom", value: props.zoom }).at("view", root).into_bevy_error(frame()));
                 }
                 props.grid.validate().map_err(|error| error.at("view", root).into_bevy_error(frame()))?;
+                props.object_snap.validate().map_err(|error| error.at("view", root).into_bevy_error(frame()))?;
                 let active_layer = preferred_layer(context.entity.world(), props.document, None);
-                Ok(ViewState { document: props.document, active_layer, group_path: Vec::new(), center: props.center, zoom: props.zoom, grid: props.grid, selection: Vec::new(), mode: CanvasMode::Select })
+                Ok(ViewState { document: props.document, active_layer, group_path: Vec::new(), center: props.center, zoom: props.zoom, grid: props.grid, object_snap: props.object_snap, selection: Vec::new(), mode: CanvasMode::Select })
             })
             Node { min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
             bevy::input_focus::tab_navigation::TabIndex(-1)

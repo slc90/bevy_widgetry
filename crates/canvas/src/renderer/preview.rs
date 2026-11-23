@@ -41,7 +41,7 @@ pub(super) fn sync(
         }
         return Ok(None);
     };
-    let (center, size) = kind.placement(world, view, start, end);
+    let (center, size) = kind.placement(world, view, start, end)?;
     if !size.is_finite() || !center.is_finite() {
         return Err(crate::error::invalid(crate::CanvasIssue::PreviewBounds));
     }

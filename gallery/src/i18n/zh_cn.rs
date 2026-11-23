@@ -218,12 +218,13 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             }
             super::CanvasKey::Ready => "选择 SVG 或 PNG，以透明背景导出已提交图形。",
             super::CanvasKey::Readout => {
-                "主视图：{zoom_a}× · 中心（{center_a}）· {mode}{parameters} · 已选 {selection_a}{draft_label}{draft} · 网格{grid}（{grid_spacing}）· 吸附{snap}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\nPath目标段：{segment} · 导出：{region} · PNG {scale}×"
+                "主视图：{zoom_a}× · 中心（{center_a}）· {mode}{parameters} · 已选 {selection_a}{draft_label}{draft} · 网格{grid}（{grid_spacing}）· 网格吸附{snap} · 对象吸附{object_snap}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\nPath目标段：{segment} · 导出：{region} · PNG {scale}×"
             }
             super::CanvasKey::PenDraftLabel => " · Pen 草稿命令 ",
             super::CanvasKey::HiddenDraftLabel => "",
             super::CanvasKey::ToggleGrid => "切换网格",
-            super::CanvasKey::ToggleGridSnap => "切换吸附",
+            super::CanvasKey::ToggleGridSnap => "切换网格吸附",
+            super::CanvasKey::ToggleObjectSnap => "切换对象吸附",
             super::CanvasKey::GridOn => "开",
             super::CanvasKey::GridOff => "关",
             super::CanvasKey::AutoRegion => "内容 AABB",

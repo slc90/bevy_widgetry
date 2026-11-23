@@ -115,6 +115,7 @@ enum Action {
     Reset,
     ToggleGrid,
     ToggleGridSnap,
+    ToggleObjectSnap,
     ToggleAuxiliary,
     Region,
     Scale,
@@ -353,6 +354,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::ZoomOut, Action::ZoomOut), (CanvasKey::Reset, Action::Reset),
         (CanvasKey::ToggleGrid, Action::ToggleGrid),
         (CanvasKey::ToggleGridSnap, Action::ToggleGridSnap),
+        (CanvasKey::ToggleObjectSnap, Action::ToggleObjectSnap),
         (CanvasKey::Auxiliary, Action::ToggleAuxiliary), (CanvasKey::Region, Action::Region),
         (CanvasKey::Scale, Action::Scale), (CanvasKey::Svg, Action::Svg), (CanvasKey::Png, Action::Png),
     ].into_iter().map(|(label, action)| bsn! {
@@ -621,6 +623,8 @@ fn refresh(world: &mut World) -> Result {
                 CanvasKey::GridOff
             })
         };
+        let object_snap =
+            CanvasView::object_snap(world, demo.main).map_err(|error| error.into_bevy_error())?;
         let binding = LocalizedText::with_args(
             TextKey::Canvas(CanvasKey::Readout),
             vec![
@@ -695,6 +699,10 @@ fn refresh(world: &mut World) -> Result {
         .with_key_arg("draft_label", TextKey::Canvas(draft_label))
         .with_key_arg("grid", grid_status(grid.visible))
         .with_key_arg("snap", grid_status(grid.snap != CanvasGridSnap::default()))
+        .with_key_arg(
+            "object_snap",
+            grid_status(object_snap.edges || object_snap.path_nodes),
+        )
         .with_key_arg(
             "region",
             TextKey::Canvas(if demo.region.is_some() {
@@ -906,6 +914,15 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                     };
                 }
                 CanvasView::set_grid_in_world(world, demo.main, grid)
+                    .map_err(|error| error.into_bevy_error())?;
+            }
+            Action::ToggleObjectSnap => {
+                let mut settings = CanvasView::object_snap(world, demo.main)
+                    .map_err(|error| error.into_bevy_error())?;
+                let enabled = !(settings.edges && settings.path_nodes);
+                settings.edges = enabled;
+                settings.path_nodes = enabled;
+                CanvasView::set_object_snap_in_world(world, demo.main, settings)
                     .map_err(|error| error.into_bevy_error())?;
             }
             Action::ToggleAuxiliary => {

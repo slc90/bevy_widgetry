@@ -19,6 +19,448 @@ const GRID: CanvasGrid = CanvasGrid {
     major_every: Some(4),
 };
 
+#[test]
+fn object_snap_uses_view_pixels_and_clears_the_reference_line_after_release() {
+    let (mut app, view, other, moving, _, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let target = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(30.0),
+            corner_radius: 0.0,
+        },
+        Transform::from_xyz(40.0, 28.0, 0.0),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let settings = CanvasObjectSnap {
+        edges: true,
+        ..default()
+    };
+    assert!(CanvasView::set_object_snap_in_world(app.world_mut(), view, settings).unwrap());
+    assert_eq!(
+        CanvasView::object_snap(app.world(), other).unwrap(),
+        CanvasObjectSnap::default()
+    );
+    assert!(
+        CanvasView::set_object_snap_in_world(
+            app.world_mut(),
+            view,
+            CanvasObjectSnap {
+                tolerance_px: f32::NAN,
+                ..settings
+            }
+        )
+        .is_err()
+    );
+    CanvasView::set_selection_in_world(app.world_mut(), view, [moving]).unwrap();
+    CanvasView::set_zoom_in_world(app.world_mut(), view, 2.0).unwrap();
+    common::update(&mut app);
+    let start = coordinates::at_document(&app, view, &base, Vec2::new(2.0, 1.0));
+    let end = coordinates::at_document(&app, view, &base, Vec2::new(39.0, 29.0));
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &start,
+        PointerAction::Move { delta: Vec2::ONE },
+    );
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &start,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &end,
+        PointerAction::Move {
+            delta: end.position - start.position,
+        },
+    );
+    assert_eq!(
+        app.world()
+            .get::<Transform>(moving)
+            .unwrap()
+            .translation
+            .truncate(),
+        Vec2::new(40.0, 28.0)
+    );
+    assert_eq!(
+        app.world()
+            .get::<Transform>(target)
+            .unwrap()
+            .translation
+            .truncate(),
+        Vec2::new(40.0, 28.0)
+    );
+    assert!(
+        app.world_mut()
+            .query::<&Name>()
+            .iter(app.world())
+            .any(|name| name.as_str() == "CanvasSnapGuide")
+    );
+    let mut last = end.clone();
+    for (raw, expected) in [(44.5, 40.0), (46.0, 46.0)] {
+        let next = coordinates::at_document(&app, view, &base, Vec2::new(raw + 2.0, 29.0));
+        common::input(
+            &mut app,
+            PointerId::Mouse,
+            &next,
+            PointerAction::Move {
+                delta: next.position - last.position,
+            },
+        );
+        assert_eq!(
+            app.world().get::<Transform>(moving).unwrap().translation.x,
+            expected
+        );
+        last = next;
+    }
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &last,
+        PointerAction::Release(PointerButton::Primary),
+    );
+    assert!(
+        !app.world_mut()
+            .query::<&Name>()
+            .iter(app.world())
+            .any(|name| name.as_str() == "CanvasSnapGuide")
+    );
+}
+
+#[test]
+fn connector_points_prefer_visible_path_anchors_and_ignore_hidden_layers() {
+    let (mut app, view, _, _, window, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    add_keyboard_dispatch(&mut app);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let layer = CanvasDocument::create_layer(app.world_mut(), document, 1, "Reference").unwrap();
+    let anchor = Vec2::new(24.0, 22.0);
+    let path = CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                CanvasPathCommand::MoveTo(Vec2::ZERO),
+                CanvasPathCommand::QuadTo {
+                    control: Vec2::new(1.0, 1.0),
+                    to: Vec2::new(12.0, 12.0),
+                },
+            ],
+        },
+        Transform::from_translation(anchor.extend(0.0)),
+        CanvasPaint {
+            fill: None,
+            stroke: Some(CanvasStroke::default()),
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasDocument::move_item_to_layer(app.world_mut(), document, path, layer).unwrap();
+    CanvasDocument::set_layer_locked(app.world_mut(), document, layer, true).unwrap();
+    CanvasView::set_grid_in_world(app.world_mut(), view, GRID).unwrap();
+    CanvasView::set_object_snap_in_world(
+        app.world_mut(),
+        view,
+        CanvasObjectSnap {
+            path_nodes: true,
+            ..default()
+        },
+    )
+    .unwrap();
+    let raw = Vec2::new(22.0, 21.0);
+    for fill in [None, Some(Color::NONE)] {
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath {
+                commands: vec![
+                    CanvasPathCommand::MoveTo(raw + Vec2::X),
+                    CanvasPathCommand::LineTo(raw + Vec2::splat(10.0)),
+                    CanvasPathCommand::LineTo(raw + Vec2::new(-10.0, 10.0)),
+                    CanvasPathCommand::Close,
+                ],
+            },
+            Transform::IDENTITY,
+            CanvasPaint { fill, ..default() },
+        )
+        .unwrap();
+    }
+    for (visible, expected) in [(true, anchor), (false, Vec2::splat(20.0))] {
+        CanvasDocument::set_layer_visible(app.world_mut(), document, layer, visible).unwrap();
+        CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Connector(default()))
+            .unwrap();
+        common::update(&mut app);
+        click(&mut app, view, &base, raw);
+        click(&mut app, view, &base, Vec2::new(61.0, 40.0));
+        press_key(&mut app, window, KeyCode::Enter);
+        let connector = CanvasView::single_selection(app.world(), view)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            app.world()
+                .get::<CanvasConnector>(connector)
+                .unwrap()
+                .route()
+                .start,
+            expected
+        );
+    }
+    assert_eq!(
+        app.world()
+            .get::<Transform>(path)
+            .unwrap()
+            .translation
+            .truncate(),
+        anchor
+    );
+}
+
+#[test]
+fn a_rotated_group_contributes_its_aggregate_center_to_snapping() {
+    let (mut app, view, _, moving, _, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let group_center = Vec2::new(55.0, 30.0);
+    let height = 8.0;
+    let width = 23.0;
+    let children = [
+        Vec2::new(-width, -height),
+        Vec2::new(width, -height),
+        Vec2::new(-width, height),
+    ]
+    .map(|offset| {
+        CanvasDocument::create_rectangle(
+            app.world_mut(),
+            document,
+            CanvasRectangle {
+                size: Vec2::splat(8.0),
+                corner_radius: 0.0,
+            },
+            Transform::from_translation((group_center + offset).extend(0.0)),
+            CanvasPaint::default(),
+        )
+        .unwrap()
+    });
+    let group =
+        CanvasDocument::group_items(app.world_mut(), document, &children, "Cluster").unwrap();
+    let angle = std::f32::consts::FRAC_PI_6;
+    CanvasDocument::update_group_transform(
+        app.world_mut(),
+        document,
+        group,
+        Transform::from_translation(group_center.extend(0.0))
+            .with_rotation(Quat::from_rotation_z(angle)),
+    )
+    .unwrap();
+    CanvasView::set_object_snap_in_world(
+        app.world_mut(),
+        view,
+        CanvasObjectSnap {
+            edges: true,
+            tolerance_px: 1.5,
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasView::set_selection_in_world(app.world_mut(), view, [moving]).unwrap();
+    common::update(&mut app);
+    let grab = Vec2::new(2.0, 1.0);
+    let projected_center = group_center - Vec2::Y * (height * angle.cos());
+    drag(
+        &mut app,
+        view,
+        &base,
+        grab,
+        projected_center + grab + Vec2::new(-0.2, 0.2),
+    );
+    let actual = app
+        .world()
+        .get::<Transform>(moving)
+        .unwrap()
+        .translation
+        .truncate();
+    assert!(
+        actual.abs_diff_eq(projected_center, TOLERANCE),
+        "{actual} != {projected_center}"
+    );
+}
+
+#[test]
+fn drawing_keeps_the_guide_until_the_drag_leaves_the_release_radius() {
+    let (mut app, view, _, _, _, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    CanvasView::set_object_snap_in_world(
+        app.world_mut(),
+        view,
+        CanvasObjectSnap {
+            edges: true,
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Rectangle(default())).unwrap();
+    let mut last = coordinates::at_document(&app, view, &base, Vec2::new(-45.0, -40.0));
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &last,
+        PointerAction::Move { delta: Vec2::ONE },
+    );
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &last,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    for x in [-20.0, -24.0] {
+        let next = coordinates::at_document(&app, view, &base, Vec2::new(x, -28.0));
+        bevy_widgetry_test_utils::queue_pointer(
+            &mut app,
+            PointerId::Mouse,
+            next.clone(),
+            PointerAction::Move {
+                delta: next.position - last.position,
+            },
+        );
+        last = next;
+    }
+    common::update(&mut app);
+    assert!((rectangle_preview_right(&mut app) + 15.0).abs() < TOLERANCE);
+    let outside = coordinates::at_document(&app, view, &base, Vec2::new(-26.0, -28.0));
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &outside,
+        PointerAction::Move {
+            delta: outside.position - last.position,
+        },
+    );
+    assert!((rectangle_preview_right(&mut app) + 26.0).abs() < TOLERANCE);
+    let raw_right = -22.8;
+    let end = coordinates::at_document(&app, view, &base, Vec2::new(raw_right, -28.0));
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &end,
+        PointerAction::Move {
+            delta: end.position - outside.position,
+        },
+    );
+    assert!(
+        app.world_mut()
+            .query::<&Name>()
+            .iter(app.world())
+            .any(|name| name.as_str() == "CanvasSnapGuide")
+    );
+    assert!((rectangle_preview_right(&mut app) + 15.0).abs() < TOLERANCE);
+    common::scroll(&mut app, PointerId::Mouse, &end, 3.0);
+    let preview_right = rectangle_preview_right(&mut app);
+    assert!((preview_right - raw_right).abs() < TOLERANCE);
+    assert!(
+        !app.world_mut()
+            .query::<&Name>()
+            .iter(app.world())
+            .any(|name| name.as_str() == "CanvasSnapGuide")
+    );
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &end,
+        PointerAction::Release(PointerButton::Primary),
+    );
+    let committed = CanvasView::single_selection(app.world(), view)
+        .unwrap()
+        .unwrap();
+    let rectangle = app
+        .world()
+        .get::<CanvasGeometry>(committed)
+        .unwrap()
+        .rectangle()
+        .unwrap();
+    let transform = app.world().get::<Transform>(committed).unwrap();
+    assert!((transform.translation.x + rectangle.size.x * 0.5 - preview_right).abs() < TOLERANCE);
+}
+
+fn rectangle_preview_right(app: &mut App) -> f32 {
+    let preview = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .find(|(_, name)| name.as_str() == "CanvasRectanglePreview")
+        .unwrap()
+        .0;
+    let fill = app.world().get::<Children>(preview).unwrap()[0];
+    let mesh = &app.world().get::<Mesh2d>(fill).unwrap().0;
+    let x = app.world().get::<Transform>(preview).unwrap().translation.x;
+    positions(app.world(), mesh)
+        .into_iter()
+        .map(|point| x + point[0])
+        .fold(f32::NEG_INFINITY, f32::max)
+}
+
+#[test]
+fn a_snap_rejected_by_connector_route_validation_leaves_no_guide() {
+    let (mut app, view, _, _, _, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let route = CanvasConnectorRoute {
+        start: Vec2::ZERO,
+        end: Vec2::splat(30.0),
+        waypoints: Vec::new(),
+    };
+    let connector =
+        CanvasDocument::create_connector(app.world_mut(), document, route.clone(), default(), None)
+            .unwrap();
+    CanvasView::set_selection_in_world(app.world_mut(), view, [connector]).unwrap();
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::PathNodeEdit).unwrap();
+    CanvasView::set_object_snap_in_world(
+        app.world_mut(),
+        view,
+        CanvasObjectSnap {
+            edges: true,
+            ..default()
+        },
+    )
+    .unwrap();
+    common::update(&mut app);
+    let start = coordinates::at_document(&app, view, &base, route.end);
+    let end = coordinates::at_document(&app, view, &base, Vec2::splat(2.0));
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &start,
+        PointerAction::Move { delta: Vec2::ONE },
+    );
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &start,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    common::input(
+        &mut app,
+        PointerId::Mouse,
+        &end,
+        PointerAction::Move {
+            delta: end.position - start.position,
+        },
+    );
+    assert_eq!(
+        app.world()
+            .get::<CanvasConnector>(connector)
+            .unwrap()
+            .route(),
+        &route
+    );
+    assert!(
+        !app.world_mut()
+            .query::<&Name>()
+            .iter(app.world())
+            .any(|name| name.as_str() == "CanvasSnapGuide")
+    );
+}
+
 #[derive(Resource, Default)]
 struct GridEvents(Vec<(Entity, CanvasGrid)>);
 

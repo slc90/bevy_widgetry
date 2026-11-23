@@ -306,8 +306,14 @@ fn exported(event: On<CanvasPngExportFinished>) -> Result {
 
 ## 网格与吸附
 
-Gallery 的「切换网格」和「切换吸附」分别控制主视图的网格显示和所有吸附操作。宿主可以用 `CanvasViewProps::grid` 初始化设置，通过 `CanvasView::grid` 查询，通过 `set_grid_in_world` 或 `set_grid` 修改。`CanvasGridSnap` 可分别控制绘制、移动、Path 节点和 Connector 路由点。有效修改提交后触发 `CanvasGridChanged`。默认间距为 25 文档单位，每 4 格突出一条主线，显示和吸附均默认关闭。间距须为正有限值，`major_every` 接受正整数或 `None`。
+Gallery 提供主视图的网格显示、网格吸附和对象吸附开关。宿主可以用 `CanvasViewProps::grid` 初始化网格设置，通过 `CanvasView::grid` 查询，通过 `set_grid_in_world` 或 `set_grid` 修改。`CanvasGridSnap` 可分别控制绘制、移动、Path 节点和 Connector 路由点。有效修改提交后触发 `CanvasGridChanged`。默认间距为 25 文档单位，每 4 格突出一条主线，显示和吸附均默认关闭。间距须为正有限值，`major_every` 接受正整数或 `None`。
 
 网格以文档原点为基准。平移和缩放改变可见范围。缩小时，视图按密度选择显示主线或更稀疏的网格线。吸附始终使用完整的基础间距。在 6 个 View 逻辑像素内，绘制点和编辑节点吸附到最近交点。Connector 的路由点开关同时控制创建和编辑。正多边形和星形优先将外顶点吸附到网格，超出容差时按住 Shift 可对齐角度。拖动绘图项时使用其局部原点作为移动目标，Connector 使用起点。多选拖动以按下的绘图项为基准，所有成员共享同一位移。
 
 显示与吸附可独立使用。共享 Document 的视图各自维护设置，撤销和重做只回放文档修改。程序化 Document API 保留调用方提供的坐标。网格画在各自视图的图形下方，绘图项继续决定命中、画序及 SVG／PNG 导出内容。
+
+通过 `CanvasViewProps::object_snap` 或 `CanvasView::set_object_snap_in_world`、`set_object_snap` 设置对象吸附。用 `CanvasView::object_snap` 查询当前设置，实际变更会触发 `CanvasObjectSnapChanged`。边缘、中心吸附和 Path 锚点吸附分别启用，默认均关闭，容差默认为 8 个 View 逻辑像素。容差须为正有限值。
+
+绘制点、Path 节点、Connector 路由点和移动操作可以捕捉 Path 锚点，也可以在两个轴上分别贴合绘图项边缘或中心线。移动时使用整个选择的文档边界，Path 锚点捕捉沿用抓取项的移动基准点。优先级依次为 Path 锚点、对象边缘或中心、网格。同距离优先取前景目标，以稳定标识消解剩余并列。绘制可见内容的 Path 才提供锚点，隐藏图层的内容和当前选择从候选中排除。可见锁定图层仍提供参考。
+
+拖动期间，参考线显示当前对齐的轴。已捕捉的目标有额外的 2 个逻辑像素释放范围。操作结束、取消或修改对象吸附设置后清除参考线。

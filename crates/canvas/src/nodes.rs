@@ -257,19 +257,24 @@ impl Edit {
         } else {
             crate::grid::SnapTarget::PathNode
         };
-        let correction = crate::grid::local_delta(world, view, target, self.projection, position);
+        let correction =
+            crate::grid::local_delta(world, view, target, self.projection, position, None)?;
         let point = (position + correction).as_vec2();
         if !point.is_finite() {
             return Ok(());
         }
         if connector {
-            return CanvasDocument::move_connector_point(
+            let applied = CanvasDocument::move_connector_point(
                 world,
                 self.document,
                 self.shape,
                 self.point.command,
                 point,
-            );
+            )?;
+            if !applied {
+                crate::snapping::clear(world, view);
+            }
+            return Ok(());
         }
         let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(self.shape) else {
             return Ok(());

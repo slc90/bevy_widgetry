@@ -135,7 +135,31 @@ fn snap_state(world: &World, view: Entity, target: SnapTarget) -> Option<&ViewSt
     })
 }
 
-pub(crate) fn point(world: &World, view: Entity, target: SnapTarget, point: Vec2) -> Option<Vec2> {
+pub(crate) fn point(
+    world: &World,
+    view: Entity,
+    target: SnapTarget,
+    point: Vec2,
+) -> CanvasResult<Option<Vec2>> {
+    if let Some(point) = crate::snapping::point(world, view, point)? {
+        return Ok(Some(point));
+    }
+    Ok(grid_point(world, view, target, point))
+}
+
+pub(crate) fn drag_point(
+    world: &mut World,
+    view: Entity,
+    point: Vec2,
+) -> CanvasResult<Option<Vec2>> {
+    let object =
+        crate::snapping::local_delta(world, view, Affine3A::IDENTITY, point.as_dvec2(), None)?;
+    Ok(object
+        .map(|delta| (point.as_dvec2() + delta).as_vec2())
+        .or_else(|| grid_point(world, view, SnapTarget::Drawing, point)))
+}
+
+fn grid_point(world: &World, view: Entity, target: SnapTarget, point: Vec2) -> Option<Vec2> {
     let state = snap_state(world, view, target)?;
     state
         .grid
@@ -144,26 +168,30 @@ pub(crate) fn point(world: &World, view: Entity, target: SnapTarget, point: Vec2
 }
 
 pub(crate) fn local_delta(
-    world: &World,
+    world: &mut World,
     view: Entity,
     target: SnapTarget,
     projection: Affine3A,
     point: DVec2,
-) -> DVec2 {
+    bounds: Option<Rect>,
+) -> CanvasResult<DVec2> {
+    if let Some(delta) = crate::snapping::local_delta(world, view, projection, point, bounds)? {
+        return Ok(delta);
+    }
     let Some(state) = snap_state(world, view, target) else {
-        return DVec2::ZERO;
+        return Ok(DVec2::ZERO);
     };
     let [x, y] = crate::groups::planar_axes(&projection);
     let document = projection.translation.truncate().as_dvec2() + x * point.x + y * point.y;
     let Some(nearest) = state.grid.snap_point(state.zoom, document) else {
-        return DVec2::ZERO;
+        return Ok(DVec2::ZERO);
     };
     let delta = nearest - document;
     let determinant = x.perp_dot(y);
-    DVec2::new(
+    Ok(DVec2::new(
         delta.perp_dot(y) / determinant,
         x.perp_dot(delta) / determinant,
-    )
+    ))
 }
 
 pub(crate) fn move_anchor_offset(world: &World, item: Entity, transform: Transform) -> DVec2 {

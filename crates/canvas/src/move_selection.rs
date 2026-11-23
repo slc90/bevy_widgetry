@@ -72,13 +72,26 @@ impl MoveSelection {
         if !moved && !self.moved {
             return Ok(false);
         }
+        let anchor_offset = crate::grid::move_anchor_offset(
+            world,
+            self.hit,
+            crate::groups::local_transform(world, self.hit)?,
+        );
+        let bounds = crate::snapping::moving_bounds(
+            world,
+            view,
+            self.hit,
+            self.parent,
+            self.anchor + delta - anchor_offset,
+        )?;
         let correction = crate::grid::local_delta(
             world,
             view,
             crate::grid::SnapTarget::Movement,
             self.parent,
             self.anchor + delta,
-        );
+            bounds,
+        )?;
         let delta = delta + correction;
         let mut updates = Vec::with_capacity(self.shapes.len());
         for (shape, origin) in &self.shapes {

@@ -81,7 +81,11 @@ pub(super) fn sync(
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
     (|| -> Result<Option<Entity>> {
-    let Some(data) = crate::pen::preview(world, view).or_else(|| crate::basic_path::preview(world, view)) else {
+    let data = match crate::pen::preview(world, view) {
+        Some(data) => Some(data),
+        None => crate::basic_path::preview(world, view)?,
+    };
+    let Some(data) = data else {
         if let Some(e) = current {
             world.despawn(e);
         }

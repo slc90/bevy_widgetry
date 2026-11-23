@@ -98,15 +98,15 @@ impl DrawingKind {
 
     pub(crate) fn placement(
         self,
-        world: &World,
+        world: &mut World,
         view: Entity,
         start: Vec2,
         end: Vec2,
-    ) -> (Vec2, Vec2) {
-        let snapped = crate::grid::point(world, view, SnapTarget::Drawing, end);
+    ) -> Result<(Vec2, Vec2)> {
+        let snapped = crate::grid::drag_point(world, view, end)?;
         let delta = snapped.unwrap_or(end) - start;
         let midpoint = start + delta * 0.5;
-        match self {
+        Ok(match self {
             Self::Parametric(tool) if tool.radial() => {
                 let snap = snapped.is_none()
                     && world
@@ -124,7 +124,7 @@ impl DrawingKind {
             }
             Self::Line | Self::Parametric(_) => (midpoint, delta),
             Self::Rectangle | Self::Ellipse | Self::Flowchart(_) => (midpoint, delta.abs()),
-        }
+        })
     }
 
     pub(crate) fn committable(self, size: Vec2) -> bool {
@@ -486,7 +486,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                             press.entity,
                             SnapTarget::Drawing,
                             point,
-                        )
+                        )?
                         .unwrap_or(point),
                     }
                 } else if let Some((kind, paint)) = drawing {
@@ -496,12 +496,14 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     ) else {
                         return Ok(());
                     };
+                    let snapped =
+                        crate::grid::point(world, press.entity, SnapTarget::Drawing, point)?;
+                    let start = snapped.unwrap_or(point);
                     DragAction::Draw {
                         kind,
                         document,
                         container,
-                        start: crate::grid::point(world, press.entity, SnapTarget::Drawing, point)
-                            .unwrap_or(point),
+                        start,
                         current: point,
                         paint,
                     }
@@ -914,8 +916,15 @@ fn advance_action(
                 return Ok(());
             };
             let anchor = position + crate::grid::move_anchor_offset(world, shape, transform);
-            let correction =
-                crate::grid::local_delta(world, entity, SnapTarget::Movement, parent, anchor);
+            let bounds = crate::snapping::moving_bounds(world, entity, shape, parent, position)?;
+            let correction = crate::grid::local_delta(
+                world,
+                entity,
+                SnapTarget::Movement,
+                parent,
+                anchor,
+                bounds,
+            )?;
             let point = (position + correction).as_vec2();
             if !point.is_finite() {
                 end(world, entity);
@@ -984,8 +993,11 @@ fn advance_action(
                 end(world, entity);
                 return Ok(());
             }
-            let point = if matches!(&drag.action, DragAction::Pen { .. }) {
-                crate::grid::point(world, entity, SnapTarget::Drawing, point).unwrap_or(point)
+            // Match every move so input batching cannot skip entering the acquire radius.
+            // Draw keeps the raw endpoint so a later zoom can refresh its preview.
+            let snapped = crate::grid::drag_point(world, entity, point)?;
+            let point = if matches!(drag.action, DragAction::Pen { .. }) {
+                snapped.unwrap_or(point)
             } else {
                 point
             };
@@ -1389,6 +1401,7 @@ pub(crate) fn cancel_drawing_tools(world: &mut World, view: Entity) {
 }
 
 pub(crate) fn release_gesture(world: &mut World, entity: Entity) {
+    crate::snapping::clear(world, entity);
     if let Some(drag) = world
         .get_mut::<DragState>(entity)
         .and_then(|mut state| state.0.take())
@@ -1531,7 +1544,6 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
             .and_then(|state| state.0.as_ref())
             .filter(|drag| continuing(world, entity, drag))
             .map(|drag| drag.action.clone());
-        end(world, entity);
         let Some(DragAction::Draw {
             kind,
             document,
@@ -1541,12 +1553,15 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
             paint,
         }) = drawing
         else {
+            end(world, entity);
             return Ok(());
         };
+        let placement = kind.placement(world, entity, start, current);
+        end(world, entity);
         if crate::history::is_busy(world, document) {
             return Ok(());
         }
-        let (center, size) = kind.placement(world, entity, start, current);
+        let (center, size) = placement?;
         CanvasView::_set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
         world.flush();
         if !center.is_finite()

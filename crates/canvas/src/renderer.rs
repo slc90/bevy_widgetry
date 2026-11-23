@@ -22,6 +22,7 @@ use bevy_widgetry_diagnostics::{
 use bevy_widgetry_internal_log::widgetry_debug;
 use std::collections::{HashMap, HashSet};
 mod grid;
+mod guides;
 mod nodes;
 mod outline;
 mod pen;
@@ -60,6 +61,7 @@ struct Renderer {
     proxies: HashMap<Entity, Entity>,
     group_proxies: HashMap<Entity, Entity>,
     grid: Option<Entity>,
+    guides: Option<Entity>,
     outline: Option<Entity>,
     preview: Option<Entity>,
     pen: Option<Entity>,
@@ -192,6 +194,7 @@ fn initialize_root(world: &mut World, root: Entity) -> RawResult {
             proxies: HashMap::new(),
             group_proxies: HashMap::new(),
             grid: None,
+            guides: None,
             outline: None,
             preview: None,
             pen: None,
@@ -234,6 +237,7 @@ fn render_root(world: &mut World, root: Entity) -> RawResult<Option<()>> {
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?;
     let camera = renderer.camera;
     let grid = renderer.grid;
+    let overlay = renderer.guides;
     let node = world
         .get::<ComputedNode>(root)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::Layout))?;
@@ -266,6 +270,15 @@ fn render_root(world: &mut World, root: Entity) -> RawResult<Option<()>> {
             .get::<ViewState>(root)
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::View))?;
         grid::update(world, grid, state.grid, state.center, pixels, zoom)?;
+    }
+    if let Some(overlay) = overlay {
+        let layout = guides::Layout {
+            lines: crate::snapping::guides(world, root),
+            center: CanvasView::_center(world, root)?,
+            pixels,
+            zoom,
+        };
+        guides::update(world, overlay, layout)?;
     }
     Ok(Some(()))
 }
@@ -316,6 +329,7 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
     let (content, layer) = (renderer.content, renderer.layer);
     let camera = renderer.camera;
     let current_grid = renderer.grid;
+    let current_guides = renderer.guides;
     let center = CanvasView::_center(world, root)?;
     let mut transform = world
         .get_mut::<Transform>(camera)
@@ -535,6 +549,14 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
             }
         }
         Err(error) => collect_error(error, &mut failure, &mut diagnostics),
+    }
+    let guide_visible = crate::snapping::guides(world, root) != [None; 2];
+    let guides = guides::sync(world, camera, layer, guide_visible, current_guides)?;
+    if current_guides != guides {
+        world
+            .get_mut::<Renderer>(root)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
+            .guides = guides;
     }
     let current = world
         .get::<Renderer>(root)
@@ -920,6 +942,7 @@ impl Plugin for CanvasPlugin {
         pen::install(app);
         nodes::install(app);
         grid::install(app);
+        guides::install(app);
         if !app.world().contains_resource::<Assets<Mesh>>() {
             app.init_asset::<Mesh>();
         }

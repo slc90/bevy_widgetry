@@ -184,12 +184,13 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
                 "Choose SVG or PNG to export the committed shapes with a transparent background."
             }
             super::CanvasKey::Readout => {
-                "Main: {zoom_a}× · center ({center_a}) · {mode}{parameters} · selected {selection_a}{draft_label}{draft} · Grid {grid} ({grid_spacing}) · Snap {snap}\nSecondary: {zoom_b}× · center ({center_b}) · selected {selection_b}\nPath segment: {segment} · Export: {region} · PNG {scale}×"
+                "Main: {zoom_a}× · center ({center_a}) · {mode}{parameters} · selected {selection_a}{draft_label}{draft} · Grid {grid} ({grid_spacing}) · Grid snap {snap} · Object snap {object_snap}\nSecondary: {zoom_b}× · center ({center_b}) · selected {selection_b}\nPath segment: {segment} · Export: {region} · PNG {scale}×"
             }
             super::CanvasKey::PenDraftLabel => " · Pen draft commands ",
             super::CanvasKey::HiddenDraftLabel => "",
             super::CanvasKey::ToggleGrid => "Toggle grid",
-            super::CanvasKey::ToggleGridSnap => "Toggle snapping",
+            super::CanvasKey::ToggleGridSnap => "Toggle grid snap",
+            super::CanvasKey::ToggleObjectSnap => "Toggle object snap",
             super::CanvasKey::GridOn => "on",
             super::CanvasKey::GridOff => "off",
             super::CanvasKey::AutoRegion => "content AABB",

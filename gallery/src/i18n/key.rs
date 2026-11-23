@@ -909,6 +909,7 @@ pub(crate) enum CanvasKey {
     Reset,
     ToggleGrid,
     ToggleGridSnap,
+    ToggleObjectSnap,
     GridOn,
     GridOff,
     Auxiliary,

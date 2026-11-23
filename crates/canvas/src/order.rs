@@ -138,7 +138,7 @@ pub(crate) fn is_item_child(item: &EntityRef, parent: Entity) -> bool {
             .is_some_and(|child| child.parent() == parent)
 }
 
-struct OrderComponents {
+pub(crate) struct OrderComponents {
     item: Option<ComponentId>,
     text: Option<[ComponentId; 2]>,
     connector: Option<[ComponentId; 2]>,
@@ -147,7 +147,7 @@ struct OrderComponents {
 }
 
 impl OrderComponents {
-    fn new(world: &World) -> Self {
+    pub(crate) fn new(world: &World) -> Self {
         Self {
             item: world.component_id::<CanvasItem>(),
             text: (|| {
@@ -207,7 +207,7 @@ impl OrderComponents {
                 .is_some_and(|child| child.parent() == parent)
     }
 
-    fn is_valid(&self, item: &EntityRef, parent: Entity) -> bool {
+    pub(crate) fn is_valid(&self, item: &EntityRef, parent: Entity) -> bool {
         self.is_attached(item, parent)
             && (self.is_shape(item)
                 || self.is_text(item)
