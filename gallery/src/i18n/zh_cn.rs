@@ -139,6 +139,11 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Canvas(key) => match key {
             super::CanvasKey::DemoBasics => "基础",
             super::CanvasKey::DemoFlowchart => "流程图",
+            super::CanvasKey::DemoCharacter => "龙娘立绘",
+            super::CanvasKey::CharacterDescription => {
+                "双击立绘并进入各组，即可编辑面部、头发、龙角和衣装。"
+            }
+            super::CanvasKey::Reference => "参考图",
             super::CanvasKey::FlowchartDescription => {
                 "拖动节点可观察连接线随动。选中连接线可编辑路由、箭头或标签。"
             }

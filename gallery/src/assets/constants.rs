@@ -15,6 +15,8 @@ pub(super) const WINDOW_BACKGROUND_1_IMAGE: (&str, &[u8]) =
     asset_data!("assets/pictures/background1.png");
 pub(super) const WINDOW_BACKGROUND_2_IMAGE: (&str, &[u8]) =
     asset_data!("assets/pictures/background2.jpg");
+pub(super) const CANVAS_CHARACTER_REFERENCE: (&str, &[u8]) =
+    asset_data!("assets/canvas/dragon-portrait-reference.png");
 pub(super) const SPLASH_FRAMES: [(&str, &[u8]); 40] = [
     asset_data!("assets/splash/frames/frame_000.png"),
     asset_data!("assets/splash/frames/frame_001.png"),

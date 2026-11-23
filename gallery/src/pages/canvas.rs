@@ -14,6 +14,7 @@ use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::{button::WidgetryButton, canvas::*, scene::spawn_scene, text::WidgetryText};
 use std::path::PathBuf;
 
+mod character;
 mod flowchart;
 mod gradient;
 mod icons;
@@ -77,6 +78,13 @@ enum DemoKind {
     Basics,
     Icons,
     Flowchart,
+    Character,
+}
+
+impl DemoKind {
+    fn main_zoom(self) -> f32 {
+        if self == Self::Character { 0.8 } else { 1.0 }
+    }
 }
 
 #[derive(Component)]
@@ -323,6 +331,7 @@ fn prepare_document(world: &mut World, kind: DemoKind) -> Result<Entity> {
         DemoKind::Basics => basics(world, document, edit),
         DemoKind::Icons => icons::populate(world, document, edit),
         DemoKind::Flowchart => flowchart::populate(world, document, edit),
+        DemoKind::Character => character::populate(world, document, edit),
     })
     .and_then(|()| CanvasDocument::clear_history(world, document));
     if let Err(error) = result {
@@ -414,7 +423,10 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
         DemoKind::Basics => CanvasKey::Description,
         DemoKind::Icons => CanvasKey::IconsDescription,
         DemoKind::Flowchart => CanvasKey::FlowchartDescription,
+        DemoKind::Character => CanvasKey::CharacterDescription,
     };
+    let reference = (kind == DemoKind::Character).then(character::reference);
+    let main_zoom = kind.main_zoom();
     let controls: Vec<_> = [
         (CanvasKey::Select, Action::Select), (CanvasKey::Rectangle, Action::Rectangle),
         (CanvasKey::Ellipse, Action::Ellipse), (CanvasKey::PlaceText,Action::PlaceText),
@@ -477,7 +489,8 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
             Children [
                 @demo_choice(CanvasKey::DemoBasics, DemoKind::Basics)--
                 @demo_choice(CanvasKey::DemoIcons, DemoKind::Icons)--
-                @demo_choice(CanvasKey::DemoFlowchart, DemoKind::Flowchart)
+                @demo_choice(CanvasKey::DemoFlowchart, DemoKind::Flowchart)--
+                @demo_choice(CanvasKey::DemoCharacter, DemoKind::Character)
             ]--
             @localized(TextKey::Canvas(description)) WidgetryText Node {max_width:percent(100)}--
             Node {column_gap:px(CONTROL_GAP),row_gap:px(GROUP_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
@@ -491,7 +504,7 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
                 Node {flex_grow:2.0,flex_basis:px(0),min_width:px(0),row_gap:px(ITEM_GAP),flex_direction:FlexDirection::Column}
                 Children [
                     @localized(TextKey::Canvas(CanvasKey::Main)) WidgetryText--
-                    #Main Name("CanvasMain") @CanvasView {@document:{Some(document)}}
+                    #Main Name("CanvasMain") @CanvasView {@document:{Some(document)}, @zoom:main_zoom}
                     Node {width:percent(100),height:px(VIEW_HEIGHT),flex_shrink:0.0}
                     BackgroundColor(Color::srgb(0.09,0.11,0.16))
                 ]--
@@ -504,7 +517,8 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
                     }
                     Node {width:percent(100),height:px(VIEW_HEIGHT),flex_shrink:0.0}
                     BackgroundColor(Color::srgb(0.13,0.1,0.16))
-                ]
+                ]--
+                @{reference}
             ]--
             @localized_args(TextKey::Canvas(CanvasKey::Paths),vec![("path",path)]) WidgetryText Node {max_width:percent(100)}--
             #Result Name("CanvasExportResult") @localized(TextKey::Canvas(CanvasKey::Ready)) WidgetryText Node {max_width:percent(100)}
@@ -1030,7 +1044,7 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                     .map_err(|error| error.into_bevy_error())?;
             }
             Action::Reset => {
-                CanvasView::set_zoom_in_world(world, demo.main, 1.0)
+                CanvasView::set_zoom_in_world(world, demo.main, demo.kind.main_zoom())
                     .map_err(|error| error.into_bevy_error())?;
                 CanvasView::set_center_in_world(world, demo.main, Vec2::ZERO)
                     .map_err(|error| error.into_bevy_error())?;
