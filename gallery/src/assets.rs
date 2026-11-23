@@ -8,8 +8,9 @@ use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
 use bevy::prelude::*;
 use constants::{
-    BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, CANVAS_CHARACTER_REFERENCE, EMBEDDED_SOURCE,
-    LOGO_ICON, SPLASH_FRAMES, WINDOW_BACKGROUND_1_IMAGE, WINDOW_BACKGROUND_2_IMAGE,
+    BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, CANVAS_CHARACTER_REFERENCE, CANVAS_STICKERS_REFERENCE,
+    EMBEDDED_SOURCE, LOGO_ICON, SPLASH_FRAMES, WINDOW_BACKGROUND_1_IMAGE,
+    WINDOW_BACKGROUND_2_IMAGE,
 };
 
 pub(crate) struct GalleryAssetPlugin;
@@ -27,6 +28,7 @@ pub(crate) enum GalleryImage {
     WindowBackground1,
     WindowBackground2,
     CanvasCharacterReference,
+    CanvasStickersReference,
 }
 
 impl GalleryImage {
@@ -35,6 +37,7 @@ impl GalleryImage {
             Self::WindowBackground1 => embedded_path!(WINDOW_BACKGROUND_1_IMAGE.0),
             Self::WindowBackground2 => embedded_path!(WINDOW_BACKGROUND_2_IMAGE.0),
             Self::CanvasCharacterReference => embedded_path!(CANVAS_CHARACTER_REFERENCE.0),
+            Self::CanvasStickersReference => embedded_path!(CANVAS_STICKERS_REFERENCE.0),
         })
         .with_source(EMBEDDED_SOURCE)
     }
@@ -62,6 +65,7 @@ impl Plugin for GalleryAssetPlugin {
                 WINDOW_BACKGROUND_1_IMAGE,
                 WINDOW_BACKGROUND_2_IMAGE,
                 CANVAS_CHARACTER_REFERENCE,
+                CANVAS_STICKERS_REFERENCE,
             ]
             .into_iter()
             .chain(SPLASH_FRAMES)

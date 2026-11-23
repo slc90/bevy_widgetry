@@ -40,6 +40,23 @@ pub(crate) fn has_group_components(item: &EntityRef) -> bool {
 }
 
 impl CanvasDocument {
+    /// Measures the item and its group descendants in document coordinates for export.
+    /// Includes vector curve extrema and rendered mesh extents.
+    pub fn item_bounds(
+        world: &World,
+        document: Entity,
+        item: Entity,
+    ) -> PublicResult<Option<Rect>> {
+        item_parent(world, document, item)
+            .and_then(|_| measure_document_bounds(world, item, ProjectionCheck::MeasureForExport))
+            .map_err(|error| {
+                error
+                    .at("document", document)
+                    .at("item", item)
+                    .into_failure(ErrorFrame::new("canvas.CanvasDocument.item_bounds"))
+            })
+    }
+
     pub fn container_of(
         world: &World,
         document: Entity,
@@ -315,6 +332,7 @@ fn group_children(world: &World, group: Entity) -> &[Entity] {
 
 enum ProjectionCheck {
     Measure,
+    MeasureForExport,
     Validate,
     Preserve(Affine3A),
 }
@@ -326,7 +344,8 @@ fn subtree_bounds(
     transform: Affine3A,
     check: ProjectionCheck,
 ) -> Result<Option<Rect>> {
-    let measure = matches!(check, ProjectionCheck::Measure);
+    let export = matches!(check, ProjectionCheck::MeasureForExport);
+    let measure = export || matches!(check, ProjectionCheck::Measure);
     let previous = match check {
         ProjectionCheck::Preserve(previous) => Some(previous),
         _ => None,
@@ -376,7 +395,7 @@ fn subtree_bounds(
             continue;
         }
         if let Some(connector) = world.get::<crate::CanvasConnector>(item) {
-            connector.bounds(&local, &transform)?;
+            let vector_bounds = connector.bounds(&local, &transform)?;
             if let Some(previous) = previous {
                 let style = connector.style();
                 let (route, arrows) = connector.route().paths(style);
@@ -425,6 +444,10 @@ fn subtree_bounds(
                 for rect in [painted, label].into_iter().flatten() {
                     bounds = Some(bounds.map_or(rect, |current| current.union(rect)));
                 }
+                if export {
+                    bounds =
+                        Some(bounds.map_or(vector_bounds, |current| current.union(vector_bounds)));
+                }
             }
             continue;
         }
@@ -443,12 +466,27 @@ fn subtree_bounds(
             return Err(invalid(CanvasIssue::GroupTransform).at("shape", item));
         }
         if measure && (paint.fill.is_some() || paint.stroke.is_some()) {
-            let item_bounds = if matches!(geometry, CanvasGeometry::Path(_)) {
-                let Some(rect) = crate::mesh_cache::painted_bounds(
+            let item_bounds = if let CanvasGeometry::Path(path) = geometry {
+                let mut painted = crate::mesh_cache::painted_bounds(
                     world, item, geometry, *paint, &transform, None,
                 )
-                .map_err(|error| error.at("shape", item))?
-                else {
+                .map_err(|error| error.at("shape", item))?;
+                if export
+                    && let Some((min, max)) = path
+                        .projected_curve_bounds(
+                            planar_axes(&transform),
+                            transform.translation.truncate().as_dvec2(),
+                            paint,
+                        )
+                        .map_err(|error| error.at("shape", item))?
+                {
+                    let vector_bounds = Rect {
+                        min: min.as_vec2(),
+                        max: max.as_vec2(),
+                    };
+                    painted = Some(painted.map_or(vector_bounds, |mesh| mesh.union(vector_bounds)));
+                }
+                let Some(rect) = painted else {
                     continue;
                 };
                 rect
@@ -473,12 +511,20 @@ pub(crate) fn local_bounds(world: &World, group: Entity) -> Result<Rect> {
 }
 
 pub(crate) fn document_bounds(world: &World, item: Entity) -> Result<Option<Rect>> {
+    measure_document_bounds(world, item, ProjectionCheck::Measure)
+}
+
+fn measure_document_bounds(
+    world: &World,
+    item: Entity,
+    check: ProjectionCheck,
+) -> Result<Option<Rect>> {
     subtree_bounds(
         world,
         item,
         local_transform(world, item)?,
         document_transform(world, item)?,
-        ProjectionCheck::Measure,
+        check,
     )
 }
 

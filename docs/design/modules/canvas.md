@@ -125,6 +125,8 @@ Document 的 `CanvasPaint` 用同一个可选填充值表达纯色和渐变。�
 
 SVG 从参数模型写出几何和文档仿射矩阵。坐标、尺寸和矩阵按双精度格式写出，浏览器读取后保留模型的数值。PNG 固定图形和组的局部变换，在临时渲染场景中重建组层级，两条渲染路径均由 Bevy 按同一层级传播变换。导出使用文档坐标和已提交的绘图项。
 
+宿主可以通过 `CanvasDocument::item_bounds` 查询绘图项子树的 Document 坐标边界，并用作 SVG 或 PNG 的裁剪区域。查询沿用分组测量的投影，并合并矢量曲线极值与细分网格边界。
+
 ```mermaid
 flowchart LR
     Document["已提交 Document"] --> SVG["参数化 SVG"]

@@ -144,6 +144,16 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
                 "双击立绘并进入各组，即可编辑面部、头发、龙角和衣装。"
             }
             super::CanvasKey::Reference => "参考图",
+            super::CanvasKey::DemoStickers => "龙娘表情包",
+            super::CanvasKey::StickersDescription => {
+                "双击进入贴纸编辑。所选裁剪采用贴纸边框或所选对象的边界。"
+            }
+            super::CanvasKey::StickerRegion => "切换所选裁剪",
+            super::CanvasKey::ChooseCropItem => "请选择对象或进入贴纸编辑以确定裁剪范围。",
+            super::CanvasKey::StickerPaths => {
+                "导出文件保存在 {path}。整页文件为 canvas.svg 和 canvas.png，裁剪文件为 canvas-selection.svg 和 canvas-selection.png。"
+            }
+            super::CanvasKey::SelectionRegion => "所选裁剪",
             super::CanvasKey::FlowchartDescription => {
                 "拖动节点可观察连接线随动。选中连接线可编辑路由、箭头或标签。"
             }

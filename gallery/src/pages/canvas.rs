@@ -7,6 +7,7 @@ const CONTROL_GAP: f32 = 8.0;
 const CONTENT_GAP: f32 = 12.0;
 
 use crate::{
+    assets::GalleryImage,
     gallery::{GalleryPage, mount_page, unmount_page},
     i18n::{CanvasKey, LocalizedText, TextKey, localized, localized_args},
 };
@@ -14,11 +15,13 @@ use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::{button::WidgetryButton, canvas::*, scene::spawn_scene, text::WidgetryText};
 use std::path::PathBuf;
 
+mod artwork;
 mod character;
 mod flowchart;
 mod gradient;
 mod icons;
 mod layers;
+mod stickers;
 mod text;
 
 pub(crate) struct CanvasDemoPlugin;
@@ -66,10 +69,18 @@ struct Demo {
     editor: Entity,
     gradient_editor: Entity,
     directory: PathBuf,
-    region: Option<Rect>,
+    region: ExportRegion,
     scale: f32,
     segment: usize,
     align_to_view: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+enum ExportRegion {
+    #[default]
+    Full,
+    Fixed(Rect),
+    Selection,
 }
 
 #[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -79,11 +90,15 @@ enum DemoKind {
     Icons,
     Flowchart,
     Character,
+    Stickers,
 }
 
 impl DemoKind {
     fn main_zoom(self) -> f32 {
-        if self == Self::Character { 0.8 } else { 1.0 }
+        match self {
+            Self::Character | Self::Stickers => 0.8,
+            _ => 1.0,
+        }
     }
 }
 
@@ -327,12 +342,21 @@ fn prepare_document(world: &mut World, kind: DemoKind) -> Result<Entity> {
     let document = world
         .spawn((Name::new("CanvasDemoDocument"), CanvasDocument))
         .id();
-    let result = CanvasDocument::edit(world, document, |world, edit| match kind {
-        DemoKind::Basics => basics(world, document, edit),
-        DemoKind::Icons => icons::populate(world, document, edit),
-        DemoKind::Flowchart => flowchart::populate(world, document, edit),
-        DemoKind::Character => character::populate(world, document, edit),
-    })
+    let result = match kind {
+        DemoKind::Basics => {
+            CanvasDocument::edit(world, document, |world, edit| basics(world, document, edit))
+        }
+        DemoKind::Icons => CanvasDocument::edit(world, document, |world, edit| {
+            icons::populate(world, document, edit)
+        }),
+        DemoKind::Flowchart => CanvasDocument::edit(world, document, |world, edit| {
+            flowchart::populate(world, document, edit)
+        }),
+        DemoKind::Character => CanvasDocument::edit(world, document, |world, edit| {
+            character::populate(world, document, edit)
+        }),
+        DemoKind::Stickers => stickers::populate(world, document),
+    }
     .and_then(|()| CanvasDocument::clear_history(world, document));
     if let Err(error) = result {
         world.despawn(document);
@@ -417,6 +441,17 @@ fn demo_choice(key: CanvasKey, kind: DemoKind) -> impl Scene {
     }
 }
 
+fn reference_panel(name: &'static str, image: GalleryImage, ratio: f32) -> impl Scene {
+    bsn! {
+        Node { width:px(210),min_width:px(0),row_gap:px(ITEM_GAP),flex_direction:FlexDirection::Column }
+        Children [
+            @localized(TextKey::Canvas(CanvasKey::Reference)) WidgetryText--
+            Name(name) Node { width:percent(100),aspect_ratio:{Some(ratio)} }
+            template(move |context| Ok(ImageNode::new(context.entity.world().resource::<AssetServer>().load(image.path()))))
+        ]
+    }
+}
+
 fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
     let path = directory.display().to_string();
     let description = match kind {
@@ -424,8 +459,31 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
         DemoKind::Icons => CanvasKey::IconsDescription,
         DemoKind::Flowchart => CanvasKey::FlowchartDescription,
         DemoKind::Character => CanvasKey::CharacterDescription,
+        DemoKind::Stickers => CanvasKey::StickersDescription,
     };
-    let reference = (kind == DemoKind::Character).then(character::reference);
+    let reference = match kind {
+        DemoKind::Character => Some(reference_panel(
+            "CanvasCharacterReference",
+            GalleryImage::CanvasCharacterReference,
+            0.75,
+        )),
+        DemoKind::Stickers => Some(reference_panel(
+            "CanvasStickersReference",
+            GalleryImage::CanvasStickersReference,
+            1.0,
+        )),
+        _ => None,
+    };
+    let region_label = if kind == DemoKind::Stickers {
+        CanvasKey::StickerRegion
+    } else {
+        CanvasKey::Region
+    };
+    let paths = if kind == DemoKind::Stickers {
+        CanvasKey::StickerPaths
+    } else {
+        CanvasKey::Paths
+    };
     let main_zoom = kind.main_zoom();
     let controls: Vec<_> = [
         (CanvasKey::Select, Action::Select), (CanvasKey::Rectangle, Action::Rectangle),
@@ -473,7 +531,7 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
         (CanvasKey::ToggleGrid, Action::ToggleGrid),
         (CanvasKey::ToggleGridSnap, Action::ToggleGridSnap),
         (CanvasKey::ToggleObjectSnap, Action::ToggleObjectSnap),
-        (CanvasKey::Auxiliary, Action::ToggleAuxiliary), (CanvasKey::Region, Action::Region),
+        (CanvasKey::Auxiliary, Action::ToggleAuxiliary), (region_label, Action::Region),
         (CanvasKey::Scale, Action::Scale), (CanvasKey::Svg, Action::Svg), (CanvasKey::Png, Action::Png),
     ].into_iter().map(|(label, action)| bsn! {
         @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Canvas(label)) WidgetryText}) as Box<dyn SceneList>)} }
@@ -482,7 +540,7 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
     bsn! {
         Name("CanvasDemo")
         Demo { kind:kind, document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers, editor:#Editor, gradient_editor:#GradientEditor,
-            directory:directory, region:None, scale:1.0, segment:0, align_to_view:false }
+            directory:directory, region:{ExportRegion::Full}, scale:1.0, segment:0, align_to_view:false }
         Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(SECTION_GAP), flex_shrink:0.0 }
         Children [
             Node {column_gap:px(CONTROL_GAP), row_gap:px(GROUP_GAP), flex_wrap:FlexWrap::Wrap}
@@ -490,7 +548,8 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
                 @demo_choice(CanvasKey::DemoBasics, DemoKind::Basics)--
                 @demo_choice(CanvasKey::DemoIcons, DemoKind::Icons)--
                 @demo_choice(CanvasKey::DemoFlowchart, DemoKind::Flowchart)--
-                @demo_choice(CanvasKey::DemoCharacter, DemoKind::Character)
+                @demo_choice(CanvasKey::DemoCharacter, DemoKind::Character)--
+                @demo_choice(CanvasKey::DemoStickers, DemoKind::Stickers)
             ]--
             @localized(TextKey::Canvas(description)) WidgetryText Node {max_width:percent(100)}--
             Node {column_gap:px(CONTROL_GAP),row_gap:px(GROUP_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
@@ -520,7 +579,7 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
                 ]--
                 @{reference}
             ]--
-            @localized_args(TextKey::Canvas(CanvasKey::Paths),vec![("path",path)]) WidgetryText Node {max_width:percent(100)}--
+            @localized_args(TextKey::Canvas(paths),vec![("path",path)]) WidgetryText Node {max_width:percent(100)}--
             #Result Name("CanvasExportResult") @localized(TextKey::Canvas(CanvasKey::Ready)) WidgetryText Node {max_width:percent(100)}
         ]
     }
@@ -844,10 +903,10 @@ fn refresh(world: &mut World) -> Result {
         )
         .with_key_arg(
             "region",
-            TextKey::Canvas(if demo.region.is_some() {
-                CanvasKey::FixedRegion
-            } else {
-                CanvasKey::AutoRegion
+            TextKey::Canvas(match demo.region {
+                ExportRegion::Full => CanvasKey::AutoRegion,
+                ExportRegion::Fixed(_) => CanvasKey::FixedRegion,
+                ExportRegion::Selection => CanvasKey::SelectionRegion,
             }),
         );
         bind(world, demo.readout, binding)?;
@@ -1101,17 +1160,20 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 };
             }
             Action::Region => {
+                let region = match demo.region {
+                    ExportRegion::Full if demo.kind == DemoKind::Stickers => {
+                        ExportRegion::Selection
+                    }
+                    ExportRegion::Full => ExportRegion::Fixed(Rect::from_corners(
+                        Vec2::new(-100.0, -75.0),
+                        Vec2::new(100.0, 75.0),
+                    )),
+                    ExportRegion::Fixed(_) | ExportRegion::Selection => ExportRegion::Full,
+                };
                 world
                     .get_mut::<Demo>(root)
                     .ok_or_else(|| invalid("demo missing"))?
-                    .region = if demo.region.is_some() {
-                    None
-                } else {
-                    Some(Rect::from_corners(
-                        Vec2::new(-100.0, -75.0),
-                        Vec2::new(100.0, 75.0),
-                    ))
-                };
+                    .region = region;
             }
             Action::Scale => {
                 world
@@ -1273,8 +1335,46 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
     } else {
         "png"
     };
-    let path = demo.directory.join(format!("canvas.{format}"));
-    info!(format, ?path, region=?demo.region, scale=demo.scale, "请求导出 Canvas 文件");
+    let stem = if matches!(demo.region, ExportRegion::Selection) {
+        "canvas-selection"
+    } else {
+        "canvas"
+    };
+    let path = demo.directory.join(format!("{stem}.{format}"));
+    let region = match demo.region {
+        ExportRegion::Full => None,
+        ExportRegion::Fixed(region) => Some(region),
+        ExportRegion::Selection => {
+            let target = stickers::crop_target(world, demo.document, demo.main)
+                .map_err(|error| error.into_bevy_error())?;
+            let bounds = match target {
+                Some(item) => CanvasDocument::item_bounds(world, demo.document, item)
+                    .map_err(|error| error.into_bevy_error())?,
+                None => None,
+            };
+            let Some(bounds) = bounds else {
+                info!(
+                    format,
+                    ?path,
+                    result = "no_selection",
+                    "Canvas 文件导出请求被拒绝"
+                );
+                return bind(
+                    world,
+                    demo.result,
+                    LocalizedText::new(TextKey::Canvas(CanvasKey::ChooseCropItem)),
+                );
+            };
+            Some(bounds)
+        }
+    };
+    info!(
+        format,
+        ?path,
+        ?region,
+        scale = demo.scale,
+        "请求导出 Canvas 文件"
+    );
     if matches!(action, Action::Png) && world.query::<&PendingExport>().iter(world).next().is_some()
     {
         info!(format, ?path, result = "busy", "Canvas 文件导出请求被拒绝");
@@ -1295,7 +1395,7 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
             ))
         })?;
         if matches!(action, Action::Svg) {
-            CanvasDocument::export_svg(world, demo.document, &path, demo.region)
+            CanvasDocument::export_svg(world, demo.document, &path, region)
                 .map_err(CanvasExportError::Background)?;
             info!(format, ?path, result = "succeeded", "Canvas 文件导出结果");
             Ok(LocalizedText::with_args(
@@ -1308,7 +1408,7 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
                 demo.document,
                 &path,
                 CanvasPngOptions {
-                    region: demo.region,
+                    region,
                     scale: demo.scale,
                 },
             )
@@ -1316,7 +1416,15 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
             world.entity_mut(request).insert(PendingExport {
                 result: demo.result,
             });
-            info!(format, ?request, ?path, region=?demo.region, scale=demo.scale, result="submitted", "已提交 Canvas PNG 导出请求");
+            info!(
+                format,
+                ?request,
+                ?path,
+                ?region,
+                scale = demo.scale,
+                result = "submitted",
+                "已提交 Canvas PNG 导出请求"
+            );
             Ok(LocalizedText::new(TextKey::Canvas(CanvasKey::Pending)))
         }
     })();
@@ -1431,7 +1539,7 @@ mod tests {
                 editor: result,
                 gradient_editor: result,
                 directory,
-                region: None,
+                region: ExportRegion::Full,
                 scale: 2.0,
                 segment: 0,
                 align_to_view: false,

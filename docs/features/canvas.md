@@ -278,6 +278,8 @@ CanvasDocument::export_svg(world, document, "drawing.svg", None)
 
 `None` 自动合并已提交图形的边界；显式 `Some(Rect)` 使用 Document 坐标区域。导出保留参数矩形、椭圆、原始 Path 命令、二维变换与透明度，不包含背景、选择框、控点和未提交草稿。
 
+可用 `CanvasDocument::item_bounds` 取得单项及其组内后代的 Document 坐标边界，再传给 SVG 或 PNG 的区域参数。此边界合成项与祖先组的变换，并包含矢量曲线、细分网格、形状描边、Connector 箭头与文字。
+
 导出成功会覆盖目标文件。完整模型、区域及颜色校验先于打开文件；空 Document 拒绝导出。部分 SVG 查看器的透明混合效果可能与 Canvas 的线性合成不同，这不改变模型中的颜色。
 
 ## PNG 导出

@@ -61,6 +61,60 @@ fn near(actual: Vec2, expected: Vec2) {
 }
 
 #[test]
+fn item_bounds_measure_the_transformed_subtree_in_document_space() {
+    let mut world = World::new();
+    let document = world
+        .spawn((CanvasDocument, Transform::from_xyz(100.0, 30.0, 0.0)))
+        .id();
+    let foreign = world.spawn(CanvasDocument).id();
+    let left = rectangle(&mut world, document, Vec2::new(-20.0, 0.0));
+    let high = rectangle(&mut world, document, Vec2::new(40.0, 20.0));
+    let right = rectangle(&mut world, document, Vec2::new(80.0, 0.0));
+    let inner = CanvasDocument::group_items(&mut world, document, &[left, high], "Inner").unwrap();
+    let outer =
+        CanvasDocument::group_items(&mut world, document, &[inner, right], "Outer").unwrap();
+    let pose = Transform::from_xyz(10.0, -5.0, 0.0)
+        .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
+    CanvasDocument::update_group_transform(&mut world, document, outer, pose).unwrap();
+
+    let bounds = CanvasDocument::item_bounds(&world, document, outer)
+        .unwrap()
+        .unwrap();
+    near(bounds.min, Vec2::new(-6.0, -61.0));
+    near(bounds.max, Vec2::new(26.0, 51.0));
+    assert!(CanvasDocument::item_bounds(&world, foreign, outer).is_err());
+}
+
+#[test]
+fn item_bounds_include_vector_extrema_between_path_mesh_vertices() {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    let path = CanvasPath {
+        commands: vec![
+            CanvasPathCommand::MoveTo(Vec2::ZERO),
+            CanvasPathCommand::QuadTo {
+                control: Vec2::new(89.0, 137.0),
+                to: Vec2::new(160.0, -23.0),
+            },
+            CanvasPathCommand::Close,
+        ],
+    };
+    let shape = CanvasDocument::create_path(
+        &mut world,
+        document,
+        path,
+        Transform::IDENTITY,
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let bounds = CanvasDocument::item_bounds(&world, document, shape)
+        .unwrap()
+        .unwrap();
+    let curve_peak = 137.0_f32.powi(2) / 297.0;
+    assert!(bounds.max.y >= curve_peak, "{bounds:?} clips {curve_peak}");
+}
+
+#[test]
 fn grouping_and_ungrouping_keep_identity_order_and_projected_geometry() {
     let mut world = World::new();
     let doc = world
