@@ -93,7 +93,7 @@ fn fixture() -> Result<Fixture> {
         )
         .with_rotation(Quat::from_rotation_z(index as f32 * 0.11));
         let paint = CanvasPaint {
-            fill: Some(Color::srgba(index as f32 / 64.0, 0.5, 0.7, 0.6)),
+            fill: Some(Color::srgba(index as f32 / 64.0, 0.5, 0.7, 0.6).into()),
             fill_rule: CanvasFillRule::EvenOdd,
             stroke: Some(CanvasStroke {
                 color: Color::WHITE,

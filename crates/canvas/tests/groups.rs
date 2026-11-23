@@ -345,7 +345,7 @@ fn a_fill_only_group_path_ignores_contours_without_a_drawn_region() {
         },
         Transform::IDENTITY,
         CanvasPaint {
-            fill: Some(Color::WHITE),
+            fill: Some(Color::WHITE.into()),
             fill_rule: CanvasFillRule::EvenOdd,
             stroke: None,
         },
@@ -389,7 +389,7 @@ fn group_bounds_keep_a_painted_triangle_with_one_very_short_edge() {
         },
         Transform::IDENTITY,
         CanvasPaint {
-            fill: Some(Color::WHITE),
+            fill: Some(Color::WHITE.into()),
             stroke: None,
             ..default()
         },
@@ -733,7 +733,7 @@ fn ungrouping_checks_quadratic_path_extrema_between_render_mesh_vertices() {
         ],
     };
     let paint = CanvasPaint {
-        fill: Some(Color::WHITE),
+        fill: Some(Color::WHITE.into()),
         stroke: None,
         ..default()
     };
@@ -867,7 +867,7 @@ fn ungrouping_preserves_valid_path_strokes_and_ignores_moves_without_segments() 
             "unpainted move",
             triangle,
             CanvasPaint {
-                fill: Some(Color::WHITE),
+                fill: Some(Color::WHITE.into()),
                 stroke: None,
                 ..default()
             },

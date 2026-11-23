@@ -200,7 +200,7 @@ fn svg_preserves_original_commands_arc_flags_and_all_paint_styles() {
                     .with_rotation(Quat::from_rotation_z(0.3))
                     .with_scale(Vec3::new(-1.5, 0.75, 0.0)),
                 CanvasPaint {
-                    fill: Some(Color::srgba(0.2, 0.4, 0.6, 0.25)),
+                    fill: Some(Color::srgba(0.2, 0.4, 0.6, 0.25).into()),
                     fill_rule: CanvasFillRule::EvenOdd,
                     stroke: Some(CanvasStroke {
                         color: Color::srgba(1.0, 0.0, 0.0, 0.5),
@@ -267,7 +267,7 @@ fn svg_mixed_shapes_preserve_holes_and_reordering_overrides_z() {
                 },
                 Transform::from_xyz(0.0, 0.0, 500.0),
                 CanvasPaint {
-                    fill: Some(Color::srgb(1.0, 0.0, 0.0)),
+                    fill: Some(Color::srgb(1.0, 0.0, 0.0).into()),
                     ..default()
                 },
             )
@@ -280,7 +280,7 @@ fn svg_mixed_shapes_preserve_holes_and_reordering_overrides_z() {
                 },
                 Transform::from_xyz(0.0, 0.0, -500.0),
                 CanvasPaint {
-                    fill: Some(Color::srgb(1.0, 0.5, 0.0)),
+                    fill: Some(Color::srgb(1.0, 0.5, 0.0).into()),
                     ..default()
                 },
             )
@@ -310,7 +310,7 @@ fn svg_mixed_shapes_preserve_holes_and_reordering_overrides_z() {
                 CanvasPath { commands },
                 Transform::default(),
                 CanvasPaint {
-                    fill: Some(Color::srgb(0.0, 0.0, 1.0)),
+                    fill: Some(Color::srgb(0.0, 0.0, 1.0).into()),
                     fill_rule: rule,
                     stroke: Some(CanvasStroke {
                         color: Color::BLACK,
@@ -511,7 +511,7 @@ fn svg_contains_all_shapes_in_depth_order_and_preserves_alpha_and_clipping() {
             },
             Transform::from_xyz(-20.0, -10.0, z),
             CanvasPaint {
-                fill: Some(color),
+                fill: Some(color.into()),
                 stroke: None,
                 ..Default::default()
             },
@@ -691,7 +691,7 @@ fn svg_declares_linear_compositing_and_keeps_each_shapes_fill_and_stroke_togethe
                 20.0,
                 0.0,
                 CanvasPaint {
-                    fill: Some(Color::srgb(1.0, 0.0, 0.0)),
+                    fill: Some(Color::srgb(1.0, 0.0, 0.0).into()),
                     stroke: Some(CanvasStroke {
                         color: Color::srgba(0.0, 1.0, 0.0, 0.5),
                         width: 4.0,
@@ -704,7 +704,7 @@ fn svg_declares_linear_compositing_and_keeps_each_shapes_fill_and_stroke_togethe
                 30.0,
                 upper_z,
                 CanvasPaint {
-                    fill: Some(Color::srgba(0.0, 0.0, 1.0, 0.5)),
+                    fill: Some(Color::srgba(0.0, 0.0, 1.0, 0.5).into()),
                     stroke: None,
                     ..Default::default()
                 },
@@ -807,7 +807,7 @@ fn svg_rejects_unrepresentable_hdr_and_out_of_range_alpha_before_touching_the_fi
                 }
             } else {
                 CanvasPaint {
-                    fill: Some(color),
+                    fill: Some(color.into()),
                     stroke: None,
                     ..Default::default()
                 }

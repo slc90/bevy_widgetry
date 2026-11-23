@@ -53,14 +53,17 @@ fn headless_crud_preserves_multiple_shapes_and_document_ownership() {
         },
         transform,
         CanvasPaint {
-            fill: Some(Color::NONE),
+            fill: Some(Color::NONE.into()),
             stroke: None,
             ..Default::default()
         },
     )
     .unwrap();
     assert_eq!(*world.get::<Transform>(a).unwrap(), transform);
-    assert_eq!(world.get::<CanvasPaint>(a).unwrap().fill, Some(Color::NONE));
+    assert_eq!(
+        world.get::<CanvasPaint>(a).unwrap().fill,
+        Some(Color::NONE.into())
+    );
     let logs = LogCapture::default();
     assert!(
         logs.run(|| CanvasDocument::remove_shape(&mut world, other, a))
@@ -288,7 +291,7 @@ fn geometry_validation_rejects_degenerate_transforms_and_overflow() {
     }
     for paint in [
         CanvasPaint {
-            fill: Some(Color::linear_rgba(f32::NAN, 0.0, 0.0, 1.0)),
+            fill: Some(Color::linear_rgba(f32::NAN, 0.0, 0.0, 1.0).into()),
             stroke: None,
             ..Default::default()
         },

@@ -1,5 +1,6 @@
 const PREVIEW_DEPTH: f32 = 102.0;
 
+use super::paint::{GradientMaterial, PaintMaterial};
 use crate::error::CanvasResult as Result;
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
@@ -16,7 +17,7 @@ struct Parts {
 struct Preview {
     fill: Handle<Mesh>,
     stroke: Handle<Mesh>,
-    fill_material: Handle<ColorMaterial>,
+    fill_material: PaintMaterial,
     stroke_material: Handle<ColorMaterial>,
     size: Vec2,
     kind: crate::input::DrawingKind,
@@ -63,7 +64,7 @@ pub(super) fn sync(
         let assets = world
             .get::<Preview>(entity)
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewAssets))?;
-        let (fill_material, stroke_material) =
+        let (mut fill_material, stroke_material) =
             (assets.fill_material.clone(), assets.stroke_material.clone());
         let paint_changed = assets.paint != paint;
         let kind_changed = assets.kind != kind;
@@ -99,23 +100,22 @@ pub(super) fn sync(
             assets.kind = kind;
         }
         if paint_changed {
-            for (material, color) in [
-                (&fill_material, paint.fill.unwrap_or(Color::NONE)),
-                (
-                    &stroke_material,
-                    paint.stroke.map_or(Color::NONE, |stroke| stroke.color),
-                ),
-            ] {
+            let fill = world.get::<Parts>(entity)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewParts))?.fill;
+            let color = paint.stroke.map_or(Color::NONE, |stroke| stroke.color);
+            {
                 let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
                 let mut material = materials
-                    .get_mut(material)
+                    .get_mut(&stroke_material)
                     .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewMaterial))?;
                 *material = ColorMaterial::from(color);
             }
-            world
+            fill_material.update(world, fill, paint.fill, ColorMaterial::from)?;
+            let mut assets = world
                 .get_mut::<Preview>(entity)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewAssets))?
-                .paint = paint;
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewAssets))?;
+            assets.fill_material = fill_material;
+            assets.paint = paint;
         }
         world
             .get_mut::<Transform>(entity)
@@ -141,9 +141,7 @@ pub(super) fn sync(
         Preview {
             fill: world.resource_mut::<Assets<Mesh>>().add(fill_mesh),
             stroke: world.resource_mut::<Assets<Mesh>>().add(stroke_mesh),
-            fill_material: world
-                .resource_mut::<Assets<ColorMaterial>>()
-                .add(ColorMaterial::from(paint.fill.unwrap_or(Color::NONE))),
+            fill_material: PaintMaterial::add(world, paint.fill, ColorMaterial::from),
             stroke_material: world.resource_mut::<Assets<ColorMaterial>>().add(
                 ColorMaterial::from(paint.stroke.map_or(Color::NONE, |stroke| stroke.color)),
             ),
@@ -151,10 +149,9 @@ pub(super) fn sync(
             kind,
             paint,
         };
-    let (fill, stroke, fill_material, stroke_material) = (
+    let (fill, stroke, stroke_material) = (
         assets.fill.clone(),
         assets.stroke.clone(),
-        assets.fill_material.clone(),
         assets.stroke_material.clone(),
     );
     let result = bevy_widgetry_core::scene::spawn_scene(
@@ -166,7 +163,6 @@ pub(super) fn sync(
             template(move |_|Ok(transform)) Visibility::default()
             Children [
                 #Fill template(move |_|Ok(Mesh2d(fill.clone())))
-                template(move |_|Ok(MeshMaterial2d(fill_material.clone())))
                 template(move |_|Ok(RenderLayers::none().with(layer)))
                 Transform::default() template(move |_|Ok(fill_visibility)) Pickable::IGNORE NoFrustumCulling
             --
@@ -179,6 +175,9 @@ pub(super) fn sync(
     );
     match result {
         Ok(entity) => {
+            let fill = world.get::<Parts>(entity)
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PreviewParts))?.fill;
+            assets.fill_material.attach(world, fill);
             world.entity_mut(entity).insert(assets);
             Ok(Some(entity))
         }
@@ -186,9 +185,8 @@ pub(super) fn sync(
             let mut meshes = world.resource_mut::<Assets<Mesh>>();
             meshes.remove(assets.fill.id());
             meshes.remove(assets.stroke.id());
-            let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
-            materials.remove(assets.fill_material.id());
-            materials.remove(assets.stroke_material.id());
+            assets.fill_material.release(world);
+            world.resource_mut::<Assets<ColorMaterial>>().remove(assets.stroke_material.id());
             Err(error.into_bevy_error().into())
         }
     }
@@ -200,11 +198,14 @@ fn release(
     assets: Query<&Preview>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut gradients: ResMut<Assets<GradientMaterial>>,
 ) {
     if let Ok(assets) = assets.get(event.entity) {
         meshes.remove(assets.fill.id());
         meshes.remove(assets.stroke.id());
-        materials.remove(assets.fill_material.id());
+        assets
+            .fill_material
+            .release_from(&mut materials, &mut gradients);
         materials.remove(assets.stroke_material.id());
     }
 }

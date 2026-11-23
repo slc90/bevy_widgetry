@@ -10,8 +10,10 @@ mod clipboard;
 mod connector;
 mod error;
 mod export;
+mod fill;
 mod flowchart;
 mod geometry;
+mod gradient_edit;
 mod grid;
 mod groups;
 mod history;
@@ -45,6 +47,7 @@ pub use export::CanvasExportError;
 pub use export::{
     CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop, CanvasRenderIssue,
 };
+pub use fill::{CanvasColorStop, CanvasFill, CanvasGradientStops};
 pub use flowchart::CanvasFlowchartPreset;
 pub use grid::{CanvasGrid, CanvasGridChanged, CanvasGridSnap};
 pub use groups::CanvasGroup;

@@ -53,6 +53,7 @@ pub enum CanvasMode {
     #[default]
     Select,
     PathNodeEdit,
+    GradientEdit,
     Text,
     Connector(crate::CanvasConnectorStyle),
     Rectangle(crate::CanvasPaint),
@@ -918,11 +919,14 @@ impl CanvasView {
                     return Err(crate::error::missing(crate::CanvasPart::View));
                 }
                 match mode {
-                    CanvasMode::Select | CanvasMode::Text | CanvasMode::PathNodeEdit => {}
+                    CanvasMode::Select
+                    | CanvasMode::Text
+                    | CanvasMode::PathNodeEdit
+                    | CanvasMode::GradientEdit => {}
                     CanvasMode::Connector(style) => {
                         let paint = style.paint();
                         crate::model::validate_transform_and_paint(&Transform::IDENTITY, &paint)
-                            .map_err(|error| error.input(crate::CanvasInput::Paint(paint)))?;
+                            .map_err(|error| error.input(crate::CanvasInput::paint(paint)))?;
                     }
                     CanvasMode::Rectangle(paint) => crate::CanvasRectangle {
                         corner_radius: 0.0,
@@ -943,7 +947,7 @@ impl CanvasView {
                     | CanvasMode::Polyline(paint)
                     | CanvasMode::Polygon(paint) => {
                         crate::model::validate_transform_and_paint(&Transform::default(), &paint)
-                            .map_err(|error| error.input(crate::CanvasInput::Paint(paint)))?
+                            .map_err(|error| error.input(crate::CanvasInput::paint(paint)))?
                     }
                 }
                 Ok(())

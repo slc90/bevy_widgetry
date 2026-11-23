@@ -232,7 +232,7 @@ impl CanvasText {
         projection: &bevy::math::Affine3A,
     ) -> CanvasResult<Rect> {
         let paint = CanvasPaint {
-            fill: Some(self.style.color),
+            fill: Some(self.style.color.into()),
             ..default()
         };
         crate::model::validate_transform_and_paint(local, &paint)?;

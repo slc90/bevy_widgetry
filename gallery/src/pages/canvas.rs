@@ -14,6 +14,7 @@ use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::{button::WidgetryButton, canvas::*, text::WidgetryText};
 use std::path::PathBuf;
 
+mod gradient;
 mod layers;
 mod text;
 
@@ -21,6 +22,7 @@ pub(crate) struct CanvasDemoPlugin;
 
 impl Plugin for CanvasDemoPlugin {
     fn build(&self, app: &mut App) {
+        gradient::install(app);
         app.add_plugins(CanvasPlugin)
             .add_systems(OnEnter(GalleryPage::Canvas), enter)
             .add_systems(OnExit(GalleryPage::Canvas), exit)
@@ -58,6 +60,7 @@ struct Demo {
     result: Entity,
     layers: Entity,
     editor: Entity,
+    gradient_editor: Entity,
     directory: PathBuf,
     region: Option<Rect>,
     scale: f32,
@@ -104,6 +107,7 @@ enum Action {
     Align(CanvasAlignment),
     Distribute(CanvasDistribution),
     ToggleAlignTarget,
+    Gradient(gradient::Kind),
     Add,
     Raise,
     Lower,
@@ -133,7 +137,7 @@ enum Action {
 
 fn paint() -> CanvasPaint {
     CanvasPaint {
-        fill: Some(Color::srgba(0.1, 0.75, 0.85, 0.55)),
+        fill: Some(Color::srgba(0.1, 0.75, 0.85, 0.55).into()),
         stroke: Some(CanvasStroke {
             color: Color::srgba(0.3, 0.5, 1.0, 0.8),
             width: 10.0,
@@ -149,7 +153,11 @@ fn refresh_geometry(
         (),
         (
             With<CanvasShape>,
-            Or<(Changed<CanvasGeometry>, Changed<Transform>)>,
+            Or<(
+                Changed<CanvasGeometry>,
+                Changed<CanvasPaint>,
+                Changed<Transform>,
+            )>,
         ),
     >,
     texts: Query<(), Changed<CanvasText>>,
@@ -204,7 +212,7 @@ fn enter(world: &mut World) -> Result {
                 },
                 Transform::from_xyz(150.0, 0.0, 0.0),
                 CanvasPaint {
-                    fill: Some(Color::srgba(1.0, 0.5, 0.1, 0.7)),
+                    fill: Some(Color::srgba(1.0, 0.5, 0.1, 0.7).into()),
                     stroke: Some(CanvasStroke {
                         color: Color::srgb(1.0, 0.8, 0.2),
                         width: 4.0,
@@ -221,7 +229,7 @@ fn enter(world: &mut World) -> Result {
                 },
                 Transform::from_xyz(-153.0, 0.0, 0.0),
                 CanvasPaint {
-                    fill: Some(Color::srgb(1.0, 0.5, 0.1)),
+                    fill: Some(Color::srgb(1.0, 0.5, 0.1).into()),
                     ..default()
                 },
             )?;
@@ -253,7 +261,7 @@ fn enter(world: &mut World) -> Result {
                 },
                 Transform::from_xyz(-150.0, 0.0, 0.0),
                 CanvasPaint {
-                    fill: Some(Color::srgba(0.65, 0.3, 1.0, 0.6)),
+                    fill: Some(Color::srgba(0.65, 0.3, 1.0, 0.6).into()),
                     fill_rule: CanvasFillRule::EvenOdd,
                     stroke: Some(CanvasStroke {
                         color: Color::srgb(0.85, 0.6, 1.0),
@@ -362,6 +370,9 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::DistributeHorizontal, Action::Distribute(CanvasDistribution::Horizontal)),
         (CanvasKey::DistributeVertical, Action::Distribute(CanvasDistribution::Vertical)),
         (CanvasKey::ToggleAlignTarget, Action::ToggleAlignTarget),
+        (CanvasKey::SolidFill, Action::Gradient(gradient::Kind::Solid)),
+        (CanvasKey::LinearGradient, Action::Gradient(gradient::Kind::Linear)),
+        (CanvasKey::RadialGradient, Action::Gradient(gradient::Kind::Radial)),
         (CanvasKey::Raise, Action::Raise), (CanvasKey::Lower, Action::Lower),
         (CanvasKey::Front, Action::Front), (CanvasKey::Back, Action::Back),
         (CanvasKey::Append, Action::Append),
@@ -382,7 +393,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     }).collect();
     bsn! {
         Name("CanvasDemo")
-        Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers, editor:#Editor,
+        Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers, editor:#Editor, gradient_editor:#GradientEditor,
             directory:directory, region:None, scale:1.0, segment:0, align_to_view:false }
         Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(SECTION_GAP), flex_shrink:0.0 }
         Children [
@@ -391,6 +402,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
             #Readout Name("CanvasReadout") Text("") WidgetryText Node {max_width:percent(100)}--
             #Layers @layers::panel()--
             #Editor @text::panel()--
+            #GradientEditor @gradient::panel()--
             @localized(TextKey::Canvas(CanvasKey::Editing)) WidgetryText Node {max_width:percent(100)}--
             Node {width:percent(100),column_gap:px(CONTENT_GAP)}
             Children [
@@ -569,6 +581,7 @@ fn refresh(world: &mut World) -> Result {
     let demos: Vec<_> = world.query::<&Demo>().iter(world).cloned().collect();
     for demo in demos {
         text::refresh(world, &demo)?;
+        gradient::refresh(world, &demo)?;
         let a = CanvasView::center(world, demo.main).map_err(|error| error.into_bevy_error())?;
         let b =
             CanvasView::center(world, demo.auxiliary).map_err(|error| error.into_bevy_error())?;
@@ -602,6 +615,7 @@ fn refresh(world: &mut World) -> Result {
             CanvasMode::Text => CanvasKey::PlaceText,
             CanvasMode::Select => CanvasKey::Select,
             CanvasMode::PathNodeEdit => CanvasKey::Nodes,
+            CanvasMode::GradientEdit => CanvasKey::EditGradient,
             CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
             CanvasMode::Ellipse(_) => CanvasKey::Ellipse,
             CanvasMode::Pen(_) => CanvasKey::Pen,
@@ -961,6 +975,9 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             }
             Action::Align(_) | Action::Distribute(_) => {
                 edit_layout(world, &demo, action)?;
+            }
+            Action::Gradient(kind) => {
+                gradient::choose_fill(world, &demo, kind)?;
             }
             Action::ToggleAlignTarget => {
                 world

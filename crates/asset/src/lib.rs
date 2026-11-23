@@ -21,6 +21,7 @@ pub struct WidgetryAssetPlugin;
 pub enum BuiltinShader {
     HoldButton,
     CanvasStraightAlpha,
+    CanvasGradient,
 }
 
 impl BuiltinShader {
@@ -28,6 +29,7 @@ impl BuiltinShader {
         let path = match self {
             Self::HoldButton => embedded_path!(constants::HOLD_BUTTON_SHADER.0),
             Self::CanvasStraightAlpha => embedded_path!(constants::CANVAS_STRAIGHT_ALPHA_SHADER.0),
+            Self::CanvasGradient => embedded_path!(constants::CANVAS_GRADIENT_SHADER.0),
         };
         AssetPath::from_path_buf(path).with_source(EMBEDDED_SOURCE)
     }
@@ -126,6 +128,7 @@ impl Plugin for WidgetryAssetPlugin {
             constants::TABLE_FILTER_ACTIVE_ICON,
             constants::HOLD_BUTTON_SHADER,
             constants::CANVAS_STRAIGHT_ALPHA_SHADER,
+            constants::CANVAS_GRADIENT_SHADER,
             FILE_DIALOG_BACK_ICON,
             FILE_DIALOG_FORWARD_ICON,
             FILE_DIALOG_UP_ICON,

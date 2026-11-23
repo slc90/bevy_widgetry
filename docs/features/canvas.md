@@ -21,7 +21,7 @@ let rectangle = CanvasDocument::create_rectangle(
     CanvasRectangle { size: Vec2::new(120.0, 80.0), corner_radius: 8.0 },
     Transform::from_xyz(100.0, 60.0, 0.0),
     CanvasPaint {
-        fill: Some(Color::srgb(0.2, 0.5, 0.9)),
+        fill: Some(CanvasFill::Solid(Color::srgb(0.2, 0.5, 0.9))),
         stroke: Some(CanvasStroke { width: 2.0, ..default() }),
         ..default()
     },
@@ -242,6 +242,14 @@ CanvasDocument::remove_shapes(world, document, &[rectangle, ellipse])
 在选择模式下双击进入组，Esc 返回上一级。同步 API 为 `enter_group_in_world` 和 `leave_group_in_world`，对应排队入口为 `enter_group` 和 `leave_group`。`CanvasView::group_path` 查询从外到内的当前编辑路径。两个共享文档的 View 可以分别停在不同层级。进入组会激活该组所属图层，明确切换到另一图层时会退出组内编辑。组内绘制的矩形、椭圆和 Pen 按预览轮廓提交到该组。若坐标换算使轮廓偏移超出亚像素容差，提交会在写入前拒绝。所属层隐藏、锁定或组被移除时，View 回到仍可编辑的最近祖先。
 
 在 Gallery 中，先 Ctrl+点击选择同一容器中的成员，再使用分组按钮。选中整组后可拖动、旋转、等比缩放或取消分组。
+
+## 线性和径向渐变填充
+
+`CanvasPaint::fill` 接受 `Option<CanvasFill>`。原有纯色用 `CanvasFill::Solid(color)` 表示，也可写作 `Some(color.into())`。线性渐变提供两个不同的局部坐标，径向渐变提供局部中心和正半径。两者都随 Shape 及其祖先 Group 的平移、旋转和缩放一起变换。诊断中的 `CanvasInput::Paint` 内保存完整的 `Box<CanvasPaint>`。
+
+通过 `CanvasGradientStops::new` 提交两个至八个色标。偏移须在 0 到 1 之间，色标按偏移稳定排序。同偏移色标保留输入顺序，用于形成硬边。调用 `CanvasDocument::update_paint` 提交填充或描边修改。
+
+Gallery 中选中 Shape 后，可切换纯色、线性或径向填充。渐变编辑提供局部方向或半径手柄，对应 `CanvasMode::GradientEdit`。拖动时只有发起 View 显示预览，释放时共享文档提交一次可撤销的编辑。色标面板可切换、添加和删除色标，再用位置和十六进制颜色字段编辑当前色标。SVG 导出写入局部坐标渐变，PNG 导出由 GPU 绘制同样的填充。
 
 ## 对齐和等间距分布
 

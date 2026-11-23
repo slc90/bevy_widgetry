@@ -61,7 +61,7 @@ impl CanvasPath {
                     self.clone(),
                 )))
                 .input(crate::CanvasInput::Transform(*transform))
-                .input(crate::CanvasInput::Paint(*paint))
+                .input(crate::CanvasInput::paint(*paint))
         })
     }
 
@@ -90,7 +90,7 @@ impl CanvasPath {
                         self.clone(),
                     )))
                     .input(crate::CanvasInput::Transform(*transform))
-                    .input(crate::CanvasInput::Paint(*paint))
+                    .input(crate::CanvasInput::paint(*paint))
             })
     }
 

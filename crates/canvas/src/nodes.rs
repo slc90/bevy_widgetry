@@ -52,6 +52,28 @@ pub(crate) struct Overlay {
     links: Vec<[Vec2; 2]>,
 }
 
+pub(crate) fn gradient_overlay(points: [Vec2; 2]) -> Overlay {
+    Overlay {
+        handles: vec![
+            (
+                Point {
+                    command: 0,
+                    role: Role::Anchor,
+                },
+                points[0],
+            ),
+            (
+                Point {
+                    command: 1,
+                    role: Role::Control1,
+                },
+                points[1],
+            ),
+        ],
+        links: vec![points],
+    }
+}
+
 pub(crate) fn overlay(world: &World, shape: Entity) -> Result<Option<Overlay>> {
     if let Some(connector) = world.get::<CanvasConnector>(shape) {
         let transform = crate::groups::document_transform(world, shape)?;

@@ -5,8 +5,8 @@ use crate::error::CanvasFailureState;
 use crate::error::CanvasResult as RawResult;
 use crate::view::ViewState;
 use crate::{
-    CanvasContainer, CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape,
-    CanvasView,
+    CanvasContainer, CanvasDocument, CanvasFill, CanvasGeometry, CanvasPaint, CanvasRectangle,
+    CanvasShape, CanvasView,
 };
 use bevy::camera::{CameraProjection, ScalingMode, primitives::Aabb, visibility::RenderLayers};
 use bevy::prelude::*;
@@ -25,6 +25,7 @@ mod grid;
 mod guides;
 mod nodes;
 mod outline;
+pub(crate) mod paint;
 mod pen;
 mod preview;
 
@@ -83,7 +84,8 @@ struct ProxyParts {
 #[derive(Component, Clone)]
 struct ShapeRender {
     shape: Entity,
-    fill_material: Handle<ColorMaterial>,
+    fill: Option<CanvasFill>,
+    fill_material: paint::PaintMaterial,
     stroke_material: Handle<ColorMaterial>,
 }
 
@@ -355,6 +357,7 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
     if let Some(document) =
         document.filter(|document| world.get::<CanvasDocument>(*document).is_some())
     {
+        let gradient_preview = crate::input::gradient_preview(world, root);
         crate::order::visit_valid_order(
             world,
             document,
@@ -387,7 +390,10 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
                             let paint = entry
                                 .get::<CanvasPaint>()
                                 .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
-                            (geometry.clone(), *paint, None)
+                            let paint = gradient_preview
+                                .filter(|(shape, _)| *shape == entry.id())
+                                .map_or(*paint, |(_, paint)| paint);
+                            (geometry.clone(), paint, None)
                         };
                     shapes.push((
                         entry.id(),
@@ -765,12 +771,8 @@ fn create_proxy(
 ) -> RawResult<Entity> {
     let assets = ShapeRender {
         shape,
-        fill_material: world
-            .resource_mut::<Assets<ColorMaterial>>()
-            .add(ColorMaterial {
-                color: paint.fill.unwrap_or(Color::NONE),
-                ..default()
-            }),
+        fill: paint.fill,
+        fill_material: paint::PaintMaterial::add(world, paint.fill, paint::blended),
         stroke_material: world
             .resource_mut::<Assets<ColorMaterial>>()
             .add(ColorMaterial {
@@ -779,8 +781,7 @@ fn create_proxy(
             }),
     };
     let (fill, stroke) = (handles.fill.clone(), handles.stroke.clone());
-    let (fill_material, stroke_material) =
-        (assets.fill_material.clone(), assets.stroke_material.clone());
+    let stroke_material = assets.stroke_material.clone();
     let result = spawn_scene(
         world,
         bsn! {
@@ -790,7 +791,6 @@ fn create_proxy(
             Children [
                 #Fill Name("CanvasFill")
                 template(move |_| Ok(Mesh2d(fill.clone())))
-                template(move |_| Ok(MeshMaterial2d(fill_material.clone())))
                 template(move |_| Ok(RenderLayers::none().with(layer)))
                 Pickable::IGNORE Transform::default() Visibility::default()
             --
@@ -804,16 +804,19 @@ fn create_proxy(
     );
     match result {
         Ok(proxy) => {
+            let Some(parts) = world.get::<ProxyParts>(proxy) else {
+                world.despawn(proxy);
+                release_assets(world, &assets);
+                return Err(crate::error::missing(crate::CanvasPart::ProxyParts));
+            };
+            let parts = [parts.fill, parts.stroke];
+            assets.fill_material.attach(world, parts[0]);
             if world.get::<crate::CanvasConnector>(shape).is_some()
                 || matches!(
                     world.get::<CanvasGeometry>(shape),
                     Some(CanvasGeometry::Path(_))
                 )
             {
-                let parts = world
-                    .get::<ProxyParts>(proxy)
-                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyParts))?;
-                let parts = [parts.fill, parts.stroke];
                 // A distant subpath can round the shared AABB away from a nearby visible contour.
                 // Path meshes rely on GPU clipping within the dedicated View render layer.
                 for part in parts {
@@ -839,7 +842,7 @@ fn update_proxy(
     paint: CanvasPaint,
     handles: &crate::mesh_cache::ShapeMeshes,
 ) -> RawResult {
-    let old = world
+    let mut old = world
         .get::<ShapeRender>(proxy)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyAssets))?
         .clone();
@@ -847,33 +850,40 @@ fn update_proxy(
         .get::<ProxyParts>(proxy)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyParts))?;
     let (fill, stroke) = (parts.fill, parts.stroke);
-    for (entity, color, handle, bounds, region) in [
+    if old.fill != paint.fill {
+        old.fill_material
+            .update(world, fill, paint.fill, paint::blended)?;
+        old.fill = paint.fill;
+        *world
+            .get_mut::<ShapeRender>(proxy)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyAssets))? = old.clone();
+    }
+    let color = paint.stroke.map_or(Color::NONE, |value| value.color);
+    let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
+    let material = materials
+        .get(&old.stroke_material)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Material))?;
+    if material.color != color
+        && let Some(mut material) = materials.get_mut(&old.stroke_material)
+    {
+        material.color = color;
+    }
+    for (entity, has_paint, bounds, region) in [
         (
             fill,
-            paint.fill,
-            &old.fill_material,
+            paint.fill.is_some(),
             handles.fill_bounds,
             handles.fill_region,
         ),
         (
             stroke,
-            paint.stroke.map(|stroke| stroke.color),
-            &old.stroke_material,
+            paint.stroke.is_some(),
             handles.stroke_bounds,
             handles.stroke_region,
         ),
     ] {
-        {
-            let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
-            let mut material = materials
-                .get_mut(handle)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Material))?;
-            if material.color != color.unwrap_or(Color::NONE) {
-                material.color = color.unwrap_or(Color::NONE);
-            }
-        }
         // CPU-only empty updates do not replace a previously uploaded GPU mesh.
-        set_mesh_visibility(world, entity, color.is_some() && region.is_some())?;
+        set_mesh_visibility(world, entity, has_paint && region.is_some())?;
         let aabb = bounds;
         if world.get::<Aabb>(entity) != Some(&aabb) {
             world.entity_mut(entity).insert(aabb);
@@ -902,9 +912,7 @@ fn set_mesh_visibility(world: &mut World, entity: Entity, visible: bool) -> RawR
 }
 
 fn release_assets(world: &mut World, assets: &ShapeRender) {
-    world
-        .resource_mut::<Assets<ColorMaterial>>()
-        .remove(assets.fill_material.id());
+    assets.fill_material.release(world);
     world
         .resource_mut::<Assets<ColorMaterial>>()
         .remove(assets.stroke_material.id());
@@ -914,9 +922,12 @@ fn release_shape(
     event: On<Discard<ShapeRender>>,
     shapes: Query<&ShapeRender>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut gradients: ResMut<Assets<paint::GradientMaterial>>,
 ) {
     if let Ok(assets) = shapes.get(event.entity) {
-        materials.remove(assets.fill_material.id());
+        assets
+            .fill_material
+            .release_from(&mut materials, &mut gradients);
         materials.remove(assets.stroke_material.id());
     }
 }
@@ -930,6 +941,7 @@ fn release_renderer(event: On<Remove<Renderer>>, mut commands: Commands) {
 impl Plugin for CanvasPlugin {
     fn build(&self, app: &mut App) {
         crate::alpha::install(app);
+        paint::install(app);
         #[cfg(feature = "png_export")]
         crate::export::install(app);
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
@@ -968,6 +980,9 @@ impl Plugin for CanvasPlugin {
             .register_type::<crate::CanvasPath>()
             .register_type::<crate::CanvasPathCommand>()
             .register_type::<CanvasPaint>()
+            .register_type::<CanvasFill>()
+            .register_type::<crate::CanvasGradientStops>()
+            .register_type::<crate::CanvasColorStop>()
             .register_type::<ViewState>()
             .add_observer(release_shape)
             .add_observer(release_renderer)

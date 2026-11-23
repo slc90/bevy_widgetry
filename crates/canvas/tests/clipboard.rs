@@ -15,7 +15,7 @@ fn rectangle(world: &mut World, document: Entity, x: f32) -> Entity {
         },
         Transform::from_xyz(x, 5.0, 0.0),
         CanvasPaint {
-            fill: Some(Color::srgb(0.4, 0.7, 0.9)),
+            fill: Some(Color::srgb(0.4, 0.7, 0.9).into()),
             ..default()
         },
     )

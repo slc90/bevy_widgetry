@@ -101,7 +101,7 @@ pub enum CanvasLineJoin {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct CanvasPaint {
-    pub fill: Option<Color>,
+    pub fill: Option<crate::CanvasFill>,
     pub fill_rule: CanvasFillRule,
     pub stroke: Option<CanvasStroke>,
 }
@@ -109,7 +109,7 @@ pub struct CanvasPaint {
 impl Default for CanvasPaint {
     fn default() -> Self {
         Self {
-            fill: Some(Color::WHITE),
+            fill: Some(Color::WHITE.into()),
             fill_rule: CanvasFillRule::NonZero,
             stroke: None,
         }
@@ -232,7 +232,7 @@ impl CanvasDocument {
                 })
                 .input(crate::CanvasInput::Rectangle(rectangle))
                 .input(crate::CanvasInput::Transform(transform))
-                .input(crate::CanvasInput::Paint(paint))
+                .input(crate::CanvasInput::paint(paint))
         })
     }
 
@@ -295,7 +295,7 @@ impl CanvasDocument {
                 })
                 .input(crate::CanvasInput::Ellipse(ellipse))
                 .input(crate::CanvasInput::Transform(transform))
-                .input(crate::CanvasInput::Paint(paint))
+                .input(crate::CanvasInput::paint(paint))
         })
     }
 
@@ -357,7 +357,7 @@ impl CanvasDocument {
                     value: document,
                 })
                 .input(crate::CanvasInput::Transform(transform))
-                .input(crate::CanvasInput::Paint(paint))
+                .input(crate::CanvasInput::paint(paint))
         })
     }
 
@@ -406,7 +406,7 @@ impl CanvasDocument {
                     value: shape,
                 })
                 .input(crate::CanvasInput::Transform(transform))
-                .input(crate::CanvasInput::Paint(paint))
+                .input(crate::CanvasInput::paint(paint))
         })
     }
 
@@ -546,7 +546,7 @@ impl CanvasDocument {
                 })
                 .input(crate::CanvasInput::Rectangle(rectangle))
                 .input(crate::CanvasInput::Transform(transform))
-                .input(crate::CanvasInput::Paint(paint))
+                .input(crate::CanvasInput::paint(paint))
         })
     }
 
@@ -596,7 +596,7 @@ impl CanvasDocument {
                 })
                 .input(crate::CanvasInput::Ellipse(ellipse))
                 .input(crate::CanvasInput::Transform(transform))
-                .input(crate::CanvasInput::Paint(paint))
+                .input(crate::CanvasInput::paint(paint))
         })
     }
 
@@ -767,7 +767,7 @@ impl CanvasRectangle {
             error
                 .input(crate::CanvasInput::Rectangle(*self))
                 .input(crate::CanvasInput::Transform(*transform))
-                .input(crate::CanvasInput::Paint(*paint))
+                .input(crate::CanvasInput::paint(*paint))
         })
     }
 
@@ -804,7 +804,7 @@ impl CanvasRectangle {
             error
                 .input(crate::CanvasInput::Rectangle(*self))
                 .input(crate::CanvasInput::Transform(*transform))
-                .input(crate::CanvasInput::Paint(*paint))
+                .input(crate::CanvasInput::paint(*paint))
         })
     }
 
@@ -844,7 +844,7 @@ fn bounds_from_extent(transform: &Affine3A, extent: DVec2, issue: CanvasIssue) -
     Ok(bounds)
 }
 
-fn finite_color(color: Color) -> bool {
+pub(crate) fn finite_color(color: Color) -> bool {
     color
         .to_linear()
         .to_f32_array()
@@ -864,11 +864,12 @@ pub(crate) fn validate_transform_and_paint(transform: &Transform, paint: &Canvas
     {
         return Err(crate::error::invalid(crate::CanvasIssue::Transform));
     }
-    if paint.fill.is_some_and(|color| !finite_color(color))
-        || paint.stroke.is_some_and(|stroke| {
-            !finite_color(stroke.color) || !stroke.width.is_finite() || stroke.width <= 0.0
-        })
-    {
+    if let Some(fill) = paint.fill {
+        fill.validate()?;
+    }
+    if paint.stroke.is_some_and(|stroke| {
+        !finite_color(stroke.color) || !stroke.width.is_finite() || stroke.width <= 0.0
+    }) {
         return Err(crate::error::invalid(crate::CanvasIssue::Paint));
     }
     Ok(())
@@ -897,7 +898,7 @@ impl CanvasGeometry {
             error
                 .input(crate::CanvasInput::Geometry(self.clone()))
                 .input(crate::CanvasInput::Transform(*transform))
-                .input(crate::CanvasInput::Paint(*paint))
+                .input(crate::CanvasInput::paint(*paint))
         })
     }
 
@@ -923,7 +924,7 @@ impl CanvasGeometry {
             error
                 .input(crate::CanvasInput::Geometry(self.clone()))
                 .input(crate::CanvasInput::Transform(*transform))
-                .input(crate::CanvasInput::Paint(*paint))
+                .input(crate::CanvasInput::paint(*paint))
         })
     }
 
@@ -957,7 +958,7 @@ impl CanvasGeometry {
             error
                 .input(crate::CanvasInput::Geometry(self.clone()))
                 .input(crate::CanvasInput::Transform(*local))
-                .input(crate::CanvasInput::Paint(*paint))
+                .input(crate::CanvasInput::paint(*paint))
         })
     }
 }
@@ -998,7 +999,7 @@ impl CanvasEllipse {
             error
                 .input(crate::CanvasInput::Ellipse(*self))
                 .input(crate::CanvasInput::Transform(*transform))
-                .input(crate::CanvasInput::Paint(*paint))
+                .input(crate::CanvasInput::paint(*paint))
         })
     }
 
@@ -1023,7 +1024,7 @@ impl CanvasEllipse {
             error
                 .input(crate::CanvasInput::Ellipse(*self))
                 .input(crate::CanvasInput::Transform(*transform))
-                .input(crate::CanvasInput::Paint(*paint))
+                .input(crate::CanvasInput::paint(*paint))
         })
     }
 

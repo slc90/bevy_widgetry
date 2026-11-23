@@ -67,6 +67,7 @@
 | `flowchart.rs` | 六种预设的局部轮廓、尺寸、取消、提交与历史，菱形的轮廓命中、编辑副本与分组导出。 |
 | `connectors.rs` | 直线与折线路由、路由点编辑、方向锚点和自动跟随、箭头和标签的投影与命中、画序、图层／组、历史和 SVG 导出。 |
 | `grid.rs` | View 网格和对象吸附设置，Pan／Zoom 投影，参考线、资源回收、命中与 SVG 隔离，以及绘制、移动和节点吸附。 |
+| `gradients.rs` | 色标顺序与校验、Paint 事务、Shape 局部坐标、SVG 定义、手柄预览、Esc 与同帧释放和共享 Mesh。 |
 | `batch.rs` | 多形状批量移动／删除、顺序和提交原子性。 |
 | `alignment.rs` | 六种对齐、双轴等间距、旋转与嵌套边界、双 View 可见区域、失败原子性和历史。 |
 | `clipboard.rs` | 跨文档快照、嵌套顺序、父子去重、连接线引用、目标图层、整体撤销与失败保护。 |
@@ -89,7 +90,7 @@
 | `path_append.rs` | Path 命令追加、几何验证与失败保留。 |
 | `pen.rs` | Pen 草稿、Path 生成与预览／提交状态。 |
 | `png.rs` | 无 GPU 或不满足导出前置条件时的 PNG API 错误。 |
-| `png_gpu.rs` | 显式 Windows／DX12 GPU 像素、形状与 Connector 快照、异步 PNG 与资源生命周期。 |
+| `png_gpu.rs` | 显式 Windows／DX12 GPU 像素、形状与 Connector 快照、渐变硬边与局部径向缩放、异步 PNG 与资源生命周期。 |
 | `renderer.rs` | 真实 BSN／Layout／Mesh、离屏资源和多 View Render。 |
 | `rotation.rs` | 交互旋转、角度连续性、吸附及控制柄。 |
 | `scaling.rs` | 八向缩放、镜像、比例与固定锚点。 |
@@ -107,6 +108,7 @@
 | `src/geometry.rs` | 几何 AABB、Transform、描边和形状边界计算。 |
 | `src/grid.rs` | 最近交点、文档步长和逻辑像素容差。 |
 | `src/renderer/grid.rs` | 可见网格相位、主线间隔、缩放密度和网格生成上限。 |
+| `src/renderer/paint.rs` | 多 View 渐变材质隔离、提交后同步及释放。 |
 | `src/export/png.rs` | PNG 尺寸、内存预算、异步生命周期与超时／取消。 |
 | `src/model.rs` | Document／Shape 局部语义和模型有效性。 |
 | `src/order.rs` | 多图层与嵌套容器的展平、重排、删除和祖先归属。 |

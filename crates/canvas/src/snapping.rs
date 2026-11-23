@@ -227,7 +227,7 @@ impl Tolerance {
 
 fn visible_paint(entry: &EntityRef) -> bool {
     entry.get::<crate::CanvasPaint>().is_none_or(|paint| {
-        paint.fill.is_some_and(|fill| fill.alpha() > 0.0)
+        paint.fill.is_some_and(crate::CanvasFill::visible)
             || paint
                 .stroke
                 .is_some_and(|stroke| stroke.color.alpha() > 0.0)

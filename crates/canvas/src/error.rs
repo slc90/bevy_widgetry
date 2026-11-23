@@ -113,6 +113,8 @@ pub enum CanvasIssue {
     EmptyPath,
     FlattenedBounds,
     GeometryKind,
+    GradientGeometry,
+    GradientStops,
     GroupMembers,
     GroupTarget,
     GroupTransform,
@@ -202,7 +204,7 @@ pub enum CanvasInput {
         value: CanvasPathCommand,
     },
     Transform(Transform),
-    Paint(CanvasPaint),
+    Paint(Box<CanvasPaint>),
 }
 
 #[derive(Debug)]
@@ -419,6 +421,10 @@ impl CanvasFailureState {
 }
 
 impl CanvasInput {
+    pub fn paint(paint: CanvasPaint) -> Self {
+        Self::Paint(Box::new(paint))
+    }
+
     fn key(&self, values: &mut Vec<u64>) {
         const INPUT_ENTITY: u64 = 0;
         const INPUT_ENTITIES: u64 = 1;
@@ -557,7 +563,38 @@ impl CanvasInput {
             Self::Paint(p) => {
                 values.extend([INPUT_PAINT, p.fill_rule as u64, u64::from(p.fill.is_some())]);
                 if let Some(fill) = p.fill {
-                    floats(values, fill.to_linear().to_f32_array());
+                    let stops = match fill {
+                        crate::CanvasFill::Solid(color) => {
+                            values.push(0);
+                            floats(values, color.to_linear().to_f32_array());
+                            None
+                        }
+                        crate::CanvasFill::LinearGradient { start, end, stops } => {
+                            values.push(1);
+                            floats(values, start.to_array().into_iter().chain(end.to_array()));
+                            Some(stops)
+                        }
+                        crate::CanvasFill::RadialGradient {
+                            center,
+                            radius,
+                            stops,
+                        } => {
+                            values.push(2);
+                            floats(values, [center.x, center.y, radius]);
+                            Some(stops)
+                        }
+                    };
+                    if let Some(stops) = stops {
+                        values.push(stops.as_slice().len() as u64);
+                        for stop in stops.as_slice() {
+                            floats(
+                                values,
+                                [stop.offset]
+                                    .into_iter()
+                                    .chain(stop.color.to_linear().to_f32_array()),
+                            );
+                        }
+                    }
                 }
                 values.push(u64::from(p.stroke.is_some()));
                 if let Some(s) = p.stroke {

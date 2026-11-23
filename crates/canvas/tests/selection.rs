@@ -323,7 +323,7 @@ fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together(
             },
             Transform::from_xyz(0.0, 0.0, 9000.0),
             CanvasPaint {
-                fill: Some(Color::srgb(1.0, 0.0, 0.0)),
+                fill: Some(Color::srgb(1.0, 0.0, 0.0).into()),
                 stroke: Some(CanvasStroke {
                     color: Color::srgb(0.0, 1.0, 0.0),
                     width: 4.0,
@@ -342,7 +342,7 @@ fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together(
             },
             Transform::from_xyz(0.0, 0.0, -9000.0),
             CanvasPaint {
-                fill: Some(Color::srgb(0.0, 0.0, 1.0)),
+                fill: Some(Color::srgb(0.0, 0.0, 1.0).into()),
                 stroke: None,
                 ..Default::default()
             },

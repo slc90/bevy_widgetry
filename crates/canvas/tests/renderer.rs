@@ -24,7 +24,7 @@ fn fixture(scale: f32) -> (App, Entity, Entity, Entity) {
         },
         Transform::from_xyz(-20.0, 30.0, 0.0).with_rotation(Quat::from_rotation_z(0.3)),
         CanvasPaint {
-            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
             stroke: Some(CanvasStroke {
                 color: Color::BLACK,
                 width: 10.0,
@@ -227,7 +227,7 @@ fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_
         ],
     };
     let paint = CanvasPaint {
-        fill: Some(Color::srgb(0.6, 0.2, 0.8)),
+        fill: Some(Color::srgb(0.6, 0.2, 0.8).into()),
         stroke: Some(CanvasStroke {
             color: Color::WHITE,
             width: 4.0,
@@ -258,13 +258,13 @@ fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_
         .iter(app.world())
         .filter(|(_, n, m)| {
             n.as_str() == "CanvasFill"
-                && app
-                    .world()
-                    .resource::<Assets<ColorMaterial>>()
-                    .get(&m.0)
-                    .unwrap()
-                    .color
-                    == paint.fill.unwrap()
+                && CanvasFill::from(
+                    app.world()
+                        .resource::<Assets<ColorMaterial>>()
+                        .get(&m.0)
+                        .unwrap()
+                        .color,
+                ) == paint.fill.unwrap()
         })
         .map(|(e, _, _)| e)
         .collect::<Vec<_>>();
@@ -335,7 +335,7 @@ fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_
         p.clone(),
         transform,
         CanvasPaint {
-            fill: Some(Color::srgb(0.2, 0.8, 0.6)),
+            fill: Some(Color::srgb(0.2, 0.8, 0.6).into()),
             stroke: paint.stroke.map(|s| CanvasStroke {
                 color: Color::BLACK,
                 ..s
@@ -452,7 +452,7 @@ fn ellipse_views_share_geometry_update_parameters_and_reclaim_only_their_own_ass
         radii: Vec2::new(30.0, 15.0),
     };
     let paint = CanvasPaint {
-        fill: Some(Color::srgb(0.0, 1.0, 0.0)),
+        fill: Some(Color::srgb(0.0, 1.0, 0.0).into()),
         stroke: Some(CanvasStroke {
             color: Color::WHITE,
             width: 6.0,
@@ -485,13 +485,13 @@ fn ellipse_views_share_geometry_update_parameters_and_reclaim_only_their_own_ass
         .iter(app.world())
         .filter(|(_, name, _, material)| {
             name.as_str() == "CanvasFill"
-                && app
-                    .world()
-                    .resource::<Assets<ColorMaterial>>()
-                    .get(&material.0)
-                    .unwrap()
-                    .color
-                    == paint.fill.unwrap()
+                && CanvasFill::from(
+                    app.world()
+                        .resource::<Assets<ColorMaterial>>()
+                        .get(&material.0)
+                        .unwrap()
+                        .color,
+                ) == paint.fill.unwrap()
         })
         .map(|(entity, _, mesh, _)| (entity, mesh.0.clone()))
         .collect::<Vec<_>>();

@@ -31,7 +31,7 @@ fn ellipse_preview_is_local_and_release_creates_one_typed_shape_on_top_in_four_d
             let (mut app, a, b, original, _, mut at) = fixture(id, 1.5, 1.0);
             let document = CanvasView::document(app.world(), a).unwrap().unwrap();
             let paint = CanvasPaint {
-                fill: Some(Color::srgba(0.2, 0.5, 0.8, 0.5)),
+                fill: Some(Color::srgba(0.2, 0.5, 0.8, 0.5).into()),
                 stroke: Some(CanvasStroke {
                     width: 2.0,
                     ..default()

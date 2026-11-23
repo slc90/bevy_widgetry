@@ -65,7 +65,7 @@ fn fixture(count: usize) -> Result<Fixture> {
                     0.0,
                 ),
                 CanvasPaint {
-                    fill: Some(Color::WHITE),
+                    fill: Some(Color::WHITE.into()),
                     stroke: Some(CanvasStroke {
                         color: Color::BLACK,
                         width: 3.0,
@@ -132,7 +132,7 @@ fn main() -> Result {
                             path,
                             Transform::from_xyz(shift, 0.0, 0.0),
                             CanvasPaint {
-                                fill: Some(Color::WHITE),
+                                fill: Some(Color::WHITE.into()),
                                 fill_rule: if mode == "paint_update" && i % 2 == 0 {
                                     CanvasFillRule::EvenOdd
                                 } else {

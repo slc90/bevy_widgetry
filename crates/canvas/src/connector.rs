@@ -157,7 +157,7 @@ impl CanvasConnectorStyle {
     pub(crate) fn paint(self) -> CanvasPaint {
         CanvasPaint {
             fill: (self.start_arrow != CanvasArrow::None || self.end_arrow != CanvasArrow::None)
-                .then_some(self.stroke.color),
+                .then_some(self.stroke.color.into()),
             stroke: Some(self.stroke),
             ..default()
         }
@@ -292,7 +292,7 @@ impl CanvasConnector {
             return (
                 CanvasGeometry::Path(marker),
                 CanvasPaint {
-                    fill: Some(self.style.stroke.color),
+                    fill: Some(self.style.stroke.color.into()),
                     ..Default::default()
                 },
                 None,

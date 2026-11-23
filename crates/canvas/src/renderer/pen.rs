@@ -3,7 +3,8 @@ const HANDLE_COLOR: Color = Color::srgb(1.0, 0.75, 0.1);
 const PREVIEW_DEPTH: f32 = 102.0;
 const HANDLE_DEPTH_OFFSET: f32 = 0.02;
 
-use crate::error::CanvasResult as Result;
+use super::paint::{GradientMaterial, PaintMaterial};
+use crate::{CanvasFill, error::CanvasResult as Result};
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
     prelude::*,
@@ -21,7 +22,7 @@ struct Preview {
     data: crate::pen::Preview,
     zoom: f32,
     meshes: [Handle<Mesh>; 3],
-    materials: [Handle<ColorMaterial>; 3],
+    materials: [PaintMaterial; 3],
     nodes: [Entity; 3],
 }
 
@@ -52,24 +53,22 @@ fn meshes(data: &crate::pen::Preview, zoom: f32) -> Result<[Mesh; 3]> {
     Ok([fill, stroke, crate::geometry::mesh(positions, indices)])
 }
 
-fn colors(data: &crate::pen::Preview) -> [Color; 3] {
+fn fills(data: &crate::pen::Preview) -> [Option<CanvasFill>; 3] {
     [
-        data.paint.fill.unwrap_or(Color::NONE),
-        data.paint.stroke.map_or(Color::NONE, |s| s.color),
-        HANDLE_COLOR,
+        data.paint.fill,
+        data.paint
+            .stroke
+            .map(|stroke| CanvasFill::Solid(stroke.color)),
+        Some(CanvasFill::Solid(HANDLE_COLOR)),
     ]
 }
 
-fn release_assets(
-    world: &mut World,
-    meshes: &[Handle<Mesh>; 3],
-    materials: &[Handle<ColorMaterial>; 3],
-) {
+fn release_assets(world: &mut World, meshes: &[Handle<Mesh>; 3], materials: &[PaintMaterial; 3]) {
     for h in meshes {
         world.resource_mut::<Assets<Mesh>>().remove(h.id());
     }
     for h in materials {
-        world.resource_mut::<Assets<ColorMaterial>>().remove(h.id());
+        h.release(world);
     }
 }
 
@@ -99,7 +98,8 @@ pub(super) fn sync(
         if p.data == data && p.zoom == zoom {
             return Ok(Some(e));
         }
-        let (handles, materials, nodes) = (p.meshes.clone(), p.materials.clone(), p.nodes);
+        let (handles, mut materials, nodes) = (p.meshes.clone(), p.materials.clone(), p.nodes);
+        let previous_fills = fills(&p.data);
         if p.data.name != data.name {
             world.entity_mut(e).insert(Name::new(data.name));
         }
@@ -115,18 +115,17 @@ pub(super) fn sync(
                 Visibility::Hidden
             });
         }
-        for (h, color) in materials.iter().zip(colors(&data)) {
-            *world
-                .resource_mut::<Assets<ColorMaterial>>()
-                .get_mut(h)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenPreviewMaterial))? =
-                ColorMaterial::from(color);
+        for (index, fill) in fills(&data).into_iter().enumerate() {
+            if fill != previous_fills[index] {
+                materials[index].update(world, nodes[index], fill, ColorMaterial::from)?;
+            }
         }
         let mut p = world
             .get_mut::<Preview>(e)
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::PenPreview))?;
         p.data = data;
         p.zoom = zoom;
+        p.materials = materials;
         return Ok(Some(e));
     }
     let generated = meshes(&data, zoom)?;
@@ -138,13 +137,8 @@ pub(super) fn sync(
         }
     });
     let meshes = generated.map(|m| world.resource_mut::<Assets<Mesh>>().add(m));
-    let materials = colors(&data).map(|c| {
-        world
-            .resource_mut::<Assets<ColorMaterial>>()
-            .add(ColorMaterial::from(c))
-    });
+    let materials = fills(&data).map(|fill| PaintMaterial::add(world, fill, ColorMaterial::from));
     let [fill, stroke, handles] = meshes.clone();
-    let [fill_material, stroke_material, handle_material] = materials.clone();
     let [fv, sv, hv] = visibility;
     let name = data.name;
     let result = bevy_widgetry_core::scene::spawn_scene(
@@ -153,11 +147,11 @@ pub(super) fn sync(
             Parts {fill:#Fill,stroke:#Stroke,handles:#Handles}
             template(move |_|Ok(Name::new(name))) template(move |_|Ok(ChildOf(content))) Transform::from_xyz(0.0,0.0,PREVIEW_DEPTH) Visibility::default()
             Children [
-                #Fill template(move |_|Ok(Mesh2d(fill.clone()))) template(move |_|Ok(MeshMaterial2d(fill_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(fv)) Transform::default() Pickable::IGNORE NoFrustumCulling
+                #Fill template(move |_|Ok(Mesh2d(fill.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(fv)) Transform::default() Pickable::IGNORE NoFrustumCulling
             --
-                #Stroke template(move |_|Ok(Mesh2d(stroke.clone()))) template(move |_|Ok(MeshMaterial2d(stroke_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(sv)) Transform::from_xyz(0.0,0.0,super::STROKE_DEPTH_OFFSET) Pickable::IGNORE NoFrustumCulling
+                #Stroke template(move |_|Ok(Mesh2d(stroke.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(sv)) Transform::from_xyz(0.0,0.0,super::STROKE_DEPTH_OFFSET) Pickable::IGNORE NoFrustumCulling
             --
-                #Handles template(move |_|Ok(Mesh2d(handles.clone()))) template(move |_|Ok(MeshMaterial2d(handle_material.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(hv)) Transform::from_xyz(0.0,0.0,HANDLE_DEPTH_OFFSET) Pickable::IGNORE NoFrustumCulling
+                #Handles template(move |_|Ok(Mesh2d(handles.clone()))) template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(hv)) Transform::from_xyz(0.0,0.0,HANDLE_DEPTH_OFFSET) Pickable::IGNORE NoFrustumCulling
             ]
         },
     );
@@ -169,6 +163,9 @@ pub(super) fn sync(
                 return Err(crate::error::missing(crate::CanvasPart::PenPreviewParts));
             };
             let nodes = [parts.fill, parts.stroke, parts.handles];
+            for (node, material) in nodes.into_iter().zip(&materials) {
+                material.attach(world, node);
+            }
             world.entity_mut(e).insert(Preview {
                 data,
                 zoom,
@@ -191,13 +188,14 @@ fn release(
     previews: Query<&Preview>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut gradients: ResMut<Assets<GradientMaterial>>,
 ) {
     if let Ok(p) = previews.get(event.entity) {
         for h in &p.meshes {
             meshes.remove(h.id());
         }
         for h in &p.materials {
-            materials.remove(h.id());
+            h.release_from(&mut materials, &mut gradients);
         }
     }
 }

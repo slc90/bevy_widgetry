@@ -76,6 +76,7 @@ fn builtin_shaders_resolve_through_embedded_source() {
     for shader in [
         bevy_widgetry_asset::BuiltinShader::HoldButton,
         bevy_widgetry_asset::BuiltinShader::CanvasStraightAlpha,
+        bevy_widgetry_asset::BuiltinShader::CanvasGradient,
     ] {
         let path = shader.path();
         assert_eq!(path.source(), &AssetSourceId::from("embedded"));

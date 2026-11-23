@@ -541,18 +541,39 @@ pub(crate) fn set_shape(
         |edit| &edit.geometry,
     )?;
     let transform_changed = record_transform(world, document, item, &transform)?;
-    let paint_changed = record_component(
-        world,
-        document,
-        item,
-        &paint,
-        |edit| &mut edit.paint,
-        |edit| &edit.paint,
-    )?;
+    let paint_changed = record_paint(world, document, item, &paint)?;
     if geometry_changed || transform_changed || paint_changed {
         world.insert_batch([(item, (geometry, transform, paint))]);
     }
     Ok(())
+}
+
+pub(crate) fn set_paint(
+    world: &mut World,
+    document: Entity,
+    item: Entity,
+    paint: CanvasPaint,
+) -> Result {
+    if record_paint(world, document, item, &paint)? {
+        world.insert_batch([(item, paint)]);
+    }
+    Ok(())
+}
+
+fn record_paint(
+    world: &mut World,
+    document: Entity,
+    item: Entity,
+    paint: &CanvasPaint,
+) -> Result<bool> {
+    record_component(
+        world,
+        document,
+        item,
+        paint,
+        |edit| &mut edit.paint,
+        |edit| &edit.paint,
+    )
 }
 
 fn record_component<T: Component + Clone + PartialEq>(

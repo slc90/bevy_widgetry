@@ -150,7 +150,7 @@ fn gpu_high_resolution_tiles_keep_request_snapshots_and_release_all_resources() 
     };
     let transform = Transform::from_xyz(960.0, 540.0, 0.0);
     let paint = CanvasPaint {
-        fill: Some(Color::srgba(0.2, 0.5, 0.8, 0.5)),
+        fill: Some(Color::srgba(0.2, 0.5, 0.8, 0.5).into()),
         ..default()
     };
     let shape =
@@ -187,7 +187,7 @@ fn gpu_high_resolution_tiles_keep_request_snapshots_and_release_all_resources() 
             rectangle,
             transform,
             CanvasPaint {
-                fill: Some(Color::WHITE),
+                fill: Some(Color::WHITE.into()),
                 ..default()
             },
         )
@@ -239,7 +239,7 @@ fn gpu_empty_paints_clear_views_and_export_transparent_regions_without_waiting_f
         commands: vec![MoveTo(Vec2::new(-30.0, 0.0)), LineTo(Vec2::new(30.0, 0.0))],
     };
     let paint = CanvasPaint {
-        fill: Some(Color::WHITE),
+        fill: Some(Color::WHITE.into()),
         stroke: Some(CanvasStroke {
             width: 6.0,
             ..default()
@@ -334,7 +334,7 @@ fn gpu_nested_group_view_and_png_preserve_projected_positions_and_paints() {
             },
             Transform::from_translation(center.extend(0.0)),
             CanvasPaint {
-                fill: Some(color),
+                fill: Some(color.into()),
                 ..default()
             },
         )
@@ -415,7 +415,7 @@ fn gpu_mixed_exports_match_views_and_svg_keep_holes_and_own_their_snapshots() {
             },
             Transform::from_xyz(-80.0, -70.0, 9000.0).with_rotation(Quat::from_rotation_z(0.4)),
             CanvasPaint {
-                fill: Some(Color::WHITE),
+                fill: Some(Color::WHITE.into()),
                 ..default()
             },
         )
@@ -428,7 +428,7 @@ fn gpu_mixed_exports_match_views_and_svg_keep_holes_and_own_their_snapshots() {
             },
             Transform::from_xyz(0.0, 0.0, 9000.0),
             CanvasPaint {
-                fill: Some(Color::srgb(1.0, 0.5, 0.0)),
+                fill: Some(Color::srgb(1.0, 0.5, 0.0).into()),
                 stroke: Some(CanvasStroke {
                     width: 3.0,
                     ..default()
@@ -496,7 +496,7 @@ fn gpu_mixed_exports_match_views_and_svg_keep_holes_and_own_their_snapshots() {
             },
             Transform::from_xyz(0.0, 0.0, -9000.0).with_scale(Vec3::new(-1.0, 1.0, 0.0)),
             CanvasPaint {
-                fill: Some(Color::srgba(0.0, 0.0, 1.0, 0.5)),
+                fill: Some(Color::srgba(0.0, 0.0, 1.0, 0.5).into()),
                 fill_rule: rule,
                 stroke: Some(CanvasStroke {
                     color: Color::srgba(1.0, 0.0, 0.0, 0.5),
@@ -704,7 +704,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
     };
     let transform = Transform::from_xyz(-100.0, -60.0, 0.0);
     let paint = CanvasPaint {
-        fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+        fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
         stroke: Some(CanvasStroke {
             color: Color::srgba(0.0, 0.0, 1.0, 0.25),
             width: 10.0,
@@ -965,7 +965,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         rectangle,
         transform,
         CanvasPaint {
-            fill: Some(Color::srgb(0.0, 1.0, 0.0)),
+            fill: Some(Color::srgb(0.0, 1.0, 0.0).into()),
             stroke: None,
             ..Default::default()
         },
@@ -1003,7 +1003,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         },
         Transform::from_xyz(0.0, 0.0, 9000.0),
         CanvasPaint {
-            fill: Some(Color::srgb(1.0, 0.0, 0.0)),
+            fill: Some(Color::srgb(1.0, 0.0, 0.0).into()),
             stroke: Some(CanvasStroke {
                 color: Color::srgb(0.0, 1.0, 0.0),
                 width: 4.0,
@@ -1022,7 +1022,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         },
         Transform::from_xyz(0.0, 0.0, -9000.0),
         CanvasPaint {
-            fill: Some(Color::srgb(0.0, 0.0, 1.0)),
+            fill: Some(Color::srgb(0.0, 0.0, 1.0).into()),
             stroke: None,
             ..Default::default()
         },
@@ -1184,7 +1184,7 @@ fn ellipse_view_scaled(
         CanvasEllipse { radii },
         Transform::from_scale(scale.extend(1.0)),
         CanvasPaint {
-            fill,
+            fill: fill.map(Into::into),
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                 width,
@@ -1965,7 +1965,7 @@ fn gpu_path_subpaths_curves_and_default_stroke_render_as_one_shape() {
         path,
         Transform::default(),
         CanvasPaint {
-            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                 width: 10.0,
@@ -2070,7 +2070,7 @@ fn gpu_path_distant_subpath_preserves_small_contour_precision() {
             CanvasPath { commands },
             Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
             CanvasPaint {
-                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
                 stroke: Some(CanvasStroke {
                     color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                     width: 0.1,
@@ -2129,7 +2129,7 @@ fn gpu_path_overlapping_subpaths_keep_nonzero_winding_and_single_stroke_coverage
             CanvasPath { commands },
             Transform::default(),
             CanvasPaint {
-                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
                 stroke: None,
                 ..Default::default()
             },
@@ -2196,7 +2196,7 @@ fn gpu_path_crossing_remote_subpath_does_not_erase_small_fill() {
             },
             Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
             CanvasPaint {
-                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
                 stroke: Some(CanvasStroke {
                     color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                     width: 0.1,
@@ -2238,7 +2238,7 @@ fn gpu_path_crossing_remote_subpath_does_not_erase_small_fill() {
         },
         Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
         CanvasPaint {
-            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
             stroke: None,
             ..Default::default()
         },
@@ -2277,7 +2277,7 @@ fn gpu_path_remote_retraced_segment_preserves_local_fill() {
             },
             Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
             CanvasPaint {
-                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
                 stroke: None,
                 ..Default::default()
             },
@@ -2315,7 +2315,7 @@ fn gpu_path_nearby_nonadjacent_vertices_preserve_self_intersection_fill() {
             },
             Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
             CanvasPaint {
-                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
                 stroke: None,
                 ..Default::default()
             },
@@ -2354,7 +2354,7 @@ fn gpu_path_narrow_axis_aligned_notch_survives_remote_vertices() {
             },
             Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
             CanvasPaint {
-                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
                 stroke: None,
                 ..Default::default()
             },
@@ -2394,7 +2394,7 @@ fn gpu_path_overlapping_slender_contours_keep_bounded_geometry() {
         },
         Transform::from_scale(Vec3::new(100.0, 1e-10, 1.0)),
         CanvasPaint {
-            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
             stroke: None,
             ..Default::default()
         },
@@ -2710,7 +2710,7 @@ fn gpu_path_fill_curves_are_independent_of_a_huge_stroke_width() {
         },
         Transform::default(),
         CanvasPaint {
-            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5).into()),
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                 width: 1e10,
@@ -2969,4 +2969,130 @@ fn gpu_connector_snapshot_renders_route_arrowheads_and_label() {
     assert!(image.enumerate_pixels().any(|(x, y, p)| {
         (55..85).contains(&x) && (10..48).contains(&y) && p.0.iter().all(|&channel| channel > 200)
     }));
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_gradient_snapshot_preserves_hard_stops_and_local_radial_scaling() {
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let red = Color::srgb(1.0, 0.0, 0.0);
+    let blue = Color::srgb(0.0, 0.0, 1.0);
+    let palette = |stops: &[(f32, Color)]| {
+        CanvasGradientStops::new(
+            &stops
+                .iter()
+                .map(|&(offset, color)| CanvasColorStop { offset, color })
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    };
+    CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(60.0),
+            corner_radius: 0.0,
+        },
+        Transform::from_xyz(40.0, 40.0, 0.0),
+        CanvasPaint {
+            fill: Some(CanvasFill::LinearGradient {
+                start: Vec2::new(-30.0, 0.0),
+                end: Vec2::new(30.0, 0.0),
+                stops: palette(&[(0.0, red), (0.5, red), (0.5, blue), (1.0, blue)]),
+            }),
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasDocument::create_ellipse(
+        app.world_mut(),
+        document,
+        CanvasEllipse {
+            radii: Vec2::splat(24.0),
+        },
+        Transform::from_xyz(120.0, 40.0, 0.0).with_scale(Vec3::new(1.5, 1.0, 1.0)),
+        CanvasPaint {
+            fill: Some(CanvasFill::RadialGradient {
+                center: Vec2::ZERO,
+                radius: 20.0,
+                stops: palette(&[
+                    (0.0, Color::srgba(1.0, 1.0, 1.0, 0.5)),
+                    (1.0, Color::srgba(0.0, 0.0, 0.0, 0.5)),
+                ]),
+            }),
+            ..default()
+        },
+    )
+    .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("gradient.png");
+    let svg = directory.path().join("gradient.svg");
+    CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(30.0),
+            corner_radius: 0.0,
+        },
+        Transform::from_xyz(40.0, 98.0, 0.0),
+        CanvasPaint {
+            fill: Some(CanvasFill::LinearGradient {
+                start: Vec2::ZERO,
+                end: Vec2::new(1.2e-38, 0.0),
+                stops: palette(&[(0.0, red), (1.0, blue)]),
+            }),
+            ..default()
+        },
+    )
+    .unwrap();
+    let region = Some(Rect::new(0.0, 0.0, 160.0, 120.0));
+    CanvasDocument::export_svg(app.world_mut(), document, &svg, region).unwrap();
+    CanvasDocument::export_png(
+        app.world_mut(),
+        document,
+        &file,
+        CanvasPngOptions { region, scale: 1.0 },
+    )
+    .unwrap();
+    finish(&mut app, 1);
+    assert_eq!(
+        app.world().resource::<Completed>().0[0].1,
+        Ok(UVec2::new(160, 120))
+    );
+    let image = image::open(file).unwrap().to_rgba8();
+    assert_eq!(image.get_pixel(39, 40).0, [255, 0, 0, 255]);
+    assert_eq!(image.get_pixel(40, 40).0, [0, 0, 255, 255]);
+    let center = image.get_pixel(120, 40).0;
+    let horizontal = image.get_pixel(135, 40).0;
+    let vertical = image.get_pixel(120, 50).0;
+    assert!(center[0] > 245 && center[3].abs_diff(128) <= 2);
+    assert!(horizontal[0] < 200 && horizontal[0].abs_diff(vertical[0]) <= 3);
+    assert_eq!(image.get_pixel(120, 68).0, [0; 4]);
+    assert_eq!(image.get_pixel(35, 107).0, [255, 0, 0, 255]);
+    assert_eq!(image.get_pixel(45, 107).0, [0, 0, 255, 255]);
+
+    let tree = resvg::usvg::Tree::from_data(
+        &std::fs::read(svg).unwrap(),
+        &resvg::usvg::Options::default(),
+    )
+    .unwrap();
+    let mut vector = resvg::tiny_skia::Pixmap::new(160, 120).unwrap();
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::identity(),
+        &mut vector.as_mut(),
+    );
+    let before_edge = vector.pixel(38, 40).unwrap();
+    let after_edge = vector.pixel(41, 40).unwrap();
+    assert_eq!(
+        (before_edge.red(), before_edge.blue(), before_edge.alpha()),
+        (255, 0, 255)
+    );
+    assert_eq!(
+        (after_edge.red(), after_edge.blue(), after_edge.alpha()),
+        (0, 255, 255)
+    );
+    assert!(vector.pixel(120, 40).unwrap().alpha().abs_diff(128) <= 2);
+    assert_eq!(vector.pixel(120, 68).unwrap().alpha(), 0);
 }

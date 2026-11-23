@@ -185,7 +185,10 @@ fn connector_points_prefer_visible_path_anchors_and_ignore_hidden_layers() {
                 ],
             },
             Transform::IDENTITY,
-            CanvasPaint { fill, ..default() },
+            CanvasPaint {
+                fill: fill.map(Into::into),
+                ..default()
+            },
         )
         .unwrap();
     }

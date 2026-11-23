@@ -10,6 +10,7 @@ use bevy::{
 #[derive(Component)]
 struct Overlay {
     data: crate::nodes::Overlay,
+    gradient: bool,
     zoom: f32,
     mesh: Handle<Mesh>,
     material: Handle<ColorMaterial>,
@@ -23,13 +24,21 @@ pub(super) fn sync(
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
     (|| -> Result<Option<Entity>> {
-    let data = if crate::CanvasView::_mode(world, view)? == crate::CanvasMode::PathNodeEdit {
-        crate::CanvasView::_single_selection(world, view)?
-            .map(|shape| crate::nodes::overlay(world, shape))
-            .transpose()?
-            .flatten()
-    } else {
-        None
+    let mode = crate::CanvasView::_mode(world, view)?;
+    let gradient = mode == crate::CanvasMode::GradientEdit;
+    let name = if gradient { "CanvasGradientHandles" } else { "CanvasPathNodes" };
+    let data = match mode {
+        crate::CanvasMode::PathNodeEdit => {
+            crate::CanvasView::_single_selection(world, view)?
+                .map(|shape| crate::nodes::overlay(world, shape))
+                .transpose()?.flatten()
+        }
+        crate::CanvasMode::GradientEdit => {
+            crate::CanvasView::_single_selection(world, view)?
+                .map(|shape| crate::gradient_edit::overlay(world, view, shape))
+                .transpose()?.flatten().map(crate::nodes::gradient_overlay)
+        }
+        _ => None,
     };
     let Some(data) = data else {
         if let Some(e) = current {
@@ -42,10 +51,11 @@ pub(super) fn sync(
         let previous = world
             .get::<Overlay>(e)
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodeOverlay))?;
-        if previous.data == data && previous.zoom == zoom {
+        if previous.data == data && previous.zoom == zoom && previous.gradient == gradient {
             return Ok(Some(e));
         }
         let handle = previous.mesh.clone();
+        let rename = previous.gradient != gradient;
         *world
             .resource_mut::<Assets<Mesh>>()
             .get_mut(&handle)
@@ -56,6 +66,10 @@ pub(super) fn sync(
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodeOverlay))?;
         previous.data = data;
         previous.zoom = zoom;
+        previous.gradient = gradient;
+        if rename {
+            world.entity_mut(e).insert(Name::new(name));
+        }
         return Ok(Some(e));
     }
     let mesh = world
@@ -68,7 +82,7 @@ pub(super) fn sync(
     match bevy_widgetry_core::scene::spawn_scene(
         world,
         bsn! {
-            Name("CanvasPathNodes") template(move |_|Ok(Mesh2d(m.clone()))) template(move |_|Ok(MeshMaterial2d(c.clone())))
+            template(move |_|Ok(Name::new(name))) template(move |_|Ok(Mesh2d(m.clone()))) template(move |_|Ok(MeshMaterial2d(c.clone())))
             template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(ChildOf(content)))
             Transform::from_xyz(0.0,0.0,NODE_DEPTH) Visibility::default() Pickable::IGNORE NoFrustumCulling
         },
@@ -76,6 +90,7 @@ pub(super) fn sync(
         Ok(e) => {
             world.entity_mut(e).insert(Overlay {
                 data,
+                gradient,
                 zoom,
                 mesh,
                 material,

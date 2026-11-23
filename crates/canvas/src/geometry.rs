@@ -110,7 +110,7 @@ pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(M
     .map_err(|error| {
         error
             .input(crate::CanvasInput::Geometry(geometry.clone()))
-            .input(crate::CanvasInput::Paint(paint))
+            .input(crate::CanvasInput::paint(paint))
             .context(bevy_widgetry_diagnostics::ErrorFrame::new(
                 "canvas.geometry.meshes",
             ))

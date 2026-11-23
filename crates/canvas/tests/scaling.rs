@@ -55,7 +55,7 @@ fn all_eight_handles_scale_in_local_axes_and_keep_the_opposite_edge_or_corner_fi
                     .with_rotation(Quat::from_rotation_z(0.4))
                     .with_scale(shape_scale);
                 let paint = CanvasPaint {
-                    fill: Some(Color::srgba(0.3, 0.5, 0.8, 0.7)),
+                    fill: Some(Color::srgba(0.3, 0.5, 0.8, 0.7).into()),
                     stroke: Some(CanvasStroke {
                         color: Color::BLACK,
                         width: 8.0,

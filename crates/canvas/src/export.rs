@@ -1,4 +1,4 @@
-use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasPathCommand};
+use crate::{CanvasDocument, CanvasFill, CanvasGeometry, CanvasPaint, CanvasPathCommand};
 use bevy::math::Affine3A;
 use bevy::prelude::*;
 use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
@@ -166,7 +166,7 @@ impl CanvasDocument {
                 STANDARD.encode_string(bevy_widgetry_asset::BuiltinFont::Default.bytes(), &mut svg);
                 svg.push_str(") format('truetype')}</style>");
             }
-            for shape in &snapshot.shapes {
+            for (index, shape) in snapshot.shapes.iter().enumerate() {
                 let matrix = svg_matrix(shape.projection);
                 let validate_color = |c: Color| {
                     let value = c.to_srgba();
@@ -184,7 +184,14 @@ impl CanvasDocument {
                 };
                 match &shape.artwork {
                     Artwork::Geometry(geometry, paint) => {
-                        write_svg_geometry(&mut svg, geometry, *paint, &matrix, validate_color)?;
+                        write_svg_geometry(
+                            &mut svg,
+                            geometry,
+                            *paint,
+                            &matrix,
+                            index,
+                            validate_color,
+                        )?;
                     }
                     Artwork::Text(text) => {
                         validate_color(text.style().color)?;
@@ -202,6 +209,7 @@ impl CanvasDocument {
                                     ..paint
                                 },
                                 &matrix,
+                                index,
                                 validate_color,
                             )?;
                         }
@@ -213,6 +221,7 @@ impl CanvasDocument {
                                 ..paint
                             },
                             &matrix,
+                            index,
                             validate_color,
                         )?;
                         if let Some((label, at)) = connector.label_at() {
@@ -252,6 +261,7 @@ fn write_svg_geometry(
     geometry: &CanvasGeometry,
     paint: CanvasPaint,
     matrix: &str,
+    index: usize,
     validate_color: impl Fn(Color) -> std::result::Result<(), CanvasExportError>,
 ) -> std::result::Result<(), CanvasExportError> {
     let geometry = match geometry {
@@ -273,14 +283,13 @@ fn write_svg_geometry(
         CanvasGeometry::Path(path) => format!("path d=\"{}\"", path_data(path)),
     };
     if let Some(fill) = paint.fill {
-        validate_color(fill)?;
+        let fill = svg_fill(svg, fill, index, &validate_color)?;
         let rule = match paint.fill_rule {
             crate::CanvasFillRule::NonZero => "nonzero",
             crate::CanvasFillRule::EvenOdd => "evenodd",
         };
         svg.push_str(&format!(
-            "<{geometry} transform=\"{matrix}\" {} fill-rule=\"{rule}\" stroke=\"none\" />",
-            color("fill", fill)
+            "<{geometry} transform=\"{matrix}\" {fill} fill-rule=\"{rule}\" stroke=\"none\" />"
         ));
     }
     if let Some(stroke) = paint.stroke {
@@ -298,6 +307,59 @@ fn write_svg_geometry(
         svg.push_str(&format!("<{geometry} transform=\"{matrix}\" fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{cap}\" stroke-linejoin=\"{join}\" stroke-miterlimit=\"4\" />",color("stroke",stroke.color),f64::from(stroke.width)));
     }
     Ok(())
+}
+
+fn svg_fill(
+    svg: &mut String,
+    fill: CanvasFill,
+    index: usize,
+    validate_color: impl Fn(Color) -> std::result::Result<(), CanvasExportError>,
+) -> std::result::Result<String, CanvasExportError> {
+    let (element, coordinates, stops) = match fill {
+        CanvasFill::Solid(solid) => {
+            validate_color(solid)?;
+            return Ok(color("fill", solid));
+        }
+        CanvasFill::LinearGradient { start, end, stops } => {
+            let [x1, y1] = start.to_array();
+            let [x2, y2] = end.to_array();
+            (
+                "linearGradient",
+                format!("x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\""),
+                stops,
+            )
+        }
+        CanvasFill::RadialGradient {
+            center,
+            radius,
+            stops,
+        } => {
+            let [cx, cy] = center.to_array();
+            (
+                "radialGradient",
+                format!("cx=\"{cx}\" cy=\"{cy}\" r=\"{radius}\""),
+                stops,
+            )
+        }
+    };
+    let id = format!("canvas-gradient-{index}");
+    svg.push_str(&format!(
+        "<defs><{element} id=\"{id}\" gradientUnits=\"userSpaceOnUse\" {coordinates}>"
+    ));
+    for stop in stops.as_slice() {
+        validate_color(stop.color)?;
+        let c = stop.color.to_srgba();
+        svg.push_str(&format!(
+            "<stop offset=\"{}\" stop-color=\"rgb({}%,{}%,{}%)\" stop-opacity=\"{}\" />",
+            stop.offset,
+            c.red * 100.0,
+            c.green * 100.0,
+            c.blue * 100.0,
+            c.alpha
+        ));
+    }
+    svg.push_str(&format!("</{element}></defs>"));
+    Ok(format!("fill=\"url(#{id})\""))
 }
 
 fn path_data(path: &crate::CanvasPath) -> String {

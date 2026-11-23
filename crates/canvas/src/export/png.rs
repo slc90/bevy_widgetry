@@ -10,10 +10,13 @@ const MAX_TILE_EDGE_ERROR_PIXELS: f64 = 1.0 / 256.0;
 const EXPORT_RENDER_TIMEOUT: Duration = Duration::from_secs(30);
 
 use super::{CanvasExportError, CanvasRenderIssue};
-use crate::{CanvasContainer, CanvasDocument};
+use crate::{
+    CanvasContainer, CanvasDocument, CanvasFill,
+    renderer::paint::{PaintMaterial, blended},
+};
 use bevy::prelude::*;
 use bevy::{
-    asset::RenderAssetUsages,
+    asset::{RenderAssetUsages, UntypedAssetId},
     camera::{RenderTarget, ScalingMode, visibility::RenderLayers},
     core_pipeline::fullscreen_material::FullscreenMaterialPipelineId,
     ecs::entity::EntityHashMap,
@@ -323,7 +326,7 @@ struct RenderResources {
     target: OffscreenTarget,
     scene: Entity,
     meshes: Vec<Handle<Mesh>>,
-    materials: Vec<Handle<ColorMaterial>>,
+    materials: Vec<PaintMaterial>,
     ready: Arc<AtomicBool>,
     started: Instant,
     capture: Option<Entity>,
@@ -446,7 +449,7 @@ struct Parts {
 #[extract_app(RenderApp)]
 struct Probe {
     meshes: Vec<AssetId<Mesh>>,
-    materials: Vec<AssetId<ColorMaterial>>,
+    materials: Vec<UntypedAssetId>,
     image: AssetId<Image>,
     atlases: Option<Vec<AssetId<Image>>>,
     ready: Arc<AtomicBool>,
@@ -888,7 +891,7 @@ fn prepare(
         .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingOperation))?;
     let probe = Probe {
         meshes: job.meshes.iter().map(Handle::id).collect(),
-        materials: job.materials.iter().map(Handle::id).collect(),
+        materials: job.materials.iter().map(PaintMaterial::id).collect(),
         image: job.target.image().id(),
         atlases: texts.is_empty().then(Vec::new),
         ready,
@@ -999,17 +1002,19 @@ fn geometry(
                 bevy_widgetry_diagnostics::ErrorFrame::new("canvas.png.geometry"),
             ))
         })?;
-        for (color, mesh, offset) in [
+        for (fill, mesh, offset) in [
             (paint.fill, fill_mesh, 0.0),
-            (paint.stroke.map(|s| s.color), stroke_mesh, 0.5),
+            (
+                paint.stroke.map(|s| CanvasFill::Solid(s.color)),
+                stroke_mesh,
+                0.5,
+            ),
         ] {
-            let Some(color) = color.filter(|_| mesh.count_vertices() > 0) else {
+            let Some(fill) = fill.filter(|_| mesh.count_vertices() > 0) else {
                 continue;
             };
             let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-            let material = world
-                .resource_mut::<Assets<ColorMaterial>>()
-                .add(ColorMaterial { color, ..default() });
+            let material = PaintMaterial::add(world, Some(fill), blended);
             let mut export = world
                 .get_mut::<CanvasPngExport>(job)
                 .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingOperation))?;
@@ -1023,18 +1028,18 @@ fn geometry(
             transform.scale.z = 1.0;
             // Map document paint order to bounded export depth independently of model Z.
             transform.translation.z = depth + offset / count * EXPORT_PAINT_DEPTH_RANGE;
-            spawn_scene(
+            let entity = spawn_scene(
                 world,
                 bsn! {
                     Name("CanvasPngPaint") template(move |_|Ok(ChildOf(parent)))
                     template(move |_|Ok(Mesh2d(mesh.clone())))
-                    template(move |_|Ok(MeshMaterial2d(material.clone())))
                     template(move |_|Ok(RenderLayers::none().with(layer)))
                     template(move |_|Ok(transform)) Visibility::default() Pickable::IGNORE
                     bevy::camera::visibility::NoFrustumCulling
                 },
             )
             .map_err(CanvasExportError::Scene)?;
+            material.attach(world, entity);
         }
     }
     Ok(texts)
@@ -1360,9 +1365,7 @@ fn cleanup_resources(world: &mut World) {
             world.resource_mut::<Assets<Mesh>>().remove(mesh.id());
         }
         for material in resources.materials {
-            world
-                .resource_mut::<Assets<ColorMaterial>>()
-                .remove(material.id());
+            material.release(world);
         }
         let mut handoff = bridge.lock();
         if let Err(error) = cleanup {
@@ -1589,7 +1592,7 @@ mod tests {
         }
         let document = app.world_mut().spawn(CanvasDocument).id();
         let paint = CanvasPaint {
-            fill: Some(Color::srgba(0.1, 0.5, 0.8, 0.4)),
+            fill: Some(Color::srgba(0.1, 0.5, 0.8, 0.4).into()),
             fill_rule: CanvasFillRule::EvenOdd,
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.8, 0.1, 0.2, 0.5),

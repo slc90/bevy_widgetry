@@ -92,7 +92,7 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
             let (mut app, a, b, original, _, mut at) = fixture(id, 1.5, 1.0);
             let document = CanvasView::document(app.world(), a).unwrap().unwrap();
             let paint = CanvasPaint {
-                fill: Some(Color::srgba(0.2, 0.5, 0.8, 0.5)),
+                fill: Some(Color::srgba(0.2, 0.5, 0.8, 0.5).into()),
                 stroke: Some(CanvasStroke {
                     color: Color::BLACK,
                     width: 2.0,
@@ -463,7 +463,7 @@ fn new_same_frame_drawing_reuses_preview_with_its_own_colors_and_stroke_width() 
         let id = pointer_ids()[1];
         let (mut app, a, _, _, _, mut at) = fixture(id, 1.0, 1.0);
         let paint = CanvasPaint {
-            fill: Some(Color::srgb(1.0, 0.0, 0.0)),
+            fill: Some(Color::srgb(1.0, 0.0, 0.0).into()),
             stroke: Some(CanvasStroke {
                 color: Color::BLACK,
                 width: 2.0,
@@ -472,7 +472,7 @@ fn new_same_frame_drawing_reuses_preview_with_its_own_colors_and_stroke_width() 
             ..Default::default()
         };
         let next = CanvasPaint {
-            fill,
+            fill: fill.map(Into::into),
             stroke: Some(CanvasStroke {
                 color: Color::srgb(0.0, 0.0, 1.0),
                 width: 8.0,
@@ -511,7 +511,13 @@ fn new_same_frame_drawing_reuses_preview_with_its_own_colors_and_stroke_width() 
         let children = app.world().get::<Children>(preview).unwrap();
         let (fill, stroke) = (children[0], children[1]);
         for (entity, color) in [
-            (fill, next.fill.unwrap_or(Color::NONE)),
+            (
+                fill,
+                match next.fill {
+                    Some(CanvasFill::Solid(color)) => color,
+                    _ => Color::NONE,
+                },
+            ),
             (stroke, next.stroke.unwrap().color),
         ] {
             let material = &app

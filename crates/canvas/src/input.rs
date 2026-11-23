@@ -165,6 +165,7 @@ enum DragAction {
     Rotate(crate::rotate::Rotate),
     Parameters(crate::parameters::Edit),
     Node(crate::nodes::Edit),
+    Gradient(crate::gradient_edit::Edit),
     MoveSelection(crate::move_selection::MoveSelection),
     Pen {
         document: Entity,
@@ -197,6 +198,7 @@ impl DragAction {
             Self::Scale(edit) => Some(edit.document),
             Self::Parameters(edit) => Some(edit.document),
             Self::Node(edit) => Some(edit.document),
+            Self::Gradient(edit) => Some(edit.document),
             Self::Pan | Self::Contour | Self::Draw { .. } | Self::Pen { .. } => None,
         }
     }
@@ -416,7 +418,9 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 }
                 if matches!(
                     CanvasView::_mode(world, press.entity)?,
-                    crate::CanvasMode::Select | crate::CanvasMode::PathNodeEdit
+                    crate::CanvasMode::Select
+                        | crate::CanvasMode::PathNodeEdit
+                        | crate::CanvasMode::GradientEdit
                 ) && world
                     .get_resource::<ButtonInput<KeyCode>>()
                     .is_some_and(|keys| {
@@ -437,6 +441,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 let drawing = match CanvasView::_mode(world, press.entity)? {
                     crate::CanvasMode::Select
                     | crate::CanvasMode::PathNodeEdit
+                    | crate::CanvasMode::GradientEdit
                     | crate::CanvasMode::Pen(_)
                     | crate::CanvasMode::Polyline(_)
                     | crate::CanvasMode::Connector(_)
@@ -506,6 +511,20 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                         start,
                         current: point,
                         paint,
+                    }
+                } else if CanvasView::_mode(world, press.entity)? == crate::CanvasMode::GradientEdit
+                {
+                    if let (Some(shape), Some(document)) = (
+                        CanvasView::_single_selection(world, press.entity)?,
+                        CanvasView::_document(world, press.entity)?,
+                    ) && let Some(edit) =
+                        crate::gradient_edit::Edit::begin(world, document, shape, point, zoom)?
+                    {
+                        DragAction::Gradient(edit)
+                    } else {
+                        let selection = crate::selection::hit_test(world, press.entity, point)?;
+                        CanvasView::_set_selection_in_world(world, press.entity, selection)?;
+                        return Ok(());
                     }
                 } else if CanvasView::_mode(world, press.entity)? == crate::CanvasMode::PathNodeEdit
                 {
@@ -871,7 +890,9 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
         {
             drag.local = local;
         }
-        if let Some(token) = drag.edit {
+        if let Some(token) = drag.edit
+            && !matches!(&drag.action, DragAction::Gradient(_))
+        {
             crate::history::apply(world, token, |world, _| {
                 advance_action(world, entity, &drag, local, zoom)
             })?;
@@ -970,6 +991,17 @@ fn advance_action(
                 return Ok(());
             }
             edit.apply(world, entity, point)?;
+        }
+        DragAction::Gradient(_) => {
+            let point = CanvasView::_center(world, entity)? + local / zoom;
+            if let Some(mut state) = world.get_mut::<DragState>(entity)
+                && let Some(Drag {
+                    action: DragAction::Gradient(edit),
+                    ..
+                }) = &mut state.0
+            {
+                edit.sample(point);
+            }
         }
         DragAction::MoveSelection(group) => {
             let point = CanvasView::_center(world, entity)? + local / zoom;
@@ -1131,6 +1163,7 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
             DragAction::Pan => true,
             DragAction::Contour => crate::basic_path::press_valid(world, entity),
             DragAction::MoveSelection(group) => group.valid(world, entity),
+            DragAction::Gradient(edit) => edit.valid(world, entity),
             DragAction::Node(edit) => {
                 world
                     .get::<crate::view::ViewState>(entity)
@@ -1435,6 +1468,17 @@ pub(crate) fn preview(
     }
 }
 
+pub(crate) fn gradient_preview(
+    world: &World,
+    entity: Entity,
+) -> Option<(Entity, crate::CanvasPaint)> {
+    let drag = world.get::<DragState>(entity)?.0.as_ref()?;
+    if let DragAction::Gradient(edit) = &drag.action {
+        return Some((edit.shape, edit.preview));
+    }
+    None
+}
+
 fn finish(world: &mut World, entity: Entity, point: Vec2) -> Result {
     (|| -> Result {
         let Some(drag) = world
@@ -1455,6 +1499,22 @@ fn finish(world: &mut World, entity: Entity, point: Vec2) -> Result {
             DragAction::MoveSelection(_) => {
                 advance(world, entity, point)?;
                 complete_selection(world, entity)
+            }
+            DragAction::Gradient(edit) => {
+                let result = (|| {
+                    advance(world, entity, point)?;
+                    if let (Some(token), Some((shape, paint))) =
+                        (drag.edit, gradient_preview(world, entity))
+                        && shape == edit.shape
+                    {
+                        crate::history::apply(world, token, |world, document| {
+                            crate::CanvasDocument::_update_paint(world, document, edit.shape, paint)
+                        })?;
+                    }
+                    Ok(())
+                })();
+                release_gesture(world, entity);
+                result
             }
             DragAction::Draw { .. } => {
                 advance(world, entity, point)?;
@@ -1722,6 +1782,7 @@ fn is_escape_press(input: &KeyboardInput) -> bool {
 fn focused_escape(
     mut event: On<FocusedInput<KeyboardInput>>,
     views: Query<&crate::view::ViewState>,
+    gestures: Query<&DragState>,
     messages: Option<Res<Messages<KeyboardInput>>>,
     mut dispatch: ResMut<EscapeDispatch>,
     mut commands: Commands,
@@ -1744,7 +1805,16 @@ fn focused_escape(
         return;
     }
     let state = views.get(view);
-    if state.is_ok_and(|state| matches!(state.mode, crate::CanvasMode::Pen(_))) {
+    if state.is_ok_and(|state| {
+        matches!(state.mode, crate::CanvasMode::Pen(_))
+            || (state.mode == crate::CanvasMode::GradientEdit
+                && gestures.get(view).is_ok_and(|gesture| {
+                    gesture
+                        .0
+                        .as_ref()
+                        .is_some_and(|drag| matches!(&drag.action, DragAction::Gradient(_)))
+                }))
+    }) {
         event.propagate(false);
     }
     if !event.input.repeat && state.is_ok() && id.is_none_or(|id| dispatch.handled.insert(id)) {
@@ -1793,6 +1863,10 @@ fn apply_escape(world: &mut World, view: Entity, window: Entity) -> bevy::prelud
         if !keyboard_available(world, view, window) {
             return Ok(());
         }
+        if gradient_preview(world, view).is_some() {
+            release_gesture(world, view);
+            return Ok(());
+        }
         match CanvasView::_mode(world, view)? {
             crate::CanvasMode::Rectangle(_)
             | crate::CanvasMode::Ellipse(_)
@@ -1805,7 +1879,9 @@ fn apply_escape(world: &mut World, view: Entity, window: Entity) -> bevy::prelud
             | crate::CanvasMode::Polygon(_) => {
                 CanvasView::_set_mode_in_world(world, view, crate::CanvasMode::Select)?;
             }
-            crate::CanvasMode::Select | crate::CanvasMode::PathNodeEdit => {
+            crate::CanvasMode::Select
+            | crate::CanvasMode::PathNodeEdit
+            | crate::CanvasMode::GradientEdit => {
                 CanvasView::_leave_group(world, view)?;
             }
             crate::CanvasMode::Pen(_) => {
@@ -1985,6 +2061,7 @@ fn cancel_unavailable(world: &mut World) -> bevy::prelude::Result {
                         | DragAction::Pen { .. }
                         | DragAction::Contour
                         | DragAction::MoveSelection(_)
+                        | DragAction::Gradient(_)
                 )
                 && continuing(world, entity, &drag)
             {

@@ -615,7 +615,7 @@ fn shape_observers_see_matching_geometry_paint_and_transform_during_replay() {
     };
     let transform = Transform::from_xyz(4.0, 3.0, 0.0);
     let paint = CanvasPaint {
-        fill: Some(Color::BLACK),
+        fill: Some(Color::BLACK.into()),
         ..default()
     };
     CanvasDocument::update_rectangle(&mut world, document, shape, rectangle, transform, paint)
@@ -943,7 +943,7 @@ fn replay_restores_shape_paint_path_topology_and_order() {
     CanvasDocument::clear_history(&mut world, document).unwrap();
     let paint = CanvasDocument::edit(&mut world, document, |world, edit| {
         let paint = CanvasPaint {
-            fill: Some(Color::BLACK),
+            fill: Some(Color::BLACK.into()),
             ..default()
         };
         CanvasDocument::update_rectangle(

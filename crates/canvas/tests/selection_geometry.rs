@@ -170,7 +170,7 @@ fn transparent_fill_has_geometry_but_none_and_ellipse_bounding_box_corners_do_no
             Transform::from_rotation(Quat::from_rotation_z(0.4))
                 .with_scale(Vec3::new(-1.2, 0.8, 0.0)),
             CanvasPaint {
-                fill: Some(Color::NONE),
+                fill: Some(Color::NONE.into()),
                 ..default()
             },
         )

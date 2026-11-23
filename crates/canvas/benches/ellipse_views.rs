@@ -55,7 +55,7 @@ fn fixture(count: usize, contour: &str) -> Result<Fixture> {
                 )
                 .with_scale(scale),
                 CanvasPaint {
-                    fill: Some(Color::WHITE),
+                    fill: Some(Color::WHITE.into()),
                     stroke: Some(CanvasStroke {
                         color: Color::BLACK,
                         width: stroke_width,
@@ -112,7 +112,7 @@ fn main() -> Result {
                             ellipse,
                             Transform::from_xyz(shift, 0.0, 0.0).with_scale(fixture.scale),
                             CanvasPaint {
-                                fill: Some(Color::WHITE),
+                                fill: Some(Color::WHITE.into()),
                                 stroke: Some(CanvasStroke {
                                     color: Color::BLACK,
                                     width: fixture.stroke_width,
