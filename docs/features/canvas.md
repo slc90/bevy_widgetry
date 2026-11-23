@@ -330,7 +330,7 @@ fn exported(event: On<CanvasPngExportFinished>) -> Result {
 
 启用 `CanvasObjectSnap::connector_anchors` 后，创建连接线或拖动端点时可以捕捉形状的 North、East、South、West 锚点。中间路由点一直是自由点。锚点位置随形状尺寸、局部变换和祖先组变换更新，跨图层和跨组连接使用同一 Document 坐标。拖离锚点范围会解除附着，删除目标则保留端点最后的局部位置。撤销删除可以恢复附着。目标所在图层隐藏期间，连接线一并从 View 和导出中隐藏。路线长度为零时，View 在重合点显示一个可选中的标记，导出会省略该连接线。
 
-宿主可通过 `CanvasDocument::shape_anchor` 查询锚点的 Document 坐标，通过 `set_connector_endpoint` 提交 `CanvasConnectorEndpoint::Free` 或 `Attached`，通过 `connector_endpoint` 查询端点。自由端点的读写使用直属容器坐标。矩形与椭圆提供精确的四向位置，单闭合 Path 在局部轮廓上取相应方向的最外侧交点。其余 Path 可继续使用自由端点。读取 `CanvasConnector::route` 会获得当前解析后的绘图项局部几何。
+宿主可通过 `CanvasDocument::shape_anchor` 查询锚点的 Document 坐标，通过 `set_connector_endpoint` 提交 `CanvasConnectorEndpoint::Free` 或 `Attached`，通过 `connector_endpoint` 查询端点。自由端点的读写使用直属容器坐标。矩形与椭圆提供精确的四向位置。Path 可由一个闭合轮廓及若干独立开放线段组成，锚点取闭合轮廓上相应方向的最外侧交点。数据库预设的顶盖横线即为开放线段。其余 Path 可继续使用自由端点。读取 `CanvasConnector::route` 会获得当前解析后的绘图项局部几何。
 
 ## 网格与吸附
 

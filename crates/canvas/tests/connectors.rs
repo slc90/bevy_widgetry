@@ -34,6 +34,36 @@ fn svg(world: &mut World, document: Entity) -> String {
 }
 
 #[test]
+fn database_cap_keeps_cardinal_anchors_on_the_closed_body() {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    let Some(CanvasGeometry::Path(path)) =
+        CanvasFlowchartPreset::Database.geometry(Vec2::new(140.0, 70.0))
+    else {
+        panic!("database preset must produce a path");
+    };
+    let database = CanvasDocument::create_path(
+        &mut world,
+        document,
+        path,
+        Transform::from_xyz(90.0, 40.0, 0.0),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    for (anchor, expected) in [
+        (CanvasAnchor::North, Vec2::new(90.0, 5.0)),
+        (CanvasAnchor::East, Vec2::new(160.0, 40.0)),
+        (CanvasAnchor::South, Vec2::new(90.0, 75.0)),
+        (CanvasAnchor::West, Vec2::new(20.0, 40.0)),
+    ] {
+        let actual = CanvasDocument::shape_anchor(&world, document, database, anchor)
+            .unwrap()
+            .unwrap();
+        assert!(actual.distance(expected) <= 0.01, "{anchor:?}: {actual:?}");
+    }
+}
+
+#[test]
 fn cardinal_anchors_project_parameter_geometry_and_closed_path_contours() {
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();

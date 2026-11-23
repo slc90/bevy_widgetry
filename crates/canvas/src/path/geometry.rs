@@ -53,15 +53,20 @@ fn contours(source: &CanvasPath) -> Result<Vec<Contour>> {
 }
 
 pub(crate) fn closed_outline(source: &CanvasPath) -> Result<Option<(Vec<DVec2>, DVec2)>> {
-    let mut contours = contours(source)?;
-    if contours.len() != 1 {
-        return Ok(None);
-    }
-    let Some(contour) = contours.pop().filter(|contour| {
-        contour.closed && contour.points.len() >= 3 && contour.max.cmpgt(contour.min).all()
-    }) else {
+    // An open, single-line contour contributes stroke without changing the filled outline.
+    let mut outlines = contours(source)?
+        .into_iter()
+        .filter(|contour| contour.closed || contour.points.len() != 2);
+    let Some(contour) = outlines.next() else {
         return Ok(None);
     };
+    if outlines.next().is_some()
+        || !contour.closed
+        || contour.points.len() < 3
+        || !contour.max.cmpgt(contour.min).all()
+    {
+        return Ok(None);
+    }
     let center = (contour.min + contour.max) * 0.5;
     let twice_area: f64 = contour
         .points

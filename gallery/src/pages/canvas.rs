@@ -14,6 +14,7 @@ use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::{button::WidgetryButton, canvas::*, scene::spawn_scene, text::WidgetryText};
 use std::path::PathBuf;
 
+mod flowchart;
 mod gradient;
 mod icons;
 mod layers;
@@ -75,6 +76,7 @@ enum DemoKind {
     #[default]
     Basics,
     Icons,
+    Flowchart,
 }
 
 #[derive(Component)]
@@ -101,6 +103,7 @@ enum Action {
     DrawLine,
     DrawPolyline,
     DrawConnector,
+    ToggleConnectorArrow(CanvasConnectorEnd),
     Flowchart(CanvasFlowchartPreset),
     DrawPolygon,
     RegularPolygon,
@@ -182,10 +185,12 @@ fn refresh_geometry(
 fn add_rectangle(
     world: &mut World,
     target: impl Into<bevy_widgetry::canvas::CanvasEditTarget>,
+    layer: CanvasLayerId,
 ) -> std::result::Result<(), bevy_widgetry::job::JobFailure> {
-    CanvasDocument::create_rectangle(
+    CanvasDocument::create_rectangle_in_layer(
         world,
         target,
+        layer,
         CanvasRectangle {
             corner_radius: 12.0,
             size: Vec2::new(120.0, 80.0),
@@ -198,9 +203,10 @@ fn add_rectangle(
 
 fn basics(
     world: &mut World,
+    document: Entity,
     edit: CanvasEditToken,
 ) -> std::result::Result<(), bevy_widgetry::job::JobFailure> {
-    add_rectangle(world, edit)?;
+    add_rectangle(world, edit, CanvasDocument::default_layer(world, document)?)?;
     let details = CanvasDocument::create_layer(world, edit, 1, "Layer 2")?;
     CanvasDocument::create_ellipse_in_layer(
         world,
@@ -314,8 +320,9 @@ fn prepare_document(world: &mut World, kind: DemoKind) -> Result<Entity> {
         .spawn((Name::new("CanvasDemoDocument"), CanvasDocument))
         .id();
     let result = CanvasDocument::edit(world, document, |world, edit| match kind {
-        DemoKind::Basics => basics(world, edit),
+        DemoKind::Basics => basics(world, document, edit),
         DemoKind::Icons => icons::populate(world, document, edit),
+        DemoKind::Flowchart => flowchart::populate(world, document, edit),
     })
     .and_then(|()| CanvasDocument::clear_history(world, document));
     if let Err(error) = result {
@@ -406,6 +413,7 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
     let description = match kind {
         DemoKind::Basics => CanvasKey::Description,
         DemoKind::Icons => CanvasKey::IconsDescription,
+        DemoKind::Flowchart => CanvasKey::FlowchartDescription,
     };
     let controls: Vec<_> = [
         (CanvasKey::Select, Action::Select), (CanvasKey::Rectangle, Action::Rectangle),
@@ -413,6 +421,8 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
         (CanvasKey::DrawLine, Action::DrawLine),
         (CanvasKey::DrawPolyline, Action::DrawPolyline),
         (CanvasKey::DrawConnector, Action::DrawConnector),
+        (CanvasKey::ToggleStartArrow, Action::ToggleConnectorArrow(CanvasConnectorEnd::Start)),
+        (CanvasKey::ToggleEndArrow, Action::ToggleConnectorArrow(CanvasConnectorEnd::End)),
         (CanvasKey::DrawPolygon, Action::DrawPolygon),
         (CanvasKey::FlowTerminator, Action::Flowchart(CanvasFlowchartPreset::Terminator)),
         (CanvasKey::FlowDecision, Action::Flowchart(CanvasFlowchartPreset::Decision)),
@@ -466,7 +476,8 @@ fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
             Node {column_gap:px(CONTROL_GAP), row_gap:px(GROUP_GAP), flex_wrap:FlexWrap::Wrap}
             Children [
                 @demo_choice(CanvasKey::DemoBasics, DemoKind::Basics)--
-                @demo_choice(CanvasKey::DemoIcons, DemoKind::Icons)
+                @demo_choice(CanvasKey::DemoIcons, DemoKind::Icons)--
+                @demo_choice(CanvasKey::DemoFlowchart, DemoKind::Flowchart)
             ]--
             @localized(TextKey::Canvas(description)) WidgetryText Node {max_width:percent(100)}--
             Node {column_gap:px(CONTROL_GAP),row_gap:px(GROUP_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
@@ -906,6 +917,10 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 )
                 .map_err(|error| error.into_bevy_error())?;
             }
+            Action::ToggleConnectorArrow(end) => {
+                flowchart::toggle_arrow(world, demo.document, demo.main, end)
+                    .map_err(|error| error.into_bevy_error())?;
+            }
             Action::RegularPolygon | Action::Star | Action::Arc => {
                 use CanvasPathTool::*;
                 let (first, second) = match action {
@@ -964,7 +979,12 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                     .map_err(|error| error.into_bevy_error())?;
             }
             Action::Add => {
-                add_rectangle(world, demo.document).map_err(|error| error.into_bevy_error())?
+                if let Some(layer) = CanvasView::active_layer(world, demo.main)
+                    .map_err(|error| error.into_bevy_error())?
+                {
+                    add_rectangle(world, demo.document, layer)
+                        .map_err(|error| error.into_bevy_error())?;
+                }
             }
             Action::Group | Action::Ungroup => edit_groups(world, &demo, action)?,
             Action::Raise | Action::Lower | Action::Front | Action::Back => {
@@ -1381,7 +1401,8 @@ mod tests {
         app.add_observer(png_finished);
         let world = app.world_mut();
         let document = world.spawn(CanvasDocument).id();
-        add_rectangle(world, document).unwrap();
+        let layer = CanvasDocument::default_layer(world, document).unwrap();
+        add_rectangle(world, document, layer).unwrap();
         let result = world.spawn_empty().id();
         (
             app,

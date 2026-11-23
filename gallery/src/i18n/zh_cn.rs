@@ -138,6 +138,10 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Navigation(NavigationKey::Canvas) => "画布",
         TextKey::Canvas(key) => match key {
             super::CanvasKey::DemoBasics => "基础",
+            super::CanvasKey::DemoFlowchart => "流程图",
+            super::CanvasKey::FlowchartDescription => {
+                "拖动节点可观察连接线随动。选中连接线可编辑路由、箭头或标签。"
+            }
             super::CanvasKey::DemoIcons => "图标与几何",
             super::CanvasKey::IconsDescription => {
                 "进入分组编辑各个图标部件，也可以复制或对齐整组图标。"
@@ -187,6 +191,8 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             super::CanvasKey::DrawLine => "直线",
             super::CanvasKey::DrawPolyline => "折线",
             super::CanvasKey::DrawConnector => "连接线",
+            super::CanvasKey::ToggleStartArrow => "切换起点箭头",
+            super::CanvasKey::ToggleEndArrow => "切换终点箭头",
             super::CanvasKey::DrawConnectorBoth => "双向连接线",
             super::CanvasKey::RegularPolygon => "正多边形",
             super::CanvasKey::Star => "星形",
