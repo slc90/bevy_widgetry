@@ -844,6 +844,9 @@ pub(crate) enum TabsKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CanvasKey {
+    DemoBasics,
+    DemoIcons,
+    IconsDescription,
     Layers,
     LayerMain,
     LayerMainActive,

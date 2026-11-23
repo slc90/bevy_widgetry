@@ -137,6 +137,11 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         },
         TextKey::Navigation(NavigationKey::Canvas) => "画布",
         TextKey::Canvas(key) => match key {
+            super::CanvasKey::DemoBasics => "基础",
+            super::CanvasKey::DemoIcons => "图标与几何",
+            super::CanvasKey::IconsDescription => {
+                "进入分组编辑各个图标部件，也可以复制或对齐整组图标。"
+            }
             super::CanvasKey::Layers => "图层",
             super::CanvasKey::LayerMain => "在主视图使用",
             super::CanvasKey::LayerMainActive => "主视图活动层",

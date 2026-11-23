@@ -105,6 +105,9 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         },
         TextKey::Navigation(NavigationKey::Canvas) => "Canvas",
         TextKey::Canvas(key) => match key {
+            super::CanvasKey::DemoBasics => "Basics",
+            super::CanvasKey::DemoIcons => "Icons & Shapes",
+            super::CanvasKey::IconsDescription => "Edit the icon sets in their groups, or copy and align the groups together.",
             super::CanvasKey::Layers => "Layers",
             super::CanvasKey::LayerMain => "Use in main",
             super::CanvasKey::LayerMainActive => "Main active",

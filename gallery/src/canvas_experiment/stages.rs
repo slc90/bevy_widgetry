@@ -782,7 +782,7 @@ mod tests {
             },
             Transform::from_xyz(100.0, 100.0, 0.0),
             CanvasPaint {
-                fill: Some(Color::BLACK),
+                fill: Some(Color::BLACK.into()),
                 ..default()
             },
         )

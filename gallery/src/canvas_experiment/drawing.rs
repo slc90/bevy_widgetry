@@ -628,7 +628,7 @@ mod tests {
             ],
         });
         let paint = CanvasPaint {
-            fill: Some(Color::srgba(0.2, 0.3, 0.4, 0.5)),
+            fill: Some(Color::srgba(0.2, 0.3, 0.4, 0.5).into()),
             fill_rule: CanvasFillRule::EvenOdd,
             stroke: Some(CanvasStroke {
                 color: Color::linear_rgba(0.1, 0.2, 0.3, 0.4),

@@ -11,10 +11,11 @@ use crate::{
     i18n::{CanvasKey, LocalizedText, TextKey, localized, localized_args},
 };
 use bevy::{prelude::*, ui_widgets::Activate};
-use bevy_widgetry::{button::WidgetryButton, canvas::*, text::WidgetryText};
+use bevy_widgetry::{button::WidgetryButton, canvas::*, scene::spawn_scene, text::WidgetryText};
 use std::path::PathBuf;
 
 mod gradient;
+mod icons;
 mod layers;
 mod text;
 
@@ -53,6 +54,7 @@ impl Plugin for CanvasDemoPlugin {
 
 #[derive(Component, FromTemplate, Clone)]
 struct Demo {
+    kind: DemoKind,
     document: Entity,
     main: Entity,
     auxiliary: Entity,
@@ -66,6 +68,13 @@ struct Demo {
     scale: f32,
     segment: usize,
     align_to_view: bool,
+}
+
+#[derive(Component, Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum DemoKind {
+    #[default]
+    Basics,
+    Icons,
 }
 
 #[derive(Component)]
@@ -187,6 +196,135 @@ fn add_rectangle(
     Ok(())
 }
 
+fn basics(
+    world: &mut World,
+    edit: CanvasEditToken,
+) -> std::result::Result<(), bevy_widgetry::job::JobFailure> {
+    add_rectangle(world, edit)?;
+    let details = CanvasDocument::create_layer(world, edit, 1, "Layer 2")?;
+    CanvasDocument::create_ellipse_in_layer(
+        world,
+        edit,
+        details,
+        CanvasEllipse {
+            radii: Vec2::new(40.0, 25.0),
+        },
+        Transform::from_xyz(150.0, 0.0, 0.0),
+        CanvasPaint {
+            fill: Some(Color::srgba(1.0, 0.5, 0.1, 0.7).into()),
+            stroke: Some(CanvasStroke {
+                color: Color::srgb(1.0, 0.8, 0.2),
+                width: 4.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    )?;
+    CanvasDocument::create_ellipse(
+        world,
+        edit,
+        CanvasEllipse {
+            radii: Vec2::new(7.0, 5.0),
+        },
+        Transform::from_xyz(-153.0, 0.0, 0.0),
+        CanvasPaint {
+            fill: Some(Color::srgb(1.0, 0.5, 0.1).into()),
+            ..default()
+        },
+    )?;
+    let path = CanvasDocument::create_path(
+        world,
+        edit,
+        CanvasPath {
+            commands: vec![
+                CanvasPathCommand::MoveTo(Vec2::new(-45.0, 25.0)),
+                CanvasPathCommand::QuadTo {
+                    control: Vec2::new(-45.0, -35.0),
+                    to: Vec2::new(0.0, -35.0),
+                },
+                CanvasPathCommand::CubicTo {
+                    control1: Vec2::new(45.0, -35.0),
+                    control2: Vec2::new(45.0, 25.0),
+                    to: Vec2::new(0.0, 25.0),
+                },
+                CanvasPathCommand::Close,
+                CanvasPathCommand::MoveTo(Vec2::new(-20.0, 45.0)),
+                CanvasPathCommand::ArcTo {
+                    radii: Vec2::new(20.0, 12.0),
+                    rotation: 0.0,
+                    large_arc: false,
+                    sweep: true,
+                    to: Vec2::new(20.0, 45.0),
+                },
+            ],
+        },
+        Transform::from_xyz(-150.0, 0.0, 0.0),
+        CanvasPaint {
+            fill: Some(Color::srgba(0.65, 0.3, 1.0, 0.6).into()),
+            fill_rule: CanvasFillRule::EvenOdd,
+            stroke: Some(CanvasStroke {
+                color: Color::srgb(0.85, 0.6, 1.0),
+                width: 6.0,
+                cap: CanvasLineCap::Round,
+                join: CanvasLineJoin::Round,
+            }),
+        },
+    )?;
+    CanvasDocument::append_rectangle(world, edit, path, Rect::new(-16.0, -10.0, 10.0, 10.0))?;
+    CanvasDocument::append_circle(world, edit, path, Vec2::new(-55.0, 75.0), 8.0)?;
+    CanvasDocument::append_ellipse(
+        world,
+        edit,
+        path,
+        Vec2::new(-25.0, 75.0),
+        Vec2::new(12.0, 6.0),
+    )?;
+    CanvasDocument::append_line(
+        world,
+        edit,
+        path,
+        Vec2::new(0.0, 75.0),
+        Vec2::new(15.0, 75.0),
+    )?;
+    CanvasDocument::append_polyline(
+        world,
+        edit,
+        path,
+        &[
+            Vec2::new(25.0, 80.0),
+            Vec2::new(33.0, 65.0),
+            Vec2::new(40.0, 80.0),
+        ],
+    )?;
+    CanvasDocument::append_polygon(
+        world,
+        edit,
+        path,
+        &[
+            Vec2::new(50.0, 80.0),
+            Vec2::new(58.0, 65.0),
+            Vec2::new(66.0, 80.0),
+        ],
+    )?;
+    Ok(())
+}
+
+fn prepare_document(world: &mut World, kind: DemoKind) -> Result<Entity> {
+    let document = world
+        .spawn((Name::new("CanvasDemoDocument"), CanvasDocument))
+        .id();
+    let result = CanvasDocument::edit(world, document, |world, edit| match kind {
+        DemoKind::Basics => basics(world, edit),
+        DemoKind::Icons => icons::populate(world, document, edit),
+    })
+    .and_then(|()| CanvasDocument::clear_history(world, document));
+    if let Err(error) = result {
+        world.despawn(document);
+        return Err(error.into_bevy_error());
+    }
+    Ok(document)
+}
+
 fn enter(world: &mut World) -> Result {
     let directory = std::env::current_exe()
         .map_err(|error| {
@@ -196,151 +334,79 @@ fn enter(world: &mut World) -> Result {
             )
         })?
         .with_file_name("exports");
-    let document = world
-        .spawn((Name::new("CanvasDemoDocument"), CanvasDocument))
-        .id();
-    let result = (|| -> Result<Entity> {
-        CanvasDocument::edit(world, document, |world, edit| {
-            add_rectangle(world, edit)?;
-            let details = CanvasDocument::create_layer(world, edit, 1, "Layer 2")?;
-            CanvasDocument::create_ellipse_in_layer(
-                world,
-                edit,
-                details,
-                CanvasEllipse {
-                    radii: Vec2::new(40.0, 25.0),
-                },
-                Transform::from_xyz(150.0, 0.0, 0.0),
-                CanvasPaint {
-                    fill: Some(Color::srgba(1.0, 0.5, 0.1, 0.7).into()),
-                    stroke: Some(CanvasStroke {
-                        color: Color::srgb(1.0, 0.8, 0.2),
-                        width: 4.0,
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            )?;
-            CanvasDocument::create_ellipse(
-                world,
-                edit,
-                CanvasEllipse {
-                    radii: Vec2::new(7.0, 5.0),
-                },
-                Transform::from_xyz(-153.0, 0.0, 0.0),
-                CanvasPaint {
-                    fill: Some(Color::srgb(1.0, 0.5, 0.1).into()),
-                    ..default()
-                },
-            )?;
-            let path = CanvasDocument::create_path(
-                world,
-                edit,
-                CanvasPath {
-                    commands: vec![
-                        CanvasPathCommand::MoveTo(Vec2::new(-45.0, 25.0)),
-                        CanvasPathCommand::QuadTo {
-                            control: Vec2::new(-45.0, -35.0),
-                            to: Vec2::new(0.0, -35.0),
-                        },
-                        CanvasPathCommand::CubicTo {
-                            control1: Vec2::new(45.0, -35.0),
-                            control2: Vec2::new(45.0, 25.0),
-                            to: Vec2::new(0.0, 25.0),
-                        },
-                        CanvasPathCommand::Close,
-                        CanvasPathCommand::MoveTo(Vec2::new(-20.0, 45.0)),
-                        CanvasPathCommand::ArcTo {
-                            radii: Vec2::new(20.0, 12.0),
-                            rotation: 0.0,
-                            large_arc: false,
-                            sweep: true,
-                            to: Vec2::new(20.0, 45.0),
-                        },
-                    ],
-                },
-                Transform::from_xyz(-150.0, 0.0, 0.0),
-                CanvasPaint {
-                    fill: Some(Color::srgba(0.65, 0.3, 1.0, 0.6).into()),
-                    fill_rule: CanvasFillRule::EvenOdd,
-                    stroke: Some(CanvasStroke {
-                        color: Color::srgb(0.85, 0.6, 1.0),
-                        width: 6.0,
-                        cap: CanvasLineCap::Round,
-                        join: CanvasLineJoin::Round,
-                    }),
-                },
-            )?;
-            CanvasDocument::append_rectangle(
-                world,
-                edit,
-                path,
-                Rect::new(-16.0, -10.0, 10.0, 10.0),
-            )?;
-            CanvasDocument::append_circle(world, edit, path, Vec2::new(-55.0, 75.0), 8.0)?;
-            CanvasDocument::append_ellipse(
-                world,
-                edit,
-                path,
-                Vec2::new(-25.0, 75.0),
-                Vec2::new(12.0, 6.0),
-            )?;
-            CanvasDocument::append_line(
-                world,
-                edit,
-                path,
-                Vec2::new(0.0, 75.0),
-                Vec2::new(15.0, 75.0),
-            )?;
-            CanvasDocument::append_polyline(
-                world,
-                edit,
-                path,
-                &[
-                    Vec2::new(25.0, 80.0),
-                    Vec2::new(33.0, 65.0),
-                    Vec2::new(40.0, 80.0),
-                ],
-            )?;
-            CanvasDocument::append_polygon(
-                world,
-                edit,
-                path,
-                &[
-                    Vec2::new(50.0, 80.0),
-                    Vec2::new(58.0, 65.0),
-                    Vec2::new(66.0, 80.0),
-                ],
-            )?;
-            Ok(())
-        })
-        .map_err(|error| error.into_bevy_error())?;
-        CanvasDocument::clear_history(world, document).map_err(|error| error.into_bevy_error())?;
-        mount_page(
-            world,
-            GalleryPage::Canvas,
-            bsn_list! { @scene(document, directory) },
-        )
-    })();
-    match result {
-        Ok(page) => {
-            world.entity_mut(document).insert(ChildOf(page));
-            layers::refresh(world)?;
-            refresh(world)
-        }
-        Err(error) => {
-            world.despawn(document);
-            Err(error)
-        }
+    let kind = DemoKind::Basics;
+    let document = prepare_document(world, kind)?;
+    if let Err(error) = mount_page(
+        world,
+        GalleryPage::Canvas,
+        bsn_list! { @scene(document, directory, kind) },
+    ) {
+        world.despawn(document);
+        return Err(error);
     }
+    let root = world
+        .query_filtered::<Entity, With<Demo>>()
+        .single(world)
+        .map_err(|_| invalid("expected one Canvas demo after mounting"))?;
+    world.entity_mut(document).insert(ChildOf(root));
+    layers::refresh(world)?;
+    refresh(world)
+}
+
+fn choose_demo(event: On<Activate>, demos: Query<&DemoKind>, mut commands: Commands) {
+    let Ok(&kind) = demos.get(event.entity) else {
+        return;
+    };
+    commands.queue(move |world: &mut World| -> Result {
+        let (old, demo, parent) = world
+            .query::<(Entity, &Demo, &ChildOf)>()
+            .single(world)
+            .map_err(|_| invalid("expected one mounted Canvas demo"))?;
+        if demo.kind == kind {
+            return Ok(());
+        }
+        let directory = demo.directory.clone();
+        let parent = parent.parent();
+        let document = prepare_document(world, kind)?;
+        let new = spawn_scene(
+            world,
+            bsn! { template(move |_| Ok(ChildOf(parent))) @scene(document, directory, kind) },
+        );
+        let root = match new {
+            Ok(root) => root,
+            Err(error) => {
+                world.despawn(document);
+                return Err(error.into_bevy_error());
+            }
+        };
+        world.entity_mut(document).insert(ChildOf(root));
+        world.despawn(old);
+        layers::refresh(world)?;
+        refresh(world)?;
+        info!(?kind, ?document, "切换 Canvas 演示");
+        Ok(())
+    });
 }
 
 fn exit(world: &mut World) -> Result {
     unmount_page(world, GalleryPage::Canvas)
 }
 
-fn scene(document: Entity, directory: PathBuf) -> impl Scene {
+fn demo_choice(key: CanvasKey, kind: DemoKind) -> impl Scene {
+    bsn! {
+        Name({format!("CanvasDemo{kind:?}")})
+        template(move |_| Ok(kind))
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Canvas(key)) WidgetryText}) as Box<dyn SceneList>)} }
+        on(choose_demo)
+    }
+}
+
+fn scene(document: Entity, directory: PathBuf, kind: DemoKind) -> impl Scene {
     let path = directory.display().to_string();
+    let description = match kind {
+        DemoKind::Basics => CanvasKey::Description,
+        DemoKind::Icons => CanvasKey::IconsDescription,
+    };
     let controls: Vec<_> = [
         (CanvasKey::Select, Action::Select), (CanvasKey::Rectangle, Action::Rectangle),
         (CanvasKey::Ellipse, Action::Ellipse), (CanvasKey::PlaceText,Action::PlaceText),
@@ -393,11 +459,16 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     }).collect();
     bsn! {
         Name("CanvasDemo")
-        Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers, editor:#Editor, gradient_editor:#GradientEditor,
+        Demo { kind:kind, document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers, editor:#Editor, gradient_editor:#GradientEditor,
             directory:directory, region:None, scale:1.0, segment:0, align_to_view:false }
         Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(SECTION_GAP), flex_shrink:0.0 }
         Children [
-            @localized(TextKey::Canvas(CanvasKey::Description)) WidgetryText Node {max_width:percent(100)}--
+            Node {column_gap:px(CONTROL_GAP), row_gap:px(GROUP_GAP), flex_wrap:FlexWrap::Wrap}
+            Children [
+                @demo_choice(CanvasKey::DemoBasics, DemoKind::Basics)--
+                @demo_choice(CanvasKey::DemoIcons, DemoKind::Icons)
+            ]--
+            @localized(TextKey::Canvas(description)) WidgetryText Node {max_width:percent(100)}--
             Node {column_gap:px(CONTROL_GAP),row_gap:px(GROUP_GAP),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
             #Readout Name("CanvasReadout") Text("") WidgetryText Node {max_width:percent(100)}--
             #Layers @layers::panel()--
@@ -1315,6 +1386,7 @@ mod tests {
         (
             app,
             Demo {
+                kind: DemoKind::Basics,
                 document,
                 main: result,
                 auxiliary: result,
@@ -1322,10 +1394,12 @@ mod tests {
                 result,
                 layers: result,
                 editor: result,
+                gradient_editor: result,
                 directory,
                 region: None,
                 scale: 2.0,
                 segment: 0,
+                align_to_view: false,
             },
         )
     }
