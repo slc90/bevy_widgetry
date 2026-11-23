@@ -1061,9 +1061,9 @@ fn translating_an_attached_connector_uses_the_movable_end_for_grid_and_keeps_cap
         if offsets[1] == -40.0 {
             let label_count = app
                 .world_mut()
-                .query::<&Text2d>()
+                .query::<&Name>()
                 .iter(app.world())
-                .filter(|text| text.0 == label().text)
+                .filter(|name| name.as_str() == "CanvasGlyph")
                 .count();
             assert_eq!(label_count, 0);
             click_at(&mut app, view, &base, Vec2::new(65.0, 30.0));
@@ -1151,6 +1151,68 @@ fn pointer_drawing_cancels_cleanly_and_commits_editable_route_points() {
 }
 
 #[test]
+fn connector_label_meshes_follow_a_moving_attachment_in_both_views() {
+    let (mut app, view, _, shape, _, _) = common::fixture(PointerId::Mouse, 1., 1.);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let connector = CanvasDocument::create_connector(
+        app.world_mut(),
+        document,
+        CanvasConnectorRoute {
+            start: Vec2::ZERO,
+            end: Vec2::new(70., 10.),
+            waypoints: Vec::new(),
+        },
+        arrow_style(3.),
+        Some(CanvasConnectorLabel {
+            text: "O".into(),
+            position: 0.25,
+            ..label()
+        }),
+    )
+    .unwrap();
+    CanvasDocument::set_connector_endpoint(
+        app.world_mut(),
+        document,
+        connector,
+        CanvasConnectorEnd::Start,
+        CanvasConnectorEndpoint::Attached {
+            target: shape,
+            anchor: CanvasAnchor::East,
+        },
+    )
+    .unwrap();
+    let projected = |app: &mut App| {
+        let route = app
+            .world()
+            .get::<CanvasConnector>(connector)
+            .unwrap()
+            .route();
+        let expected = route.start.lerp(route.end, 0.25) * Vec2::new(1., -1.);
+        let positions = app
+            .world_mut()
+            .query::<(&Name, &GlobalTransform)>()
+            .iter(app.world())
+            .filter(|(name, _)| name.as_str() == "CanvasTextProxy")
+            .map(|(_, pose)| pose.translation().truncate())
+            .collect::<Vec<_>>();
+        assert_eq!(positions.len(), 2);
+        assert!(positions.iter().all(|at| at.abs_diff_eq(expected, 0.001)));
+        expected
+    };
+    common::update(&mut app);
+    let before = projected(&mut app);
+    CanvasDocument::update_transform(
+        app.world_mut(),
+        document,
+        shape,
+        Transform::from_xyz(8., 20., 0.),
+    )
+    .unwrap();
+    common::update(&mut app);
+    assert_ne!(projected(&mut app), before);
+}
+
+#[test]
 fn pointer_hits_arrow_wings_and_label_and_moves_the_connector_as_one_item() {
     let (mut app, view, auxiliary, _, window, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
     add_keyboard_dispatch(&mut app);
@@ -1197,9 +1259,9 @@ fn pointer_hits_arrow_wings_and_label_and_moves_the_connector_as_one_item() {
     common::update(&mut app);
     let labels = app
         .world_mut()
-        .query::<(&Text2d, &Transform)>()
+        .query::<(&Name, &Transform)>()
         .iter(app.world())
-        .filter(|(text, _)| text.0 == "STEP")
+        .filter(|(name, _)| name.as_str() == "CanvasTextProxy")
         .map(|(_, pose)| pose.translation.truncate())
         .collect::<Vec<_>>();
     assert_eq!(labels, [Vec2::new(-12.0, -33.0); 2]);

@@ -318,7 +318,9 @@ fn exported(event: On<CanvasPngExportFinished>) -> Result {
 
 在主视图选择「放置文字」，单击目标位置。Canvas 将文字中心放在点击处，加入当前组或活动图层，并选中新文字。Gallery 属性面板支持显式换行、字号、十六进制颜色和起始／居中／末尾对齐。点击「应用文字属性」后两个视图同步更新。选择框和自动导出区域包含伸出排版框的字形笔画。字号使用文档单位，拖动、变换、编组、层次移动、删除和撤销使用普通绘图项的操作。
 
-宿主可用 `CanvasDocument::create_text` 或 `create_text_in_layer` 创建文字，从 `CanvasText::style` 读取属性，通过 `update_text` 提交修改。`duplicate_text` 将副本添加到原容器，保留局部变换。`draw_order` 包含文字，`shape_order` 只返回矢量形状。每项使用一种字体、字号和颜色，长行保持单行。SVG 导出保留可编辑的文字和内置默认字体，PNG 导出将文字和其他可见项一起绘制。
+宿主可用 `CanvasDocument::create_text` 或 `create_text_in_layer` 创建文字，从 `CanvasText::style` 读取属性，通过 `update_text` 提交修改。`duplicate_text` 将副本添加到原容器，保留局部变换。`draw_order` 包含文字，`shape_order` 只返回矢量形状。每项使用一种字体、字号和颜色，长行保持单行。
+
+View 和 PNG 按文档中的画序绘制矢量字形轮廓。字形随文字项和父组的变换缩放，各个 View 按自身倍率选择轮廓精度，同一次 PNG 导出的所有分块使用统一精度。SVG 导出保留可编辑的文字和内置默认字体。
 
 ## 绘制和编辑连接线
 
@@ -328,7 +330,7 @@ fn exported(event: On<CanvasPngExportFinished>) -> Result {
 
 宿主通过 `CanvasDocument::create_connector` 或 `create_connector_in_layer` 创建连接线，并通过 `update_connector` 修改路由、样式或标签。路由坐标以绘图项局部坐标表示，创建时使用所在容器的坐标。样式支持独立的起点和终点三角箭头，以及描边颜色、宽度、端点和连接样式。标签的 `position` 取值为 `0.0..=1.0`，按局部路由的累计长度计算，文字以该点为中心。
 
-`duplicate_connector` 将路线、样式、标签与局部变换复制到同一容器。`draw_order` 包含连接线。连接线可重排、编组、移动图层、删除并撤销或重做。SVG 导出写入描边路径、箭头轮廓和标签文字，PNG 渲染已提交的完整连接线。
+`duplicate_connector` 将路线、样式、标签与局部变换复制到同一容器。`draw_order` 包含连接线。连接线可重排、编组、移动图层、删除并撤销或重做。View 和 PNG 在对应路径与箭头上方绘制标签的矢量字形，标签随附着端点解析后的路线移动。SVG 导出写入描边路径、箭头轮廓和可编辑标签文字。
 
 启用 `CanvasObjectSnap::connector_anchors` 后，创建连接线或拖动端点时可以捕捉形状的 North、East、South、West 锚点。中间路由点一直是自由点。锚点位置随形状尺寸、局部变换和祖先组变换更新，跨图层和跨组连接使用同一 Document 坐标。拖离锚点范围会解除附着，删除目标则保留端点最后的局部位置。撤销删除可以恢复附着。目标所在图层隐藏期间，连接线一并从 View 和导出中隐藏。路线长度为零时，View 在重合点显示一个可选中的标记，导出会省略该连接线。
 

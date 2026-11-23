@@ -3,12 +3,14 @@ pub(super) const STROKE_DEPTH_OFFSET: f32 = 0.01;
 
 use crate::error::CanvasFailureState;
 use crate::error::CanvasResult as RawResult;
+use crate::text::vector::{self, GlyphMeshCache, TextDraw};
 use crate::view::ViewState;
 use crate::{
     CanvasContainer, CanvasDocument, CanvasFill, CanvasGeometry, CanvasPaint, CanvasRectangle,
     CanvasShape, CanvasView,
 };
 use bevy::camera::{CameraProjection, ScalingMode, primitives::Aabb, visibility::RenderLayers};
+use bevy::math::DVec2;
 use bevy::prelude::*;
 use bevy_widgetry_core::offscreen::{
     OffscreenTarget, OffscreenUpdate, OffscreenViewport, WidgetryOffscreenPlugin,
@@ -307,6 +309,7 @@ fn prepare(world: &mut World) -> bevy::prelude::Result {
         .map(|proxy| proxy.shape)
         .collect();
     crate::mesh_cache::retain(world, &used);
+    world.resource_mut::<GlyphMeshCache>().trim();
     finish_errors(world, failure, diagnostics)
 }
 
@@ -318,6 +321,14 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
         }
     }
     let document = CanvasView::_document(world, root)?;
+    let zoom = CanvasView::_zoom(world, root)?;
+    let density = DVec2::splat(
+        world
+            .get::<ComputedNode>(root)
+            .map_or(f64::from(zoom), |node| {
+                f64::from(zoom) / f64::from(node.inverse_scale_factor())
+            }),
+    );
     if document.is_some_and(|document| world.get::<CanvasDocument>(document).is_none()) {
         CanvasView::_set_document_in_world(world, root, None)?;
         world.flush();
@@ -368,14 +379,8 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
                     .ok_or_else(|| crate::error::missing(crate::CanvasPart::Transform))?;
                 if group {
                     groups.push((entry.id(), container, transform));
-                } else if let Some(text) = entry.get_ref::<crate::CanvasText>() {
-                    texts.push((
-                        shapes.len() + texts.len(),
-                        entry.id(),
-                        container,
-                        text.last_changed(),
-                        transform,
-                    ));
+                } else if entry.contains::<crate::CanvasText>() {
+                    texts.push((shapes.len() + texts.len(), entry.id(), container, transform));
                 } else {
                     let (geometry, paint, arrows) =
                         if let Some(connector) = entry.get::<crate::CanvasConnector>() {
@@ -442,80 +447,21 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
     }
     let mut failure = Vec::new();
     let mut diagnostics = DiagnosticBatch::default();
-    for (index, item, container, version, transform) in texts {
+    for (index, item, container, mut transform) in texts {
         let parent = projection_parent(world, root, content, container)?;
-        let transform = crate::CanvasText::projected_transform(transform, index as f32 * spacing);
-        let existing = world
-            .get::<Renderer>(root)
-            .and_then(|r| r.proxies.get(&item))
-            .copied()
-            .filter(|p| world.get_entity(*p).is_ok());
-        if let Some(proxy) = existing {
-            reparent_proxy(world, proxy, parent);
-            world
-                .get_mut::<Transform>(proxy)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyTransform))?
-                .set_if_neq(transform);
-            if world
-                .get::<ProjectedText>(proxy)
-                .is_some_and(|last| last.0 == version)
-            {
-                continue;
-            }
-            let style = world
-                .get::<crate::CanvasText>(item)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Text))?
-                .style()
-                .clone();
-            world.entity_mut(proxy).insert((
-                Text2d::new(style.content),
-                TextLayout::new(style.align.justify(), bevy::text::LineBreak::NoWrap),
-                TextColor(style.color),
-                ProjectedText(version),
-            ));
-            world
-                .get_mut::<TextFont>(proxy)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::TextFont))?
-                .font_size = style.font_size.into();
-        } else {
-            let text = world
-                .get::<crate::CanvasText>(item)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Text))?
-                .clone();
-            let proxy = text.proxy(world, parent, layer, transform);
-            world.entity_mut(proxy).insert(ProjectedText(version));
-            world
-                .get_mut::<Renderer>(root)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
-                .proxies
-                .insert(item, proxy);
+        transform.translation.z = index as f32 * spacing;
+        let result = prepare_text(world, root, item, parent, layer, transform, density);
+        if let Err(error) = observe_item(world, root, document, item, result) {
+            collect_error(error, &mut failure, &mut diagnostics);
         }
     }
     for (shape, container, geometry, transform, paint, arrows, index) in shapes {
         let parent = projection_parent(world, root, content, container)?;
         let result = prepare_shape(
             world, root, parent, layer, index, spacing, shape, geometry, transform, paint, arrows,
-        )
-        .map_err(|error| {
-            let error = error.at("view", root).at("shape", shape);
-            match document {
-                Some(document) => error.at("document", document),
-                None => error,
-            }
-        });
-        let frame = ErrorFrame::new("canvas.renderer.shape")
-            .field("view", root)
-            .field("shape", shape);
-        let result = if let Some(mut states) = world.get_mut::<RenderFailure>(root) {
-            states
-                .shapes
-                .entry(shape)
-                .or_default()
-                .observe(result, frame)
-        } else {
-            result.map_err(|error| error.into_bevy_error(frame))
-        };
-        if let Err(error) = result {
+            density,
+        );
+        if let Err(error) = observe_item(world, root, document, shape, result) {
             collect_error(error, &mut failure, &mut diagnostics);
         }
     }
@@ -655,6 +601,74 @@ fn reparent_proxy(world: &mut World, proxy: Entity, parent: Entity) {
     }
 }
 
+fn observe_item(
+    world: &mut World,
+    root: Entity,
+    document: Option<Entity>,
+    shape: Entity,
+    result: RawResult,
+) -> Result {
+    let result = result.map_err(|error| {
+        let error = error.at("view", root).at("shape", shape);
+        match document {
+            Some(document) => error.at("document", document),
+            None => error,
+        }
+    });
+    let frame = ErrorFrame::new("canvas.renderer.shape")
+        .field("view", root)
+        .field("shape", shape);
+    if let Some(mut states) = world.get_mut::<RenderFailure>(root) {
+        states
+            .shapes
+            .entry(shape)
+            .or_default()
+            .observe(result, frame)
+    } else {
+        result.map_err(|error| error.into_bevy_error(frame))
+    }
+}
+
+fn prepare_text(
+    world: &mut World,
+    view: Entity,
+    item: Entity,
+    parent: Entity,
+    layer: usize,
+    local: Transform,
+    density: DVec2,
+) -> RawResult {
+    let existing = world
+        .get::<Renderer>(view)
+        .and_then(|renderer| renderer.proxies.get(&item))
+        .copied()
+        .filter(|proxy| world.get_entity(*proxy).is_ok());
+    let document = crate::groups::document_transform(world, item)?;
+    let text = world
+        .get::<crate::CanvasText>(item)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Text))?;
+    let proxy = TextDraw::from_text(text).project(
+        world,
+        existing,
+        vector::Projection {
+            parent,
+            layer,
+            local,
+            document,
+            density,
+            cull: true,
+        },
+    )?;
+    if Some(proxy) != existing {
+        world
+            .get_mut::<Renderer>(view)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
+            .proxies
+            .insert(item, proxy);
+    }
+    Ok(())
+}
+
 fn prepare_shape(
     world: &mut World,
     root: Entity,
@@ -667,6 +681,7 @@ fn prepare_shape(
     transform: Transform,
     paint: CanvasPaint,
     arrows: Option<crate::CanvasPath>,
+    density: DVec2,
 ) -> RawResult {
     let proxy = world
         .get::<Renderer>(root)
@@ -704,7 +719,7 @@ fn prepare_shape(
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::StrokeTransform))?
         .set_if_neq(Transform::from_xyz(0.0, 0.0, spacing * 0.5));
     if world.get::<crate::CanvasConnector>(shape).is_some() {
-        prepare_connector_label(world, shape, proxy, layer, spacing * 0.75)?;
+        prepare_connector_label(world, shape, proxy, layer, spacing * 0.75, density)?;
     }
 
     Ok(())
@@ -716,6 +731,7 @@ fn prepare_connector_label(
     parent: Entity,
     layer: usize,
     depth: f32,
+    density: DVec2,
 ) -> RawResult {
     let current = world.get::<ConnectorLabelProxy>(parent).map(|p| p.0);
     let Some((label, at)) = world
@@ -729,33 +745,23 @@ fn prepare_connector_label(
         }
         return Ok(());
     };
-    let transform = crate::CanvasConnector::label_transform(Transform::IDENTITY, at, depth);
-    if let Some(proxy) = current.filter(|proxy| world.get_entity(*proxy).is_ok()) {
-        let style = label.style();
-        let content = (world.get::<Text2d>(proxy).map(|text| &text.0) != Some(&style.content))
-            .then(|| style.content.clone());
-        let color = style.color;
-        let size = style.font_size.into();
-        world
-            .get_mut::<Transform>(proxy)
-            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyTransform))?
-            .set_if_neq(transform);
-        if let Some(content) = content {
-            world.entity_mut(proxy).insert(Text2d::new(content));
-        }
-        world
-            .get_mut::<TextColor>(proxy)
-            .ok_or_else(|| crate::error::missing(crate::CanvasPart::Text))?
-            .set_if_neq(TextColor(color));
-        let mut font = world
-            .get_mut::<TextFont>(proxy)
-            .ok_or_else(|| crate::error::missing(crate::CanvasPart::TextFont))?;
-        if font.font_size != size {
-            font.font_size = size;
-        }
-    } else {
-        let label = label.clone();
-        let proxy = label.proxy(world, parent, layer, transform);
+    let local = crate::CanvasConnector::label_transform(Transform::IDENTITY, at, depth);
+    let document = crate::groups::document_transform(world, item)?;
+    let draw = TextDraw::from_text(label);
+    let existing = current.filter(|proxy| world.get_entity(*proxy).is_ok());
+    let proxy = draw.project(
+        world,
+        existing,
+        vector::Projection {
+            parent,
+            layer,
+            local,
+            document,
+            density,
+            cull: true,
+        },
+    )?;
+    if Some(proxy) != current {
         world.entity_mut(parent).insert(ConnectorLabelProxy(proxy));
     }
     Ok(())
@@ -966,6 +972,7 @@ impl Plugin for CanvasPlugin {
             app.init_asset::<ColorMaterial>();
         }
         app.init_resource::<crate::mesh_cache::MeshCache>()
+            .init_resource::<GlyphMeshCache>()
             .init_resource::<crate::CanvasClipboard>();
         app.register_type::<CanvasDocument>()
             .register_type::<crate::CanvasItem>()
@@ -1034,9 +1041,6 @@ fn finish_errors(
     }
     error.map_or(Ok(()), Err)
 }
-
-#[derive(Component)]
-struct ProjectedText(bevy::ecs::change_detection::Tick);
 
 #[derive(Component)]
 struct ConnectorLabelProxy(Entity);

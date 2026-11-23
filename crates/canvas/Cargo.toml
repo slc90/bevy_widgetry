@@ -51,6 +51,10 @@ name = "path_views"
 harness = false
 
 [[bench]]
+name = "text_views"
+harness = false
+
+[[bench]]
 name = "path_append"
 harness = false
 

@@ -63,7 +63,6 @@ pub enum CanvasPart {
     ProxyParts,
     ProxyTransform,
     Text,
-    TextFont,
     Renderer,
     RotationTransform,
     ScalingTransform,
@@ -161,6 +160,7 @@ pub enum CanvasErrorKind {
     Structure(CanvasPart),
     Invalid(CanvasIssue),
     TextLayout,
+    GlyphOutline,
     Tessellation,
     IndexConversion,
 }
@@ -210,6 +210,7 @@ pub enum CanvasInput {
 #[derive(Debug)]
 pub enum CanvasErrorSource {
     TextLayout(bevy::text::TextError),
+    GlyphOutline(skrifa::outline::DrawError),
     Tessellation(lyon::tessellation::TessellationError),
     IndexConversion(std::num::TryFromIntError),
 }
@@ -233,6 +234,7 @@ impl Error for CanvasError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.source {
             Some(CanvasErrorSource::TextLayout(error)) => Some(error),
+            Some(CanvasErrorSource::GlyphOutline(error)) => Some(error),
             Some(CanvasErrorSource::Tessellation(error)) => Some(error),
             Some(CanvasErrorSource::IndexConversion(error)) => Some(error),
             None => None,
@@ -375,6 +377,12 @@ pub(crate) fn text_layout(error: bevy::text::TextError) -> CanvasFault {
     fault(
         CanvasErrorKind::TextLayout,
         Some(CanvasErrorSource::TextLayout(error)),
+    )
+}
+pub(crate) fn glyph_outline(error: skrifa::outline::DrawError) -> CanvasFault {
+    fault(
+        CanvasErrorKind::GlyphOutline,
+        Some(CanvasErrorSource::GlyphOutline(error)),
     )
 }
 pub(crate) fn tessellation(source: lyon::tessellation::TessellationError) -> CanvasFault {

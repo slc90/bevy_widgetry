@@ -3,7 +3,6 @@ use crate::{
     CanvasContainer, CanvasDocument, CanvasEditTarget, CanvasGeometry, CanvasIssue, CanvasPaint,
     CanvasRectangle,
 };
-use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use bevy::text::{
     ComputedTextBlock, FontCx, FontSource, LayoutCx, LineBreak, TextBounds, TextElement,
@@ -11,6 +10,10 @@ use bevy::text::{
 };
 use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_diagnostics::ErrorFrame;
+use skrifa::{FontRef, GlyphId, MetadataProvider, instance::Size};
+use std::sync::Arc;
+
+pub(crate) mod vector;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum CanvasTextAlign {
@@ -36,6 +39,28 @@ pub struct CanvasText {
     size: Vec2,
     local_bounds: Rect,
     lines: Vec<TextLine>,
+    #[reflect(ignore, clone)]
+    glyphs: Option<Arc<GlyphLayout>>,
+}
+
+#[derive(Debug, PartialEq)]
+struct GlyphLayout {
+    runs: Vec<GlyphRun>,
+    max_font_size: f32,
+}
+
+#[derive(Debug, PartialEq)]
+struct GlyphRun {
+    font: parley::FontData,
+    coords: Arc<[skrifa::instance::NormalizedCoord]>,
+    font_size: f32,
+    glyphs: Vec<PositionedGlyph>,
+}
+
+#[derive(Debug, PartialEq)]
+struct PositionedGlyph {
+    id: GlyphId,
+    origin: Vec2,
 }
 
 #[derive(Clone, Debug, PartialEq, Reflect)]
@@ -161,22 +186,25 @@ impl LayoutEngine {
                 baseline: line.metrics().baseline,
             })
             .collect();
-        let local_bounds = glyph_bounds(layout, size)?;
+        let (local_bounds, glyphs) = position_glyphs(layout, size)?;
         Ok(CanvasText {
             style,
             size,
             local_bounds,
             lines,
+            glyphs: Some(Arc::new(glyphs)),
         })
     }
 }
 
-fn glyph_bounds(layout: &parley::Layout<bevy::text::TextBrush>, size: Vec2) -> CanvasResult<Rect> {
-    use skrifa::{
-        FontRef, GlyphId, MetadataProvider,
-        instance::{NormalizedCoord, Size},
-    };
+fn position_glyphs(
+    layout: &parley::Layout<bevy::text::TextBrush>,
+    size: Vec2,
+) -> CanvasResult<(Rect, GlyphLayout)> {
+    use skrifa::instance::NormalizedCoord;
     let mut bounds = Rect::from_corners(Vec2::ZERO, size);
+    let mut runs = Vec::new();
+    let mut max_font_size: f32 = 0.0;
     for line in layout.lines() {
         for item in line.items() {
             let parley::PositionedLayoutItem::GlyphRun(glyphs) = item else {
@@ -193,24 +221,45 @@ fn glyph_bounds(layout: &parley::Layout<bevy::text::TextBrush>, size: Vec2) -> C
                 .map(NormalizedCoord::from_bits)
                 .collect();
             let metrics = font.glyph_metrics(Size::new(run.font_size()), coords.as_slice());
+            let mut positioned = Vec::new();
             for glyph in glyphs.positioned_glyphs() {
-                if let Some(ink) = metrics.bounds(GlyphId::new(glyph.id)) {
-                    let origin = Vec2::new(glyph.x, glyph.y);
+                let id = GlyphId::new(glyph.id);
+                let origin = Vec2::new(glyph.x, glyph.y);
+                if let Some(ink) = metrics.bounds(id) {
                     bounds = bounds.union(Rect {
                         min: (origin + Vec2::new(ink.x_min, -ink.y_max)).floor(),
                         max: (origin + Vec2::new(ink.x_max, -ink.y_min)).ceil(),
                     });
                 }
+                positioned.push(PositionedGlyph {
+                    id,
+                    origin: origin - size * 0.5,
+                });
+            }
+            if !positioned.is_empty() {
+                runs.push(GlyphRun {
+                    font: data.clone(),
+                    coords: coords.into(),
+                    font_size: run.font_size(),
+                    glyphs: positioned,
+                });
+                max_font_size = max_font_size.max(run.font_size());
             }
         }
     }
     if !bounds.size().is_finite() {
         return Err(invalid(CanvasIssue::TextProperties));
     }
-    Ok(Rect {
-        min: bounds.min - size * 0.5,
-        max: bounds.max - size * 0.5,
-    })
+    Ok((
+        Rect {
+            min: bounds.min - size * 0.5,
+            max: bounds.max - size * 0.5,
+        },
+        GlyphLayout {
+            runs,
+            max_font_size,
+        },
+    ))
 }
 
 impl CanvasText {
@@ -402,45 +451,5 @@ impl CanvasDocument {
             e.at("text", item)
                 .into_failure(ErrorFrame::new("canvas.CanvasDocument.update_text"))
         })
-    }
-}
-
-impl CanvasText {
-    pub(crate) fn proxy(
-        &self,
-        world: &mut World,
-        parent: Entity,
-        layer: usize,
-        transform: Transform,
-    ) -> Entity {
-        let font = world
-            .resource::<AssetServer>()
-            .load(BuiltinFont::Default.path());
-        world
-            .spawn((
-                Name::new("CanvasTextProxy"),
-                ChildOf(parent),
-                Text2d::new(self.style.content.clone()),
-                TextLayout::new(self.style.align.justify(), LineBreak::NoWrap),
-                TextFont {
-                    font: font.into(),
-                    font_size: self.style.font_size.into(),
-                    ..default()
-                },
-                TextColor(self.style.color),
-                RenderLayers::none().with(layer),
-                // Text2d needs a visible sprite on its layer before it can lay out the first glyph.
-                // A cropped export can legitimately start with every label outside its first tile.
-                bevy::camera::visibility::NoFrustumCulling,
-                transform,
-                Pickable::IGNORE,
-            ))
-            .id()
-    }
-
-    pub(crate) fn projected_transform(mut transform: Transform, depth: f32) -> Transform {
-        transform.translation.z = depth;
-        transform.scale.y = -transform.scale.y;
-        transform
     }
 }

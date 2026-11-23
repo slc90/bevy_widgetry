@@ -2823,22 +2823,7 @@ fn gpu_multiline_text_exports_visible_aligned_glyphs_from_the_request_snapshot()
         },
     )
     .unwrap();
-    let measured = app.world().get::<CanvasText>(text).unwrap().size();
     CanvasDocument::remove_text(app.world_mut(), doc, text).unwrap();
-    let deadline = Instant::now() + GPU_READY_TIMEOUT;
-    loop {
-        frame(&mut app);
-        let layout = app
-            .world_mut()
-            .query_filtered::<&bevy::text::TextLayoutInfo, With<Text2d>>()
-            .iter(app.world())
-            .find(|info| !info.glyphs.is_empty());
-        if let Some(layout) = layout {
-            assert_eq!(layout.size / layout.scale_factor, measured);
-            break;
-        }
-        assert!(Instant::now() < deadline, "text proxy was never laid out");
-    }
     finish(&mut app, 1);
     assert_eq!(
         app.world().resource::<Completed>().0[0].1,

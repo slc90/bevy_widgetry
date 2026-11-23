@@ -142,17 +142,10 @@ fn click_places_a_label_and_both_views_project_committed_edits() {
     );
     let mut draft = app.world().get::<CanvasText>(item).unwrap().style().clone();
     draft.content = "Updated".to_owned();
-    let proxies = |world: &mut World| {
-        world
-            .query::<&Text2d>()
-            .iter(world)
-            .map(|text| text.0.clone())
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(proxies(app.world_mut()), ["Text", "Text"]);
+    assert_eq!(glyph_meshes(app.world_mut()).len(), 8);
     CanvasDocument::update_text(app.world_mut(), doc, item, draft).unwrap();
     common::update(&mut app);
-    assert_eq!(proxies(app.world_mut()), ["Updated", "Updated"]);
+    assert_eq!(glyph_meshes(app.world_mut()).len(), 14);
     let size = app.world().get::<CanvasText>(item).unwrap().size();
     for (offset, expected) in [
         (size * 0.47, Some(item)),
@@ -171,6 +164,145 @@ fn click_places_a_label_and_both_views_project_committed_edits() {
             expected
         );
     }
+}
+
+fn glyph_meshes(world: &mut World) -> Vec<(AssetId<Mesh>, Vec2)> {
+    world
+        .query::<(&Name, &Mesh2d, &GlobalTransform)>()
+        .iter(world)
+        .filter(|(name, _, _)| name.as_str() == "CanvasGlyph")
+        .map(|(_, mesh, pose)| (mesh.0.id(), pose.translation().truncate()))
+        .collect()
+}
+
+#[test]
+fn views_share_text_meshes_until_zoom_or_group_scale_requires_finer_curves() {
+    let (mut app, a, b, shape, _, _) =
+        common::fixture(bevy::picking::pointer::PointerId::Mouse, 1., 1.);
+    let doc = CanvasView::document(app.world(), a).unwrap().unwrap();
+    let style = CanvasTextStyle {
+        content: "O O\n回".into(),
+        ..default()
+    };
+    let text =
+        CanvasDocument::create_text(app.world_mut(), doc, style.clone(), Transform::IDENTITY)
+            .unwrap();
+    let group =
+        CanvasDocument::group_items(app.world_mut(), doc, &[shape, text], "Glyphs").unwrap();
+    common::update(&mut app);
+    let before = glyph_meshes(app.world_mut());
+    assert_eq!(before.len(), 6);
+    let ids = |glyphs: &[(AssetId<Mesh>, Vec2)]| {
+        glyphs
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<std::collections::HashSet<_>>()
+    };
+    assert_eq!(ids(&before).len(), 2);
+    for id in ids(&before) {
+        let assets = app.world().resource::<Assets<Mesh>>();
+        assert_outline_has_counter(assets.get(id).unwrap());
+    }
+    let group_origin = app
+        .world()
+        .get::<Transform>(group)
+        .unwrap()
+        .translation
+        .truncate();
+    CanvasView::set_zoom_in_world(app.world_mut(), b, 4.).unwrap();
+    common::update(&mut app);
+    let zoomed = glyph_meshes(app.world_mut());
+    assert_eq!(ids(&zoomed).len(), 4);
+    assert!(before.iter().all(|glyph| zoomed.contains(glyph)));
+    assert!(
+        zoomed
+            .iter()
+            .all(|(_, position)| before.iter().any(|(_, previous)| position == previous))
+    );
+    CanvasDocument::update_group_transform(
+        app.world_mut(),
+        doc,
+        group,
+        Transform::from_scale(Vec3::new(4., 4., 1.)),
+    )
+    .unwrap();
+    common::update(&mut app);
+    let scaled = glyph_meshes(app.world_mut());
+    assert_eq!(ids(&scaled).len(), 4);
+    assert!(scaled.iter().all(|(_, position)| {
+        before.iter().any(|(_, previous)| {
+            position.abs_diff_eq((*previous - group_origin * Vec2::new(1., -1.)) * 4., 0.001)
+        })
+    }));
+    CanvasDocument::update_transform(
+        app.world_mut(),
+        doc,
+        text,
+        Transform::from_scale(Vec3::new(6., 0.5, 1.)),
+    )
+    .unwrap();
+    common::update(&mut app);
+    assert!(ids(&glyph_meshes(app.world_mut())).is_disjoint(&ids(&scaled)));
+    for content in ["   ", ""] {
+        CanvasDocument::update_text(
+            app.world_mut(),
+            doc,
+            text,
+            CanvasTextStyle {
+                content: content.into(),
+                ..style.clone()
+            },
+        )
+        .unwrap();
+        common::update(&mut app);
+        assert!(glyph_meshes(app.world_mut()).is_empty());
+        assert_eq!(
+            app.world().get::<CanvasText>(text).unwrap().size().x > 0.,
+            !content.is_empty()
+        );
+    }
+}
+
+fn assert_outline_has_counter(mesh: &Mesh) {
+    let vertices = mesh
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .and_then(bevy::mesh::VertexAttributeValues::as_float3)
+        .unwrap();
+    let vertices = vertices
+        .iter()
+        .map(|v| Vec3::from_array(*v).truncate())
+        .collect::<Vec<_>>();
+    let bounds = Rect {
+        min: vertices
+            .iter()
+            .copied()
+            .fold(Vec2::splat(f32::INFINITY), Vec2::min),
+        max: vertices
+            .iter()
+            .copied()
+            .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max),
+    };
+    let indices = mesh.indices().unwrap().iter().collect::<Vec<_>>();
+    let filled = |point: Vec2| {
+        indices.as_chunks::<3>().0.iter().any(|triangle| {
+            let [a, b, c] = [
+                vertices[triangle[0]],
+                vertices[triangle[1]],
+                vertices[triangle[2]],
+            ];
+            let edges = [
+                (b - a).perp_dot(point - a),
+                (c - b).perp_dot(point - b),
+                (a - c).perp_dot(point - c),
+            ];
+            edges.iter().all(|v| *v >= 0.) || edges.iter().all(|v| *v <= 0.)
+        })
+    };
+    assert!(!filled(bounds.center()));
+    assert!((1..20).any(|step| filled(Vec2::new(
+        bounds.min.x + bounds.width() * step as f32 / 40.,
+        bounds.center().y
+    ))));
 }
 
 #[test]

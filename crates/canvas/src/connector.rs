@@ -316,7 +316,8 @@ impl CanvasConnector {
     pub(crate) fn label_transform(transform: Transform, at: Vec2, depth: f32) -> Transform {
         let mut label = transform;
         label.translation = transform.transform_point(at.extend(0.0));
-        CanvasText::projected_transform(label, depth)
+        label.translation.z = depth;
+        label
     }
 
     pub(crate) fn label_projection(projection: Affine3A, at: Vec2) -> Affine3A {

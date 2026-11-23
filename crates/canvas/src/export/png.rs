@@ -13,7 +13,9 @@ use super::{CanvasExportError, CanvasRenderIssue};
 use crate::{
     CanvasContainer, CanvasDocument, CanvasFill,
     renderer::paint::{PaintMaterial, blended},
+    text::vector::{self, TextDraw},
 };
+use bevy::math::DVec2;
 use bevy::prelude::*;
 use bevy::{
     asset::{RenderAssetUsages, UntypedAssetId},
@@ -46,7 +48,7 @@ use bevy_widgetry_job::{
     JobState,
 };
 use event_listener::Event;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{
@@ -448,10 +450,9 @@ struct Parts {
 #[derive(Component, Clone, ExtractComponent)]
 #[extract_app(RenderApp)]
 struct Probe {
-    meshes: Vec<AssetId<Mesh>>,
+    meshes: HashSet<AssetId<Mesh>>,
     materials: Vec<UntypedAssetId>,
     image: AssetId<Image>,
-    atlases: Option<Vec<AssetId<Image>>>,
     ready: Arc<AtomicBool>,
 }
 
@@ -468,7 +469,7 @@ pub(super) fn install(app: &mut App) {
         .add_plugins(ExtractComponentPlugin::<Probe>::default())
         .add_observer(release)
         .add_systems(Update, poll_jobs)
-        .add_systems(Last, (text_ready, redraw_exports));
+        .add_systems(Last, redraw_exports);
     if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
         render_app.add_systems(
             Render,
@@ -496,10 +497,6 @@ fn mark_ready(
     for (probe, pipeline, _) in &probes {
         if pipelines.get_render_pipeline(pipeline.0).is_some()
             && images.get(probe.image).is_some()
-            && probe
-                .atlases
-                .as_ref()
-                .is_some_and(|ids| ids.iter().all(|id| images.get(*id).is_some()))
             && probe.meshes.iter().all(|id| meshes.get(*id).is_some())
             && probe
                 .materials
@@ -829,10 +826,12 @@ fn prepare(
     entity: Entity,
     snapshot: super::Snapshot,
     size: UVec2,
+    density: DVec2,
 ) -> std::result::Result<(), CanvasExportError> {
     let target = OffscreenTarget::allocate(world, entity).map_err(CanvasExportError::Offscreen)?;
     let layer = target.layer();
     let image_handle = target.image().clone();
+    let image = image_handle.id();
     if let Err(error) = set_image(world, image_handle.clone(), size) {
         return Err(error.with_cleanup(target.release(world)));
     }
@@ -884,58 +883,25 @@ fn prepare(
         started: Instant::now(),
         capture: None,
     });
-    let texts = geometry(world, entity, content, layer, &snapshot)?;
+    let mut probe = Probe {
+        meshes: HashSet::new(),
+        materials: Vec::new(),
+        image,
+        ready,
+    };
+    geometry(
+        world, entity, content, layer, &snapshot, density, &mut probe,
+    )?;
     let job = world
         .get::<CanvasPngExport>(entity)
         .and_then(|job| job.resources.as_ref())
         .ok_or_else(|| CanvasExportError::Render(CanvasRenderIssue::MissingOperation))?;
-    let probe = Probe {
-        meshes: job.meshes.iter().map(Handle::id).collect(),
-        materials: job.materials.iter().map(PaintMaterial::id).collect(),
-        image: job.target.image().id(),
-        atlases: texts.is_empty().then(Vec::new),
-        ready,
-    };
+    probe.meshes.extend(job.meshes.iter().map(Handle::id));
+    probe
+        .materials
+        .extend(job.materials.iter().map(PaintMaterial::id));
     world.entity_mut(camera).insert(probe);
-    if !texts.is_empty() {
-        world.entity_mut(camera).insert(PendingText(texts));
-    }
     Ok(())
-}
-
-#[derive(Component)]
-struct PendingText(Vec<Entity>);
-
-fn text_ready(
-    mut commands: Commands,
-    mut probes: Query<(Entity, &PendingText, &mut Probe)>,
-    layouts: Query<(&bevy::text::TextLayoutInfo, &TextFont, &Text2d)>,
-    fonts: Option<Res<Assets<Font>>>,
-) {
-    let Some(fonts) = fonts else { return };
-    for (camera, pending, mut probe) in &mut probes {
-        let mut atlases = Vec::new();
-        if pending.0.iter().all(|id| {
-            let Ok((layout, font, text)) = layouts.get(*id) else {
-                return false;
-            };
-            let bevy::text::FontSource::Handle(handle) = &font.font else {
-                return false;
-            };
-            if !fonts.contains(handle.id()) || (!text.0.is_empty() && layout.size.y <= 0.0) {
-                return false;
-            }
-            for glyph in &layout.glyphs {
-                if !atlases.contains(&glyph.atlas_info.texture) {
-                    atlases.push(glyph.atlas_info.texture);
-                }
-            }
-            true
-        }) {
-            probe.atlases = Some(atlases);
-            commands.entity(camera).remove::<PendingText>();
-        }
-    }
 }
 
 fn geometry(
@@ -944,8 +910,9 @@ fn geometry(
     content: Entity,
     layer: usize,
     snapshot: &super::Snapshot,
-) -> std::result::Result<Vec<Entity>, CanvasExportError> {
-    let mut texts = Vec::new();
+    density: DVec2,
+    probe: &mut Probe,
+) -> std::result::Result<(), CanvasExportError> {
     let mut proxies = EntityHashMap::default();
     for group in &snapshot.groups {
         let parent = export_parent(content, &proxies, group.container)?;
@@ -965,31 +932,55 @@ fn geometry(
     for (index, shape) in snapshot.shapes.iter().enumerate() {
         let depth = index as f32 / count * EXPORT_PAINT_DEPTH_RANGE;
         let parent = export_parent(content, &proxies, shape.container)?;
+        let geometry_error = |error: crate::error::CanvasFault| {
+            CanvasExportError::Model(
+                error
+                    .at("shape", shape.entity)
+                    .into_failure(ErrorFrame::new("canvas.png.geometry")),
+            )
+        };
+        let mut draw_text = |text: &crate::CanvasText,
+                             local: Transform|
+         -> std::result::Result<(), CanvasExportError> {
+            let proxy = TextDraw::from_text(text)
+                .project(
+                    world,
+                    None,
+                    vector::Projection {
+                        parent,
+                        layer,
+                        local,
+                        document: shape.projection,
+                        density,
+                        cull: false,
+                    },
+                )
+                .map_err(geometry_error)?;
+            let (material, meshes) = vector::assets(world, proxy);
+            probe.meshes.extend(meshes);
+            probe.materials.extend(material.map(AssetId::untyped));
+            Ok(())
+        };
         let (paint, meshes) = match &shape.artwork {
             super::Artwork::Geometry(geometry, paint) => {
                 (*paint, crate::geometry::meshes(geometry, *paint))
             }
             super::Artwork::Text(text) => {
-                texts.push(text.proxy(
-                    world,
-                    parent,
-                    layer,
-                    crate::CanvasText::projected_transform(shape.local_transform, depth),
-                ));
+                let mut local = shape.local_transform;
+                local.translation.z = depth;
+                draw_text(text, local)?;
                 continue;
             }
             super::Artwork::Connector(connector) => {
                 if let Some((label, at)) = connector.label_at() {
-                    texts.push(label.proxy(
-                        world,
-                        parent,
-                        layer,
+                    draw_text(
+                        label,
                         crate::CanvasConnector::label_transform(
                             shape.local_transform,
                             at,
                             depth + 0.75 / count * EXPORT_PAINT_DEPTH_RANGE,
                         ),
-                    ));
+                    )?;
                 }
                 let style = connector.style();
                 let paint = style.paint();
@@ -997,11 +988,7 @@ fn geometry(
                 (paint, crate::path::connector_meshes(&route, &arrows, paint))
             }
         };
-        let (fill_mesh, stroke_mesh) = meshes.map_err(|error| {
-            CanvasExportError::Model(error.at("shape", shape.entity).into_failure(
-                bevy_widgetry_diagnostics::ErrorFrame::new("canvas.png.geometry"),
-            ))
-        })?;
+        let (fill_mesh, stroke_mesh) = meshes.map_err(geometry_error)?;
         for (fill, mesh, offset) in [
             (paint.fill, fill_mesh, 0.0),
             (
@@ -1042,7 +1029,7 @@ fn geometry(
             material.attach(world, entity);
         }
     }
-    Ok(texts)
+    Ok(())
 }
 
 fn export_parent(
@@ -1093,7 +1080,8 @@ fn poll_jobs(world: &mut World) -> Result {
                     }
                 };
                 let size = job.tiles.tile().render_size;
-                if let Err(error) = prepare(world, entity, snapshot, size) {
+                let density = job.tiles.size.as_dvec2() / job.tiles.region.size().as_dvec2();
+                if let Err(error) = prepare(world, entity, snapshot, size, density) {
                     fail_export(world, entity, &bridge, ExportInput::Failed(error));
                 }
             } else {
@@ -1538,7 +1526,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
-    fn dx12_forced_tiles_match_full_frame_curves_holes_strokes_and_transparency() {
+    fn dx12_forced_tiles_match_full_frame_curves_holes_strokes_text_and_transparency() {
         use crate::{
             CanvasFillRule, CanvasGeometry, CanvasPaint, CanvasPath, CanvasPathCommand::*,
             CanvasStroke,
@@ -1648,6 +1636,18 @@ mod tests {
             paint,
         )
         .unwrap();
+        CanvasDocument::create_text(
+            app.world_mut(),
+            document,
+            crate::CanvasTextStyle {
+                content: "O回".into(),
+                font_size: 48.0,
+                color: Color::srgb(1.0, 1.0, 0.0),
+                ..default()
+            },
+            Transform::from_xyz(118.0, 87.0, 0.0),
+        )
+        .unwrap();
         assert!(
             app.world_mut()
                 .query_filtered::<Entity, With<CanvasGeometry>>()
@@ -1684,6 +1684,17 @@ mod tests {
             let tiled = image::open(directory.path().join(format!("{scale}-true.png")))
                 .unwrap()
                 .into_rgba8();
+            let ink = |x, y| *full.get_pixel(x, y) == image::Rgba([255, 255, 0, 255]);
+            for boundary in [false, true] {
+                assert!(full.enumerate_pixels().any(|(x, y, _)| {
+                    ink(x, y)
+                        && if boundary {
+                            x >= 128 * scale
+                        } else {
+                            x < 128 * scale
+                        }
+                }));
+            }
             let max = full
                 .as_raw()
                 .iter()
