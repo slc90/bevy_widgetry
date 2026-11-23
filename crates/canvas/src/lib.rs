@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod alpha;
+mod anchors;
 mod basic_path;
 mod batch;
 mod connector;
@@ -31,6 +32,7 @@ mod snapping;
 mod text;
 mod view;
 
+pub use anchors::{CanvasAnchor, CanvasConnectorEnd, CanvasConnectorEndpoint};
 pub use connector::{
     CanvasArrow, CanvasConnector, CanvasConnectorLabel, CanvasConnectorRoute, CanvasConnectorStyle,
 };

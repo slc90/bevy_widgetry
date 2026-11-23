@@ -128,6 +128,7 @@ pub enum CanvasIssue {
     Paint,
     TextProperties,
     ConnectorRoute,
+    ConnectorAnchor,
     ConnectorLabelPosition,
     GridSpacing,
     ObjectSnapTolerance,

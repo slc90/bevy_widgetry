@@ -64,10 +64,7 @@ pub(crate) fn update_selected_transforms(
             Some(shape) => error.at("shape", shape),
             None => error,
         })?;
-        for (shape, transform) in updates {
-            crate::history::set_transform(world, document, *shape, *transform)?;
-        }
-        Ok(())
+        crate::history::set_transforms(world, document, updates)
     })()
     .map_err(|error| {
         error.input(crate::CanvasInput::Entity {

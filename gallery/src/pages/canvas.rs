@@ -701,7 +701,9 @@ fn refresh(world: &mut World) -> Result {
         .with_key_arg("snap", grid_status(grid.snap != CanvasGridSnap::default()))
         .with_key_arg(
             "object_snap",
-            grid_status(object_snap.edges || object_snap.path_nodes),
+            grid_status(
+                object_snap.edges || object_snap.path_nodes || object_snap.connector_anchors,
+            ),
         )
         .with_key_arg(
             "region",
@@ -919,9 +921,11 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             Action::ToggleObjectSnap => {
                 let mut settings = CanvasView::object_snap(world, demo.main)
                     .map_err(|error| error.into_bevy_error())?;
-                let enabled = !(settings.edges && settings.path_nodes);
+                let enabled =
+                    !(settings.edges && settings.path_nodes && settings.connector_anchors);
                 settings.edges = enabled;
                 settings.path_nodes = enabled;
+                settings.connector_anchors = enabled;
                 CanvasView::set_object_snap_in_world(world, demo.main, settings)
                     .map_err(|error| error.into_bevy_error())?;
             }

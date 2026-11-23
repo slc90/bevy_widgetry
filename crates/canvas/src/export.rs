@@ -496,6 +496,9 @@ fn snapshot(
             })?;
             (Artwork::Text(text.clone()), b)
         } else if let Some(connector) = world.get::<crate::CanvasConnector>(entity) {
+            if !connector.drawn() {
+                return Ok(false);
+            }
             let bounds = connector
                 .bounds(&local_transform, &projection)
                 .map_err(|error| {

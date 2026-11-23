@@ -1,14 +1,16 @@
 use crate::error::{CanvasResult, PublicResult, invalid};
 use crate::{
-    CanvasContainer, CanvasDocument, CanvasEditTarget, CanvasGeometry, CanvasIssue, CanvasLayerId,
-    CanvasPaint, CanvasPath, CanvasPathCommand, CanvasStroke, CanvasText, CanvasTextAlign,
-    CanvasTextStyle,
+    CanvasAnchor, CanvasConnectorEnd, CanvasConnectorEndpoint, CanvasContainer, CanvasDocument,
+    CanvasEditTarget, CanvasGeometry, CanvasIssue, CanvasLayerId, CanvasPaint, CanvasPath,
+    CanvasPathCommand, CanvasStroke, CanvasText, CanvasTextAlign, CanvasTextStyle,
+    anchors::Attachment,
 };
 use bevy::{math::Affine3A, prelude::*};
 use bevy_widgetry_diagnostics::ErrorFrame;
 
 const ARROW_LENGTH_IN_STROKE_WIDTHS: f64 = 4.0;
 const ARROW_HALF_WIDTH_RATIO: f64 = 0.4;
+const COLLAPSED_MARKER_HALF_SIZE: f32 = 3.0;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Reflect)]
 pub enum CanvasArrow {
@@ -45,6 +47,8 @@ pub struct CanvasConnectorLabel {
 #[require(crate::CanvasItem, Transform)]
 pub struct CanvasConnector {
     route: CanvasConnectorRoute,
+    attachments: [Option<Attachment>; 2],
+    hidden_by_anchor: bool,
     style: CanvasConnectorStyle,
     label: Option<CanvasConnectorLabel>,
     layout: Option<CanvasText>,
@@ -165,6 +169,86 @@ impl CanvasConnector {
         &self.route
     }
 
+    fn endpoint(&self, end: CanvasConnectorEnd, local: Transform) -> CanvasConnectorEndpoint {
+        let point = match end {
+            CanvasConnectorEnd::Start => self.route.start,
+            CanvasConnectorEnd::End => self.route.end,
+        };
+        self.attachments[end.index()].map_or_else(
+            || {
+                CanvasConnectorEndpoint::Free(
+                    crate::snapping::project(local.compute_affine(), point.as_dvec2()).as_vec2(),
+                )
+            },
+            |attachment| CanvasConnectorEndpoint::Attached {
+                target: attachment.target,
+                anchor: attachment.anchor,
+            },
+        )
+    }
+
+    pub(crate) fn drawn(&self) -> bool {
+        self.visible() && self.route.drawable()
+    }
+
+    pub(crate) fn visible(&self) -> bool {
+        !self.hidden_by_anchor
+    }
+
+    pub(crate) fn movement_anchor(&self) -> Vec2 {
+        if self.attachments[CanvasConnectorEnd::Start.index()].is_none() {
+            self.route.start
+        } else if let Some(&waypoint) = self.route.waypoints.first() {
+            waypoint
+        } else if self.attachments[CanvasConnectorEnd::End.index()].is_none() {
+            self.route.end
+        } else {
+            Vec2::ZERO
+        }
+    }
+
+    fn has_attachments(&self) -> bool {
+        self.attachments.iter().any(Option::is_some)
+    }
+
+    fn set_route_endpoint(&mut self, end: CanvasConnectorEnd, point: Vec2) {
+        match end {
+            CanvasConnectorEnd::Start => self.route.start = point,
+            CanvasConnectorEnd::End => self.route.end = point,
+        }
+    }
+
+    fn refresh_targets(&mut self, world: &World, document: Entity, item: Entity) -> CanvasResult {
+        let projection = crate::groups::document_transform(world, item)?;
+        self.refresh_in_projection(world, document, projection)
+    }
+
+    fn refresh_in_projection(
+        &mut self,
+        world: &World,
+        document: Entity,
+        projection: Affine3A,
+    ) -> CanvasResult {
+        self.hidden_by_anchor = false;
+        if !self.has_attachments() {
+            return Ok(());
+        }
+        for end in CanvasConnectorEnd::ALL {
+            let Some(attachment) = self.attachments[end.index()] else {
+                continue;
+            };
+            if let Some((visible, point)) =
+                resolve_attachment(world, document, projection, attachment)?
+            {
+                self.hidden_by_anchor |= !visible;
+                self.set_route_endpoint(end, point);
+            } else {
+                self.attachments[end.index()] = None;
+            }
+        }
+        Ok(())
+    }
+
     pub fn style(&self) -> CanvasConnectorStyle {
         self.style
     }
@@ -174,6 +258,27 @@ impl CanvasConnector {
     }
 
     pub(crate) fn geometry(&self) -> (CanvasGeometry, CanvasPaint, Option<CanvasPath>) {
+        if !self.route.drawable() {
+            let point = self.route.start;
+            let radius = COLLAPSED_MARKER_HALF_SIZE;
+            let marker = CanvasPath {
+                commands: vec![
+                    CanvasPathCommand::MoveTo(point - Vec2::X * radius),
+                    CanvasPathCommand::LineTo(point - Vec2::Y * radius),
+                    CanvasPathCommand::LineTo(point + Vec2::X * radius),
+                    CanvasPathCommand::LineTo(point + Vec2::Y * radius),
+                    CanvasPathCommand::Close,
+                ],
+            };
+            return (
+                CanvasGeometry::Path(marker),
+                CanvasPaint {
+                    fill: Some(self.style.stroke.color),
+                    ..Default::default()
+                },
+                None,
+            );
+        }
         let (route, arrows) = self.route.paths(self.style);
         (
             CanvasGeometry::Path(route),
@@ -211,6 +316,14 @@ impl CanvasConnector {
 
     pub(crate) fn bounds(&self, local: &Transform, projection: &Affine3A) -> CanvasResult<Rect> {
         if !self.route.drawable() {
+            if self.route.vertices().all(Vec2::is_finite) {
+                crate::model::validate_transform_and_paint(local, &self.style.paint())?;
+                let point =
+                    crate::snapping::project(*projection, self.route.start.as_dvec2()).as_vec2();
+                if point.is_finite() {
+                    return Ok(Rect::from_center_size(point, Vec2::ZERO));
+                }
+            }
             return Err(invalid(CanvasIssue::ConnectorRoute));
         }
         let (route, arrows) = self.route.paths(self.style);
@@ -256,6 +369,8 @@ impl CanvasConnector {
             .transpose()?;
         Ok(Self {
             route,
+            attachments: [None; crate::CanvasConnectorEnd::ALL.len()],
+            hidden_by_anchor: false,
             style,
             label,
             layout,
@@ -264,6 +379,96 @@ impl CanvasConnector {
 }
 
 impl CanvasDocument {
+    pub fn connector_endpoint(
+        world: &World,
+        document: Entity,
+        item: Entity,
+        end: CanvasConnectorEnd,
+    ) -> PublicResult<CanvasConnectorEndpoint> {
+        (|| -> CanvasResult<_> {
+            crate::groups::item_parent(world, document, item)?;
+            let local = crate::groups::local_transform(world, item)?;
+            Ok(connector(world, item)?.endpoint(end, local))
+        })()
+        .map_err(|error| {
+            error
+                .at("connector", item)
+                .into_failure(ErrorFrame::new("canvas.CanvasDocument.connector_endpoint"))
+        })
+    }
+
+    pub fn shape_anchor(
+        world: &World,
+        document: Entity,
+        shape: Entity,
+        anchor: CanvasAnchor,
+    ) -> PublicResult<Option<Vec2>> {
+        (|| -> CanvasResult<Option<Vec2>> {
+            crate::model::validate_document(world, document)?;
+            if crate::order::item_placement(world, document, shape).is_none()
+                || world.get::<crate::CanvasShape>(shape).is_none()
+            {
+                return Err(crate::model::invalid_ownership(world, shape));
+            }
+            crate::anchors::document_point(world, shape, anchor)
+        })()
+        .map_err(|error| {
+            error
+                .at("document", document)
+                .at("shape", shape)
+                .into_failure(ErrorFrame::new("canvas.CanvasDocument.shape_anchor"))
+        })
+    }
+
+    pub fn set_connector_endpoint(
+        world: &mut World,
+        target: impl Into<CanvasEditTarget>,
+        item: Entity,
+        end: CanvasConnectorEnd,
+        endpoint: CanvasConnectorEndpoint,
+    ) -> PublicResult<bool> {
+        crate::history::apply(world, target, |world, document| {
+            crate::groups::item_parent(world, document, item)?;
+            let previous = connector(world, item)?;
+            let mut value = previous.clone();
+            let local = crate::groups::local_transform(world, item)?;
+            if value.endpoint(end, local) == endpoint {
+                return Ok(false);
+            }
+            let (point, attachment) = match endpoint {
+                CanvasConnectorEndpoint::Free(point) => (
+                    crate::scale::local_point(local.compute_affine(), point).as_vec2(),
+                    None,
+                ),
+                CanvasConnectorEndpoint::Attached { target, anchor } => {
+                    let attachment = Attachment { target, anchor };
+                    let projection = crate::groups::document_transform(world, item)?;
+                    let (_, point) = resolve_attachment(world, document, projection, attachment)?
+                        .ok_or_else(|| {
+                        invalid(CanvasIssue::ConnectorAnchor).at("shape", target)
+                    })?;
+                    (point, Some(attachment))
+                }
+            };
+            value.attachments[end.index()] = attachment;
+            value.set_route_endpoint(end, point);
+            value.refresh_targets(world, document, item)?;
+            if previous == &value {
+                return Ok(false);
+            }
+            if attachment.is_none() && !value.route.drawable() {
+                return Err(invalid(CanvasIssue::ConnectorRoute));
+            }
+            Self::set_connector(world, document, item, value)?;
+            Ok(true)
+        })
+        .map_err(|error| {
+            error.at("connector", item).into_failure(ErrorFrame::new(
+                "canvas.CanvasDocument.set_connector_endpoint",
+            ))
+        })
+    }
+
     pub fn create_connector(
         world: &mut World,
         target: impl Into<CanvasEditTarget>,
@@ -280,6 +485,7 @@ impl CanvasDocument {
                 route,
                 style,
                 label,
+                [None; CanvasConnectorEnd::ALL.len()],
             )
         })
         .map_err(|e| e.into_failure(ErrorFrame::new("canvas.CanvasDocument.create_connector")))
@@ -301,6 +507,7 @@ impl CanvasDocument {
                 route,
                 style,
                 label,
+                [None; CanvasConnectorEnd::ALL.len()],
             )
         })
         .map_err(|e| {
@@ -317,12 +524,21 @@ impl CanvasDocument {
         route: CanvasConnectorRoute,
         style: CanvasConnectorStyle,
         label: Option<CanvasConnectorLabel>,
+        attachments: [Option<Attachment>; 2],
     ) -> CanvasResult<Entity> {
-        let connector = CanvasConnector::new(world, route, style, label)?;
+        if !route.drawable() {
+            return Err(invalid(CanvasIssue::ConnectorRoute));
+        }
+        let mut connector = CanvasConnector::new(world, route, style, label)?;
+        connector.attachments = attachments;
         let projection = match container {
             CanvasContainer::Layer(_) => Affine3A::IDENTITY,
             CanvasContainer::Group(group) => crate::groups::document_transform(world, group)?,
         };
+        connector.refresh_in_projection(world, document, projection)?;
+        if !connector.route.drawable() {
+            return Err(invalid(CanvasIssue::ConnectorRoute));
+        }
         connector.bounds(&Transform::IDENTITY, &projection)?;
         Self::insert_item(world, document, container, (connector, Transform::IDENTITY))
     }
@@ -333,6 +549,7 @@ impl CanvasDocument {
         container: CanvasContainer,
         mut route: CanvasConnectorRoute,
         mut style: CanvasConnectorStyle,
+        attachments: [Option<Attachment>; 2],
     ) -> CanvasResult<Entity> {
         if let CanvasContainer::Group(group) = container {
             let parent = crate::groups::document_transform(world, group)?;
@@ -349,7 +566,7 @@ impl CanvasDocument {
             style.stroke.width = (f64::from(style.stroke.width) / x.length()) as f32;
         }
         crate::history::apply(world, document, |world, document| {
-            Self::insert_connector(world, document, container, route, style, None)
+            Self::insert_connector(world, document, container, route, style, None, attachments)
         })
     }
 
@@ -367,7 +584,13 @@ impl CanvasDocument {
             if previous.route == route && previous.style == style && previous.label == label {
                 return Ok(());
             }
-            let value = CanvasConnector::new(world, route, style, label)?;
+            if !route.drawable() && previous.route != route {
+                return Err(invalid(CanvasIssue::ConnectorRoute));
+            }
+            let attachments = previous.attachments;
+            let mut value = CanvasConnector::new(world, route, style, label)?;
+            value.attachments = attachments;
+            value.refresh_targets(world, document, item)?;
             Self::set_connector(world, document, item, value)
         })
         .map_err(|e| {
@@ -382,11 +605,16 @@ impl CanvasDocument {
         item: Entity,
         index: usize,
         point: Vec2,
+        attachment: Option<Attachment>,
     ) -> CanvasResult<bool> {
         let mut value = connector(world, item)?.clone();
         value.route.set_point(index, point);
         if !value.route.drawable() {
             return Ok(false);
+        }
+        if let Some(end) = CanvasConnectorEnd::for_point(index, value.route.waypoints.len()) {
+            value.attachments[end.index()] = attachment;
+            value.refresh_targets(world, document, item)?;
         }
         Self::set_connector(world, document, item, value)?;
         Ok(true)
@@ -436,6 +664,121 @@ impl CanvasDocument {
                 .into_failure(ErrorFrame::new("canvas.CanvasDocument.remove_connector"))
         })
     }
+}
+
+fn resolve_attachment(
+    world: &World,
+    document: Entity,
+    projection: Affine3A,
+    attachment: Attachment,
+) -> CanvasResult<Option<(bool, Vec2)>> {
+    let Some((_, layer)) = crate::order::item_placement(world, document, attachment.target)
+        .filter(|_| world.get::<crate::CanvasShape>(attachment.target).is_some())
+    else {
+        return Ok(None);
+    };
+    let Some(point) = crate::anchors::document_point(world, attachment.target, attachment.anchor)?
+    else {
+        return Ok(None);
+    };
+    let local = crate::scale::local_point(projection, point).as_vec2();
+    if !local.is_finite() {
+        return Err(invalid(CanvasIssue::ConnectorAnchor).at("shape", attachment.target));
+    }
+    Ok(Some((layer.visible(), local)))
+}
+
+fn attached_connectors(world: &mut World, document: Entity) -> Vec<(Entity, CanvasConnector)> {
+    if world.component_id::<CanvasConnector>().is_none() {
+        return Vec::new();
+    }
+    world
+        .query::<(Entity, &CanvasConnector)>()
+        .iter(world)
+        .filter(|(item, value)| {
+            value.has_attachments()
+                && crate::order::item_placement(world, document, *item).is_some()
+        })
+        .map(|(item, value)| (item, value.clone()))
+        .collect()
+}
+
+fn attachment_updates(
+    world: &World,
+    document: Entity,
+    attached: Vec<(Entity, CanvasConnector)>,
+) -> CanvasResult<Vec<(Entity, CanvasConnector)>> {
+    let mut updates = Vec::new();
+    for (item, mut value) in attached {
+        value.refresh_targets(world, document, item)?;
+        if connector(world, item)? != &value {
+            value
+                .bounds(
+                    &crate::groups::local_transform(world, item)?,
+                    &crate::groups::document_transform(world, item)?,
+                )
+                .map_err(|error| error.at("connector", item))?;
+            updates.push((item, value));
+        }
+    }
+    Ok(updates)
+}
+
+pub(crate) fn validate_following(
+    world: &mut World,
+    document: Entity,
+    transforms: &[(Entity, Transform)],
+    geometry: Option<(Entity, &CanvasGeometry)>,
+) -> CanvasResult {
+    let attached = attached_connectors(world, document);
+    if attached.is_empty() {
+        return Ok(());
+    }
+    let previous = transforms
+        .iter()
+        .map(|&(item, _)| {
+            crate::groups::local_transform(world, item).map(|transform| (item, transform))
+        })
+        .collect::<CanvasResult<Vec<_>>>()?;
+    let previous_geometry = geometry
+        .map(|(item, _)| {
+            world
+                .get::<CanvasGeometry>(item)
+                .cloned()
+                .map(|geometry| (item, geometry))
+                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Geometry).at("shape", item))
+        })
+        .transpose()?;
+    // Preview the complete edit without running observers or changing the live component ticks.
+    let set_transforms = |world: &mut World, values: &[(Entity, Transform)]| {
+        for &(item, transform) in values {
+            if let Some(mut current) = world.get_mut::<Transform>(item) {
+                *current.bypass_change_detection() = transform;
+            }
+        }
+    };
+    set_transforms(world, transforms);
+    if let Some((item, geometry)) = geometry
+        && let Some(mut current) = world.get_mut::<CanvasGeometry>(item)
+    {
+        current.bypass_change_detection().clone_from(geometry);
+    }
+    let validation = attachment_updates(world, document, attached);
+    set_transforms(world, &previous);
+    if let Some((item, geometry)) = previous_geometry
+        && let Some(mut current) = world.get_mut::<CanvasGeometry>(item)
+    {
+        *current.bypass_change_detection() = geometry;
+    }
+    validation.map(|_| ())
+}
+
+pub(crate) fn refresh_attachments(world: &mut World, document: Entity) -> CanvasResult {
+    let attached = attached_connectors(world, document);
+    for (item, value) in attachment_updates(world, document, attached)? {
+        crate::history::set_connector(world, document, item, value)?;
+    }
+    Ok(())
 }
 
 fn connector(world: &World, item: Entity) -> CanvasResult<&CanvasConnector> {

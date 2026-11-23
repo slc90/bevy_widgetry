@@ -410,7 +410,7 @@ fn subtree_bounds(
                     return Err(invalid(CanvasIssue::GroupTransform).at("connector", item));
                 }
             }
-            if measure {
+            if measure && connector.drawn() {
                 let (route, paint, arrows) = connector.geometry();
                 let painted = crate::mesh_cache::painted_bounds(
                     world,

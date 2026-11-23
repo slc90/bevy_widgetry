@@ -1,3 +1,4 @@
+use crate::anchors::{AnchorSnap, Attachment};
 use crate::error::{CanvasResult, PublicResult, invalid, missing};
 use crate::{CanvasGeometry, CanvasInput, CanvasIssue, CanvasPart, CanvasView, view::ViewState};
 use bevy::{
@@ -15,6 +16,7 @@ const RELEASE_MARGIN_PX: f64 = 2.0;
 pub struct CanvasObjectSnap {
     pub edges: bool,
     pub path_nodes: bool,
+    pub connector_anchors: bool,
     pub tolerance_px: f32,
 }
 
@@ -23,6 +25,7 @@ impl Default for CanvasObjectSnap {
         Self {
             edges: false,
             path_nodes: false,
+            connector_anchors: false,
             tolerance_px: DEFAULT_TOLERANCE_PX,
         }
     }
@@ -105,6 +108,7 @@ fn set_settings(world: &mut World, view: Entity, settings: CanvasObjectSnap) -> 
 enum Feature {
     Edge { source: usize, target: usize },
     Node(usize),
+    ConnectorAnchor(crate::CanvasAnchor),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -141,6 +145,7 @@ pub(crate) struct DragSnap {
     axes: [Option<Target>; 2],
     node: Option<Target>,
     guides: [Option<f32>; 2],
+    anchor: Option<Attachment>,
 }
 
 pub(crate) fn guides(world: &World, view: Entity) -> [Option<f32>; 2] {
@@ -199,6 +204,15 @@ struct Tolerance {
 }
 
 impl Tolerance {
+    fn for_view(state: &ViewState) -> Self {
+        let zoom = f64::from(state.zoom);
+        let tolerance = f64::from(state.object_snap.tolerance_px);
+        Self {
+            acquire: tolerance / zoom,
+            release: (tolerance + RELEASE_MARGIN_PX) / zoom,
+        }
+    }
+
     fn consider(self, best: &mut Option<Candidate>, candidate: Candidate) {
         let limit = if candidate.held {
             self.release
@@ -209,6 +223,125 @@ impl Tolerance {
             *best = Some(candidate);
         }
     }
+}
+
+fn visible_paint(entry: &EntityRef) -> bool {
+    entry.get::<crate::CanvasPaint>().is_none_or(|paint| {
+        paint.fill.is_some_and(|fill| fill.alpha() > 0.0)
+            || paint
+                .stroke
+                .is_some_and(|stroke| stroke.color.alpha() > 0.0)
+    })
+}
+
+pub(crate) fn connector_anchor(
+    world: &World,
+    view: Entity,
+    point: Vec2,
+    held: Option<Attachment>,
+) -> CanvasResult<Option<AnchorSnap>> {
+    let Some(state) = world
+        .get::<ViewState>(view)
+        .filter(|state| state.object_snap.connector_anchors)
+    else {
+        return Ok(None);
+    };
+    let Some(document) = state.document else {
+        return Ok(None);
+    };
+    let point = point.as_dvec2();
+    if !point.is_finite() || world.get::<crate::CanvasDocument>(document).is_none() {
+        return Ok(None);
+    }
+    let tolerance = Tolerance::for_view(state);
+    let mut candidate = None;
+    let mut draw_index = 0;
+    let order = crate::order::OrderComponents::new(world);
+    let layers = crate::order::stack(world, document)?
+        .layers()
+        .iter()
+        .filter(|layer| layer.visible());
+    crate::order::visit_draw_order(
+        world,
+        layers,
+        |entity, container, entry| -> CanvasResult<bool> {
+            let Some(entry) =
+                entry.filter(|entry| order.is_valid(entry, container.parent(document)))
+            else {
+                return Ok(false);
+            };
+            if entry.contains::<crate::CanvasGroup>() {
+                return Ok(true);
+            }
+            let Some(geometry) = entry
+                .get::<CanvasGeometry>()
+                .filter(|_| visible_paint(entry))
+            else {
+                return Ok(false);
+            };
+            draw_index += 1;
+            let projection = crate::groups::document_transform(world, entity)?;
+            for (anchor, local) in crate::CanvasAnchor::ALL
+                .into_iter()
+                .zip(crate::anchors::local_points(geometry)?)
+            {
+                let Some(local) = local else {
+                    continue;
+                };
+                let delta = project(projection, local) - point;
+                tolerance.consider(
+                    &mut candidate,
+                    Candidate {
+                        target: Target {
+                            entity,
+                            feature: Feature::ConnectorAnchor(anchor),
+                        },
+                        draw_index,
+                        distance: delta.length(),
+                        held: held
+                            == Some(Attachment {
+                                target: entity,
+                                anchor,
+                            }),
+                        coordinate: 0.0,
+                        delta,
+                    },
+                );
+            }
+            Ok(false)
+        },
+    )?;
+    Ok(candidate.and_then(|found| {
+        let Feature::ConnectorAnchor(anchor) = found.target.feature else {
+            return None;
+        };
+        let point = (point + found.delta).as_vec2();
+        point.is_finite().then_some(AnchorSnap {
+            attachment: Attachment {
+                target: found.target.entity,
+                anchor,
+            },
+            point,
+        })
+    }))
+}
+
+pub(crate) fn drag_connector_anchor(
+    world: &mut World,
+    view: Entity,
+    point: Vec2,
+) -> CanvasResult<Option<AnchorSnap>> {
+    let held = world.get::<DragSnap>(view).and_then(|state| state.anchor);
+    let snapped = connector_anchor(world, view, point, held)?;
+    if let Some(hit) = snapped
+        && let Some(mut drag) = world.get_mut::<DragSnap>(view)
+    {
+        *drag = DragSnap {
+            anchor: Some(hit.attachment),
+            ..default()
+        };
+    }
+    Ok(snapped)
 }
 
 fn axes(bounds: Option<Rect>, point: DVec2, axis: usize) -> [f64; 3] {
@@ -290,11 +423,7 @@ fn matches(
     if !point.is_finite() || !(settings.edges || settings.path_nodes) {
         return Ok(matches);
     }
-    let zoom = f64::from(state.zoom);
-    let tolerance = Tolerance {
-        acquire: f64::from(settings.tolerance_px) / zoom,
-        release: (f64::from(settings.tolerance_px) + RELEASE_MARGIN_PX) / zoom,
-    };
+    let tolerance = Tolerance::for_view(state);
     let selected: EntityHashSet = state.selection.iter().copied().collect();
     let mut ancestors = EntityHashSet::default();
     for &item in &selected {
@@ -322,12 +451,7 @@ fn matches(
             if selected.contains(&entity) {
                 return Ok(false);
             }
-            if let Some(paint) = entry.get::<crate::CanvasPaint>()
-                && !paint.fill.is_some_and(|fill| fill.alpha() > 0.0)
-                && !paint
-                    .stroke
-                    .is_some_and(|stroke| stroke.color.alpha() > 0.0)
-            {
+            if !visible_paint(entry) {
                 return Ok(false);
             }
             let is_group = entry.contains::<crate::CanvasGroup>();

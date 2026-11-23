@@ -257,9 +257,21 @@ impl Edit {
         } else {
             crate::grid::SnapTarget::PathNode
         };
-        let correction =
-            crate::grid::local_delta(world, view, target, self.projection, position, None)?;
-        let point = (position + correction).as_vec2();
+        let anchor = if let Source::Connector(waypoints) = self.source
+            && crate::CanvasConnectorEnd::for_point(self.point.command, waypoints).is_some()
+        {
+            let point = crate::snapping::project(self.projection, position).as_vec2();
+            crate::snapping::drag_connector_anchor(world, view, point)?
+        } else {
+            None
+        };
+        let point = if let Some(anchor) = anchor {
+            crate::scale::local_point(self.projection, anchor.point).as_vec2()
+        } else {
+            let correction =
+                crate::grid::local_delta(world, view, target, self.projection, position, None)?;
+            (position + correction).as_vec2()
+        };
         if !point.is_finite() {
             return Ok(());
         }
@@ -270,6 +282,7 @@ impl Edit {
                 self.shape,
                 self.point.command,
                 point,
+                anchor.map(|anchor| anchor.attachment),
             )?;
             if !applied {
                 crate::snapping::clear(world, view);

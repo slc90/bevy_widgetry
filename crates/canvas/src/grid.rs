@@ -198,7 +198,7 @@ pub(crate) fn move_anchor_offset(world: &World, item: Entity, transform: Transfo
     world
         .get::<CanvasConnector>(item)
         .map_or(DVec2::ZERO, |connector| {
-            let start = connector.route().start.as_dvec2();
+            let start = connector.movement_anchor().as_dvec2();
             let [x, y] = crate::groups::planar_axes(&transform.compute_affine());
             x * start.x + y * start.y
         })

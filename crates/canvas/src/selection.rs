@@ -13,7 +13,9 @@ pub(crate) fn belongs_to(world: &World, document: Option<Entity>, shape: Entity)
             && world.get_entity(shape).as_ref().is_ok_and(|item| {
                 crate::model::has_shape_components(item)
                     || item.contains::<crate::CanvasText>()
-                    || item.contains::<CanvasConnector>()
+                    || item
+                        .get::<CanvasConnector>()
+                        .is_some_and(CanvasConnector::visible)
                     || crate::groups::has_group_components(item)
             })
             && crate::order::item_placement(world, document, shape)
@@ -102,6 +104,12 @@ fn hit_shapes(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Ent
             },
         )?;
         for shape in items.into_iter().rev() {
+            if world
+                .get::<CanvasConnector>(shape)
+                .is_some_and(|connector| !connector.visible())
+            {
+                continue;
+            }
             let Some(target) = target_in_scope(world, document, scope, shape) else {
                 continue;
             };
@@ -114,6 +122,7 @@ fn hit_shapes(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Ent
             }
             if let Some((label, at)) = world
                 .get::<CanvasConnector>(shape)
+                .filter(|connector| connector.drawn())
                 .and_then(CanvasConnector::label_at)
                 && hit_rect(
                     label.local_bounds(),
@@ -243,6 +252,7 @@ pub(crate) fn local_bounds(world: &mut World, shape: Entity) -> Result<Rect> {
         let mut bounds = Rect { min, max };
         if let Some((label, at)) = world
             .get::<CanvasConnector>(shape)
+            .filter(|connector| connector.drawn())
             .and_then(CanvasConnector::label_at)
         {
             let rect = label.local_bounds();

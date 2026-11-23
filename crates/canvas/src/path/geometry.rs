@@ -52,6 +52,26 @@ fn contours(source: &CanvasPath) -> Result<Vec<Contour>> {
     Ok(contours)
 }
 
+pub(crate) fn closed_outline(source: &CanvasPath) -> Result<Option<(Vec<DVec2>, DVec2)>> {
+    let mut contours = contours(source)?;
+    if contours.len() != 1 {
+        return Ok(None);
+    }
+    let Some(contour) = contours.pop().filter(|contour| {
+        contour.closed && contour.points.len() >= 3 && contour.max.cmpgt(contour.min).all()
+    }) else {
+        return Ok(None);
+    };
+    let center = (contour.min + contour.max) * 0.5;
+    let twice_area: f64 = contour
+        .points
+        .iter()
+        .zip(contour.points.iter().cycle().skip(1))
+        .map(|(a, b)| (*a - center).perp_dot(*b - center))
+        .sum();
+    Ok((twice_area != 0.0).then_some((contour.points, center)))
+}
+
 fn tessellate_contours(
     fill_contours: &[Contour],
     stroke_contours: &[Contour],

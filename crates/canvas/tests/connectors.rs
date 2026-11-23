@@ -34,6 +34,313 @@ fn svg(world: &mut World, document: Entity) -> String {
 }
 
 #[test]
+fn cardinal_anchors_project_parameter_geometry_and_closed_path_contours() {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    let ellipse = CanvasDocument::create_ellipse(
+        &mut world,
+        document,
+        CanvasEllipse {
+            radii: Vec2::new(20.0, 8.0),
+        },
+        Transform::from_xyz(100.0, -10.0, 0.0),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let triangle = CanvasDocument::create_path(
+        &mut world,
+        document,
+        CanvasPath {
+            commands: vec![
+                CanvasPathCommand::MoveTo(Vec2::new(-20.0, 10.0)),
+                CanvasPathCommand::LineTo(Vec2::new(20.0, 10.0)),
+                CanvasPathCommand::LineTo(Vec2::new(0.0, -10.0)),
+                CanvasPathCommand::Close,
+            ],
+        },
+        Transform::IDENTITY,
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    for (anchor, ellipse_point, triangle_point) in [
+        (
+            CanvasAnchor::North,
+            Vec2::new(100.0, -18.0),
+            Vec2::new(0.0, -10.0),
+        ),
+        (
+            CanvasAnchor::East,
+            Vec2::new(120.0, -10.0),
+            Vec2::new(10.0, 0.0),
+        ),
+        (
+            CanvasAnchor::South,
+            Vec2::new(100.0, -2.0),
+            Vec2::new(0.0, 10.0),
+        ),
+        (
+            CanvasAnchor::West,
+            Vec2::new(80.0, -10.0),
+            Vec2::new(-10.0, 0.0),
+        ),
+    ] {
+        assert_eq!(
+            CanvasDocument::shape_anchor(&world, document, ellipse, anchor).unwrap(),
+            Some(ellipse_point)
+        );
+        assert_eq!(
+            CanvasDocument::shape_anchor(&world, document, triangle, anchor).unwrap(),
+            Some(triangle_point)
+        );
+    }
+}
+
+#[test]
+fn attached_endpoints_move_with_the_shape_and_detach_in_the_deletion_entry() {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    let layer = CanvasDocument::create_layer(&mut world, document, 1, "Nodes").unwrap();
+    let decoration = CanvasDocument::create_rectangle(
+        &mut world,
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(12.0),
+            corner_radius: 0.0,
+        },
+        Transform::from_xyz(-50.0, 20.0, 0.0),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let shape = CanvasDocument::create_rectangle_in_layer(
+        &mut world,
+        document,
+        layer,
+        CanvasRectangle {
+            size: Vec2::new(20.0, 40.0),
+            corner_radius: 3.0,
+        },
+        Transform::IDENTITY,
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let waypoint = Vec2::new(40.0, 22.0);
+    let route = CanvasConnectorRoute {
+        start: Vec2::X,
+        end: Vec2::X * 90.0,
+        waypoints: vec![waypoint],
+    };
+    let connector =
+        CanvasDocument::create_connector(&mut world, document, route, default(), None).unwrap();
+    let attached = CanvasConnectorEndpoint::Attached {
+        target: shape,
+        anchor: CanvasAnchor::East,
+    };
+    assert!(
+        CanvasDocument::set_connector_endpoint(
+            &mut world,
+            document,
+            connector,
+            CanvasConnectorEnd::Start,
+            attached
+        )
+        .unwrap()
+    );
+    let start = |world: &World| {
+        world
+            .get::<CanvasConnector>(connector)
+            .unwrap()
+            .route()
+            .start
+    };
+    let endpoint = |world: &World| {
+        CanvasDocument::connector_endpoint(world, document, connector, CanvasConnectorEnd::Start)
+            .unwrap()
+    };
+    assert_eq!(start(&world), Vec2::X * 10.0);
+    let moved = Transform::from_xyz(25.0, -10.0, 0.0)
+        .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
+    CanvasDocument::update_transform(&mut world, document, shape, moved).unwrap();
+    assert!(start(&world).abs_diff_eq(Vec2::new(25.0, 0.0), 0.001));
+    let wider = CanvasRectangle {
+        size: Vec2::new(40.0, 40.0),
+        corner_radius: 3.0,
+    };
+    CanvasDocument::update_rectangle(&mut world, document, shape, wider, moved, default()).unwrap();
+    assert!(start(&world).abs_diff_eq(Vec2::new(25.0, 10.0), 0.001));
+    assert_eq!(
+        world
+            .get::<CanvasConnector>(connector)
+            .unwrap()
+            .route()
+            .waypoints,
+        [waypoint]
+    );
+    let sibling = CanvasDocument::create_ellipse_in_layer(
+        &mut world,
+        document,
+        layer,
+        CanvasEllipse {
+            radii: Vec2::splat(6.0),
+        },
+        Transform::from_xyz(50.0, 35.0, 0.0),
+        default(),
+    )
+    .unwrap();
+    let nodes =
+        CanvasDocument::group_items(&mut world, document, &[shape, sibling], "Nodes").unwrap();
+    let edges =
+        CanvasDocument::group_items(&mut world, document, &[decoration, connector], "Edges")
+            .unwrap();
+    let pivot = Transform::from_xyz(12.0, 24.0, 0.0)
+        .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_4))
+        .with_scale(Vec3::new(1.5, 1.5, 1.0));
+    CanvasDocument::update_group_transform(&mut world, document, nodes, pivot).unwrap();
+    CanvasDocument::update_group_transform(
+        &mut world,
+        document,
+        edges,
+        Transform::from_xyz(5.0, 8.0, 0.0),
+    )
+    .unwrap();
+    let local_anchor = Vec3::X * (wider.size.x * 0.5);
+    let shape_pose = world.get::<Transform>(shape).unwrap();
+    let expected = pivot
+        .transform_point(shape_pose.transform_point(local_anchor))
+        .truncate();
+    let connection_pose = CanvasDocument::document_transform(&world, document, connector).unwrap();
+    assert!(
+        connection_pose
+            .transform_point3(start(&world).extend(0.0))
+            .truncate()
+            .abs_diff_eq(expected, 0.001)
+    );
+    CanvasDocument::set_layer_visible(&mut world, document, layer, false).unwrap();
+    assert!(!svg(&mut world, document).contains("<path "));
+    CanvasDocument::set_layer_visible(&mut world, document, layer, true).unwrap();
+    assert!(svg(&mut world, document).contains("<path "));
+    let last = start(&world);
+    let last_in_parent = world
+        .get::<Transform>(connector)
+        .unwrap()
+        .transform_point(last.extend(0.0))
+        .truncate();
+    CanvasDocument::remove_shape(&mut world, document, shape).unwrap();
+    assert_eq!(
+        endpoint(&world),
+        CanvasConnectorEndpoint::Free(last_in_parent)
+    );
+    assert!(CanvasDocument::undo(&mut world, document).unwrap());
+    assert_eq!(endpoint(&world), attached);
+    assert_eq!(start(&world), last);
+    assert!(CanvasDocument::redo(&mut world, document).unwrap());
+    assert_eq!(
+        endpoint(&world),
+        CanvasConnectorEndpoint::Free(last_in_parent)
+    );
+}
+
+#[test]
+fn unrepresentable_following_route_rejects_the_entire_transform_batch() {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    let shape = CanvasDocument::create_rectangle(
+        &mut world,
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(20.0),
+            corner_radius: 0.0,
+        },
+        Transform::IDENTITY,
+        default(),
+    )
+    .unwrap();
+    let distance = 2e38;
+    let connector = CanvasDocument::create_connector(
+        &mut world,
+        document,
+        CanvasConnectorRoute {
+            start: Vec2::ZERO,
+            end: Vec2::new(-distance, 0.0),
+            waypoints: Vec::new(),
+        },
+        default(),
+        None,
+    )
+    .unwrap();
+    CanvasDocument::set_connector_endpoint(
+        &mut world,
+        document,
+        connector,
+        CanvasConnectorEnd::Start,
+        CanvasConnectorEndpoint::Attached {
+            target: shape,
+            anchor: CanvasAnchor::East,
+        },
+    )
+    .unwrap();
+    CanvasDocument::clear_history(&mut world, document).unwrap();
+    let route = world
+        .get::<CanvasConnector>(connector)
+        .unwrap()
+        .route()
+        .clone();
+    assert!(
+        CanvasDocument::update_transforms(
+            &mut world,
+            document,
+            &[(shape, Transform::from_xyz(distance, 0.0, 0.0))]
+        )
+        .is_err()
+    );
+    assert_eq!(world.get::<Transform>(shape), Some(&Transform::IDENTITY));
+    assert_eq!(
+        world.get::<CanvasConnector>(connector).unwrap().route(),
+        &route
+    );
+    assert!(!CanvasDocument::can_undo(&world, document).unwrap());
+}
+
+#[test]
+fn free_endpoint_setter_takes_the_parent_position_of_a_translated_connector() {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    let connector = CanvasDocument::create_connector(
+        &mut world,
+        document,
+        CanvasConnectorRoute {
+            start: Vec2::ZERO,
+            end: Vec2::X * 60.0,
+            waypoints: Vec::new(),
+        },
+        default(),
+        None,
+    )
+    .unwrap();
+    let pose = Transform::from_xyz(100.0, 0.0, 0.0);
+    CanvasDocument::update_transforms(&mut world, document, &[(connector, pose)]).unwrap();
+    let parent_point = Vec2::X * 20.0;
+    CanvasDocument::set_connector_endpoint(
+        &mut world,
+        document,
+        connector,
+        CanvasConnectorEnd::Start,
+        CanvasConnectorEndpoint::Free(parent_point),
+    )
+    .unwrap();
+    let value = world.get::<CanvasConnector>(connector).unwrap();
+    assert_eq!(
+        pose.transform_point(value.route().start.extend(0.0))
+            .truncate(),
+        parent_point
+    );
+    assert_eq!(
+        CanvasDocument::connector_endpoint(&world, document, connector, CanvasConnectorEnd::Start)
+            .unwrap(),
+        CanvasConnectorEndpoint::Free(parent_point)
+    );
+}
+
+#[test]
 fn straight_connector_has_its_own_geometry_and_one_creation_entry() {
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();
@@ -289,6 +596,89 @@ fn grouping_a_rotated_connector_uses_its_painted_projection() {
     );
 }
 
+#[test]
+fn repeated_free_endpoint_at_roundoff_is_a_no_op() {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    let connector = CanvasDocument::create_connector(
+        &mut world,
+        document,
+        CanvasConnectorRoute {
+            start: Vec2::ZERO,
+            end: Vec2::X * 40.0,
+            waypoints: vec![],
+        },
+        default(),
+        None,
+    )
+    .unwrap();
+    CanvasDocument::update_transforms(
+        &mut world,
+        document,
+        &[(connector, Transform::from_xyz(100.0, 0.0, 0.0))],
+    )
+    .unwrap();
+    let endpoint = CanvasConnectorEndpoint::Free(Vec2::X * 0.1);
+    assert!(
+        CanvasDocument::set_connector_endpoint(
+            &mut world,
+            document,
+            connector,
+            CanvasConnectorEnd::Start,
+            endpoint
+        )
+        .unwrap()
+    );
+    CanvasDocument::clear_history(&mut world, document).unwrap();
+    assert!(
+        !CanvasDocument::set_connector_endpoint(
+            &mut world,
+            document,
+            connector,
+            CanvasConnectorEnd::Start,
+            endpoint
+        )
+        .unwrap()
+    );
+    assert!(!CanvasDocument::can_undo(&world, document).unwrap());
+    let target = CanvasDocument::create_rectangle(
+        &mut world,
+        document,
+        CanvasRectangle {
+            size: Vec2::new(2.0, 10.0),
+            corner_radius: 0.0,
+        },
+        Transform::IDENTITY.with_scale(Vec3::new(0.1, 1.0, 1.0)),
+        default(),
+    )
+    .unwrap();
+    CanvasDocument::set_connector_endpoint(
+        &mut world,
+        document,
+        connector,
+        CanvasConnectorEnd::End,
+        CanvasConnectorEndpoint::Attached {
+            target,
+            anchor: CanvasAnchor::East,
+        },
+    )
+    .unwrap();
+    let route = world.get::<CanvasConnector>(connector).unwrap().route();
+    assert_eq!(route.start, route.end);
+    CanvasDocument::clear_history(&mut world, document).unwrap();
+    assert!(
+        !CanvasDocument::set_connector_endpoint(
+            &mut world,
+            document,
+            connector,
+            CanvasConnectorEnd::Start,
+            endpoint
+        )
+        .unwrap()
+    );
+    assert!(!CanvasDocument::can_undo(&world, document).unwrap());
+}
+
 fn drag(app: &mut App, view: Entity, base: &Location, from: Vec2, delta: Vec2) {
     let mut at = coordinates::at_document(app, view, base, from);
     common::input(
@@ -310,6 +700,348 @@ fn drag(app: &mut App, view: Entity, base: &Location, from: Vec2, delta: Vec2) {
         &at,
         PointerAction::Release(PointerButton::Primary),
     );
+}
+
+#[test]
+fn connector_drawing_and_endpoint_drags_use_shape_anchors_without_binding_waypoints() {
+    let (mut app, view, _, shape, window, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    add_keyboard_dispatch(&mut app);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    CanvasView::set_object_snap_in_world(
+        app.world_mut(),
+        view,
+        CanvasObjectSnap {
+            connector_anchors: true,
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Connector(default())).unwrap();
+    let west = Vec2::new(-18.0, 1.0);
+    let waypoint = Vec2::new(-3.0, -17.0);
+    let free = Vec2::new(50.0, -20.0);
+    for point in [west, waypoint, free] {
+        click_at(&mut app, view, &base, point);
+    }
+    press_key(&mut app, window, KeyCode::Enter);
+    let item = CanvasView::single_selection(app.world(), view)
+        .unwrap()
+        .unwrap();
+    let endpoint = |world: &World, end| {
+        CanvasDocument::connector_endpoint(world, document, item, end).unwrap()
+    };
+    let attached = |anchor| CanvasConnectorEndpoint::Attached {
+        target: shape,
+        anchor,
+    };
+    assert_eq!(
+        endpoint(app.world(), CanvasConnectorEnd::Start),
+        attached(CanvasAnchor::West)
+    );
+    assert_eq!(
+        app.world()
+            .get::<CanvasConnector>(item)
+            .unwrap()
+            .route()
+            .waypoints,
+        [waypoint]
+    );
+    assert_eq!(
+        endpoint(app.world(), CanvasConnectorEnd::End),
+        CanvasConnectorEndpoint::Free(free)
+    );
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::PathNodeEdit).unwrap();
+    common::update(&mut app);
+    drag(&mut app, view, &base, free, Vec2::new(17.0, -1.0) - free);
+    assert_eq!(
+        endpoint(app.world(), CanvasConnectorEnd::End),
+        attached(CanvasAnchor::East)
+    );
+    let east = Vec2::X * 15.0;
+    drag(&mut app, view, &base, east, free - east);
+    assert_eq!(
+        endpoint(app.world(), CanvasConnectorEnd::End),
+        CanvasConnectorEndpoint::Free(free)
+    );
+    assert!(CanvasDocument::undo(app.world_mut(), document).unwrap());
+    assert_eq!(
+        endpoint(app.world(), CanvasConnectorEnd::End),
+        attached(CanvasAnchor::East)
+    );
+}
+
+#[test]
+fn drawing_keeps_distinct_shape_anchors_with_the_same_grid_candidate() {
+    let (mut app, view, _, _, window, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    add_keyboard_dispatch(&mut app);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    let shapes = [-6.0, 6.0].map(|y| {
+        CanvasDocument::create_ellipse(
+            app.world_mut(),
+            document,
+            CanvasEllipse {
+                radii: Vec2::splat(2.0),
+            },
+            Transform::from_xyz(0.0, y, 0.0),
+            default(),
+        )
+        .unwrap()
+    });
+    CanvasView::set_object_snap_in_world(
+        app.world_mut(),
+        view,
+        CanvasObjectSnap {
+            connector_anchors: true,
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasView::set_grid_in_world(
+        app.world_mut(),
+        view,
+        CanvasGrid {
+            snap: CanvasGridSnap::ALL,
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Connector(default())).unwrap();
+    for y in [-4.0, 4.0] {
+        click_at(&mut app, view, &base, Vec2::new(0.0, y));
+    }
+    press_key(&mut app, window, KeyCode::Enter);
+    let item = CanvasView::single_selection(app.world(), view)
+        .unwrap()
+        .unwrap();
+    let connector = app.world().get::<CanvasConnector>(item).unwrap();
+    assert_eq!(connector.route().start, Vec2::new(0.0, -4.0));
+    assert_eq!(connector.route().end, Vec2::new(0.0, 4.0));
+    assert_eq!(
+        CanvasDocument::connector_endpoint(app.world(), document, item, CanvasConnectorEnd::Start)
+            .unwrap(),
+        CanvasConnectorEndpoint::Attached {
+            target: shapes[0],
+            anchor: CanvasAnchor::South
+        }
+    );
+    assert_eq!(
+        CanvasDocument::connector_endpoint(app.world(), document, item, CanvasConnectorEnd::End)
+            .unwrap(),
+        CanvasConnectorEndpoint::Attached {
+            target: shapes[1],
+            anchor: CanvasAnchor::North
+        }
+    );
+}
+
+#[test]
+fn connector_deduplicates_repeated_ordinary_grid_candidates() {
+    let (mut app, view, _, _, window, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    add_keyboard_dispatch(&mut app);
+    CanvasView::set_grid_in_world(
+        app.world_mut(),
+        view,
+        CanvasGrid {
+            snap: CanvasGridSnap {
+                connector_points: true,
+                ..default()
+            },
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Connector(default())).unwrap();
+    for point in [
+        Vec2::new(-25.0, 25.0),
+        Vec2::new(46.0, 0.0),
+        Vec2::new(54.0, 0.0),
+        Vec2::new(75.0, 25.0),
+    ] {
+        click_at(&mut app, view, &base, point);
+    }
+    press_key(&mut app, window, KeyCode::Enter);
+    let item = CanvasView::single_selection(app.world(), view)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        app.world()
+            .get::<CanvasConnector>(item)
+            .unwrap()
+            .route()
+            .waypoints,
+        [Vec2::X * 50.0]
+    );
+}
+
+#[test]
+fn a_click_near_the_start_anchor_can_become_a_free_waypoint() {
+    let (mut app, view, _, _, window, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+    add_keyboard_dispatch(&mut app);
+    let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+    CanvasDocument::create_ellipse(
+        app.world_mut(),
+        document,
+        CanvasEllipse {
+            radii: Vec2::splat(8.0),
+        },
+        Transform::from_xyz(0.0, 12.0, 0.0),
+        default(),
+    )
+    .unwrap();
+    CanvasView::set_object_snap_in_world(
+        app.world_mut(),
+        view,
+        CanvasObjectSnap {
+            connector_anchors: true,
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasView::set_grid_in_world(
+        app.world_mut(),
+        view,
+        CanvasGrid {
+            snap: CanvasGridSnap {
+                connector_points: true,
+                ..default()
+            },
+            ..default()
+        },
+    )
+    .unwrap();
+    CanvasView::set_mode_in_world(app.world_mut(), view, CanvasMode::Connector(default())).unwrap();
+    for point in [
+        Vec2::new(0.0, 4.0),
+        Vec2::new(4.0, 1.0),
+        Vec2::new(30.0, 20.0),
+    ] {
+        click_at(&mut app, view, &base, point);
+    }
+    press_key(&mut app, window, KeyCode::Enter);
+    let item = CanvasView::single_selection(app.world(), view)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        app.world()
+            .get::<CanvasConnector>(item)
+            .unwrap()
+            .route()
+            .waypoints,
+        [Vec2::ZERO]
+    );
+}
+
+#[test]
+fn translating_an_attached_connector_uses_the_movable_end_for_grid_and_keeps_capture_at_zero() {
+    for (grid, offsets) in [
+        (true, [10.0, 11.0]),
+        (false, [-40.0, -48.0]),
+        (false, [-38.0, -40.0]),
+    ] {
+        let (mut app, view, _, shape, _, base) = common::fixture(PointerId::Mouse, 1.0, 1.0);
+        let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+        CanvasDocument::update_transform(
+            app.world_mut(),
+            document,
+            shape,
+            Transform::from_xyz(-15.0, 0.0, 0.0),
+        )
+        .unwrap();
+        let item = CanvasDocument::create_connector(
+            app.world_mut(),
+            document,
+            CanvasConnectorRoute {
+                start: Vec2::ZERO,
+                end: Vec2::X * 40.0,
+                waypoints: Vec::new(),
+            },
+            default(),
+            (offsets[1] == -40.0).then(label),
+        )
+        .unwrap();
+        CanvasDocument::set_connector_endpoint(
+            app.world_mut(),
+            document,
+            item,
+            CanvasConnectorEnd::Start,
+            CanvasConnectorEndpoint::Attached {
+                target: shape,
+                anchor: CanvasAnchor::East,
+            },
+        )
+        .unwrap();
+        CanvasView::set_selection_in_world(app.world_mut(), view, [item]).unwrap();
+        CanvasView::set_grid_in_world(
+            app.world_mut(),
+            view,
+            CanvasGrid {
+                spacing: 40.0,
+                snap: CanvasGridSnap {
+                    movement: grid,
+                    ..default()
+                },
+                ..default()
+            },
+        )
+        .unwrap();
+        common::update(&mut app);
+        let grab = Vec2::X * 30.0;
+        let mut last = coordinates::at_document(&app, view, &base, grab);
+        common::input(
+            &mut app,
+            PointerId::Mouse,
+            &last,
+            PointerAction::Move { delta: Vec2::ONE },
+        );
+        common::input(
+            &mut app,
+            PointerId::Mouse,
+            &last,
+            PointerAction::Press(PointerButton::Primary),
+        );
+        for offset in offsets {
+            let next = coordinates::at_document(&app, view, &base, grab + Vec2::X * offset);
+            common::input(
+                &mut app,
+                PointerId::Mouse,
+                &next,
+                PointerAction::Move {
+                    delta: next.position - last.position,
+                },
+            );
+            assert_eq!(CanvasView::selection(app.world(), view).unwrap(), [item]);
+            let model = app.world().get::<CanvasConnector>(item).unwrap();
+            let transform = app.world().get::<Transform>(item).unwrap();
+            assert_eq!(
+                transform.transform_point(model.route().start.extend(0.0)),
+                Vec3::ZERO
+            );
+            assert_eq!(
+                transform.transform_point(model.route().end.extend(0.0)),
+                Vec3::X * (40.0 + offset)
+            );
+            last = next;
+        }
+        common::input(
+            &mut app,
+            PointerId::Mouse,
+            &last,
+            PointerAction::Release(PointerButton::Primary),
+        );
+        if offsets[1] == -40.0 {
+            let label_count = app
+                .world_mut()
+                .query::<&Text2d>()
+                .iter(app.world())
+                .filter(|text| text.0 == label().text)
+                .count();
+            assert_eq!(label_count, 0);
+            click_at(&mut app, view, &base, Vec2::new(65.0, 30.0));
+            assert!(CanvasView::selection(app.world(), view).unwrap().is_empty());
+            click_at(&mut app, view, &base, Vec2::ZERO);
+            assert_eq!(CanvasView::selection(app.world(), view).unwrap(), [item]);
+        }
+    }
 }
 
 #[test]

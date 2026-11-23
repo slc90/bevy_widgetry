@@ -396,16 +396,20 @@ pub(crate) fn apply<T>(
             verify(world, token)?;
             let result = operation(world, token.document);
             detach_pending(world, token.document)?;
+            let attachments = crate::connector::refresh_attachments(world, token.document);
             // Bevy defers the inverse relationship update for batched inserts.
             // Settle it before another operation re-parents the same item.
             world.flush();
+            attachments?;
             result
         }
         CanvasEditTarget::Document(document) => {
             let token = begin(world, document)?;
             let result = operation(world, document);
             detach_pending(world, document)?;
+            let attachments = crate::connector::refresh_attachments(world, document);
             commit(world, token)?;
+            attachments?;
             result
         }
     }
@@ -423,8 +427,19 @@ pub(crate) fn set_transform(
     item: Entity,
     value: Transform,
 ) -> Result {
-    if record_transform(world, document, item, &value)? {
-        world.insert_batch([(item, value)]);
+    set_transforms(world, document, &[(item, value)])
+}
+
+pub(crate) fn set_transforms(
+    world: &mut World,
+    document: Entity,
+    updates: &[(Entity, Transform)],
+) -> Result {
+    crate::connector::validate_following(world, document, updates, None)?;
+    for &(item, value) in updates {
+        if record_transform(world, document, item, &value)? {
+            world.insert_batch([(item, value)]);
+        }
     }
     Ok(())
 }
@@ -489,6 +504,7 @@ pub(crate) fn set_geometry(
     item: Entity,
     value: CanvasGeometry,
 ) -> Result {
+    crate::connector::validate_following(world, document, &[], Some((item, &value)))?;
     if record_component(
         world,
         document,
@@ -510,6 +526,12 @@ pub(crate) fn set_shape(
     transform: Transform,
     paint: CanvasPaint,
 ) -> Result {
+    crate::connector::validate_following(
+        world,
+        document,
+        &[(item, transform)],
+        Some((item, &geometry)),
+    )?;
     let geometry_changed = record_component(
         world,
         document,

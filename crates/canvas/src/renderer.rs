@@ -376,6 +376,9 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
                 } else {
                     let (geometry, paint, arrows) =
                         if let Some(connector) = entry.get::<crate::CanvasConnector>() {
+                            if !connector.visible() {
+                                return Ok(());
+                            }
                             connector.geometry()
                         } else {
                             let geometry = entry.get::<CanvasGeometry>().ok_or_else(|| {
@@ -694,7 +697,7 @@ fn prepare_shape(
         .get_mut::<Transform>(stroke)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::StrokeTransform))?
         .set_if_neq(Transform::from_xyz(0.0, 0.0, spacing * 0.5));
-    if arrows.is_some() {
+    if world.get::<crate::CanvasConnector>(shape).is_some() {
         prepare_connector_label(world, shape, proxy, layer, spacing * 0.75)?;
     }
 
@@ -711,6 +714,7 @@ fn prepare_connector_label(
     let current = world.get::<ConnectorLabelProxy>(parent).map(|p| p.0);
     let Some((label, at)) = world
         .get::<crate::CanvasConnector>(item)
+        .filter(|connector| connector.drawn())
         .and_then(crate::CanvasConnector::label_at)
     else {
         if let Some(proxy) = current {

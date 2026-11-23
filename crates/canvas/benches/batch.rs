@@ -130,6 +130,7 @@ fn fixture(count: usize, nested: bool, snapping: bool) -> Result<Fixture> {
                 edges: true,
                 path_nodes: true,
                 tolerance_px: 0.25,
+                ..default()
             },
         )
         .map_err(|error| error.into_bevy_error())?;
@@ -190,6 +191,66 @@ fn fixture(count: usize, nested: bool, snapping: bool) -> Result<Fixture> {
         at,
     })
 }
+
+struct AnchorFixture {
+    world: World,
+    document: Entity,
+    target: Entity,
+    connectors: Vec<Entity>,
+}
+
+fn anchor_fixture(count: usize) -> Result<AnchorFixture> {
+    let mut world = World::new();
+    let document = world.spawn(CanvasDocument).id();
+    let target = CanvasDocument::create_rectangle(
+        &mut world,
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(GRID_SPACING * 2.0),
+            corner_radius: 0.0,
+        },
+        Transform::IDENTITY,
+        default(),
+    )
+    .map_err(|error| error.into_bevy_error())?;
+    let attachment = CanvasConnectorEndpoint::Attached {
+        target,
+        anchor: CanvasAnchor::East,
+    };
+    let mut connectors = Vec::with_capacity(count);
+    CanvasDocument::edit(&mut world, document, |world, edit| {
+        for index in 0..count {
+            let connector = CanvasDocument::create_connector(
+                world,
+                edit,
+                CanvasConnectorRoute {
+                    start: Vec2::ZERO,
+                    end: Vec2::new(GRID_SPACING * 4.0, index as f32),
+                    waypoints: Vec::new(),
+                },
+                default(),
+                None,
+            )?;
+            CanvasDocument::set_connector_endpoint(
+                world,
+                edit,
+                connector,
+                CanvasConnectorEnd::Start,
+                attachment,
+            )?;
+            connectors.push(connector);
+        }
+        Ok(())
+    })
+    .map_err(|error| error.into_bevy_error())?;
+    Ok(AnchorFixture {
+        world,
+        document,
+        target,
+        connectors,
+    })
+}
+
 fn main() -> Result {
     let mut harness = Harness::new("canvas-batch-criterion")?;
     let entity_counts = [100, 1000];
@@ -303,6 +364,35 @@ fn main() -> Result {
                 Ok(())
             },
             |f| Ok(f.app.world().entities().count_spawned()),
+        )?;
+        run(
+            &mut harness,
+            &format!("canvas_batch/connectors{count}/follow_shared_anchor"),
+            false,
+            || anchor_fixture(count),
+            |f, index| {
+                let y = if index % 2 == 0 { GRID_SPACING } else { 0.0 };
+                CanvasDocument::update_transform(
+                    &mut f.world,
+                    f.document,
+                    f.target,
+                    Transform::from_xyz(0.0, y, 0.0),
+                )
+                .map_err(|error| error.into_bevy_error())?;
+                if f.connectors.iter().any(|&connector| {
+                    f.world
+                        .get::<CanvasConnector>(connector)
+                        .is_none_or(|connector| {
+                            connector.route().start != Vec2::new(GRID_SPACING, y)
+                        })
+                }) {
+                    return Err(error(
+                        "connector endpoints did not follow the shared anchor",
+                    ));
+                }
+                Ok(())
+            },
+            |f| Ok(f.world.entities().count_spawned()),
         )?;
     }
     harness.finish()

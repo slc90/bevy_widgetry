@@ -45,6 +45,9 @@ struct Draft {
     context: Context,
     pointer: PointerId,
     vertices: Vec<Vec2>,
+    start_anchor: Option<crate::anchors::AnchorSnap>,
+    end_anchor: Option<crate::anchors::AnchorSnap>,
+    last_vertex_input: Option<Vec2>,
     last_click: Option<(Vec2, Duration)>,
 }
 
@@ -173,12 +176,8 @@ pub(crate) fn add_vertex(world: &mut World, view: Entity, screen: Vec2) -> Resul
         }
         return Ok(());
     };
-    let point = draw_point(
-        world,
-        view,
-        press.context.mode,
-        CanvasView::_center(world, view)? + local / CanvasView::_zoom(world, view)?,
-    )?;
+    let at = CanvasView::_center(world, view)? + local / CanvasView::_zoom(world, view)?;
+    let point = draw_point(world, view, press.context.mode, at)?;
     if !point.is_finite() {
         return Ok(());
     }
@@ -194,6 +193,12 @@ pub(crate) fn add_vertex(world: &mut World, view: Entity, screen: Vec2) -> Resul
         }
         return Ok(());
     }
+    let anchor = if matches!(press.context.mode, CanvasMode::Connector(_)) {
+        crate::snapping::connector_anchor(world, view, at, None)?
+    } else {
+        None
+    };
+    let vertex_input = if anchor.is_some() { at } else { point };
     let now = world.resource::<Time<Real>>().elapsed();
     let interval = world.resource::<PickingSettings>().multi_click_interval;
     let Some(mut state) = world.get_mut::<State>(view) else {
@@ -203,19 +208,44 @@ pub(crate) fn add_vertex(world: &mut World, view: Entity, screen: Vec2) -> Resul
         context: press.context,
         pointer: press.pointer,
         vertices: Vec::new(),
+        start_anchor: None,
+        end_anchor: None,
+        last_vertex_input: None,
         last_click: None,
     });
     draft.pointer = press.pointer;
     if draft.last_click.is_some_and(|(previous, at)| {
-        is_near(local, previous) && now.saturating_sub(at) <= interval
+        is_near(local, previous)
+            && now.saturating_sub(at) <= interval
+            && draft.end_anchor.map(|hit| hit.attachment) == anchor.map(|hit| hit.attachment)
     }) {
         return finish(world, view);
     }
-    if draft.vertices.last() != Some(&point) {
+    if !same_vertex(
+        draft.last_vertex_input,
+        draft.end_anchor,
+        vertex_input,
+        anchor,
+    ) {
+        if draft.vertices.is_empty() {
+            draft.start_anchor = anchor;
+        }
+        draft.end_anchor = anchor;
+        draft.last_vertex_input = Some(vertex_input);
         draft.vertices.push(point);
     }
     draft.last_click = Some((local, now));
     Ok(())
+}
+
+fn same_vertex(
+    previous: Option<Vec2>,
+    previous_anchor: Option<crate::anchors::AnchorSnap>,
+    point: Vec2,
+    anchor: Option<crate::anchors::AnchorSnap>,
+) -> bool {
+    previous == Some(point)
+        && previous_anchor.map(|hit| hit.attachment) == anchor.map(|hit| hit.attachment)
 }
 
 fn enter(mut event: On<FocusedInput<KeyboardInput>>, views: Query<&State>, mut commands: Commands) {
@@ -254,17 +284,25 @@ fn finish(world: &mut World, view: Entity) -> Result {
         return Ok(());
     }
     if let CanvasMode::Connector(style) = context.mode {
-        let Some(route) = CanvasConnectorRoute::from_vertices(&draft.vertices)
-            .filter(CanvasConnectorRoute::drawable)
+        let Some(route) = connector_route(
+            world,
+            context.document,
+            &draft.vertices,
+            draft.start_anchor,
+            draft.end_anchor,
+        )?
         else {
             return Ok(());
         };
+        let attachments =
+            [draft.start_anchor, draft.end_anchor].map(|anchor| anchor.map(|hit| hit.attachment));
         let item = CanvasDocument::draw_connector(
             world,
             context.document,
             context.container,
             route,
             style,
+            attachments,
         )?;
         return select_created(world, view, &context, item);
     }
@@ -287,6 +325,30 @@ fn finish(world: &mut World, view: Entity) -> Result {
         paint,
     )?;
     select_created(world, view, &context, shape)
+}
+
+fn connector_route(
+    world: &World,
+    document: Entity,
+    vertices: &[Vec2],
+    start: Option<crate::anchors::AnchorSnap>,
+    end: Option<crate::anchors::AnchorSnap>,
+) -> Result<Option<CanvasConnectorRoute>> {
+    let Some(mut route) = CanvasConnectorRoute::from_vertices(vertices) else {
+        return Ok(None);
+    };
+    for (snap, point) in [(start, &mut route.start), (end, &mut route.end)] {
+        if let Some(snap) = snap {
+            let target = snap.attachment.target;
+            *point = if crate::order::item_placement(world, document, target).is_some() {
+                crate::anchors::document_point(world, target, snap.attachment.anchor)?
+                    .unwrap_or(snap.point)
+            } else {
+                snap.point
+            };
+        }
+    }
+    Ok(route.drawable().then_some(route))
 }
 
 fn select_created(world: &mut World, view: Entity, context: &Context, shape: Entity) -> Result {
@@ -420,41 +482,71 @@ pub(crate) fn preview(world: &World, view: Entity) -> Result<Option<crate::pen::
         .as_ref()
         .map_or(draft.pointer, |press| press.pointer);
     let mut vertices = draft.vertices.clone();
+    let mut end_anchor = draft.end_anchor;
     if let Some(point) = pointer_position(world, pointer, &draft.context.target)
         && let Some(local) =
             crate::input::inside_position(world, view, &draft.context.target, point)
     {
-        let point = draw_point(
-            world,
-            view,
-            draft.context.mode,
-            CanvasView::_center(world, view)? + local / CanvasView::_zoom(world, view)?,
-        )?;
-        if point.is_finite() && vertices.last() != Some(&point) {
+        let at = CanvasView::_center(world, view)? + local / CanvasView::_zoom(world, view)?;
+        let point = draw_point(world, view, draft.context.mode, at)?;
+        let connector = matches!(draft.context.mode, CanvasMode::Connector(_));
+        let hover_anchor = if connector {
+            crate::snapping::connector_anchor(world, view, at, None)?
+        } else {
+            None
+        };
+        let vertex_input = if hover_anchor.is_some() { at } else { point };
+        if point.is_finite()
+            && !same_vertex(
+                draft.last_vertex_input,
+                end_anchor,
+                vertex_input,
+                hover_anchor,
+            )
+        {
             vertices.push(point);
+            end_anchor = hover_anchor;
         }
     }
     if let CanvasMode::Connector(style) = draft.context.mode {
-        let (path, arrows) = CanvasConnectorRoute::from_vertices(&vertices)
-            .filter(CanvasConnectorRoute::drawable)
-            .map_or_else(
-                || {
-                    (
-                        CanvasPath {
-                            commands: Vec::new(),
-                        },
-                        CanvasPath {
-                            commands: Vec::new(),
-                        },
-                    )
-                },
-                |route| route.paths(style),
-            );
+        let (path, arrows) = connector_route(
+            world,
+            draft.context.document,
+            &vertices,
+            draft.start_anchor,
+            end_anchor,
+        )?
+        .map_or_else(
+            || {
+                (
+                    CanvasPath {
+                        commands: Vec::new(),
+                    },
+                    CanvasPath {
+                        commands: Vec::new(),
+                    },
+                )
+            },
+            |route| route.paths(style),
+        );
+        let mut points = draft.vertices.clone();
+        if let Some(point) = points.first_mut()
+            && let Some(crate::CanvasPathCommand::MoveTo(start)) = path.commands.first()
+        {
+            *point = *start;
+        }
+        if points.len() > 1
+            && points.len() == vertices.len()
+            && let Some(point) = points.last_mut()
+            && let Some(crate::CanvasPathCommand::LineTo(end)) = path.commands.last()
+        {
+            *point = *end;
+        }
         return Ok(Some(crate::pen::Preview {
             name: "CanvasConnectorPreview",
             path,
             arrows: Some(arrows),
-            points: draft.vertices.clone(),
+            points,
             paint: style.paint(),
         }));
     }
