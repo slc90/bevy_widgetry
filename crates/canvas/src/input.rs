@@ -1,4 +1,5 @@
 use crate::error::CanvasResult as Result;
+use crate::grid::SnapTarget;
 use crate::{CanvasContainer, CanvasDocument, CanvasDocumentChanged, CanvasView};
 use bevy::{
     camera::{NormalizedRenderTarget, RenderTarget},
@@ -95,16 +96,24 @@ impl DrawingKind {
         }
     }
 
-    pub(crate) fn placement(self, world: &World, start: Vec2, end: Vec2) -> (Vec2, Vec2) {
-        let delta = end - start;
+    pub(crate) fn placement(
+        self,
+        world: &World,
+        view: Entity,
+        start: Vec2,
+        end: Vec2,
+    ) -> (Vec2, Vec2) {
+        let snapped = crate::grid::point(world, view, SnapTarget::Drawing, end);
+        let delta = snapped.unwrap_or(end) - start;
         let midpoint = start + delta * 0.5;
         match self {
             Self::Parametric(tool) if tool.radial() => {
-                let snap = world
-                    .get_resource::<ButtonInput<KeyCode>>()
-                    .is_some_and(|keys| {
-                        keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight])
-                    });
+                let snap = snapped.is_none()
+                    && world
+                        .get_resource::<ButtonInput<KeyCode>>()
+                        .is_some_and(|keys| {
+                            keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight])
+                        });
                 let radius = if snap {
                     let step = crate::rotate::SNAP_ANGLE_RADIANS as f32;
                     Vec2::from_angle((delta.to_angle() / step).round() * step) * delta.length()
@@ -472,7 +481,13 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                         document,
                         container,
                         paint,
-                        current: point,
+                        current: crate::grid::point(
+                            world,
+                            press.entity,
+                            SnapTarget::Drawing,
+                            point,
+                        )
+                        .unwrap_or(point),
                     }
                 } else if let Some((kind, paint)) = drawing {
                     let (Some(document), Some(container)) = (
@@ -485,7 +500,8 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                         kind,
                         document,
                         container,
-                        start: point,
+                        start: crate::grid::point(world, press.entity, SnapTarget::Drawing, point)
+                            .unwrap_or(point),
                         current: point,
                         paint,
                     }
@@ -892,15 +908,19 @@ fn advance_action(
             parent,
         } => {
             let pointer = CanvasView::_center(world, entity)? + local / zoom;
-            let point = (crate::scale::local_point(parent, pointer) - offset).as_vec2();
-            if !point.is_finite() {
-                end(world, entity);
-                return Ok(());
-            }
+            let position = crate::scale::local_point(parent, pointer) - offset;
             let Some(mut transform) = world.get::<Transform>(shape).copied() else {
                 end(world, entity);
                 return Ok(());
             };
+            let anchor = position + crate::grid::move_anchor_offset(world, shape, transform);
+            let correction =
+                crate::grid::local_delta(world, entity, SnapTarget::Movement, parent, anchor);
+            let point = (position + correction).as_vec2();
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
             transform.translation.x = point.x;
             transform.translation.y = point.y;
             crate::groups::update_item_transform(world, document, shape, transform)?;
@@ -940,7 +960,7 @@ fn advance_action(
                 end(world, entity);
                 return Ok(());
             }
-            edit.apply(world, point)?;
+            edit.apply(world, entity, point)?;
         }
         DragAction::MoveSelection(group) => {
             let point = CanvasView::_center(world, entity)? + local / zoom;
@@ -948,7 +968,7 @@ fn advance_action(
                 end(world, entity);
                 return Ok(());
             }
-            let moved = group.apply(world, point)?;
+            let moved = group.apply(world, entity, point)?;
             if let Some(mut state) = world.get_mut::<DragState>(entity)
                 && let Some(Drag {
                     action: DragAction::MoveSelection(group),
@@ -964,6 +984,11 @@ fn advance_action(
                 end(world, entity);
                 return Ok(());
             }
+            let point = if matches!(&drag.action, DragAction::Pen { .. }) {
+                crate::grid::point(world, entity, SnapTarget::Drawing, point).unwrap_or(point)
+            } else {
+                point
+            };
             if let Some(mut state) = world.get_mut::<DragState>(entity)
                 && let Some(Drag {
                     action: DragAction::Draw { current, .. } | DragAction::Pen { current, .. },
@@ -1521,9 +1546,9 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         if crate::history::is_busy(world, document) {
             return Ok(());
         }
+        let (center, size) = kind.placement(world, entity, start, current);
         CanvasView::_set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
         world.flush();
-        let (center, size) = kind.placement(world, start, current);
         if !center.is_finite()
             || !size.is_finite()
             || !kind.committable(size)

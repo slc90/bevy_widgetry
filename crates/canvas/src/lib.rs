@@ -9,6 +9,7 @@ mod error;
 mod export;
 mod flowchart;
 mod geometry;
+mod grid;
 mod groups;
 mod history;
 mod input;
@@ -38,6 +39,7 @@ pub use export::{
     CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions, CanvasPngStop, CanvasRenderIssue,
 };
 pub use flowchart::CanvasFlowchartPreset;
+pub use grid::{CanvasGrid, CanvasGridChanged, CanvasGridSnap};
 pub use groups::CanvasGroup;
 pub use history::{CanvasEditTarget, CanvasEditToken, CanvasHistory};
 pub use layers::{CanvasLayerRemoval, CanvasLayersChanged};

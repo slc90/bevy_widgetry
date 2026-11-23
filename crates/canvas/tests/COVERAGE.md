@@ -9,7 +9,7 @@
 ## States
 - Document 默认图层、图层显隐与锁定、绘图项身份、Shape 几何、Connector 路由及标签、Paint、Transform 与层级叠放顺序。
 - Document 编辑事务、撤销和重做位置、有容量限制的保留实体。
-- 多 View 的 Document 绑定、Pan／Zoom／Selection、绘图／编辑工具和 Render／Mesh 资源。
+- 多 View 的 Document 绑定、Pan／Zoom／Selection、网格显示和吸附设置、绘图／编辑工具和 Render／Mesh 资源。
 - Pointer Capture／Focus、预览草稿、矩形／椭圆／Path 参数及节点拓扑。
 - SVG／PNG 文件导出、GPU Readback、异步 Job 与导出请求生命周期。
 
@@ -41,6 +41,7 @@
 - 多个 View 可以共享 Mesh 和 Model，但 Pan、Zoom、Selection、Focus、Camera、RenderLayers 与预览互相独立；解绑／销毁按最后引用正确回收资源。
 - Renderer 在 Geometry／Paint／Transform 改变时刷新所需网格，Transform-only 不无故重建；空几何不残留旧像素或幽灵命中。
 - Pan／Zoom 使用真实 Picking 和窗口／UI 比例换算，Wheel 保持光标锚点，跨帧／同帧手势按输入顺序推进；取消只释放本手势持有的捕获。
+- 网格显示按文档原点与视口投影定位。密度受可见范围和缩放约束，吸附使用独立的基础步长与逻辑距离。Connector 创建和点编辑使用同一开关，网格交点优先于径向工具的角度约束，网格抵消位移时多选拖动仍保持选择。View 各自配置，Document 历史、命中、画序与导出由正式绘图项决定。
 - Selection 以 Document 中的真实形状身份表示，形状删除和 View 解绑后修复；子控件 Focus／Wheel／Delete 不由 Canvas 抢占。
 - Move／Scale／Rotate 对矩形、椭圆和 Path 均保持不相关的 Geometry／Paint／顺序；镜像、旋转、边界缩放和 Ctrl／Shift 修饰按既有工具语义执行。
 - 预览不会提前改写业务 Document；合法释放才创建最终形状并切换工具，取消／无效草稿回收 Mesh／Entity／Capture。
@@ -64,6 +65,7 @@
 | `basic_path_tools.rs` | 直线、折线和多边形的局部预览与完成。参数化工具的边数、交替半径、角度吸附和 ArcTo 参数，退化拖动、取消、历史、节点修改、复制、变换与 SVG 导出。 |
 | `flowchart.rs` | 六种预设的局部轮廓、尺寸、取消、提交与历史，菱形的轮廓命中、编辑副本与分组导出。 |
 | `connectors.rs` | 自由端点直线与折线路由、绘制取消与提交、路由点拖动、箭头和标签的投影与命中、整体移动、画序、图层／组、历史和 SVG 导出。 |
+| `grid.rs` | View 网格设置、通知、Pan／Zoom 投影、资源回收、命中与 SVG 隔离，以及绘制、移动和节点吸附。 |
 | `batch.rs` | 多形状批量移动／删除、顺序和提交原子性。 |
 | `deletion.rs` | 真实键盘删除与历史回放、Focus 归属、手势合并和双 View 修复。 |
 | `diagnostics.rs` | 模型、输入、渲染、导出与颜色错误的来源和宿主传播。 |
@@ -100,6 +102,8 @@
 | 源码测试模块 | 主要测试职责 |
 |---|---|
 | `src/geometry.rs` | 几何 AABB、Transform、描边和形状边界计算。 |
+| `src/grid.rs` | 最近交点、文档步长和逻辑像素容差。 |
+| `src/renderer/grid.rs` | 可见网格相位、主线间隔、缩放密度和网格生成上限。 |
 | `src/export/png.rs` | PNG 尺寸、内存预算、异步生命周期与超时／取消。 |
 | `src/model.rs` | Document／Shape 局部语义和模型有效性。 |
 | `src/order.rs` | 多图层与嵌套容器的展平、重排、删除和祖先归属。 |

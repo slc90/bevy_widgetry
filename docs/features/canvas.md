@@ -303,3 +303,11 @@ fn exported(event: On<CanvasPngExportFinished>) -> Result {
 宿主通过 `CanvasDocument::create_connector` 或 `create_connector_in_layer` 创建连接线，并通过 `update_connector` 修改路由、样式或标签。路由坐标以绘图项局部坐标表示，创建时使用所在容器的坐标。样式支持独立的起点和终点三角箭头，以及描边颜色、宽度、端点和连接样式。标签的 `position` 取值为 `0.0..=1.0`，按局部路由的累计长度计算，文字以该点为中心。
 
 `duplicate_connector` 将路线、样式、标签与局部变换复制到同一容器。`draw_order` 包含连接线。连接线可重排、编组、移动图层、删除并撤销或重做。SVG 导出写入描边路径、箭头轮廓和标签文字，PNG 渲染已提交的完整连接线。
+
+## 网格与吸附
+
+Gallery 的「切换网格」和「切换吸附」分别控制主视图的网格显示和所有吸附操作。宿主可以用 `CanvasViewProps::grid` 初始化设置，通过 `CanvasView::grid` 查询，通过 `set_grid_in_world` 或 `set_grid` 修改。`CanvasGridSnap` 可分别控制绘制、移动、Path 节点和 Connector 路由点。有效修改提交后触发 `CanvasGridChanged`。默认间距为 25 文档单位，每 4 格突出一条主线，显示和吸附均默认关闭。间距须为正有限值，`major_every` 接受正整数或 `None`。
+
+网格以文档原点为基准。平移和缩放改变可见范围。缩小时，视图按密度选择显示主线或更稀疏的网格线。吸附始终使用完整的基础间距。在 6 个 View 逻辑像素内，绘制点和编辑节点吸附到最近交点。Connector 的路由点开关同时控制创建和编辑。正多边形和星形优先将外顶点吸附到网格，超出容差时按住 Shift 可对齐角度。拖动绘图项时使用其局部原点作为移动目标，Connector 使用起点。多选拖动以按下的绘图项为基准，所有成员共享同一位移。
+
+显示与吸附可独立使用。共享 Document 的视图各自维护设置，撤销和重做只回放文档修改。程序化 Document API 保留调用方提供的坐标。网格画在各自视图的图形下方，绘图项继续决定命中、画序及 SVG／PNG 导出内容。

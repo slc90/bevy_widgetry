@@ -9,6 +9,7 @@ pub(crate) struct MoveSelection {
     pub(crate) hit: Entity,
     pub(crate) moved: bool,
     start: bevy::math::DVec2,
+    anchor: bevy::math::DVec2,
     parent: bevy::math::Affine3A,
 }
 impl MoveSelection {
@@ -30,12 +31,16 @@ impl MoveSelection {
                 })
                 .collect::<Result<Vec<_>>>()?;
             let parent = crate::groups::parent_transform(world, hit)?;
+            let transform = crate::groups::local_transform(world, hit)?;
+            let anchor = transform.translation.truncate().as_dvec2()
+                + crate::grid::move_anchor_offset(world, hit, transform);
             Ok(Self {
                 document,
                 shapes,
                 hit,
                 moved: false,
                 start: crate::scale::local_point(parent, start),
+                anchor,
                 parent,
             })
         })()
@@ -61,11 +66,20 @@ impl MoveSelection {
         }) && crate::groups::parent_transform(world, self.hit)
             .is_ok_and(|parent| parent == self.parent)
     }
-    pub(crate) fn apply(&self, world: &mut World, point: Vec2) -> Result<bool> {
+    pub(crate) fn apply(&self, world: &mut World, view: Entity, point: Vec2) -> Result<bool> {
         let delta = crate::scale::local_point(self.parent, point) - self.start;
-        if delta == bevy::math::DVec2::ZERO && !self.moved {
+        let moved = delta != bevy::math::DVec2::ZERO;
+        if !moved && !self.moved {
             return Ok(false);
         }
+        let correction = crate::grid::local_delta(
+            world,
+            view,
+            crate::grid::SnapTarget::Movement,
+            self.parent,
+            self.anchor + delta,
+        );
+        let delta = delta + correction;
         let mut updates = Vec::with_capacity(self.shapes.len());
         for (shape, origin) in &self.shapes {
             let position = (origin.as_dvec2() + delta).as_vec2();
@@ -80,7 +94,7 @@ impl MoveSelection {
             updates.push((*shape, transform));
         }
         crate::batch::update_selected_transforms(world, self.document, &updates)?;
-        Ok(delta != bevy::math::DVec2::ZERO)
+        Ok(moved)
     }
     pub(crate) fn finish(self, world: &mut World, view: Entity) -> Result {
         (|| -> Result {

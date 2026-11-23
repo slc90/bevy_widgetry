@@ -66,6 +66,16 @@ fn is_near(a: Vec2, b: Vec2) -> bool {
     a.distance_squared(b) <= CLICK_RADIUS * CLICK_RADIUS
 }
 
+fn draw_point(world: &World, view: Entity, mode: CanvasMode, point: Vec2) -> Vec2 {
+    use crate::grid::SnapTarget;
+    let target = if matches!(mode, CanvasMode::Connector(_)) {
+        SnapTarget::ConnectorPoint
+    } else {
+        SnapTarget::Drawing
+    };
+    crate::grid::point(world, view, target, point).unwrap_or(point)
+}
+
 pub(crate) fn install(app: &mut App) {
     app.add_observer(enter);
 }
@@ -163,7 +173,12 @@ pub(crate) fn add_vertex(world: &mut World, view: Entity, screen: Vec2) -> Resul
         }
         return Ok(());
     };
-    let point = CanvasView::_center(world, view)? + local / CanvasView::_zoom(world, view)?;
+    let point = draw_point(
+        world,
+        view,
+        press.context.mode,
+        CanvasView::_center(world, view)? + local / CanvasView::_zoom(world, view)?,
+    );
     if !point.is_finite() {
         return Ok(());
     }
@@ -405,8 +420,12 @@ pub(crate) fn preview(world: &World, view: Entity) -> Option<crate::pen::Preview
         && let Some(local) =
             crate::input::inside_position(world, view, &draft.context.target, point)
     {
-        let point =
-            CanvasView::_center(world, view).ok()? + local / CanvasView::_zoom(world, view).ok()?;
+        let point = draw_point(
+            world,
+            view,
+            draft.context.mode,
+            CanvasView::_center(world, view).ok()? + local / CanvasView::_zoom(world, view).ok()?,
+        );
         if point.is_finite() && vertices.last() != Some(&point) {
             vertices.push(point);
         }

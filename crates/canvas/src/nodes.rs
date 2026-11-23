@@ -248,14 +248,21 @@ impl Edit {
                     .is_some_and(|connector| connector.route().waypoints.len() == waypoint_count),
             }
     }
-    pub(crate) fn apply(self, world: &mut World, at: Vec2) -> Result {
-        let point = (self.origin.as_dvec2() + crate::scale::local_point(self.projection, at)
-            - self.start)
-            .as_vec2();
+    pub(crate) fn apply(self, world: &mut World, view: Entity, at: Vec2) -> Result {
+        let position =
+            self.origin.as_dvec2() + crate::scale::local_point(self.projection, at) - self.start;
+        let connector = matches!(self.source, Source::Connector(_));
+        let target = if connector {
+            crate::grid::SnapTarget::ConnectorPoint
+        } else {
+            crate::grid::SnapTarget::PathNode
+        };
+        let correction = crate::grid::local_delta(world, view, target, self.projection, position);
+        let point = (position + correction).as_vec2();
         if !point.is_finite() {
             return Ok(());
         }
-        if matches!(self.source, Source::Connector(_)) {
+        if connector {
             return CanvasDocument::move_connector_point(
                 world,
                 self.document,

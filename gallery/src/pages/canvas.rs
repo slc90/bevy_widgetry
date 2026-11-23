@@ -113,6 +113,8 @@ enum Action {
     ZoomIn,
     ZoomOut,
     Reset,
+    ToggleGrid,
+    ToggleGridSnap,
     ToggleAuxiliary,
     Region,
     Scale,
@@ -349,6 +351,8 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::Cubic, Action::Cubic), (CanvasKey::Close, Action::Close),
         (CanvasKey::Add, Action::Add), (CanvasKey::ZoomIn, Action::ZoomIn),
         (CanvasKey::ZoomOut, Action::ZoomOut), (CanvasKey::Reset, Action::Reset),
+        (CanvasKey::ToggleGrid, Action::ToggleGrid),
+        (CanvasKey::ToggleGridSnap, Action::ToggleGridSnap),
         (CanvasKey::Auxiliary, Action::ToggleAuxiliary), (CanvasKey::Region, Action::Region),
         (CanvasKey::Scale, Action::Scale), (CanvasKey::Svg, Action::Svg), (CanvasKey::Png, Action::Png),
     ].into_iter().map(|(label, action)| bsn! {
@@ -379,7 +383,10 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
                 Node {flex_grow:1.0,flex_basis:px(0),min_width:px(0),row_gap:px(ITEM_GAP),flex_direction:FlexDirection::Column}
                 Children [
                     @localized(TextKey::Canvas(CanvasKey::Secondary)) WidgetryText--
-                    #Auxiliary Name("CanvasAuxiliary") @CanvasView {@document:{Some(document)},@zoom:0.5,@center:Vec2::new(20.0,-10.0)}
+                    #Auxiliary Name("CanvasAuxiliary") @CanvasView {
+                        @document:{Some(document)},@zoom:0.5,@center:Vec2::new(20.0,-10.0),
+                        @grid:{CanvasGrid { spacing:50.0, ..default() }}
+                    }
                     Node {width:percent(100),height:px(VIEW_HEIGHT),flex_shrink:0.0}
                     BackgroundColor(Color::srgb(0.13,0.1,0.16))
                 ]
@@ -606,6 +613,14 @@ fn refresh(world: &mut World) -> Result {
         } else {
             (CanvasKey::HiddenDraftLabel, String::new())
         };
+        let grid = CanvasView::grid(world, demo.main).map_err(|error| error.into_bevy_error())?;
+        let grid_status = |enabled| {
+            TextKey::Canvas(if enabled {
+                CanvasKey::GridOn
+            } else {
+                CanvasKey::GridOff
+            })
+        };
         let binding = LocalizedText::with_args(
             TextKey::Canvas(CanvasKey::Readout),
             vec![
@@ -673,10 +688,13 @@ fn refresh(world: &mut World) -> Result {
                     },
                 ),
                 ("draft", draft),
+                ("grid_spacing", grid.spacing.to_string()),
             ],
         )
         .with_key_arg("mode", TextKey::Canvas(mode))
         .with_key_arg("draft_label", TextKey::Canvas(draft_label))
+        .with_key_arg("grid", grid_status(grid.visible))
+        .with_key_arg("snap", grid_status(grid.snap != CanvasGridSnap::default()))
         .with_key_arg(
             "region",
             TextKey::Canvas(if demo.region.is_some() {
@@ -873,6 +891,21 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 CanvasView::set_zoom_in_world(world, demo.main, 1.0)
                     .map_err(|error| error.into_bevy_error())?;
                 CanvasView::set_center_in_world(world, demo.main, Vec2::ZERO)
+                    .map_err(|error| error.into_bevy_error())?;
+            }
+            Action::ToggleGrid | Action::ToggleGridSnap => {
+                let mut grid =
+                    CanvasView::grid(world, demo.main).map_err(|error| error.into_bevy_error())?;
+                if matches!(action, Action::ToggleGrid) {
+                    grid.visible = !grid.visible;
+                } else {
+                    grid.snap = if grid.snap == CanvasGridSnap::ALL {
+                        CanvasGridSnap::default()
+                    } else {
+                        CanvasGridSnap::ALL
+                    };
+                }
+                CanvasView::set_grid_in_world(world, demo.main, grid)
                     .map_err(|error| error.into_bevy_error())?;
             }
             Action::ToggleAuxiliary => {

@@ -17,6 +17,7 @@ pub struct CanvasViewProps {
     pub document: Option<Entity>,
     pub center: Vec2,
     pub zoom: f32,
+    pub grid: crate::CanvasGrid,
 }
 
 impl Default for CanvasViewProps {
@@ -25,6 +26,7 @@ impl Default for CanvasViewProps {
             document: None,
             center: Vec2::ZERO,
             zoom: 1.0,
+            grid: default(),
         }
     }
 }
@@ -37,6 +39,7 @@ pub(crate) struct ViewState {
     group_path: Vec<Entity>,
     pub(crate) center: Vec2,
     pub(crate) zoom: f32,
+    pub(crate) grid: crate::CanvasGrid,
     pub(crate) selection: Vec<Entity>,
     pub(crate) mode: CanvasMode,
 }
@@ -301,8 +304,9 @@ impl CanvasView {
                 if !(MIN_ZOOM..=MAX_ZOOM).contains(&props.zoom) {
                     return Err(crate::error::invalid(crate::CanvasIssue::ZoomTarget).input(crate::CanvasInput::Float { field: "zoom", value: props.zoom }).at("view", root).into_bevy_error(frame()));
                 }
+                props.grid.validate().map_err(|error| error.at("view", root).into_bevy_error(frame()))?;
                 let active_layer = preferred_layer(context.entity.world(), props.document, None);
-                Ok(ViewState { document: props.document, active_layer, group_path: Vec::new(), center: props.center, zoom: props.zoom, selection: Vec::new(), mode: CanvasMode::Select })
+                Ok(ViewState { document: props.document, active_layer, group_path: Vec::new(), center: props.center, zoom: props.zoom, grid: props.grid, selection: Vec::new(), mode: CanvasMode::Select })
             })
             Node { min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
             bevy::input_focus::tab_navigation::TabIndex(-1)

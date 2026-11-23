@@ -21,6 +21,7 @@ use bevy_widgetry_diagnostics::{
 };
 use bevy_widgetry_internal_log::widgetry_debug;
 use std::collections::{HashMap, HashSet};
+mod grid;
 mod nodes;
 mod outline;
 mod pen;
@@ -58,6 +59,7 @@ struct Renderer {
     layer: usize,
     proxies: HashMap<Entity, Entity>,
     group_proxies: HashMap<Entity, Entity>,
+    grid: Option<Entity>,
     outline: Option<Entity>,
     preview: Option<Entity>,
     pen: Option<Entity>,
@@ -189,6 +191,7 @@ fn initialize_root(world: &mut World, root: Entity) -> RawResult {
             layer,
             proxies: HashMap::new(),
             group_proxies: HashMap::new(),
+            grid: None,
             outline: None,
             preview: None,
             pen: None,
@@ -230,10 +233,13 @@ fn render_root(world: &mut World, root: Entity) -> RawResult<Option<()>> {
         .get::<Renderer>(root)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?;
     let camera = renderer.camera;
+    let grid = renderer.grid;
     let node = world
         .get::<ComputedNode>(root)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::Layout))?;
-    let logical_size = node.size() * node.inverse_scale_factor() / CanvasView::_zoom(world, root)?;
+    let pixels = node.size() * node.inverse_scale_factor();
+    let zoom = CanvasView::_zoom(world, root)?;
+    let logical_size = pixels / zoom;
     let mut projection = world
         .get_mut::<Projection>(camera)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::Projection))?;
@@ -255,6 +261,12 @@ fn render_root(world: &mut World, root: Entity) -> RawResult<Option<()>> {
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::Camera))?
         .computed
         .clip_from_view = clip_from_view;
+    if let Some(grid) = grid {
+        let state = world
+            .get::<ViewState>(root)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::View))?;
+        grid::update(world, grid, state.grid, state.center, pixels, zoom)?;
+    }
     Ok(Some(()))
 }
 
@@ -303,6 +315,7 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?;
     let (content, layer) = (renderer.content, renderer.layer);
     let camera = renderer.camera;
+    let current_grid = renderer.grid;
     let center = CanvasView::_center(world, root)?;
     let mut transform = world
         .get_mut::<Transform>(camera)
@@ -310,6 +323,16 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
     let translation = Vec3::new(center.x, -center.y, transform.translation.z);
     if transform.translation != translation {
         transform.translation = translation;
+    }
+    let grid_visible = world
+        .get::<ViewState>(root)
+        .is_some_and(|state| state.grid.visible);
+    let grid = grid::sync(world, camera, layer, grid_visible, current_grid)?;
+    if current_grid != grid {
+        world
+            .get_mut::<Renderer>(root)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::Renderer))?
+            .grid = grid;
     }
     let document = CanvasView::_document(world, root)?;
     let mut shapes = Vec::new();
@@ -896,6 +919,7 @@ impl Plugin for CanvasPlugin {
         preview::install(app);
         pen::install(app);
         nodes::install(app);
+        grid::install(app);
         if !app.world().contains_resource::<Assets<Mesh>>() {
             app.init_asset::<Mesh>();
         }
