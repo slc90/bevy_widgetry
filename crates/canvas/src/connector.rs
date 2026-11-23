@@ -762,6 +762,40 @@ pub(crate) fn validate_following(
     transforms: &[(Entity, Transform)],
     geometry: Option<(Entity, &CanvasGeometry)>,
 ) -> CanvasResult {
+    preview_following(world, document, transforms, geometry, |_, _| Ok(()))
+}
+
+pub(crate) fn validate_following_layout(
+    world: &mut World,
+    document: Entity,
+    transforms: &[(Entity, Transform)],
+    validate: impl FnOnce(&World) -> CanvasResult,
+) -> CanvasResult {
+    preview_following(world, document, transforms, None, |world, mut routes| {
+        if routes.is_empty() {
+            return Ok(());
+        }
+        let swap_routes = |world: &mut World, routes: &mut [(Entity, CanvasConnector)]| {
+            for (entity, route) in routes {
+                if let Some(mut current) = world.get_mut::<CanvasConnector>(*entity) {
+                    std::mem::swap(current.bypass_change_detection(), route);
+                }
+            }
+        };
+        swap_routes(world, &mut routes);
+        let result = validate(world);
+        swap_routes(world, &mut routes);
+        result
+    })
+}
+
+fn preview_following(
+    world: &mut World,
+    document: Entity,
+    transforms: &[(Entity, Transform)],
+    geometry: Option<(Entity, &CanvasGeometry)>,
+    validate: impl FnOnce(&mut World, Vec<(Entity, CanvasConnector)>) -> CanvasResult,
+) -> CanvasResult {
     let attached = attached_connectors(world, document);
     if attached.is_empty() {
         return Ok(());
@@ -795,14 +829,15 @@ pub(crate) fn validate_following(
     {
         current.bypass_change_detection().clone_from(geometry);
     }
-    let validation = attachment_updates(world, document, attached);
+    let validation =
+        attachment_updates(world, document, attached).and_then(|routes| validate(world, routes));
     set_transforms(world, &previous);
     if let Some((item, geometry)) = previous_geometry
         && let Some(mut current) = world.get_mut::<CanvasGeometry>(item)
     {
         *current.bypass_change_detection() = geometry;
     }
-    validation.map(|_| ())
+    validation
 }
 
 pub(crate) fn refresh_attachments(world: &mut World, document: Entity) -> CanvasResult {

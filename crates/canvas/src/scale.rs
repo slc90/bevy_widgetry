@@ -166,6 +166,10 @@ impl Scale {
 
 pub(crate) fn local_point(transform: Affine3A, point: Vec2) -> DVec2 {
     let relative = point.as_dvec2() - transform.translation.truncate().as_dvec2();
+    local_delta(transform, relative)
+}
+
+pub(crate) fn local_delta(transform: Affine3A, relative: DVec2) -> DVec2 {
     let [x, y] = crate::groups::planar_axes(&transform);
     let determinant = x.perp_dot(y);
     DVec2::new(

@@ -112,6 +112,52 @@ fn main() -> Result {
             },
             |(fixture, _, _)| Ok(fixture.world.entities().count_spawned()),
         )?;
+        run(
+            &mut harness,
+            &format!("canvas_alignment/shapes{count}/align_undo"),
+            false,
+            || {
+                let mut fixture = fixture(count)?;
+                let items = CanvasDocument::draw_order(&fixture.world, fixture.document)
+                    .map_err(|error| error.into_bevy_error())?;
+                let positions = items
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &item)| {
+                        (
+                            item,
+                            Transform::from_xyz(
+                                (index % 50) as f32 * 40.0,
+                                (index / 50) as f32 * 30.0,
+                                0.0,
+                            ),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                CanvasDocument::update_transforms(&mut fixture.world, fixture.document, &positions)
+                    .map_err(|error| error.into_bevy_error())?;
+                CanvasDocument::clear_history(&mut fixture.world, fixture.document)
+                    .map_err(|error| error.into_bevy_error())?;
+                Ok((fixture, items))
+            },
+            |(fixture, items), _| {
+                if !CanvasDocument::align_items(
+                    &mut fixture.world,
+                    fixture.document,
+                    items,
+                    CanvasAlignment::Left,
+                    CanvasAlignTarget::Selection,
+                )
+                .map_err(|error| error.into_bevy_error())?
+                    || !CanvasDocument::undo(&mut fixture.world, fixture.document)
+                        .map_err(|error| error.into_bevy_error())?
+                {
+                    return Err(error("benchmark did not align and undo the selection"));
+                }
+                Ok(())
+            },
+            |(fixture, _)| Ok(fixture.world.entities().count_spawned()),
+        )?;
     }
     harness.finish()
 }

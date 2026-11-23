@@ -87,6 +87,9 @@ pub enum CanvasPart {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CanvasIssue {
+    AlignmentBounds,
+    AlignmentItem,
+    AlignmentTarget,
     AnchorInsertion,
     AppendEllipse,
     AppendKind,

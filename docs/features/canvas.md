@@ -243,6 +243,14 @@ CanvasDocument::remove_shapes(world, document, &[rectangle, ellipse])
 
 在 Gallery 中，先 Ctrl+点击选择同一容器中的成员，再使用分组按钮。选中整组后可拖动、旋转、等比缩放或取消分组。
 
+## 对齐和等间距分布
+
+使用 `CanvasDocument::align_items` 将绘图项按左、右、上、下边缘或两个轴的中心对齐。`CanvasAlignTarget::Selection` 使用选择范围，`CanvasAlignTarget::View` 使用指定视图的可见文档矩形。可见矩形随视图的布局尺寸、平移和缩放变化。Gallery 可切换目标并显示当前选择。
+
+`CanvasDocument::distribute_items` 沿选择的轴均分绘图项之间的间距。它按各项文档包围盒的起始边缘排序，保留首尾两项的位置及所有项的尺寸。少于三个有效项或当前重叠使等间距无法维持顺序时，返回未改变。对齐与分布共用文档坐标轴上的包围盒，组范围包含可见后代。旋转图形也使用文档坐标轴上的边缘。
+
+Shape、Text 和 Group 可参与操作。直接选择 Connector、不可编辑图层的项、重复项或同一组及其后代会拒绝整个命令。Connector 会跟随已移动的锚定 Shape。每条布局命令按编辑前的包围盒计算一次平移。当随动端点使这次平移无法实现指定的对齐边缘，或改变分布中的组边界时，命令返回错误并保留原布局。成功操作保留画序并可整体撤销。
+
 ## 复制、剪切、粘贴和创建副本
 
 Gallery 使用主视图的选择和活动图层执行剪贴板操作。宿主可调用 `CanvasClipboard::copy`、`cut`、`paste` 和 `duplicate`；剪贴板由 `CanvasPlugin` 在应用内共享，支持跨 Document 粘贴。复制的内容包括绘图项的样式、变换、内部画序和嵌套分组。选择同时包含父组和子项时，父组的副本已经包含该子项。

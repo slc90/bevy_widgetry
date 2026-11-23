@@ -1,6 +1,7 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+mod alignment;
 mod alpha;
 mod anchors;
 mod basic_path;
@@ -33,6 +34,7 @@ mod snapping;
 mod text;
 mod view;
 
+pub use alignment::{CanvasAlignTarget, CanvasAlignment, CanvasDistribution};
 pub use anchors::{CanvasAnchor, CanvasConnectorEnd, CanvasConnectorEndpoint};
 pub use clipboard::CanvasClipboard;
 pub use connector::{

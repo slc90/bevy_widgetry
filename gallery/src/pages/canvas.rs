@@ -62,6 +62,7 @@ struct Demo {
     region: Option<Rect>,
     scale: f32,
     segment: usize,
+    align_to_view: bool,
 }
 
 #[derive(Component)]
@@ -100,6 +101,9 @@ enum Action {
     Cut,
     Paste,
     Duplicate,
+    Align(CanvasAlignment),
+    Distribute(CanvasDistribution),
+    ToggleAlignTarget,
     Add,
     Raise,
     Lower,
@@ -349,6 +353,15 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::Group, Action::Group), (CanvasKey::Ungroup, Action::Ungroup),
         (CanvasKey::Copy, Action::Copy), (CanvasKey::Cut, Action::Cut),
         (CanvasKey::Paste, Action::Paste), (CanvasKey::Duplicate, Action::Duplicate),
+        (CanvasKey::AlignLeft, Action::Align(CanvasAlignment::Left)),
+        (CanvasKey::AlignHorizontalCenter, Action::Align(CanvasAlignment::HorizontalCenter)),
+        (CanvasKey::AlignRight, Action::Align(CanvasAlignment::Right)),
+        (CanvasKey::AlignTop, Action::Align(CanvasAlignment::Top)),
+        (CanvasKey::AlignVerticalCenter, Action::Align(CanvasAlignment::VerticalCenter)),
+        (CanvasKey::AlignBottom, Action::Align(CanvasAlignment::Bottom)),
+        (CanvasKey::DistributeHorizontal, Action::Distribute(CanvasDistribution::Horizontal)),
+        (CanvasKey::DistributeVertical, Action::Distribute(CanvasDistribution::Vertical)),
+        (CanvasKey::ToggleAlignTarget, Action::ToggleAlignTarget),
         (CanvasKey::Raise, Action::Raise), (CanvasKey::Lower, Action::Lower),
         (CanvasKey::Front, Action::Front), (CanvasKey::Back, Action::Back),
         (CanvasKey::Append, Action::Append),
@@ -370,7 +383,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     bsn! {
         Name("CanvasDemo")
         Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result, layers:#Layers, editor:#Editor,
-            directory:directory, region:None, scale:1.0, segment:0 }
+            directory:directory, region:None, scale:1.0, segment:0, align_to_view:false }
         Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(SECTION_GAP), flex_shrink:0.0 }
         Children [
             @localized(TextKey::Canvas(CanvasKey::Description)) WidgetryText Node {max_width:percent(100)}--
@@ -706,6 +719,14 @@ fn refresh(world: &mut World) -> Result {
         .with_key_arg("grid", grid_status(grid.visible))
         .with_key_arg("snap", grid_status(grid.snap != CanvasGridSnap::default()))
         .with_key_arg(
+            "align_target",
+            TextKey::Canvas(if demo.align_to_view {
+                CanvasKey::AlignViewTarget
+            } else {
+                CanvasKey::AlignSelectionTarget
+            }),
+        )
+        .with_key_arg(
             "object_snap",
             grid_status(
                 object_snap.edges || object_snap.path_nodes || object_snap.connector_anchors,
@@ -938,6 +959,15 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             Action::Copy | Action::Cut | Action::Paste | Action::Duplicate => {
                 edit_clipboard(world, &demo, action)?;
             }
+            Action::Align(_) | Action::Distribute(_) => {
+                edit_layout(world, &demo, action)?;
+            }
+            Action::ToggleAlignTarget => {
+                world
+                    .get_mut::<Demo>(root)
+                    .ok_or_else(|| invalid("demo missing"))?
+                    .align_to_view = !demo.align_to_view;
+            }
             Action::ToggleAuxiliary => {
                 let mut node = world
                     .get_mut::<Node>(demo.auxiliary)
@@ -977,12 +1007,42 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
         }
         if !matches!(
             action,
-            Action::Svg | Action::Png | Action::Group | Action::Ungroup
+            Action::Svg
+                | Action::Png
+                | Action::Group
+                | Action::Ungroup
+                | Action::Align(_)
+                | Action::Distribute(_)
         ) {
             info!(?action, "执行 Canvas 演示操作");
         }
         refresh(world)
     });
+}
+
+fn edit_layout(world: &mut World, demo: &Demo, action: Action) -> Result {
+    let items = CanvasView::selection(world, demo.main).map_err(|error| error.into_bevy_error())?;
+    let result = match action {
+        Action::Align(alignment) => {
+            let target = if demo.align_to_view {
+                CanvasAlignTarget::View(demo.main)
+            } else {
+                CanvasAlignTarget::Selection
+            };
+            CanvasDocument::align_items(world, demo.document, &items, alignment, target)
+        }
+        Action::Distribute(distribution) => {
+            CanvasDocument::distribute_items(world, demo.document, &items, distribution)
+        }
+        _ => return Err(invalid("expected a Canvas layout action")),
+    };
+    let outcome = match result {
+        Ok(true) => "changed",
+        Ok(false) => "unchanged",
+        Err(_) => "failed",
+    };
+    info!(?action, document=?demo.document, selection=items.len(), result=outcome, "执行 Canvas 布局操作");
+    result.map(|_| ()).map_err(|error| error.into_bevy_error())
 }
 
 fn edit_clipboard(world: &mut World, demo: &Demo, action: Action) -> Result {
@@ -995,7 +1055,7 @@ fn edit_clipboard(world: &mut World, demo: &Demo, action: Action) -> Result {
         Action::Cut => CanvasClipboard::cut(world, demo.document, &selected).map(|_| Vec::new()),
         Action::Paste => CanvasClipboard::paste(world, demo.document, layer),
         Action::Duplicate => CanvasClipboard::duplicate(world, demo.document, layer, &selected),
-        _ => unreachable!("clipboard action"),
+        _ => return Err(invalid("expected a Canvas clipboard action")),
     }
     .map_err(|error| error.into_bevy_error())?;
     if !items.is_empty()

@@ -218,7 +218,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             }
             super::CanvasKey::Ready => "选择 SVG 或 PNG，以透明背景导出已提交图形。",
             super::CanvasKey::Readout => {
-                "主视图：{zoom_a}× · 中心（{center_a}）· {mode}{parameters} · 已选 {selection_a}{draft_label}{draft} · 网格{grid}（{grid_spacing}）· 网格吸附{snap} · 对象吸附{object_snap}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\nPath目标段：{segment} · 导出：{region} · PNG {scale}×"
+                "主视图：{zoom_a}× · 中心（{center_a}）· {mode}{parameters} · 已选 {selection_a}{draft_label}{draft} · 网格{grid}（{grid_spacing}）· 网格吸附{snap} · 对象吸附{object_snap}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\n对齐至{align_target} · Path目标段：{segment} · 导出：{region} · PNG {scale}×"
             }
             super::CanvasKey::PenDraftLabel => " · Pen 草稿命令 ",
             super::CanvasKey::HiddenDraftLabel => "",
@@ -229,6 +229,17 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             super::CanvasKey::Cut => "剪切",
             super::CanvasKey::Paste => "粘贴",
             super::CanvasKey::Duplicate => "创建副本",
+            super::CanvasKey::AlignLeft => "左对齐",
+            super::CanvasKey::AlignHorizontalCenter => "水平居中",
+            super::CanvasKey::AlignRight => "右对齐",
+            super::CanvasKey::AlignTop => "顶端对齐",
+            super::CanvasKey::AlignVerticalCenter => "垂直居中",
+            super::CanvasKey::AlignBottom => "底端对齐",
+            super::CanvasKey::DistributeHorizontal => "水平等间距",
+            super::CanvasKey::DistributeVertical => "垂直等间距",
+            super::CanvasKey::ToggleAlignTarget => "切换对齐目标",
+            super::CanvasKey::AlignSelectionTarget => "选择范围",
+            super::CanvasKey::AlignViewTarget => "可见区域",
             super::CanvasKey::GridOn => "开",
             super::CanvasKey::GridOff => "关",
             super::CanvasKey::AutoRegion => "内容 AABB",

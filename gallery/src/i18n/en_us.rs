@@ -184,7 +184,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
                 "Choose SVG or PNG to export the committed shapes with a transparent background."
             }
             super::CanvasKey::Readout => {
-                "Main: {zoom_a}× · center ({center_a}) · {mode}{parameters} · selected {selection_a}{draft_label}{draft} · Grid {grid} ({grid_spacing}) · Grid snap {snap} · Object snap {object_snap}\nSecondary: {zoom_b}× · center ({center_b}) · selected {selection_b}\nPath segment: {segment} · Export: {region} · PNG {scale}×"
+                "Main: {zoom_a}× · center ({center_a}) · {mode}{parameters} · selected {selection_a}{draft_label}{draft} · Grid {grid} ({grid_spacing}) · Grid snap {snap} · Object snap {object_snap}\nSecondary: {zoom_b}× · center ({center_b}) · selected {selection_b}\nAlign to {align_target} · Path segment: {segment} · Export: {region} · PNG {scale}×"
             }
             super::CanvasKey::PenDraftLabel => " · Pen draft commands ",
             super::CanvasKey::HiddenDraftLabel => "",
@@ -195,6 +195,17 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             super::CanvasKey::Cut => "Cut",
             super::CanvasKey::Paste => "Paste",
             super::CanvasKey::Duplicate => "Duplicate",
+            super::CanvasKey::AlignLeft => "Align left",
+            super::CanvasKey::AlignHorizontalCenter => "Center horizontally",
+            super::CanvasKey::AlignRight => "Align right",
+            super::CanvasKey::AlignTop => "Align top",
+            super::CanvasKey::AlignVerticalCenter => "Center vertically",
+            super::CanvasKey::AlignBottom => "Align bottom",
+            super::CanvasKey::DistributeHorizontal => "Space horizontally",
+            super::CanvasKey::DistributeVertical => "Space vertically",
+            super::CanvasKey::ToggleAlignTarget => "Switch align target",
+            super::CanvasKey::AlignSelectionTarget => "selection",
+            super::CanvasKey::AlignViewTarget => "visible area",
             super::CanvasKey::GridOn => "on",
             super::CanvasKey::GridOff => "off",
             super::CanvasKey::AutoRegion => "content AABB",
