@@ -211,6 +211,17 @@ impl CanvasConnector {
         self.attachments.iter().any(Option::is_some)
     }
 
+    pub(crate) fn remap_attachments(&mut self, mut target: impl FnMut(Entity) -> Option<Entity>) {
+        self.attachments = self.attachments.map(|attachment| {
+            let attachment = attachment?;
+            Some(Attachment {
+                target: target(attachment.target)?,
+                ..attachment
+            })
+        });
+        self.hidden_by_anchor = false;
+    }
+
     fn set_route_endpoint(&mut self, end: CanvasConnectorEnd, point: Vec2) {
         match end {
             CanvasConnectorEnd::Start => self.route.start = point,
@@ -229,6 +240,16 @@ impl CanvasConnector {
         document: Entity,
         projection: Affine3A,
     ) -> CanvasResult {
+        self.refresh_endpoints(projection, |attachment| {
+            shape_anchor(world, document, attachment)
+        })
+    }
+
+    pub(crate) fn refresh_endpoints(
+        &mut self,
+        projection: Affine3A,
+        mut resolve: impl FnMut(Attachment) -> CanvasResult<Option<(bool, Vec2)>>,
+    ) -> CanvasResult {
         self.hidden_by_anchor = false;
         if !self.has_attachments() {
             return Ok(());
@@ -237,11 +258,9 @@ impl CanvasConnector {
             let Some(attachment) = self.attachments[end.index()] else {
                 continue;
             };
-            if let Some((visible, point)) =
-                resolve_attachment(world, document, projection, attachment)?
-            {
+            if let Some((visible, point)) = resolve(attachment)? {
                 self.hidden_by_anchor |= !visible;
-                self.set_route_endpoint(end, point);
+                self.set_route_endpoint(end, local_anchor(projection, point, attachment.target)?);
             } else {
                 self.attachments[end.index()] = None;
             }
@@ -672,20 +691,33 @@ fn resolve_attachment(
     projection: Affine3A,
     attachment: Attachment,
 ) -> CanvasResult<Option<(bool, Vec2)>> {
+    shape_anchor(world, document, attachment)?
+        .map(|(visible, point)| Ok((visible, local_anchor(projection, point, attachment.target)?)))
+        .transpose()
+}
+
+fn shape_anchor(
+    world: &World,
+    document: Entity,
+    attachment: Attachment,
+) -> CanvasResult<Option<(bool, Vec2)>> {
     let Some((_, layer)) = crate::order::item_placement(world, document, attachment.target)
         .filter(|_| world.get::<crate::CanvasShape>(attachment.target).is_some())
     else {
         return Ok(None);
     };
-    let Some(point) = crate::anchors::document_point(world, attachment.target, attachment.anchor)?
-    else {
-        return Ok(None);
-    };
+    Ok(
+        crate::anchors::document_point(world, attachment.target, attachment.anchor)?
+            .map(|point| (layer.visible(), point)),
+    )
+}
+
+fn local_anchor(projection: Affine3A, point: Vec2, target: Entity) -> CanvasResult<Vec2> {
     let local = crate::scale::local_point(projection, point).as_vec2();
     if !local.is_finite() {
-        return Err(invalid(CanvasIssue::ConnectorAnchor).at("shape", attachment.target));
+        return Err(invalid(CanvasIssue::ConnectorAnchor).at("shape", target));
     }
-    Ok(Some((layer.visible(), local)))
+    Ok(local)
 }
 
 fn attached_connectors(world: &mut World, document: Entity) -> Vec<(Entity, CanvasConnector)> {

@@ -953,7 +953,8 @@ impl Plugin for CanvasPlugin {
         if !app.world().contains_resource::<Assets<ColorMaterial>>() {
             app.init_asset::<ColorMaterial>();
         }
-        app.init_resource::<crate::mesh_cache::MeshCache>();
+        app.init_resource::<crate::mesh_cache::MeshCache>()
+            .init_resource::<crate::CanvasClipboard>();
         app.register_type::<CanvasDocument>()
             .register_type::<crate::CanvasItem>()
             .register_type::<crate::CanvasGroup>()

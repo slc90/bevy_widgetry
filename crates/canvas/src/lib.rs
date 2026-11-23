@@ -5,6 +5,7 @@ mod alpha;
 mod anchors;
 mod basic_path;
 mod batch;
+mod clipboard;
 mod connector;
 mod error;
 mod export;
@@ -33,6 +34,7 @@ mod text;
 mod view;
 
 pub use anchors::{CanvasAnchor, CanvasConnectorEnd, CanvasConnectorEndpoint};
+pub use clipboard::CanvasClipboard;
 pub use connector::{
     CanvasArrow, CanvasConnector, CanvasConnectorLabel, CanvasConnectorRoute, CanvasConnectorStyle,
 };

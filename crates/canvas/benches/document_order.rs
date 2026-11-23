@@ -75,5 +75,43 @@ fn main() -> Result {
             |fixture| Ok(fixture.world.entities().count_spawned()),
         )?;
     }
+    for count in [100, 1000] {
+        run(
+            &mut harness,
+            &format!("canvas_clipboard/shapes{count}/copy_paste_undo"),
+            false,
+            || {
+                let mut fixture = fixture(count)?;
+                let items = CanvasDocument::draw_order(&fixture.world, fixture.document)
+                    .map_err(|error| error.into_bevy_error())?;
+                let group = CanvasDocument::group_items(
+                    &mut fixture.world,
+                    fixture.document,
+                    &items,
+                    "Clipboard benchmark",
+                )
+                .map_err(|error| error.into_bevy_error())?;
+                let destination = fixture.world.spawn(CanvasDocument).id();
+                Ok((fixture, group, destination))
+            },
+            |(fixture, group, destination), _| {
+                let world = &mut fixture.world;
+                let copied = CanvasClipboard::copy(world, fixture.document, &[*group])
+                    .map_err(|error| error.into_bevy_error())?;
+                let pasted = CanvasClipboard::paste(world, *destination, None)
+                    .map_err(|error| error.into_bevy_error())?;
+                if copied != 1 || pasted.len() != 1 {
+                    return Err(error("benchmark failed to copy and paste one group"));
+                }
+                if !CanvasDocument::undo(world, *destination)
+                    .map_err(|error| error.into_bevy_error())?
+                {
+                    return Err(error("benchmark paste did not record history"));
+                }
+                Ok(())
+            },
+            |(fixture, _, _)| Ok(fixture.world.entities().count_spawned()),
+        )?;
+    }
     harness.finish()
 }

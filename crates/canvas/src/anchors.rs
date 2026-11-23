@@ -116,12 +116,20 @@ pub(crate) fn document_point(
         return Ok(None);
     };
     let projection = crate::groups::document_transform(world, shape)?;
+    projected_point(geometry, projection, anchor).map_err(|error| error.at("shape", shape))
+}
+
+pub(crate) fn projected_point(
+    geometry: &CanvasGeometry,
+    projection: bevy::math::Affine3A,
+    anchor: CanvasAnchor,
+) -> CanvasResult<Option<Vec2>> {
     let Some(point) = local_points(geometry)?[anchor as usize] else {
         return Ok(None);
     };
     let point = crate::snapping::project(projection, point).as_vec2();
     if !point.is_finite() {
-        return Err(invalid(CanvasIssue::ConnectorAnchor).at("shape", shape));
+        return Err(invalid(CanvasIssue::ConnectorAnchor));
     }
     Ok(Some(point))
 }

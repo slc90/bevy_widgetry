@@ -96,6 +96,10 @@ enum Action {
     Nodes,
     Group,
     Ungroup,
+    Copy,
+    Cut,
+    Paste,
+    Duplicate,
     Add,
     Raise,
     Lower,
@@ -343,6 +347,8 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::Pen, Action::Pen),
         (CanvasKey::Nodes, Action::Nodes),
         (CanvasKey::Group, Action::Group), (CanvasKey::Ungroup, Action::Ungroup),
+        (CanvasKey::Copy, Action::Copy), (CanvasKey::Cut, Action::Cut),
+        (CanvasKey::Paste, Action::Paste), (CanvasKey::Duplicate, Action::Duplicate),
         (CanvasKey::Raise, Action::Raise), (CanvasKey::Lower, Action::Lower),
         (CanvasKey::Front, Action::Front), (CanvasKey::Back, Action::Back),
         (CanvasKey::Append, Action::Append),
@@ -929,6 +935,9 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 CanvasView::set_object_snap_in_world(world, demo.main, settings)
                     .map_err(|error| error.into_bevy_error())?;
             }
+            Action::Copy | Action::Cut | Action::Paste | Action::Duplicate => {
+                edit_clipboard(world, &demo, action)?;
+            }
             Action::ToggleAuxiliary => {
                 let mut node = world
                     .get_mut::<Node>(demo.auxiliary)
@@ -974,6 +983,30 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
         }
         refresh(world)
     });
+}
+
+fn edit_clipboard(world: &mut World, demo: &Demo, action: Action) -> Result {
+    let selected =
+        CanvasView::selection(world, demo.main).map_err(|error| error.into_bevy_error())?;
+    let layer =
+        CanvasView::active_layer(world, demo.main).map_err(|error| error.into_bevy_error())?;
+    let items = match action {
+        Action::Copy => CanvasClipboard::copy(world, demo.document, &selected).map(|_| Vec::new()),
+        Action::Cut => CanvasClipboard::cut(world, demo.document, &selected).map(|_| Vec::new()),
+        Action::Paste => CanvasClipboard::paste(world, demo.document, layer),
+        Action::Duplicate => CanvasClipboard::duplicate(world, demo.document, layer, &selected),
+        _ => unreachable!("clipboard action"),
+    }
+    .map_err(|error| error.into_bevy_error())?;
+    if !items.is_empty()
+        && CanvasView::group_path(world, demo.main)
+            .map_err(|error| error.into_bevy_error())?
+            .is_empty()
+    {
+        CanvasView::set_selection_in_world(world, demo.main, items)
+            .map_err(|error| error.into_bevy_error())?;
+    }
+    Ok(())
 }
 
 fn edit_groups(world: &mut World, demo: &Demo, action: Action) -> Result {
