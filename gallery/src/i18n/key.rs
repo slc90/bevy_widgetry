@@ -882,6 +882,8 @@ pub(crate) enum CanvasKey {
     Pen,
     DrawLine,
     DrawPolyline,
+    DrawConnector,
+    DrawConnectorBoth,
     DrawPolygon,
     PlaceText,
     FontSize,

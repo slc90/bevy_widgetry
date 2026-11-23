@@ -2,7 +2,7 @@ const NODE_HIT_RADIUS_SQUARED: f32 = 36.0;
 const NODE_HALF_SIZE: f32 = 4.0;
 
 use crate::error::CanvasResult as Result;
-use crate::{CanvasDocument, CanvasGeometry, CanvasPathCommand};
+use crate::{CanvasConnector, CanvasDocument, CanvasGeometry, CanvasPathCommand};
 use bevy::{math::DVec2, prelude::*};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -53,6 +53,26 @@ pub(crate) struct Overlay {
 }
 
 pub(crate) fn overlay(world: &World, shape: Entity) -> Result<Option<Overlay>> {
+    if let Some(connector) = world.get::<CanvasConnector>(shape) {
+        let transform = crate::groups::document_transform(world, shape)?;
+        return Ok(Some(Overlay {
+            handles: connector
+                .route()
+                .vertices()
+                .enumerate()
+                .map(|(command, point)| {
+                    (
+                        Point {
+                            command,
+                            role: Role::Anchor,
+                        },
+                        transform.transform_point3(point.extend(0.0)).truncate(),
+                    )
+                })
+                .collect(),
+            links: Vec::new(),
+        }));
+    }
     let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
         return Ok(None);
     };
@@ -159,11 +179,17 @@ pub(crate) fn mesh(data: &Overlay, zoom: f32) -> Mesh {
 }
 
 #[derive(Clone, Copy)]
+enum Source {
+    Path(usize),
+    Connector(usize),
+}
+
+#[derive(Clone, Copy)]
 pub(crate) struct Edit {
     pub(crate) document: Entity,
     pub(crate) shape: Entity,
     point: Point,
-    commands: usize,
+    source: Source,
     projection: bevy::math::Affine3A,
     start: DVec2,
     origin: Vec2,
@@ -177,20 +203,30 @@ impl Edit {
         at: Vec2,
     ) -> Result<Self> {
         (|| -> Result<Self> {
-            let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
+            let (origin, source) = if let Some(connector) = world.get::<CanvasConnector>(shape) {
+                let route = connector.route();
+                (
+                    route.point(point.command),
+                    Source::Connector(route.waypoints.len()),
+                )
+            } else if let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) {
+                (
+                    path.commands
+                        .get(point.command)
+                        .and_then(|c| point.read(*c)),
+                    Source::Path(path.commands.len()),
+                )
+            } else {
                 return Err(crate::error::missing(crate::CanvasPart::NodePath));
             };
-            let origin = path
-                .commands
-                .get(point.command)
-                .and_then(|c| point.read(*c))
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::NodePoint))?;
+            let origin =
+                origin.ok_or_else(|| crate::error::missing(crate::CanvasPart::NodePoint))?;
             let projection = crate::groups::document_transform(world, shape)?;
             Ok(Self {
                 document,
                 shape,
                 point,
-                commands: path.commands.len(),
+                source,
                 projection,
                 start: crate::scale::local_point(projection, at),
                 origin,
@@ -201,19 +237,37 @@ impl Edit {
     pub(crate) fn valid(self, world: &World) -> bool {
         crate::groups::document_transform(world, self.shape)
             .is_ok_and(|transform| transform == self.projection)
-            && matches!(world.get::<CanvasGeometry>(self.shape),Some(CanvasGeometry::Path(p)) if p.commands.len()==self.commands && p.commands.get(self.point.command).is_some_and(|c|self.point.read(*c).is_some()))
+            && match self.source {
+                Source::Path(count) => matches!(
+                    world.get::<CanvasGeometry>(self.shape), Some(CanvasGeometry::Path(path))
+                        if path.commands.len() == count
+                        && path.commands.get(self.point.command).is_some_and(|c| self.point.read(*c).is_some())
+                ),
+                Source::Connector(waypoint_count) => world
+                    .get::<CanvasConnector>(self.shape)
+                    .is_some_and(|connector| connector.route().waypoints.len() == waypoint_count),
+            }
     }
     pub(crate) fn apply(self, world: &mut World, at: Vec2) -> Result {
-        let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(self.shape) else {
-            return Ok(());
-        };
-        let mut path = path.clone();
         let point = (self.origin.as_dvec2() + crate::scale::local_point(self.projection, at)
             - self.start)
             .as_vec2();
         if !point.is_finite() {
             return Ok(());
         }
+        if matches!(self.source, Source::Connector(_)) {
+            return CanvasDocument::move_connector_point(
+                world,
+                self.document,
+                self.shape,
+                self.point.command,
+                point,
+            );
+        }
+        let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(self.shape) else {
+            return Ok(());
+        };
+        let mut path = path.clone();
         let Some(p) = path
             .commands
             .get_mut(self.point.command)

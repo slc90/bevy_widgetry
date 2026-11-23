@@ -13,6 +13,7 @@ struct Fields {
     content: Entity,
     size: Entity,
     color: Entity,
+    alignment: Entity,
 }
 
 #[derive(Component, Clone, Default)]
@@ -27,7 +28,7 @@ struct Draft {
 pub(super) fn panel() -> impl Scene {
     bsn! {
         Name("CanvasTextProperties") Draft::default()
-        Fields { content:#Content,size:#Size,color:#Color }
+        Fields { content:#Content,size:#Size,color:#Color,alignment:#Alignment }
         Node { display:Display::None, align_items:AlignItems::Center, column_gap:px(8), flex_wrap:FlexWrap::Wrap }
         Children [
             #Content Name("CanvasTextContent") @WidgetryTextField {@multiline:true,@visible_lines:{Some(2.0)}} Node {width:px(245)}--
@@ -35,7 +36,7 @@ pub(super) fn panel() -> impl Scene {
             #Size Name("CanvasTextSize") @WidgetryNumberInput<f32> {@min:{Some(1.0)}, @value:{Some(24.0)}} Node {width:px(100)}--
             @localized(TextKey::Canvas(CanvasKey::TextColor)) WidgetryText--
             #Color Name("CanvasTextColor") @WidgetryTextField Node {width:px(122)}--
-            Name("CanvasTextAlignment") @WidgetryButton { @children:{Some(Box::new(bsn_list! { AlignmentLabel @localized(TextKey::Canvas(CanvasKey::AlignStart)) WidgetryText }) as Box<dyn SceneList>)} } on(align)--
+            #Alignment Name("CanvasTextAlignment") @WidgetryButton { @children:{Some(Box::new(bsn_list! { AlignmentLabel @localized(TextKey::Canvas(CanvasKey::AlignStart)) WidgetryText }) as Box<dyn SceneList>)} } on(align)--
             Name("CanvasApplyText") @WidgetryButton { @children:{Some(Box::new(bsn_list! {@localized(TextKey::Canvas(CanvasKey::ApplyText)) WidgetryText }) as Box<dyn SceneList>)} } on(apply)
         ]
     }
@@ -56,6 +57,23 @@ pub(super) fn refresh(world: &mut World, demo: &Demo) -> Result {
             world
                 .get::<CanvasText>(id)
                 .map(|text| (id, text.style().clone()))
+                .or_else(|| {
+                    let connector = world.get::<CanvasConnector>(id)?;
+                    let style = connector.label().map_or(
+                        CanvasTextStyle {
+                            content: String::new(),
+                            align: CanvasTextAlign::Center,
+                            ..default()
+                        },
+                        |label| CanvasTextStyle {
+                            content: label.text.clone(),
+                            font_size: label.font_size,
+                            color: label.color,
+                            align: CanvasTextAlign::Center,
+                        },
+                    );
+                    Some((id, style))
+                })
         });
     let mut draft = world
         .get_mut::<Draft>(demo.editor)
@@ -75,11 +93,20 @@ pub(super) fn refresh(world: &mut World, demo: &Demo) -> Result {
     } else {
         Display::None
     };
-    if let Some((_, style)) = selected {
+    if let Some((item, style)) = selected {
         let fields = world
             .get::<Fields>(demo.editor)
             .ok_or_else(|| invalid("missing Canvas text fields"))?
             .clone();
+        let connector = world.get::<CanvasConnector>(item).is_some();
+        world
+            .get_mut::<Node>(fields.alignment)
+            .ok_or_else(|| invalid("missing Canvas alignment button"))?
+            .display = if connector {
+            Display::None
+        } else {
+            Display::Flex
+        };
         WidgetryTextFieldHeadless::set_text_in_world(world, fields.content, style.content)
             .map_err(|e| e.into_bevy_error())?;
         WidgetryNumberInput::<f32>::set_value_in_world(world, fields.size, style.font_size)
@@ -148,8 +175,26 @@ fn apply(_: On<Activate>, mut commands: Commands) {
             color: color.into(),
             align: draft.align,
         };
-        CanvasDocument::update_text(world, demo.document, item, style)
+        if let Some(connector) = world.get::<CanvasConnector>(item) {
+            let label = (!style.content.is_empty()).then(|| CanvasConnectorLabel {
+                text: style.content,
+                font_size: style.font_size,
+                color: style.color,
+                position: connector.label().map_or(0.5, |label| label.position),
+            });
+            CanvasDocument::update_connector(
+                world,
+                demo.document,
+                item,
+                connector.route().clone(),
+                connector.style(),
+                label,
+            )
             .map_err(|e| e.into_bevy_error())?;
+        } else {
+            CanvasDocument::update_text(world, demo.document, item, style)
+                .map_err(|e| e.into_bevy_error())?;
+        }
         bind(
             world,
             demo.result,

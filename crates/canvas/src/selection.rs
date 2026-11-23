@@ -1,5 +1,8 @@
 use crate::error::CanvasResult as Result;
-use crate::{CanvasDocument, CanvasGeometry, CanvasGroup, CanvasPaint, CanvasView};
+use crate::{
+    CanvasConnector, CanvasDocument, CanvasGeometry, CanvasGroup, CanvasPaint, CanvasView,
+};
+use bevy::math::Affine3A;
 use bevy::prelude::*;
 
 mod hit;
@@ -10,6 +13,7 @@ pub(crate) fn belongs_to(world: &World, document: Option<Entity>, shape: Entity)
             && world.get_entity(shape).as_ref().is_ok_and(|item| {
                 crate::model::has_shape_components(item)
                     || item.contains::<crate::CanvasText>()
+                    || item.contains::<CanvasConnector>()
                     || crate::groups::has_group_components(item)
             })
             && crate::order::item_placement(world, document, shape)
@@ -101,38 +105,36 @@ fn hit_shapes(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Ent
             let Some(target) = target_in_scope(world, document, scope, shape) else {
                 continue;
             };
+            let transform = crate::groups::document_transform(world, shape)?;
             if let Some(text) = world.get::<crate::CanvasText>(shape) {
-                let local = crate::scale::local_point(
-                    crate::groups::document_transform(world, shape)?,
-                    point,
-                );
-                let bounds = text.local_bounds();
-                if bounds.size().min_element() > 0.0
-                    && local.cmpge(bounds.min.as_dvec2()).all()
-                    && local.cmple(bounds.max.as_dvec2()).all()
-                {
+                if hit_rect(text.local_bounds(), transform, point) {
                     return Ok(Some(target));
                 }
                 continue;
             }
-            let geometry = world
-                .get::<CanvasGeometry>(shape)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Geometry))?
-                .clone();
-            let transform = crate::groups::document_transform(world, shape)?;
+            if let Some((label, at)) = world
+                .get::<CanvasConnector>(shape)
+                .and_then(CanvasConnector::label_at)
+                && hit_rect(
+                    label.local_bounds(),
+                    CanvasConnector::label_projection(transform, at),
+                    point,
+                )
+            {
+                return Ok(Some(target));
+            }
+            let (geometry, paint, arrows) = item_geometry(world, shape)?;
             let local = world
                 .get::<Transform>(shape)
                 .ok_or_else(|| crate::error::missing(crate::CanvasPart::SelectionTransform))?;
-            let paint = *world
-                .get::<CanvasPaint>(shape)
-                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
             geometry
                 .bounds_in_projection(local, &transform, &paint)
                 .map_err(|error| error.at("shape", shape).at("document", document))?;
             if paint.fill.is_none() && paint.stroke.is_none() {
                 continue;
             }
-            let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint)?;
+            let handles =
+                crate::mesh_cache::geometry(world, shape, &geometry, paint, arrows.as_ref())?;
             let meshes = world.resource::<Assets<Mesh>>();
             let fill = meshes
                 .get(&handles.fill)
@@ -157,6 +159,29 @@ fn hit_shapes(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Ent
         Ok(None)
     })()
     .map_err(|error| error.at("view", view))
+}
+
+fn hit_rect(bounds: Rect, projection: Affine3A, point: Vec2) -> bool {
+    let local = crate::scale::local_point(projection, point);
+    bounds.size().min_element() > 0.0
+        && local.cmpge(bounds.min.as_dvec2()).all()
+        && local.cmple(bounds.max.as_dvec2()).all()
+}
+
+fn item_geometry(
+    world: &World,
+    item: Entity,
+) -> Result<(CanvasGeometry, CanvasPaint, Option<crate::CanvasPath>)> {
+    if let Some(connector) = world.get::<CanvasConnector>(item) {
+        return Ok(connector.geometry());
+    }
+    let source = world
+        .get::<CanvasGeometry>(item)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Geometry))?;
+    let paint = world
+        .get::<CanvasPaint>(item)
+        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
+    Ok((source.clone(), *paint, None))
 }
 
 fn target_in_scope(
@@ -184,18 +209,12 @@ pub(crate) fn local_bounds(world: &mut World, shape: Entity) -> Result<Rect> {
         return crate::groups::local_bounds(world, shape);
     }
     (|| -> Result<Rect> {
-        let geometry = world
-            .get::<CanvasGeometry>(shape)
-            .ok_or_else(|| crate::error::missing(crate::CanvasPart::SelectionGeometry))?
-            .clone();
-        let paint = *world
-            .get::<CanvasPaint>(shape)
-            .ok_or_else(|| crate::error::missing(crate::CanvasPart::SelectionPaint))?;
+        let (geometry, paint, arrows) = item_geometry(world, shape)?;
         let transform = world
             .get::<Transform>(shape)
             .ok_or_else(|| crate::error::missing(crate::CanvasPart::SelectionTransform))?;
         geometry._validate(transform, &paint)?;
-        let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint)?;
+        let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint, arrows.as_ref())?;
         let mut min = Vec2::splat(f32::INFINITY);
         let mut max = Vec2::splat(f32::NEG_INFINITY);
         for (region, include) in [
@@ -221,7 +240,18 @@ pub(crate) fn local_bounds(world: &mut World, shape: Entity) -> Result<Rect> {
             min = bounds.min;
             max = bounds.max;
         }
-        Ok(Rect { min, max })
+        let mut bounds = Rect { min, max };
+        if let Some((label, at)) = world
+            .get::<CanvasConnector>(shape)
+            .and_then(CanvasConnector::label_at)
+        {
+            let rect = label.local_bounds();
+            bounds = bounds.union(Rect {
+                min: rect.min + at,
+                max: rect.max + at,
+            });
+        }
+        Ok(bounds)
     })()
     .map_err(|error| error.at("shape", shape))
 }

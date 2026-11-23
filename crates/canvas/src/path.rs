@@ -10,7 +10,7 @@ mod edit;
 pub use edit::CanvasPathSegment;
 mod geometry;
 mod stroke_projection;
-pub(crate) use geometry::meshes;
+pub(crate) use geometry::{connector_meshes, meshes};
 
 #[derive(Clone, Debug, PartialEq, Reflect)]
 pub struct CanvasPath {

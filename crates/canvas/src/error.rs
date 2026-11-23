@@ -124,6 +124,8 @@ pub enum CanvasIssue {
     Ownership,
     Paint,
     TextProperties,
+    ConnectorRoute,
+    ConnectorLabelPosition,
     PathToolParameters,
     PathBounds,
     PathClose,

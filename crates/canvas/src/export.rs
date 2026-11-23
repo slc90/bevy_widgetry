@@ -154,11 +154,11 @@ impl CanvasDocument {
             let mut svg = format!(
                 "<svg xmlns=\"http://www.w3.org/2000/svg\" color-interpolation=\"linearRGB\" width=\"{width}\" height=\"{height}\" viewBox=\"{left} {top} {width} {height}\"><defs><clipPath id=\"canvas-region\"><rect x=\"{left}\" y=\"{top}\" width=\"{width}\" height=\"{height}\"/></clipPath></defs><g clip-path=\"url(#canvas-region)\">",
             );
-            if snapshot
-                .shapes
-                .iter()
-                .any(|shape| matches!(shape.artwork, Artwork::Text(_)))
-            {
+            if snapshot.shapes.iter().any(|shape| match &shape.artwork {
+                Artwork::Text(_) => true,
+                Artwork::Connector(connector) => connector.label().is_some(),
+                Artwork::Geometry(..) => false,
+            }) {
                 use base64::{Engine, engine::general_purpose::STANDARD};
                 svg.push_str(
                     "<style>@font-face{font-family:CanvasDefault;src:url(data:font/ttf;base64,",
@@ -167,12 +167,7 @@ impl CanvasDocument {
                 svg.push_str(") format('truetype')}</style>");
             }
             for shape in &snapshot.shapes {
-                let [x, y] = crate::groups::planar_axes(&shape.projection);
-                let center = shape.projection.translation.truncate().as_dvec2();
-                let matrix = format!(
-                    "matrix({} {} {} {} {} {})",
-                    x.x, x.y, y.x, y.y, center.x, center.y
-                );
+                let matrix = svg_matrix(shape.projection);
                 let validate_color = |c: Color| {
                     let value = c.to_srgba();
                     if [value.red, value.green, value.blue, value.alpha]
@@ -187,53 +182,46 @@ impl CanvasDocument {
                         })
                     }
                 };
-                let (geometry, paint) = match &shape.artwork {
-                    Artwork::Geometry(geometry, paint) => (geometry, paint),
+                match &shape.artwork {
+                    Artwork::Geometry(geometry, paint) => {
+                        write_svg_geometry(&mut svg, geometry, *paint, &matrix, validate_color)?;
+                    }
                     Artwork::Text(text) => {
                         validate_color(text.style().color)?;
                         svg.push_str(&text.svg(&matrix));
-                        continue;
                     }
-                };
-                let geometry = match geometry {
-                    CanvasGeometry::Rectangle(rectangle) => {
-                        let size = rectangle.size.as_dvec2();
-                        let radius = f64::from(rectangle.corner_radius);
-                        format!(
-                            "rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\" ry=\"{radius}\"",
-                            -size.x * 0.5,
-                            -size.y * 0.5,
-                            size.x,
-                            size.y
-                        )
+                    Artwork::Connector(connector) => {
+                        let (route, arrows) = connector.route().paths(connector.style());
+                        let paint = connector.style().paint();
+                        if !arrows.commands.is_empty() {
+                            write_svg_geometry(
+                                &mut svg,
+                                &CanvasGeometry::Path(arrows),
+                                CanvasPaint {
+                                    stroke: None,
+                                    ..paint
+                                },
+                                &matrix,
+                                validate_color,
+                            )?;
+                        }
+                        write_svg_geometry(
+                            &mut svg,
+                            &CanvasGeometry::Path(route),
+                            CanvasPaint {
+                                fill: None,
+                                ..paint
+                            },
+                            &matrix,
+                            validate_color,
+                        )?;
+                        if let Some((label, at)) = connector.label_at() {
+                            validate_color(label.style().color)?;
+                            let label_projection =
+                                crate::CanvasConnector::label_projection(shape.projection, at);
+                            svg.push_str(&label.svg(&svg_matrix(label_projection)));
+                        }
                     }
-                    CanvasGeometry::Ellipse(ellipse) => {
-                        let [rx, ry] = ellipse.radii.as_dvec2().to_array();
-                        format!("ellipse cx=\"0\" cy=\"0\" rx=\"{rx}\" ry=\"{ry}\"")
-                    }
-                    CanvasGeometry::Path(path) => format!("path d=\"{}\"", path_data(path)),
-                };
-                if let Some(fill) = paint.fill {
-                    validate_color(fill)?;
-                    let rule = match paint.fill_rule {
-                        crate::CanvasFillRule::NonZero => "nonzero",
-                        crate::CanvasFillRule::EvenOdd => "evenodd",
-                    };
-                    svg.push_str(&format!("<{geometry} transform=\"{matrix}\" {} fill-rule=\"{rule}\" stroke=\"none\" />",color("fill",fill)));
-                }
-                if let Some(stroke) = paint.stroke {
-                    validate_color(stroke.color)?;
-                    let cap = match stroke.cap {
-                        crate::CanvasLineCap::Butt => "butt",
-                        crate::CanvasLineCap::Round => "round",
-                        crate::CanvasLineCap::Square => "square",
-                    };
-                    let join = match stroke.join {
-                        crate::CanvasLineJoin::Miter => "miter",
-                        crate::CanvasLineJoin::Round => "round",
-                        crate::CanvasLineJoin::Bevel => "bevel",
-                    };
-                    svg.push_str(&format!("<{geometry} transform=\"{matrix}\" fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{cap}\" stroke-linejoin=\"{join}\" stroke-miterlimit=\"4\" />",color("stroke",stroke.color),f64::from(stroke.width)));
                 }
             }
             svg.push_str("</g></svg>\n");
@@ -248,6 +236,68 @@ impl CanvasDocument {
             )
         })
     }
+}
+
+fn svg_matrix(projection: Affine3A) -> String {
+    let [x, y] = crate::groups::planar_axes(&projection);
+    let center = projection.translation.truncate().as_dvec2();
+    format!(
+        "matrix({} {} {} {} {} {})",
+        x.x, x.y, y.x, y.y, center.x, center.y
+    )
+}
+
+fn write_svg_geometry(
+    svg: &mut String,
+    geometry: &CanvasGeometry,
+    paint: CanvasPaint,
+    matrix: &str,
+    validate_color: impl Fn(Color) -> std::result::Result<(), CanvasExportError>,
+) -> std::result::Result<(), CanvasExportError> {
+    let geometry = match geometry {
+        CanvasGeometry::Rectangle(rectangle) => {
+            let size = rectangle.size.as_dvec2();
+            let radius = f64::from(rectangle.corner_radius);
+            format!(
+                "rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\" ry=\"{radius}\"",
+                -size.x * 0.5,
+                -size.y * 0.5,
+                size.x,
+                size.y
+            )
+        }
+        CanvasGeometry::Ellipse(ellipse) => {
+            let [rx, ry] = ellipse.radii.as_dvec2().to_array();
+            format!("ellipse cx=\"0\" cy=\"0\" rx=\"{rx}\" ry=\"{ry}\"")
+        }
+        CanvasGeometry::Path(path) => format!("path d=\"{}\"", path_data(path)),
+    };
+    if let Some(fill) = paint.fill {
+        validate_color(fill)?;
+        let rule = match paint.fill_rule {
+            crate::CanvasFillRule::NonZero => "nonzero",
+            crate::CanvasFillRule::EvenOdd => "evenodd",
+        };
+        svg.push_str(&format!(
+            "<{geometry} transform=\"{matrix}\" {} fill-rule=\"{rule}\" stroke=\"none\" />",
+            color("fill", fill)
+        ));
+    }
+    if let Some(stroke) = paint.stroke {
+        validate_color(stroke.color)?;
+        let cap = match stroke.cap {
+            crate::CanvasLineCap::Butt => "butt",
+            crate::CanvasLineCap::Round => "round",
+            crate::CanvasLineCap::Square => "square",
+        };
+        let join = match stroke.join {
+            crate::CanvasLineJoin::Miter => "miter",
+            crate::CanvasLineJoin::Round => "round",
+            crate::CanvasLineJoin::Bevel => "bevel",
+        };
+        svg.push_str(&format!("<{geometry} transform=\"{matrix}\" fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{cap}\" stroke-linejoin=\"{join}\" stroke-miterlimit=\"4\" />",color("stroke",stroke.color),f64::from(stroke.width)));
+    }
+    Ok(())
 }
 
 fn path_data(path: &crate::CanvasPath) -> String {
@@ -315,6 +365,7 @@ fn color(attribute: &str, value: Color) -> String {
 enum Artwork {
     Geometry(CanvasGeometry, CanvasPaint),
     Text(crate::CanvasText),
+    Connector(crate::CanvasConnector),
 }
 
 impl crate::CanvasText {
@@ -391,7 +442,8 @@ fn snapshot(
             crate::order::is_item_child(entry, container.parent(document))
                 && (group
                     || crate::model::has_shape_components(entry)
-                    || entry.contains::<crate::CanvasText>())
+                    || entry.contains::<crate::CanvasText>()
+                    || entry.contains::<crate::CanvasConnector>())
         }) {
             return Err(CanvasExportError::Model(
                 crate::model::invalid_ownership(world, entity)
@@ -443,6 +495,17 @@ fn snapshot(
                 )
             })?;
             (Artwork::Text(text.clone()), b)
+        } else if let Some(connector) = world.get::<crate::CanvasConnector>(entity) {
+            let bounds = connector
+                .bounds(&local_transform, &projection)
+                .map_err(|error| {
+                    CanvasExportError::Model(
+                        error
+                            .at("connector", entity)
+                            .into_failure(ErrorFrame::new("canvas.export.bounds")),
+                    )
+                })?;
+            (Artwork::Connector(connector.clone()), bounds)
         } else {
             let geometry = world.get::<CanvasGeometry>(entity);
             let paint = world.get::<CanvasPaint>(entity);

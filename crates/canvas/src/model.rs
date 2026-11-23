@@ -124,7 +124,9 @@ impl CanvasDocument {
         transform: Transform,
     ) -> crate::error::PublicResult {
         crate::history::apply(world, target, |world, document| {
-            if world.get::<crate::CanvasText>(shape).is_some() {
+            if world.get::<crate::CanvasText>(shape).is_some()
+                || world.get::<crate::CanvasConnector>(shape).is_some()
+            {
                 crate::groups::update_item_transform(world, document, shape, transform)
             } else {
                 Self::_update_transform(world, document, shape, transform)

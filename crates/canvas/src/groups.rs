@@ -134,7 +134,9 @@ pub(crate) fn update_item_transform(
     item: Entity,
     transform: Transform,
 ) -> Result {
-    if world.get::<crate::CanvasText>(item).is_some() {
+    if world.get::<crate::CanvasText>(item).is_some()
+        || world.get::<crate::CanvasConnector>(item).is_some()
+    {
         item_parent(world, document, item)?;
         validate_item_transform(world, item, transform)?;
         return crate::history::set_transform(world, document, item, transform);
@@ -373,6 +375,59 @@ fn subtree_bounds(
             }
             continue;
         }
+        if let Some(connector) = world.get::<crate::CanvasConnector>(item) {
+            connector.bounds(&local, &transform)?;
+            if let Some(previous) = previous {
+                let style = connector.style();
+                let (route, arrows) = connector.route().paths(style);
+                let route_preserved = preserves_geometry(
+                    &CanvasGeometry::Path(route),
+                    &style.paint(),
+                    previous,
+                    transform,
+                )?;
+                let arrows_preserved = arrows.commands.is_empty()
+                    || preserves_geometry(
+                        &CanvasGeometry::Path(arrows),
+                        &CanvasPaint::default(),
+                        previous,
+                        transform,
+                    )?;
+                let label_preserved = if let Some((label, at)) = connector.label_at() {
+                    preserves_projection(
+                        crate::CanvasConnector::label_projection(previous, at),
+                        crate::CanvasConnector::label_projection(transform, at),
+                    ) && preserves_geometry(
+                        &label.enclosing_geometry(),
+                        &CanvasPaint::default(),
+                        crate::CanvasConnector::label_projection(previous, at),
+                        crate::CanvasConnector::label_projection(transform, at),
+                    )?
+                } else {
+                    true
+                };
+                if !(route_preserved && arrows_preserved && label_preserved) {
+                    return Err(invalid(CanvasIssue::GroupTransform).at("connector", item));
+                }
+            }
+            if measure {
+                let (route, paint, arrows) = connector.geometry();
+                let painted = crate::mesh_cache::painted_bounds(
+                    world,
+                    item,
+                    &route,
+                    paint,
+                    &transform,
+                    arrows.as_ref(),
+                )
+                .map_err(|error| error.at("connector", item))?;
+                let label = connector.label_bounds(&local, &transform)?;
+                for rect in [painted, label].into_iter().flatten() {
+                    bounds = Some(bounds.map_or(rect, |current| current.union(rect)));
+                }
+            }
+            continue;
+        }
         let geometry = world
             .get::<CanvasGeometry>(item)
             .ok_or_else(|| missing(CanvasPart::Geometry).at("item", item))?;
@@ -389,9 +444,10 @@ fn subtree_bounds(
         }
         if measure && (paint.fill.is_some() || paint.stroke.is_some()) {
             let item_bounds = if matches!(geometry, CanvasGeometry::Path(_)) {
-                let Some(rect) =
-                    crate::mesh_cache::painted_bounds(world, item, geometry, *paint, &transform)
-                        .map_err(|error| error.at("shape", item))?
+                let Some(rect) = crate::mesh_cache::painted_bounds(
+                    world, item, geometry, *paint, &transform, None,
+                )
+                .map_err(|error| error.at("shape", item))?
                 else {
                     continue;
                 };
@@ -417,6 +473,13 @@ pub(crate) fn local_bounds(world: &World, group: Entity) -> Result<Rect> {
 }
 
 pub(crate) fn validate_item_transform(world: &World, item: Entity, transform: Transform) -> Result {
+    if let Some(connector) = world.get::<crate::CanvasConnector>(item) {
+        connector.bounds(
+            &transform,
+            &(parent_transform(world, item)? * transform.compute_affine()),
+        )?;
+        return Ok(());
+    }
     if let Some(text) = world.get::<crate::CanvasText>(item) {
         text.bounds(
             &transform,

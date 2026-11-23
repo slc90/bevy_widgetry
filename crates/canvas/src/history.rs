@@ -107,6 +107,7 @@ fn forget_tombstone(mut world: DeferredWorld, context: HookContext) {
 struct Edit {
     transforms: EntityHashMap<Transform>,
     text: EntityHashMap<crate::CanvasText>,
+    connectors: EntityHashMap<crate::CanvasConnector>,
     geometry: EntityHashMap<CanvasGeometry>,
     paint: EntityHashMap<CanvasPaint>,
     parents: EntityHashMap<Option<Entity>>,
@@ -120,6 +121,7 @@ struct Edit {
 struct Entry {
     transforms: Vec<Change<Transform>>,
     text: Vec<Change<crate::CanvasText>>,
+    connectors: Vec<Change<crate::CanvasConnector>>,
     geometry: Vec<Change<CanvasGeometry>>,
     paint: Vec<Change<CanvasPaint>>,
     parents: Vec<Change<Option<Entity>>>,
@@ -458,6 +460,25 @@ pub(crate) fn set_text(
         |edit| &edit.text,
     )? {
         world.insert_batch([(item, text)]);
+    }
+    Ok(())
+}
+
+pub(crate) fn set_connector(
+    world: &mut World,
+    document: Entity,
+    item: Entity,
+    connector: crate::CanvasConnector,
+) -> Result {
+    if record_component(
+        world,
+        document,
+        item,
+        &connector,
+        |edit| &mut edit.connectors,
+        |edit| &edit.connectors,
+    )? {
+        world.insert_batch([(item, connector)]);
     }
     Ok(())
 }
@@ -850,6 +871,11 @@ impl Edit {
                     .then(|| world.get::<crate::CanvasText>(entity).cloned())
                     .flatten()
             }),
+            connectors: changes(self.connectors, |entity| {
+                (!transient.contains(&entity))
+                    .then(|| world.get::<crate::CanvasConnector>(entity).cloned())
+                    .flatten()
+            }),
             geometry: changes(self.geometry, |entity| {
                 (!transient.contains(&entity))
                     .then(|| world.get::<CanvasGeometry>(entity).cloned())
@@ -884,6 +910,8 @@ impl Entry {
         self.references
             .extend(self.text.iter().map(|change| change.entity));
         self.references
+            .extend(self.connectors.iter().map(|change| change.entity));
+        self.references
             .extend(self.geometry.iter().map(|change| change.entity));
         self.references
             .extend(self.paint.iter().map(|change| change.entity));
@@ -900,6 +928,7 @@ impl Entry {
     fn is_empty(&self) -> bool {
         self.transforms.is_empty()
             && self.text.is_empty()
+            && self.connectors.is_empty()
             && self.geometry.is_empty()
             && self.paint.is_empty()
             && self.parents.is_empty()
@@ -1129,6 +1158,7 @@ fn restore(
         .iter()
         .map(|change| change.entity)
         .chain(entry.text.iter().map(|change| change.entity))
+        .chain(entry.connectors.iter().map(|change| change.entity))
         .chain(entry.geometry.iter().map(|change| change.entity))
         .chain(entry.paint.iter().map(|change| change.entity))
         .chain(entry.parents.iter().map(|change| change.entity))
@@ -1161,6 +1191,16 @@ fn restore(
     let attachments = ordered_attachments(world, document, &entry.parents, parent)?;
     let structure = StructureReplay::build(world, document, entry, direction)?;
     let (mut shapes, mut transforms) = prepare_components(world, entry, direction)?;
+    let mut connectors = entry
+        .connectors
+        .iter()
+        .map(|change| {
+            (
+                change.entity,
+                direction.value(&change.before, &change.after).clone(),
+            )
+        })
+        .collect::<EntityHashMap<_>>();
 
     structure.write(world, document);
     let mut group_transforms = Vec::new();
@@ -1183,6 +1223,12 @@ fn restore(
         let parent = ChildOf(parent);
         if let Some(shape) = shapes.remove(&item) {
             world.insert_batch([(item, (shape, parent))]);
+        } else if let Some(connector) = connectors.remove(&item) {
+            if let Some(transform) = transforms.remove(&item) {
+                world.insert_batch([(item, (connector, transform, parent))]);
+            } else {
+                world.insert_batch([(item, (connector, parent))]);
+            }
         } else if let Some(transform) = transforms.remove(&item) {
             world.insert_batch([(item, (transform, parent))]);
         } else {
@@ -1195,6 +1241,13 @@ fn restore(
             direction.value(&change.before, &change.after).clone(),
         )
     }));
+    for (item, connector) in connectors {
+        if let Some(transform) = transforms.remove(&item) {
+            world.insert_batch([(item, (connector, transform))]);
+        } else {
+            world.insert_batch([(item, connector)]);
+        }
+    }
     world.insert_batch(shapes);
     world.insert_batch(transforms);
     world.insert_batch(group_transforms);

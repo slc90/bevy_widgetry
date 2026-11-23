@@ -34,7 +34,11 @@ fn meshes(data: &crate::pen::Preview, zoom: f32) -> Result<[Mesh; 3]> {
     let (fill, stroke) = if data.path.commands.is_empty() {
         (empty(), empty())
     } else {
-        crate::geometry::meshes(&crate::CanvasGeometry::Path(data.path.clone()), data.paint)?
+        crate::geometry::meshes_with_arrows(
+            &crate::CanvasGeometry::Path(data.path.clone()),
+            data.paint,
+            data.arrows.as_ref(),
+        )?
     };
     let mut positions = Vec::new();
     let mut indices = Vec::new();

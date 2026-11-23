@@ -7,6 +7,18 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
+pub(crate) fn meshes_with_arrows(
+    geometry: &CanvasGeometry,
+    paint: CanvasPaint,
+    arrows: Option<&crate::CanvasPath>,
+) -> Result<(Mesh, Mesh)> {
+    if let (CanvasGeometry::Path(route), Some(arrows)) = (geometry, arrows) {
+        crate::path::connector_meshes(route, arrows, paint)
+    } else {
+        meshes(geometry, paint)
+    }
+}
+
 pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(Mesh, Mesh)> {
     (|| -> Result<(Mesh, Mesh)> {
         let width = paint.stroke.map_or(0.0, |stroke| stroke.width);

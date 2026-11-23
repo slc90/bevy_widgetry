@@ -87,6 +87,7 @@ enum Action {
     PlaceText,
     DrawLine,
     DrawPolyline,
+    DrawConnector,
     Flowchart(CanvasFlowchartPreset),
     DrawPolygon,
     RegularPolygon,
@@ -141,10 +142,11 @@ fn refresh_geometry(
         ),
     >,
     texts: Query<(), Changed<CanvasText>>,
+    connectors: Query<(), Changed<CanvasConnector>>,
     demos: Query<(), With<Demo>>,
     mut commands: Commands,
 ) {
-    if !demos.is_empty() && (!shapes.is_empty() || !texts.is_empty()) {
+    if !demos.is_empty() && (!shapes.is_empty() || !texts.is_empty() || !connectors.is_empty()) {
         commands.queue(refresh);
     }
 }
@@ -325,6 +327,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::Ellipse, Action::Ellipse), (CanvasKey::PlaceText,Action::PlaceText),
         (CanvasKey::DrawLine, Action::DrawLine),
         (CanvasKey::DrawPolyline, Action::DrawPolyline),
+        (CanvasKey::DrawConnector, Action::DrawConnector),
         (CanvasKey::DrawPolygon, Action::DrawPolygon),
         (CanvasKey::FlowTerminator, Action::Flowchart(CanvasFlowchartPreset::Terminator)),
         (CanvasKey::FlowDecision, Action::Flowchart(CanvasFlowchartPreset::Decision)),
@@ -576,6 +579,10 @@ fn refresh(world: &mut World) -> Result {
             CanvasMode::Pen(_) => CanvasKey::Pen,
             CanvasMode::Line(_) => CanvasKey::DrawLine,
             CanvasMode::Polyline(_) => CanvasKey::DrawPolyline,
+            CanvasMode::Connector(style) if style.start_arrow == CanvasArrow::Triangle => {
+                CanvasKey::DrawConnectorBoth
+            }
+            CanvasMode::Connector(_) => CanvasKey::DrawConnector,
             CanvasMode::Polygon(_) => CanvasKey::DrawPolygon,
             CanvasMode::Flowchart(preset, _) => match preset {
                 CanvasFlowchartPreset::Terminator => CanvasKey::FlowTerminator,
@@ -731,6 +738,31 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                     world,
                     demo.main,
                     CanvasMode::Flowchart(preset, paint()),
+                )
+                .map_err(|error| error.into_bevy_error())?;
+            }
+            Action::DrawConnector => {
+                let current =
+                    CanvasView::mode(world, demo.main).map_err(|error| error.into_bevy_error())?;
+                let start_arrow = match current {
+                    CanvasMode::Connector(style) if style.start_arrow == CanvasArrow::None => {
+                        CanvasArrow::Triangle
+                    }
+                    _ => CanvasArrow::None,
+                };
+                CanvasView::set_mode_in_world(
+                    world,
+                    demo.main,
+                    CanvasMode::Connector(CanvasConnectorStyle {
+                        stroke: CanvasStroke {
+                            color: Color::srgb(0.30, 0.75, 1.0),
+                            width: 3.0,
+                            join: CanvasLineJoin::Round,
+                            ..default()
+                        },
+                        start_arrow,
+                        end_arrow: CanvasArrow::Triangle,
+                    }),
                 )
                 .map_err(|error| error.into_bevy_error())?;
             }

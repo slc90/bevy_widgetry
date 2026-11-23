@@ -13,6 +13,9 @@ flowchart LR
     Layer --> Group["CanvasGroup / CanvasItemOrder"]
     Layer --> Text["CanvasItem / CanvasText Entity"]
     Group --> Text
+    Layer --> Connector["CanvasItem / CanvasConnector Entity"]
+    Group --> Connector
+    Connector --> Route["自由端点、路由点、描边、箭头与标签"]
     Layer --> Shape["CanvasItem / CanvasShape Entity"]
     Group --> Shape
     Shape --> Geometry["参数几何 / 原始命令"]
@@ -120,3 +123,11 @@ PNG 将 GPU 渲染与后台编码连接为同一次导出：逐块读回、受�
 ## 文字项的排版和投影
 
 `CanvasText` 保存单样式文本、排版尺寸和各行基线。`create_text` 和 `update_text` 使用内置默认字体与 Bevy TextPipeline 按文档单位排版。命中和选择框使用排版矩形与字形墨迹的并集（局部原点位于排版矩形中心），然后合成组和绘图项变换。每个 View 通过独立的 `Text2d` 代理显示文字，沿绘制顺序与形状交错。宿主保存编辑草稿，属性提交进入文档历史。SVG 使用行基线生成 tspan，并附带字体；PNG 对请求快照创建文字代理，在字形图集就绪后捕获。
+
+## 连接线的路由和投影
+
+`CanvasConnector` 保存局部坐标中的起点、终点和手动路由点，Transform 把整个绘图项放入直属容器。组内绘制将指针确认的文档坐标换算为父组局部坐标，同时换算描边宽度。分组和取消分组通过组合 Transform 保留已提交路线、箭头和标签的文档投影。
+
+细分阶段从路由派生开放描边路径，用首尾非零线段的切线生成实心三角箭头。共享 Mesh Cache 分别保存箭头填充和路由描边，参与真实网格命中。可选标签使用默认字体排版，中心沿路由累计长度定位，并随 Connector 一起管理画序、复制、删除和历史。分组测量投影后的描边、箭头网格和标签边界。文档中只创建一个绘图项，View 和 PNG 渲染为标签生成独立文字代理。
+
+Connector 工具复用多点绘制会话。当前 View 持有确认点和悬停预览，提交时将全部确认点写入一条 Connector。节点编辑复用单次拖动的文档写入事务，每个手柄对应原始路由上的一个点。SVG 从同一几何解释写出描边、三角箭头和文字，PNG 使用 Renderer 的细分及文字排版。

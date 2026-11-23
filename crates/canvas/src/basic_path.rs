@@ -1,7 +1,7 @@
 use crate::error::CanvasResult as Result;
 use crate::{
-    CanvasContainer, CanvasDocument, CanvasGeometry, CanvasMode, CanvasPaint, CanvasPath,
-    CanvasView,
+    CanvasConnectorRoute, CanvasContainer, CanvasDocument, CanvasGeometry, CanvasMode, CanvasPaint,
+    CanvasPath, CanvasView,
 };
 use bevy::{
     camera::NormalizedRenderTarget,
@@ -73,7 +73,7 @@ pub(crate) fn install(app: &mut App) {
 pub(crate) fn begin_click(world: &mut World, press: &PointerPress, local: Vec2) -> Result<bool> {
     let view = press.entity;
     let mode = CanvasView::_mode(world, view)?;
-    if mode != CanvasMode::Text && contour(mode).is_none() {
+    if !matches!(mode, CanvasMode::Text | CanvasMode::Connector(_)) && contour(mode).is_none() {
         return Ok(false);
     }
     let (Some(document), Some(container)) = (
@@ -234,7 +234,26 @@ fn finish(world: &mut World, view: Entity) -> Result {
     else {
         return Ok(());
     };
-    let Some((paint, closed)) = contour(draft.context.mode) else {
+    let context = draft.context.clone();
+    if !valid(world, view, &context) || crate::history::is_busy(world, context.document) {
+        return Ok(());
+    }
+    if let CanvasMode::Connector(style) = context.mode {
+        let Some(route) = CanvasConnectorRoute::from_vertices(&draft.vertices)
+            .filter(CanvasConnectorRoute::drawable)
+        else {
+            return Ok(());
+        };
+        let item = CanvasDocument::draw_connector(
+            world,
+            context.document,
+            context.container,
+            route,
+            style,
+        )?;
+        return select_created(world, view, &context, item);
+    }
+    let Some((paint, closed)) = contour(context.mode) else {
         return Ok(());
     };
     let vertices = effective_vertices(&draft.vertices, closed);
@@ -244,10 +263,6 @@ fn finish(world: &mut World, view: Entity) -> Result {
     let Ok(commands) = crate::path::contour(vertices, closed) else {
         return Ok(());
     };
-    let context = draft.context.clone();
-    if !valid(world, view, &context) || crate::history::is_busy(world, context.document) {
-        return Ok(());
-    }
     let shape = CanvasDocument::create_drawing(
         world,
         context.document,
@@ -385,7 +400,6 @@ pub(crate) fn preview(world: &World, view: Entity) -> Option<crate::pen::Preview
         .press
         .as_ref()
         .map_or(draft.pointer, |press| press.pointer);
-    let (paint, closed) = contour(draft.context.mode)?;
     let mut vertices = draft.vertices.clone();
     if let Some(point) = pointer_position(world, pointer, &draft.context.target)
         && let Some(local) =
@@ -397,12 +411,38 @@ pub(crate) fn preview(world: &World, view: Entity) -> Option<crate::pen::Preview
             vertices.push(point);
         }
     }
+    if let CanvasMode::Connector(style) = draft.context.mode {
+        let (path, arrows) = CanvasConnectorRoute::from_vertices(&vertices)
+            .filter(CanvasConnectorRoute::drawable)
+            .map_or_else(
+                || {
+                    (
+                        CanvasPath {
+                            commands: Vec::new(),
+                        },
+                        CanvasPath {
+                            commands: Vec::new(),
+                        },
+                    )
+                },
+                |route| route.paths(style),
+            );
+        return Some(crate::pen::Preview {
+            name: "CanvasConnectorPreview",
+            path,
+            arrows: Some(arrows),
+            points: draft.vertices.clone(),
+            paint: style.paint(),
+        });
+    }
+    let (paint, closed) = contour(draft.context.mode)?;
     let vertices = effective_vertices(&vertices, closed);
     let closed = closed && has_three_vertices(vertices);
     let commands = crate::path::contour(vertices, closed).unwrap_or_default();
     Some(crate::pen::Preview {
         name: "CanvasContourPreview",
         path: CanvasPath { commands },
+        arrows: None,
         points: draft.vertices.clone(),
         paint: if closed {
             paint

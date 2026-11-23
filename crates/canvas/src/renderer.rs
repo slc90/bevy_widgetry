@@ -337,18 +337,25 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
                         transform,
                     ));
                 } else {
-                    let geometry = entry
-                        .get::<CanvasGeometry>()
-                        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Geometry))?;
-                    let paint = entry
-                        .get::<CanvasPaint>()
-                        .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
+                    let (geometry, paint, arrows) =
+                        if let Some(connector) = entry.get::<crate::CanvasConnector>() {
+                            connector.geometry()
+                        } else {
+                            let geometry = entry.get::<CanvasGeometry>().ok_or_else(|| {
+                                crate::error::missing(crate::CanvasPart::Geometry)
+                            })?;
+                            let paint = entry
+                                .get::<CanvasPaint>()
+                                .ok_or_else(|| crate::error::missing(crate::CanvasPart::Paint))?;
+                            (geometry.clone(), *paint, None)
+                        };
                     shapes.push((
                         entry.id(),
                         container,
-                        geometry.clone(),
+                        geometry,
                         transform,
-                        *paint,
+                        paint,
+                        arrows,
                         shapes.len() + texts.len(),
                     ));
                 }
@@ -438,10 +445,10 @@ fn prepare_root(world: &mut World, root: Entity) -> RawResult {
                 .insert(item, proxy);
         }
     }
-    for (shape, container, geometry, transform, paint, index) in shapes {
+    for (shape, container, geometry, transform, paint, arrows, index) in shapes {
         let parent = projection_parent(world, root, content, container)?;
         let result = prepare_shape(
-            world, root, parent, layer, index, spacing, shape, geometry, transform, paint,
+            world, root, parent, layer, index, spacing, shape, geometry, transform, paint, arrows,
         )
         .map_err(|error| {
             let error = error.at("view", root).at("shape", shape);
@@ -605,6 +612,7 @@ fn prepare_shape(
     geometry: CanvasGeometry,
     transform: Transform,
     paint: CanvasPaint,
+    arrows: Option<crate::CanvasPath>,
 ) -> RawResult {
     let proxy = world
         .get::<Renderer>(root)
@@ -615,7 +623,7 @@ fn prepare_shape(
         reparent_proxy(world, proxy, content);
     }
     geometry._validate(&transform, &paint)?;
-    let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint)?;
+    let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint, arrows.as_ref())?;
     let proxy = if let Some(proxy) = proxy {
         proxy
     } else {
@@ -629,6 +637,9 @@ fn prepare_shape(
     };
     let mut projected = transform;
     projected.translation.z = index as f32 * spacing;
+    if arrows.is_some() {
+        projected.scale.z = 1.0;
+    }
     update_proxy(world, proxy, projected, paint, &handles)?;
     let stroke = world
         .get::<ProxyParts>(proxy)
@@ -638,9 +649,63 @@ fn prepare_shape(
         .get_mut::<Transform>(stroke)
         .ok_or_else(|| crate::error::missing(crate::CanvasPart::StrokeTransform))?
         .set_if_neq(Transform::from_xyz(0.0, 0.0, spacing * 0.5));
+    if arrows.is_some() {
+        prepare_connector_label(world, shape, proxy, layer, spacing * 0.75)?;
+    }
 
     Ok(())
 }
+
+fn prepare_connector_label(
+    world: &mut World,
+    item: Entity,
+    parent: Entity,
+    layer: usize,
+    depth: f32,
+) -> RawResult {
+    let current = world.get::<ConnectorLabelProxy>(parent).map(|p| p.0);
+    let Some((label, at)) = world
+        .get::<crate::CanvasConnector>(item)
+        .and_then(crate::CanvasConnector::label_at)
+    else {
+        if let Some(proxy) = current {
+            world.despawn(proxy);
+            world.entity_mut(parent).remove::<ConnectorLabelProxy>();
+        }
+        return Ok(());
+    };
+    let transform = crate::CanvasConnector::label_transform(Transform::IDENTITY, at, depth);
+    if let Some(proxy) = current.filter(|proxy| world.get_entity(*proxy).is_ok()) {
+        let style = label.style();
+        let content = (world.get::<Text2d>(proxy).map(|text| &text.0) != Some(&style.content))
+            .then(|| style.content.clone());
+        let color = style.color;
+        let size = style.font_size.into();
+        world
+            .get_mut::<Transform>(proxy)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyTransform))?
+            .set_if_neq(transform);
+        if let Some(content) = content {
+            world.entity_mut(proxy).insert(Text2d::new(content));
+        }
+        world
+            .get_mut::<TextColor>(proxy)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::Text))?
+            .set_if_neq(TextColor(color));
+        let mut font = world
+            .get_mut::<TextFont>(proxy)
+            .ok_or_else(|| crate::error::missing(crate::CanvasPart::TextFont))?;
+        if font.font_size != size {
+            font.font_size = size;
+        }
+    } else {
+        let label = label.clone();
+        let proxy = label.proxy(world, parent, layer, transform);
+        world.entity_mut(parent).insert(ConnectorLabelProxy(proxy));
+    }
+    Ok(())
+}
+
 fn create_proxy(
     world: &mut World,
     content: Entity,
@@ -690,10 +755,12 @@ fn create_proxy(
     );
     match result {
         Ok(proxy) => {
-            if matches!(
-                world.get::<CanvasGeometry>(shape),
-                Some(CanvasGeometry::Path(_))
-            ) {
+            if world.get::<crate::CanvasConnector>(shape).is_some()
+                || matches!(
+                    world.get::<CanvasGeometry>(shape),
+                    Some(CanvasGeometry::Path(_))
+                )
+            {
                 let parts = world
                     .get::<ProxyParts>(proxy)
                     .ok_or_else(|| crate::error::missing(crate::CanvasPart::ProxyParts))?;
@@ -841,6 +908,7 @@ impl Plugin for CanvasPlugin {
             .register_type::<crate::CanvasGroup>()
             .register_type::<crate::CanvasLayerStack>()
             .register_type::<crate::CanvasText>()
+            .register_type::<crate::CanvasConnector>()
             .register_type::<CanvasShape>()
             .register_type::<CanvasGeometry>()
             .register_type::<CanvasRectangle>()
@@ -902,3 +970,6 @@ fn finish_errors(
 
 #[derive(Component)]
 struct ProjectedText(bevy::ecs::change_detection::Tick);
+
+#[derive(Component)]
+struct ConnectorLabelProxy(Entity);

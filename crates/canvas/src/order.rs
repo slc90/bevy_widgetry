@@ -141,6 +141,7 @@ pub(crate) fn is_item_child(item: &EntityRef, parent: Entity) -> bool {
 struct OrderComponents {
     item: Option<ComponentId>,
     text: Option<[ComponentId; 2]>,
+    connector: Option<[ComponentId; 2]>,
     shape: Option<[ComponentId; 4]>,
     group: Option<[ComponentId; 3]>,
 }
@@ -152,6 +153,12 @@ impl OrderComponents {
             text: (|| {
                 Some([
                     world.component_id::<crate::CanvasText>()?,
+                    world.component_id::<Transform>()?,
+                ])
+            })(),
+            connector: (|| {
+                Some([
+                    world.component_id::<crate::CanvasConnector>()?,
                     world.component_id::<Transform>()?,
                 ])
             })(),
@@ -178,6 +185,11 @@ impl OrderComponents {
             .is_some_and(|ids| ids.into_iter().all(|id| item.contains_id(id)))
     }
 
+    fn is_connector(&self, item: &EntityRef) -> bool {
+        self.connector
+            .is_some_and(|ids| ids.into_iter().all(|id| item.contains_id(id)))
+    }
+
     fn is_shape(&self, item: &EntityRef) -> bool {
         self.shape
             .is_some_and(|ids| ids.into_iter().all(|id| item.contains_id(id)))
@@ -197,7 +209,10 @@ impl OrderComponents {
 
     fn is_valid(&self, item: &EntityRef, parent: Entity) -> bool {
         self.is_attached(item, parent)
-            && (self.is_shape(item) || self.is_text(item) || self.is_group(item))
+            && (self.is_shape(item)
+                || self.is_text(item)
+                || self.is_group(item)
+                || self.is_connector(item))
     }
 }
 
@@ -469,7 +484,10 @@ pub(crate) fn visit_valid_order(
         if let Some(entry) =
             entity.filter(|entry| components.is_attached(entry, container.parent(document)))
         {
-            if components.is_shape(entry) || components.is_text(entry) {
+            if components.is_shape(entry)
+                || components.is_text(entry)
+                || components.is_connector(entry)
+            {
                 visit(entry, container, false)?;
                 return Ok(false);
             }

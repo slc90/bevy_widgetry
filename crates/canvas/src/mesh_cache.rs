@@ -11,6 +11,7 @@ use std::{
 #[derive(Clone)]
 struct Geometry {
     source: Arc<CanvasGeometry>,
+    arrows: Option<crate::CanvasPath>,
     style: GeometryStyle,
     fill: Handle<Mesh>,
     stroke: Handle<Mesh>,
@@ -50,44 +51,51 @@ pub(crate) fn geometry(
     shape: Entity,
     source: &CanvasGeometry,
     paint: CanvasPaint,
+    arrows: Option<&crate::CanvasPath>,
 ) -> Result<ShapeMeshes> {
     (|| -> Result<ShapeMeshes> {
         let style = GeometryStyle::from(paint);
         let previous = world.resource::<MeshCache>().0.get(&shape).cloned();
-        let geometry =
-            if let Some(mut geometry) = previous {
-                if geometry.source.as_ref() != source || geometry.style != style {
-                    let (fill, stroke) = crate::geometry::meshes(source, paint)?;
-                    geometry.fill_region = region(&fill)?;
-                    geometry.stroke_region = region(&stroke)?;
-                    let mut meshes = world.resource_mut::<Assets<Mesh>>();
-                    if !meshes.contains(&geometry.fill) {
-                        return Err(crate::error::missing(crate::CanvasPart::SharedFillMesh));
-                    }
-                    if !meshes.contains(&geometry.stroke) {
-                        return Err(crate::error::missing(crate::CanvasPart::SharedStrokeMesh));
-                    }
-                    *meshes.get_mut(&geometry.fill).ok_or_else(|| {
-                        crate::error::missing(crate::CanvasPart::SharedFillMesh)
-                    })? = fill;
-                    *meshes.get_mut(&geometry.stroke).ok_or_else(|| {
-                        crate::error::missing(crate::CanvasPart::SharedStrokeMesh)
-                    })? = stroke;
-                    geometry.source = Arc::new(source.clone());
-                    geometry.style = style;
+        let geometry = if let Some(mut geometry) = previous {
+            if geometry.source.as_ref() != source
+                || geometry.style != style
+                || geometry.arrows.as_ref() != arrows
+            {
+                let (fill, stroke) = crate::geometry::meshes_with_arrows(source, paint, arrows)?;
+                geometry.fill_region = region(&fill)?;
+                geometry.stroke_region = region(&stroke)?;
+                let mut meshes = world.resource_mut::<Assets<Mesh>>();
+                if !meshes.contains(&geometry.fill) {
+                    return Err(crate::error::missing(crate::CanvasPart::SharedFillMesh));
                 }
-                geometry
-            } else {
-                let (fill, stroke) = crate::geometry::meshes(source, paint)?;
-                Geometry {
-                    source: Arc::new(source.clone()),
-                    style,
-                    fill_region: region(&fill)?,
-                    stroke_region: region(&stroke)?,
-                    fill: world.resource_mut::<Assets<Mesh>>().add(fill),
-                    stroke: world.resource_mut::<Assets<Mesh>>().add(stroke),
+                if !meshes.contains(&geometry.stroke) {
+                    return Err(crate::error::missing(crate::CanvasPart::SharedStrokeMesh));
                 }
-            };
+                *meshes
+                    .get_mut(&geometry.fill)
+                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::SharedFillMesh))? =
+                    fill;
+                *meshes
+                    .get_mut(&geometry.stroke)
+                    .ok_or_else(|| crate::error::missing(crate::CanvasPart::SharedStrokeMesh))? =
+                    stroke;
+                geometry.source = Arc::new(source.clone());
+                geometry.arrows = arrows.cloned();
+                geometry.style = style;
+            }
+            geometry
+        } else {
+            let (fill, stroke) = crate::geometry::meshes_with_arrows(source, paint, arrows)?;
+            Geometry {
+                source: Arc::new(source.clone()),
+                arrows: arrows.cloned(),
+                style,
+                fill_region: region(&fill)?,
+                stroke_region: region(&stroke)?,
+                fill: world.resource_mut::<Assets<Mesh>>().add(fill),
+                stroke: world.resource_mut::<Assets<Mesh>>().add(stroke),
+            }
+        };
         let handles = ShapeMeshes {
             fill: geometry.fill.clone(),
             stroke: geometry.stroke.clone(),
@@ -112,6 +120,7 @@ pub(crate) fn painted_bounds(
     source: &CanvasGeometry,
     paint: CanvasPaint,
     projection: &Affine3A,
+    arrows: Option<&crate::CanvasPath>,
 ) -> Result<Option<Rect>> {
     if paint.fill.is_none() && paint.stroke.is_none() {
         return Ok(None);
@@ -138,6 +147,7 @@ pub(crate) fn painted_bounds(
     if let Some(cache) = world.get_resource::<MeshCache>()
         && let Some(current) = cache.0.get(&shape)
         && current.source.as_ref() == source
+        && current.arrows.as_ref() == arrows
         && current.style == GeometryStyle::from(paint)
         && let Some(meshes) = world.get_resource::<Assets<Mesh>>()
         && let (Some(fill), Some(stroke)) = (meshes.get(&current.fill), meshes.get(&current.stroke))
@@ -145,7 +155,7 @@ pub(crate) fn painted_bounds(
         return measure(fill, stroke);
     }
 
-    let (fill, stroke) = crate::geometry::meshes(source, paint)?;
+    let (fill, stroke) = crate::geometry::meshes_with_arrows(source, paint, arrows)?;
     measure(&fill, &stroke)
 }
 
@@ -282,7 +292,7 @@ mod tests {
             stroke: Some(crate::CanvasStroke::default()),
             ..default()
         };
-        let first = geometry(&mut world, shape, &source(5.0), paint).unwrap();
+        let first = geometry(&mut world, shape, &source(5.0), paint, None).unwrap();
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
         let before = meshes
             .get(&first.fill)
@@ -291,7 +301,7 @@ mod tests {
             .unwrap()
             .clone();
         meshes.remove(first.stroke.id());
-        assert!(geometry(&mut world, shape, &source(10.0), paint).is_err());
+        assert!(geometry(&mut world, shape, &source(10.0), paint, None).is_err());
         let meshes = world.resource::<Assets<Mesh>>();
         assert_eq!(
             meshes

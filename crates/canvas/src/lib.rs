@@ -4,6 +4,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 mod alpha;
 mod basic_path;
 mod batch;
+mod connector;
 mod error;
 mod export;
 mod flowchart;
@@ -28,6 +29,9 @@ mod selection;
 mod text;
 mod view;
 
+pub use connector::{
+    CanvasArrow, CanvasConnector, CanvasConnectorLabel, CanvasConnectorRoute, CanvasConnectorStyle,
+};
 pub use export::CanvasExportError;
 #[cfg(feature = "png_export")]
 pub use export::{

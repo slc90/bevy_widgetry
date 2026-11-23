@@ -541,6 +541,7 @@ impl CanvasView {
 pub(crate) struct Preview {
     pub(crate) name: &'static str,
     pub(crate) path: CanvasPath,
+    pub(crate) arrows: Option<CanvasPath>,
     pub(crate) points: Vec<Vec2>,
     pub(crate) paint: CanvasPaint,
 }
@@ -578,6 +579,7 @@ pub(crate) fn preview(world: &World, view: Entity) -> Option<Preview> {
     points.extend(data.pending);
     Some(Preview {
         name: "CanvasPenPreview",
+        arrows: None,
         path: if drawable(&data.path) {
             data.path
         } else {

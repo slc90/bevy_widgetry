@@ -2912,3 +2912,61 @@ fn gpu_text_outside_the_export_region_does_not_block_visible_shapes() {
         [255; 4]
     );
 }
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_connector_snapshot_renders_route_arrowheads_and_label() {
+    let mut app = gpu_app();
+    let doc = app.world_mut().spawn(CanvasDocument).id();
+    let item = CanvasDocument::create_connector(
+        app.world_mut(),
+        doc,
+        CanvasConnectorRoute {
+            start: Vec2::new(20.0, 30.0),
+            waypoints: vec![Vec2::new(100.0, 30.0)],
+            end: Vec2::new(100.0, 80.0),
+        },
+        CanvasConnectorStyle {
+            stroke: CanvasStroke {
+                color: Color::srgb(1.0, 0.0, 0.0),
+                width: 6.0,
+                ..default()
+            },
+            start_arrow: CanvasArrow::Triangle,
+            end_arrow: CanvasArrow::Triangle,
+        },
+        Some(CanvasConnectorLabel {
+            text: "Go".into(),
+            font_size: 20.0,
+            color: Color::WHITE,
+            position: 0.38,
+        }),
+    )
+    .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("connector.png");
+    CanvasDocument::export_png(
+        app.world_mut(),
+        doc,
+        &path,
+        CanvasPngOptions {
+            region: Some(Rect::new(0.0, 0.0, 120.0, 105.0)),
+            scale: 1.0,
+        },
+    )
+    .unwrap();
+    CanvasDocument::remove_connector(app.world_mut(), doc, item).unwrap();
+    finish(&mut app, 1);
+    assert_eq!(
+        app.world().resource::<Completed>().0[0].1,
+        Ok(UVec2::new(120, 105))
+    );
+    let image = image::open(path).unwrap().to_rgba8();
+    for (x, y) in [(42, 23), (106, 58), (85, 30)] {
+        assert_eq!(image.get_pixel(x, y).0, [255, 0, 0, 255]);
+    }
+    assert_eq!(image.get_pixel(50, 55).0, [0; 4]);
+    assert!(image.enumerate_pixels().any(|(x, y, p)| {
+        (55..85).contains(&x) && (10..48).contains(&y) && p.0.iter().all(|&channel| channel > 200)
+    }));
+}

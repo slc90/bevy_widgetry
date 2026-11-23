@@ -962,8 +962,10 @@ fn geometry(
     for (index, shape) in snapshot.shapes.iter().enumerate() {
         let depth = index as f32 / count * EXPORT_PAINT_DEPTH_RANGE;
         let parent = export_parent(content, &proxies, shape.container)?;
-        let (geometry, paint) = match &shape.artwork {
-            super::Artwork::Geometry(geometry, paint) => (geometry, paint),
+        let (paint, meshes) = match &shape.artwork {
+            super::Artwork::Geometry(geometry, paint) => {
+                (*paint, crate::geometry::meshes(geometry, *paint))
+            }
             super::Artwork::Text(text) => {
                 texts.push(text.proxy(
                     world,
@@ -973,13 +975,30 @@ fn geometry(
                 ));
                 continue;
             }
+            super::Artwork::Connector(connector) => {
+                if let Some((label, at)) = connector.label_at() {
+                    texts.push(label.proxy(
+                        world,
+                        parent,
+                        layer,
+                        crate::CanvasConnector::label_transform(
+                            shape.local_transform,
+                            at,
+                            depth + 0.75 / count * EXPORT_PAINT_DEPTH_RANGE,
+                        ),
+                    ));
+                }
+                let style = connector.style();
+                let paint = style.paint();
+                let (route, arrows) = connector.route().paths(style);
+                (paint, crate::path::connector_meshes(&route, &arrows, paint))
+            }
         };
-        let (fill_mesh, stroke_mesh) =
-            crate::geometry::meshes(geometry, *paint).map_err(|error| {
-                CanvasExportError::Model(error.at("shape", shape.entity).into_failure(
-                    bevy_widgetry_diagnostics::ErrorFrame::new("canvas.png.geometry"),
-                ))
-            })?;
+        let (fill_mesh, stroke_mesh) = meshes.map_err(|error| {
+            CanvasExportError::Model(error.at("shape", shape.entity).into_failure(
+                bevy_widgetry_diagnostics::ErrorFrame::new("canvas.png.geometry"),
+            ))
+        })?;
         for (color, mesh, offset) in [
             (paint.fill, fill_mesh, 0.0),
             (paint.stroke.map(|s| s.color), stroke_mesh, 0.5),

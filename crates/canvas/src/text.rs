@@ -84,6 +84,10 @@ struct LayoutEngine {
     family: Option<String>,
 }
 
+pub(crate) fn measure(world: &mut World, style: CanvasTextStyle) -> CanvasResult<CanvasText> {
+    world.get_resource_or_init::<LayoutEngine>().measure(style)
+}
+
 impl LayoutEngine {
     fn measure(&mut self, mut style: CanvasTextStyle) -> CanvasResult<CanvasText> {
         if !style.font_size.is_finite()

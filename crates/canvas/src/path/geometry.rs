@@ -20,6 +20,24 @@ struct Contour {
 }
 
 pub(crate) fn meshes(source: &CanvasPath, paint: CanvasPaint) -> Result<(Mesh, Mesh)> {
+    let contours = contours(source)?;
+    tessellate_contours(&contours, &contours, paint)
+}
+
+pub(crate) fn connector_meshes(
+    route: &CanvasPath,
+    arrows: &CanvasPath,
+    paint: CanvasPaint,
+) -> Result<(Mesh, Mesh)> {
+    let arrow_contours = if arrows.commands.is_empty() {
+        Vec::new()
+    } else {
+        contours(arrows)?
+    };
+    tessellate_contours(&arrow_contours, &contours(route)?, paint)
+}
+
+fn contours(source: &CanvasPath) -> Result<Vec<Contour>> {
     let mut contours = Vec::new();
     let mut current = Vec::new();
     for segment in source.segments()? {
@@ -31,19 +49,30 @@ pub(crate) fn meshes(source: &CanvasPath, paint: CanvasPaint) -> Result<(Mesh, M
     if !current.is_empty() {
         contours.push(contour(current)?);
     }
+    Ok(contours)
+}
+
+fn tessellate_contours(
+    fill_contours: &[Contour],
+    stroke_contours: &[Contour],
+    paint: CanvasPaint,
+) -> Result<(Mesh, Mesh)> {
     let width = f64::from(paint.stroke.map_or(0.0, |s| s.width));
     let mut fill = VertexBuffers::<[f32; 3], u32>::new();
     let mut stroke = VertexBuffers::<[f32; 3], u32>::new();
-    for group in groups(&contours, 0.0) {
-        let polygons = group.iter().map(|i| contours[*i].points.clone()).collect();
+    for group in groups(fill_contours, 0.0) {
+        let polygons = group
+            .iter()
+            .map(|i| fill_contours[*i].points.clone())
+            .collect();
         paint_regions(&mut fill, polygons, 0.0, &[], paint.fill_rule)?;
     }
     if width > 0.0 {
-        for group in groups(&contours, width * 2.0) {
+        for group in groups(stroke_contours, width * 2.0) {
             let mut polygons = Vec::new();
             let mut center_edges = Vec::new();
             for index in group {
-                let contour = &contours[index];
+                let contour = &stroke_contours[index];
                 if !contour.has_segments {
                     continue;
                 }

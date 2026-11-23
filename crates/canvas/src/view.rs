@@ -47,6 +47,7 @@ pub enum CanvasMode {
     Select,
     PathNodeEdit,
     Text,
+    Connector(crate::CanvasConnectorStyle),
     Rectangle(crate::CanvasPaint),
     Ellipse(crate::CanvasPaint),
     Pen(crate::CanvasPaint),
@@ -909,6 +910,11 @@ impl CanvasView {
                 }
                 match mode {
                     CanvasMode::Select | CanvasMode::Text | CanvasMode::PathNodeEdit => {}
+                    CanvasMode::Connector(style) => {
+                        let paint = style.paint();
+                        crate::model::validate_transform_and_paint(&Transform::IDENTITY, &paint)
+                            .map_err(|error| error.input(crate::CanvasInput::Paint(paint)))?;
+                    }
                     CanvasMode::Rectangle(paint) => crate::CanvasRectangle {
                         corner_radius: 0.0,
                         size: Vec2::ONE,
