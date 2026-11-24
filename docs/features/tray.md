@@ -21,6 +21,33 @@ app.add_plugins(
 
 图标数据在编译期嵌入，运行时不再读取这个文件。图标和提示文字在创建时固定。托盘实例与某个窗口 Entity 无关；所有窗口隐藏时，它仍然可以存在并接收点击。
 
+### 查询初始化状态
+
+安装 `WidgetryTrayPlugin` 后，宿主可以通过 `Res<WidgetryTrayStatus>` 读取初始化结果。需要在状态更新时采取行动的系统可以使用 Bevy Resource 的变化检测。
+
+| 状态 | 含义 |
+|---|---|
+| `Initializing` | 插件已安装，原生托盘初始化尚未完成。 |
+| `Ready` | 原生图标已创建，Windows Shell 注册已确认，事件桥接已就绪。 |
+| `Failed` | Startup 初始化失败，原始诊断交给宿主的 Bevy 错误处理器。 |
+
+```rust
+use bevy::prelude::*;
+use bevy_widgetry::tray::WidgetryTrayStatus;
+
+fn report_tray_ready(status: Res<WidgetryTrayStatus>) {
+    if status.is_changed() && *status == WidgetryTrayStatus::Ready {
+        info!("托盘已就绪");
+    }
+}
+
+app.add_systems(Update, report_tray_ready);
+```
+
+`WidgetryTrayPlugin::new` 在安装插件前解码 ICO。无效 ICO 会直接返回 `TrayFailure`，此时尚未创建状态 Resource。插件安装后的失败由 Startup 设置 `Failed`，并通过 Diagnostics 传播。
+
+`Ready` 表示启动时的初始化结果。运行期间的菜单同步、回调桥接等故障由 Diagnostics 报告，初始化结果保持原值。
+
 ### 接收左键单击
 
 ```rust

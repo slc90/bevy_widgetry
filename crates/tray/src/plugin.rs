@@ -15,6 +15,18 @@ pub struct WidgetryTrayPlugin {
     config: TrayConfig,
 }
 
+/// The outcome of native tray initialization during Startup.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WidgetryTrayStatus {
+    /// The plugin is installed and native initialization is pending.
+    #[default]
+    Initializing,
+    /// Native initialization completed, including Windows Shell registration.
+    Ready,
+    /// Native initialization failed and its diagnostic went to the host error handler.
+    Failed,
+}
+
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum WidgetryTraySystems {
     Sync,
@@ -66,6 +78,7 @@ impl Plugin for WidgetryTrayPlugin {
     fn build(&self, app: &mut App) {
         bridge::install();
         app.insert_resource(self.config.clone())
+            .insert_resource(WidgetryTrayStatus::Initializing)
             .insert_non_send(TrayOwner::default())
             .add_message::<WidgetryTrayClick>()
             .add_message::<WidgetryTrayMenuClick>()
@@ -88,16 +101,26 @@ fn initialize(
     menu: Option<Res<WidgetryTrayMenu>>,
     proxy: Option<Res<EventLoopProxyWrapper>>,
     mut owner: NonSendMut<TrayOwner>,
+    mut status: ResMut<WidgetryTrayStatus>,
     mut commands: Commands,
 ) -> Result {
-    initialize_instance(
+    match initialize_instance(
         &config,
         menu.as_deref(),
         proxy.as_deref(),
         &mut owner,
         &mut commands,
-    )
-    .map_err(TrayFailure::into_bevy_error)
+    ) {
+        Ok(()) => {
+            // Publish readiness after the deferred Inbox insertion is applied.
+            commands.insert_resource(WidgetryTrayStatus::Ready);
+            Ok(())
+        }
+        Err(failure) => {
+            *status = WidgetryTrayStatus::Failed;
+            Err(failure.into_bevy_error())
+        }
+    }
 }
 
 fn initialize_instance(
@@ -274,21 +297,30 @@ mod menu_tests;
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+    use std::error::Error;
+
+    fn test_plugin(tooltip: &str) -> WidgetryTrayPlugin {
+        let mut ico = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::from_pixel(16, 16, image::Rgba([0, 120, 255, 255]))
+            .write_to(&mut ico, image::ImageFormat::Ico)
+            .unwrap();
+        let bytes = Box::leak(ico.into_inner().into_boxed_slice());
+        WidgetryTrayPlugin::new(bytes, tooltip).unwrap()
+    }
 
     #[test]
-    fn real_startup_reports_source_id_and_original_origin_to_host() {
-        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+    fn startup_without_winit_publishes_failed_and_preserves_the_host_diagnostic() {
         let mut app = App::new();
-        app.insert_resource(TrayConfig {
-            rgba: image::RgbaImage::new(16, 16),
-            tooltip: "test".into(),
-        })
-        .insert_non_send(TrayOwner::default())
-        .add_systems(Startup, initialize);
+        app.add_plugins(test_plugin("Failed tray"));
         app.set_error_handler(ErrorCapture::handler());
         let errors = ErrorCapture::default();
         let logs = LogCapture::default();
         errors.run(|| logs.run(|| app.update()));
+        assert_eq!(
+            app.world().get_resource::<WidgetryTrayStatus>(),
+            Some(&WidgetryTrayStatus::Failed)
+        );
         let records = errors.take_records();
         assert_eq!(records.len(), 1);
         assert_eq!(
@@ -296,6 +328,10 @@ mod tests {
             bevy::ecs::error::Severity::Error
         );
         let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+        assert!(matches!(
+            diagnostic.source().unwrap().downcast_ref::<TrayError>(),
+            Some(TrayError::MissingEventLoop)
+        ));
         assert_eq!(
             diagnostic.origin().backtrace().status(),
             std::backtrace::BacktraceStatus::Captured
@@ -309,23 +345,30 @@ mod tests {
             logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
                 .is_empty()
         );
+        let frame = &diagnostic.contexts()[0];
+        assert_eq!(frame.operation(), "initialize tray");
+        assert!(frame.fields().contains(&("width".into(), "16".into())));
         assert!(
-            diagnostic.contexts()[0]
+            frame
                 .fields()
-                .contains(&("width".into(), "16".into()))
+                .contains(&("tooltip".into(), "Failed tray".into()))
         );
         assert!(app.world().non_send::<TrayOwner>().0.is_none());
+        assert!(!app.world().contains_resource::<bridge::Inbox>());
     }
 
     #[test]
-    fn rejects_invalid_ico_without_panicking() {
+    fn rejects_invalid_ico_before_installing_a_tray_status() {
+        let mut app = App::new();
         let error = WidgetryTrayPlugin::new(b"not an icon", "test")
-            .err()
-            .expect("invalid ICO must fail");
+            .map(|plugin| {
+                app.add_plugins(plugin);
+            })
+            .expect_err("invalid ICO must fail");
         assert!(error.to_string().contains("ICO"));
         assert!(matches!(error.kind(), TrayError::Decode { .. }));
-        use std::error::Error;
         assert!(error.kind().source().unwrap().is::<image::ImageError>());
+        assert!(!app.world().contains_resource::<WidgetryTrayStatus>());
     }
 
     #[test]
@@ -339,37 +382,88 @@ mod tests {
     }
 
     #[test]
-    fn accepts_embedded_ico_and_keeps_configuration_without_native_creation() {
-        let mut ico = std::io::Cursor::new(Vec::new());
-        image::RgbaImage::from_pixel(32, 32, image::Rgba([0, 120, 255, 255]))
-            .write_to(&mut ico, image::ImageFormat::Ico)
-            .unwrap();
-        let bytes = Box::leak(ico.into_inner().into_boxed_slice());
+    fn installing_the_plugin_publishes_initializing_before_native_creation() {
         let mut app = App::new();
-        app.add_plugins(WidgetryTrayPlugin::new(bytes, "Embedded tooltip").unwrap());
+        app.add_plugins(test_plugin("Embedded tooltip"));
         assert_eq!(
             app.world().resource::<TrayConfig>().tooltip,
             "Embedded tooltip"
+        );
+        assert_eq!(
+            app.world().get_resource::<WidgetryTrayStatus>(),
+            Some(&WidgetryTrayStatus::Initializing)
         );
         assert!(app.world().non_send::<TrayOwner>().0.is_none());
     }
 
     #[test]
-    fn missing_winit_returns_error_and_leaves_no_native_instance() {
-        use bevy::ecs::system::RunSystemOnce;
+    fn native_startup_publishes_ready_after_the_inbox_and_menu_errors_leave_it_ready() {
+        use crate::TrayMenuEntry;
+        use bevy::a11y::AccessibilityPlugin;
+        use bevy::asset::AssetPlugin;
+        use bevy::image::ImagePlugin;
+        use bevy::input::InputPlugin;
+        use bevy::window::ExitCondition;
+        use bevy::winit::WinitPlugin;
+
         let mut app = App::new();
-        app.insert_resource(TrayConfig {
-            rgba: image::RgbaImage::new(16, 16),
-            tooltip: "test".into(),
-        })
-        .insert_non_send(TrayOwner::default());
-        let error = app
-            .world_mut()
-            .run_system_once::<_, Result, _>(initialize)
-            .unwrap()
-            .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-        assert!(error.to_string().contains("WinitPlugin"));
+        app.add_plugins((
+            InputPlugin,
+            WindowPlugin {
+                primary_window: None,
+                exit_condition: ExitCondition::DontExit,
+                ..default()
+            },
+            AccessibilityPlugin,
+            AssetPlugin::default(),
+            WinitPlugin {
+                run_on_any_thread: true,
+            },
+            ImagePlugin::default(),
+            test_plugin("Ready tray"),
+        ));
+        app.set_error_handler(ErrorCapture::handler());
+        app.insert_resource(
+            WidgetryTrayMenu::new(vec![TrayMenuEntry::item("open", "Open")]).unwrap(),
+        );
+        app.add_systems(
+            Startup,
+            (|status: Res<WidgetryTrayStatus>, inbox: Option<Res<bridge::Inbox>>| {
+                assert_eq!(*status, WidgetryTrayStatus::Initializing);
+                assert!(inbox.is_none());
+            })
+            .after_ignore_deferred(initialize),
+        );
+        let errors = ErrorCapture::default();
+        errors.run(|| app.update());
+        let startup_errors = errors.take();
+        assert!(startup_errors.is_empty(), "{startup_errors:?}");
+        assert_eq!(
+            *app.world().resource::<WidgetryTrayStatus>(),
+            WidgetryTrayStatus::Ready
+        );
+        assert!(app.world().contains_resource::<bridge::Inbox>());
+        assert!(app.world().non_send::<TrayOwner>().0.is_some());
+
+        app.world_mut()
+            .resource_mut::<WidgetryTrayMenu>()
+            .set_text("open", "invalid\0label")
+            .unwrap();
+        errors.run(|| app.update());
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+        assert!(matches!(
+            diagnostic.source().unwrap().downcast_ref::<TrayError>(),
+            Some(TrayError::MenuProjection { .. })
+        ));
+        assert_eq!(
+            *app.world().resource::<WidgetryTrayStatus>(),
+            WidgetryTrayStatus::Ready
+        );
+
+        app.world_mut().write_message(AppExit::Success);
+        app.update();
         assert!(app.world().non_send::<TrayOwner>().0.is_none());
     }
 }

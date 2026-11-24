@@ -17,6 +17,14 @@ flowchart LR
 
 这使同一能力既可用于单窗口应用，也可用于多窗口或全隐藏状态，而不内置某一种窗口模型。
 
+## 初始化结果与实例所有权
+
+插件安装时写入公开的 `WidgetryTrayStatus::Initializing`。Startup 在主线程创建原生图标，通过 `set_tooltip` 确认 Windows Shell 注册，再建立事件路由及所需的菜单监听。完整实例由非 Send 的 `TrayOwner` 持有。事件 Inbox 提交后，公开状态变为 `Ready`。
+
+初始化失败时，`TrayOwner` 保持为空，状态变为 `Failed`，原始 `TrayFailure` 通过 Bevy 错误处理器传播。插件构造阶段的 ICO 解码错误直接返回给调用方，此时还没有安装插件或创建状态 Resource。
+
+`WidgetryTrayStatus` 记录 Startup 的一次性结果。后续菜单同步和事件桥接失败继续通过 Diagnostics 传播。退出时由 `TrayOwner` 负责回收原生实例。
+
 ## 用实例路由隔离全局回调
 
 原生库提供进程级事件入口，但应用内部需要区分真正拥有事件的实例。桥接层因此按图标和菜单原生身份路由，只保留指向存活桥接对象的弱引用。
